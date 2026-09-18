@@ -1,0 +1,1897 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panario v2.0.2 — Ayuda Completa</title>
+    <style>
+        /* ============================================================
+           RESET Y VARIABLES
+           ============================================================ */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+        }
+
+        :root {
+            --bg: #fdf6e3;
+            --bg-card: #ffffff;
+            --bg-alt: #f8f5ed;
+            --text: #2d2d2d;
+            --text-light: #666;
+            --text-muted: #94a3b8;
+            --primary: #f5a623;
+            --primary-dark: #d4891b;
+            --primary-light: #fef3d6;
+            --border: #e0d5c0;
+            --border-light: #f0ebe0;
+            --success: #10b981;
+            --success-bg: #10b98120;
+            --danger: #ef4444;
+            --danger-bg: #ef444420;
+            --warning: #f59e0b;
+            --warning-bg: #f59e0b20;
+            --info: #3b82f6;
+            --info-bg: #3b82f620;
+            --purple: #8b5cf6;
+            --purple-bg: #8b5cf620;
+            --shadow: 0 2px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 20px 60px rgba(0,0,0,0.15);
+            --radius: 14px;
+            --radius-sm: 8px;
+            --header-height: 70px;
+            --sidebar-width: 280px;
+        }
+
+        [data-theme="dark"] {
+            --bg: #0d0d0d;
+            --bg-card: #1a1a1a;
+            --bg-alt: #141414;
+            --text: #e8e0d5;
+            --text-light: #a0a0a0;
+            --text-muted: #707070;
+            --primary: #f5a623;
+            --primary-light: #2a2010;
+            --border: #3a3a3a;
+            --border-light: #2a2a2a;
+            --shadow: 0 2px 12px rgba(0,0,0,0.6);
+            --shadow-lg: 0 20px 60px rgba(0,0,0,0.8);
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ============================================================
+           HEADER
+           ============================================================ */
+        header.help-header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--bg-card);
+            border-bottom: 2px solid var(--border);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: var(--shadow);
+            flex-wrap: wrap;
+        }
+
+        .help-logo {
+            font-size: 32px;
+            line-height: 1;
+        }
+
+        .help-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 0;
+        }
+
+        .help-subtitle {
+            font-size: 12px;
+            color: var(--text-light);
+            margin: 0;
+        }
+
+        .help-version {
+            font-size: 11px;
+            background: var(--primary-light);
+            color: var(--primary-dark);
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            margin-left: auto;
+        }
+
+        .help-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-left: auto;
+        }
+
+        .help-btn {
+            background: var(--bg-alt);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 6px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            color: var(--text);
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .help-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            transform: translateY(-1px);
+        }
+
+        .help-btn.primary {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+        }
+
+        .help-btn.primary:hover {
+            background: var(--primary-dark);
+            color: #fff;
+        }
+
+        /* ============================================================
+           LAYOUT PRINCIPAL
+           ============================================================ */
+        .help-layout {
+            display: flex;
+            flex: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+            padding: 20px;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        /* ============================================================
+           SIDEBAR / ÍNDICE
+           ============================================================ */
+        aside.help-sidebar {
+            width: var(--sidebar-width);
+            flex-shrink: 0;
+            position: sticky;
+            top: calc(var(--header-height) + 20px);
+            max-height: calc(100vh - var(--header-height) - 40px);
+            overflow-y: auto;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            box-shadow: var(--shadow);
+        }
+
+        .sidebar-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .sidebar-search {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--bg-alt);
+            color: var(--text);
+            font-size: 13px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+
+        .sidebar-search:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .sidebar-nav {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .sidebar-nav li a {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 10px;
+            color: var(--text);
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 13px;
+            transition: all 0.15s;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-nav li a:hover {
+            background: var(--bg-alt);
+            border-left-color: var(--primary);
+        }
+
+        .sidebar-nav li a.active {
+            background: var(--primary-light);
+            color: var(--primary-dark);
+            font-weight: 600;
+            border-left-color: var(--primary);
+        }
+
+        .sidebar-nav .nav-section {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 10px 10px 4px 10px;
+            margin-top: 4px;
+        }
+
+        .sidebar-nav .nav-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        /* ============================================================
+           CONTENIDO PRINCIPAL
+           ============================================================ */
+        main.help-content {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        section.help-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px 32px;
+            box-shadow: var(--shadow);
+            scroll-margin-top: calc(var(--header-height) + 20px);
+        }
+
+        section.help-section h2 {
+            font-size: 24px;
+            color: var(--primary);
+            margin: 0 0 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 12px;
+            border-bottom: 3px solid var(--primary);
+        }
+
+        section.help-section h3 {
+            font-size: 18px;
+            color: var(--text);
+            margin: 24px 0 12px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        section.help-section h4 {
+            font-size: 15px;
+            color: var(--text);
+            margin: 16px 0 8px 0;
+        }
+
+        section.help-section p {
+            margin: 8px 0;
+            color: var(--text);
+        }
+
+        section.help-section ul,
+        section.help-section ol {
+            margin: 8px 0 8px 24px;
+            color: var(--text);
+        }
+
+        section.help-section li {
+            margin: 4px 0;
+        }
+
+        section.help-section a {
+            color: var(--primary);
+            text-decoration: none;
+            border-bottom: 1px dashed var(--primary);
+        }
+
+        section.help-section a:hover {
+            color: var(--primary-dark);
+        }
+
+        section.help-section code {
+            background: var(--bg-alt);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            font-size: 13px;
+            border: 1px solid var(--border);
+            color: var(--danger);
+        }
+
+        section.help-section pre {
+            background: var(--bg-alt);
+            padding: 14px;
+            border-radius: var(--radius-sm);
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            margin: 12px 0;
+        }
+
+        section.help-section pre code {
+            background: none;
+            padding: 0;
+            border: none;
+            color: var(--text);
+        }
+
+        /* ============================================================
+           CARDS
+           ============================================================ */
+        .card-help {
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 16px 18px;
+            margin: 12px 0;
+        }
+
+        .card-help.info { border-left: 4px solid var(--info); }
+        .card-help.success { border-left: 4px solid var(--success); }
+        .card-help.warning { border-left: 4px solid var(--warning); }
+        .card-help.danger { border-left: 4px solid var(--danger); }
+        .card-help.primary { border-left: 4px solid var(--primary); }
+        .card-help.purple { border-left: 4px solid var(--purple); }
+
+        .card-help-title {
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* ============================================================
+           TABLAS
+           ============================================================ */
+        table.help-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 13px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+
+        table.help-table th {
+            background: var(--primary);
+            color: #fff;
+            padding: 10px 12px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        table.help-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+
+        table.help-table tr:nth-child(even) td {
+            background: var(--bg-alt);
+        }
+
+        table.help-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* ============================================================
+           BADGES
+           ============================================================ */
+        .badge-help {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-success { background: var(--success-bg); color: var(--success); }
+        .badge-danger { background: var(--danger-bg); color: var(--danger); }
+        .badge-warning { background: var(--warning-bg); color: var(--warning); }
+        .badge-info { background: var(--info-bg); color: var(--info); }
+        .badge-primary { background: var(--primary-light); color: var(--primary-dark); }
+        .badge-purple { background: var(--purple-bg); color: var(--purple); }
+
+        /* ============================================================
+           FAQ / ACORDEÓN
+           ============================================================ */
+        details.faq-item {
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            transition: all 0.2s;
+        }
+
+        details.faq-item[open] {
+            border-color: var(--primary);
+        }
+
+        details.faq-item summary {
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text);
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        details.faq-item summary::-webkit-details-marker {
+            display: none;
+        }
+
+        details.faq-item summary::before {
+            content: '▶';
+            font-size: 10px;
+            color: var(--primary);
+            transition: transform 0.2s;
+            display: inline-block;
+        }
+
+        details.faq-item[open] summary::before {
+            transform: rotate(90deg);
+        }
+
+        details.faq-item .faq-answer {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed var(--border);
+            font-size: 13px;
+            color: var(--text-light);
+            line-height: 1.7;
+        }
+
+        /* ============================================================
+           BOTONES DE NAVEGACIÓN RÁPIDA
+           ============================================================ */
+        .quick-nav {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .quick-nav-card {
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            text-align: center;
+            text-decoration: none;
+            color: var(--text);
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .quick-nav-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .quick-nav-card .qnc-icon {
+            font-size: 32px;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .quick-nav-card .qnc-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .quick-nav-card .qnc-desc {
+            font-size: 11px;
+            color: var(--text-light);
+        }
+
+        /* ============================================================
+           BOTÓN VOLVER ARRIBA
+           ============================================================ */
+        .back-to-top {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            font-size: 22px;
+            cursor: pointer;
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s;
+            z-index: 50;
+        }
+
+        .back-to-top.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .back-to-top:hover {
+            background: var(--primary-dark);
+            transform: translateY(-3px);
+        }
+
+        /* ============================================================
+           FOOTER
+           ============================================================ */
+        footer.help-footer {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-light);
+            font-size: 12px;
+            border-top: 1px solid var(--border);
+            margin-top: 20px;
+        }
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media (max-width: 900px) {
+            .help-layout {
+                flex-direction: column;
+                padding: 12px;
+            }
+
+            aside.help-sidebar {
+                width: 100%;
+                position: static;
+                max-height: 300px;
+            }
+
+            section.help-section {
+                padding: 20px;
+            }
+
+            section.help-section h2 {
+                font-size: 20px;
+            }
+
+            section.help-section h3 {
+                font-size: 16px;
+            }
+        }
+
+        @media (max-width: 500px) {
+            header.help-header {
+                padding: 10px 12px;
+            }
+
+            .help-title {
+                font-size: 16px;
+            }
+
+            .help-version {
+                font-size: 10px;
+                padding: 1px 8px;
+            }
+
+            section.help-section {
+                padding: 16px;
+                border-radius: 10px;
+            }
+
+            table.help-table {
+                font-size: 11px;
+            }
+
+            table.help-table th,
+            table.help-table td {
+                padding: 6px 8px;
+            }
+        }
+
+        /* ============================================================
+           PRINT
+           ============================================================ */
+        @media print {
+            header.help-header {
+                position: static;
+            }
+
+            aside.help-sidebar {
+                display: none;
+            }
+
+            section.help-section {
+                break-inside: avoid;
+                box-shadow: none;
+                border: 1px solid #ccc;
+            }
+
+            .back-to-top {
+                display: none;
+            }
+        }
+
+        /* ============================================================
+           SCROLLBAR
+           ============================================================ */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-dark);
+        }
+    </style>
+</head>
+<body>
+
+<!-- ============================================================
+     HEADER
+     ============================================================ -->
+<header class="help-header">
+    <span class="help-logo">🍞</span>
+    <div>
+        <h1 class="help-title">Panario — Ayuda Completa</h1>
+        <p class="help-subtitle">Guía de uso de todos los módulos</p>
+    </div>
+    <span class="help-version">v2.0.2</span>
+    <div class="help-controls">
+        <button class="help-btn" onclick="toggleTheme()" title="Cambiar tema">
+            <span id="theme-icon">🌙</span>
+        </button>
+        <button class="help-btn" onclick="window.print()" title="Imprimir / Guardar PDF">
+            🖨️
+        </button>
+    </div>
+</header>
+
+<!-- ============================================================
+     LAYOUT
+     ============================================================ -->
+<div class="help-layout">
+
+    <!-- SIDEBAR / ÍNDICE -->
+    <aside class="help-sidebar">
+        <div class="sidebar-title">📑 Índice</div>
+        <input type="text" 
+               class="sidebar-search" 
+               id="sidebar-search" 
+               placeholder="🔍 Buscar en la ayuda..."
+               oninput="filterSidebar()">
+        <ul class="sidebar-nav" id="sidebar-nav">
+            <li class="nav-section">Inicio</li>
+            <li><a href="#intro"><span class="nav-icon">🏠</span> Introducción</a></li>
+            <li><a href="#primeros-pasos"><span class="nav-icon">🚀</span> Primeros pasos</a></li>
+            
+            <li class="nav-section">Módulos principales</li>
+            <li><a href="#dashboard"><span class="nav-icon">📊</span> Dashboard</a></li>
+            <li><a href="#orders"><span class="nav-icon">📋</span> Pedidos</a></li>
+            <li><a href="#insumos"><span class="nav-icon">🛒</span> Insumos</a></li>
+            <li><a href="#recipes"><span class="nav-icon">📖</span> Recetas</a></li>
+            <li><a href="#productos"><span class="nav-icon">🏷️</span> Productos</a></li>
+            <li><a href="#sales"><span class="nav-icon">💰</span> Ventas</a></li>
+            
+            <li class="nav-section">Funciones avanzadas</li>
+            <li><a href="#corriente"><span class="nav-icon">⚡</span> Corriente</a></li>
+            <li><a href="#rewards"><span class="nav-icon">🏆</span> Premios</a></li>
+            <li><a href="#notifications"><span class="nav-icon">🔔</span> Notificaciones</a></li>
+            <li><a href="#profile"><span class="nav-icon">👤</span> Perfil</a></li>
+            <li><a href="#settings"><span class="nav-icon">⚙️</span> Herramientas</a></li>
+            
+            <li class="nav-section">Ayuda</li>
+            <li><a href="#faq"><span class="nav-icon">❓</span> Preguntas frecuentes</a></li>
+            <li><a href="#atajos"><span class="nav-icon">⌨️</span> Atajos</a></li>
+            <li><a href="#creditos"><span class="nav-icon">👨‍💻</span> Créditos</a></li>
+        </ul>
+    </aside>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="help-content">
+
+        <!-- ============================================================
+             INTRODUCCIÓN
+             ============================================================ -->
+        <section class="help-section" id="intro">
+            <h2>🏠 Introducción</h2>
+            
+            <p><strong>Panario v2.0.2</strong> es una aplicación PWA (Progressive Web App) diseñada específicamente para la gestión integral de una <strong>panadería artesanal</strong>. Funciona completamente offline y guarda todos tus datos localmente en tu dispositivo.</p>
+
+            <div class="card-help primary">
+                <div class="card-help-title">✨ ¿Qué puedes hacer con Panario?</div>
+                <ul>
+                    <li>🛒 Gestionar <strong>insumos</strong> (compras, stock, costos)</li>
+                    <li>📖 Crear <strong>recetas</strong> con fórmulas y cálculo de costos</li>
+                    <li>🏷️ Definir <strong>productos</strong> para la venta</li>
+                    <li>💰 Registrar <strong>ventas</strong> con descuento automático de stock</li>
+                    <li>📋 Gestionar <strong>pedidos y reservas</strong></li>
+                    <li>📊 Ver <strong>estadísticas</strong> y análisis del negocio</li>
+                    <li>⚡ Planificar según <strong>horarios de corriente</strong></li>
+                    <li>🏆 Premiar a tus <strong>mejores clientes</strong></li>
+                    <li>👥 Trabajar en <strong>multiusuario</strong></li>
+                </ul>
+            </div>
+
+            <h3>📱 Información técnica</h3>
+            <table class="help-table">
+                <tr>
+                    <th style="width: 40%;">Propiedad</th>
+                    <th>Valor</th>
+                </tr>
+                <tr><td>Versión</td><td><strong>2.0.2</strong></td></tr>
+                <tr><td>Estado</td><td><span class="badge-help badge-success">✅ Producción</span></td></tr>
+                <tr><td>Arquitectura</td><td>Cliente local (SQLite WASM)</td></tr>
+                <tr><td>Tecnología</td><td>HTML5 + CSS3 + JavaScript (ES6+)</td></tr>
+                <tr><td>Persistencia</td><td>SQLite (sql.js) + localStorage</td></tr>
+                <tr><td>Modo offline</td><td>✅ 100% funcional</td></tr>
+                <tr><td>Instalable</td><td>✅ Como app nativa</td></tr>
+            </table>
+
+            <div class="card-help success">
+                <div class="card-help-title">💾 Privacidad y seguridad</div>
+                <ul>
+                    <li>✅ Todos los datos se guardan <strong>localmente en tu dispositivo</strong>.</li>
+                    <li>✅ No se envía información a ningún servidor externo.</li>
+                    <li>✅ Puedes hacer copias de seguridad desde <strong>Herramientas</strong>.</li>
+                    <li>✅ Funciona 100% offline.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             PRIMEROS PASOS
+             ============================================================ -->
+        <section class="help-section" id="primeros-pasos">
+            <h2>🚀 Primeros pasos</h2>
+            
+            <p>Sigue estos 5 pasos para empezar a usar Panario correctamente:</p>
+
+            <div class="quick-nav">
+                <a href="#insumos" class="quick-nav-card">
+                    <span class="qnc-icon">🛒</span>
+                    <div class="qnc-title">1. Insumos</div>
+                    <div class="qnc-desc">Registra tus compras</div>
+                </a>
+                <a href="#recipes" class="quick-nav-card">
+                    <span class="qnc-icon">📖</span>
+                    <div class="qnc-title">2. Recetas</div>
+                    <div class="qnc-desc">Crea tus fórmulas</div>
+                </a>
+                <a href="#productos" class="quick-nav-card">
+                    <span class="qnc-icon">🏷️</span>
+                    <div class="qnc-title">3. Productos</div>
+                    <div class="qnc-desc">Define qué vendes</div>
+                </a>
+                <a href="#sales" class="quick-nav-card">
+                    <span class="qnc-icon">💰</span>
+                    <div class="qnc-title">4. Ventas</div>
+                    <div class="qnc-desc">Registra transacciones</div>
+                </a>
+                <a href="#orders" class="quick-nav-card">
+                    <span class="qnc-icon">📋</span>
+                    <div class="qnc-title">5. Pedidos</div>
+                    <div class="qnc-desc">Gestiona reservas</div>
+                </a>
+            </div>
+
+            <h3>📝 Detalle de cada paso</h3>
+
+            <div class="card-help primary">
+                <div class="card-help-title">Paso 1: Registrar insumos</div>
+                <p>Ve a <strong>🛒 Insumos</strong> y registra todo lo que compras: harina, levadura, yogur, mantequilla, etc. Define el costo unitario, stock actual y stock mínimo.</p>
+            </div>
+
+            <div class="card-help purple">
+                <div class="card-help-title">Paso 2: Crear recetas</div>
+                <p>Ve a <strong>📖 Recetas</strong> y crea tus fórmulas. Asocia los insumos con sus cantidades. Ej: "Pan de Yogur" con harina, levadura y yogur.</p>
+            </div>
+
+            <div class="card-help success">
+                <div class="card-help-title">Paso 3: Crear productos</div>
+                <p>Ve a <strong>🏷️ Productos</strong> y define lo que vendes. Asocia cada producto a una receta. Ej: "Jaba de Pan" con 10 panes de la receta "Pan de Yogur".</p>
+            </div>
+
+            <div class="card-help info">
+                <div class="card-help-title">Paso 4: Registrar ventas</div>
+                <p>Ve a <strong>💰 Ventas</strong> y registra tus transacciones. El stock de insumos se descuenta automáticamente según la receta.</p>
+            </div>
+
+            <div class="card-help warning">
+                <div class="card-help-title">Paso 5: Gestionar pedidos</div>
+                <p>Ve a <strong>📋 Pedidos</strong> para gestionar reservas, lista de espera y entregas. Al entregar un pedido, se crea la venta automáticamente.</p>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             DASHBOARD
+             ============================================================ -->
+        <section class="help-section" id="dashboard">
+            <h2>📊 Dashboard</h2>
+            
+            <p>El <strong>Dashboard</strong> es la pantalla principal. Muestra un resumen completo de tu negocio en tiempo real.</p>
+
+            <h3>🎯 Tarjetas de estadísticas</h3>
+            <table class="help-table">
+                <tr>
+                    <th style="width: 35%;">Tarjeta</th>
+                    <th>Descripción</th>
+                </tr>
+                <tr><td>🛒 Ventas totales</td><td>Cantidad total de ventas registradas</td></tr>
+                <tr><td>💰 Ingresos</td><td>Suma total de todos los ingresos</td></tr>
+                <tr><td>📤 Gastos</td><td>Suma total de gastos registrados</td></tr>
+                <tr><td>📈 Ganancia</td><td>Ingresos - Gastos</td></tr>
+                <tr><td>📋 Pedidos pendientes</td><td>Pedidos aún no entregados</td></tr>
+                <tr><td>💳 Deudas</td><td>Ventas pendientes de cobro</td></tr>
+                <tr><td>📈 Ventas hoy</td><td>Total vendido en el día actual</td></tr>
+                <tr><td>💵 Fondo en caja</td><td>Saldo en efectivo</td></tr>
+                <tr><td>🏦 Fondo en banco</td><td>Saldo por transferencia</td></tr>
+            </table>
+
+            <h3>🆕 Estadísticas avanzadas</h3>
+            <table class="help-table">
+                <tr>
+                    <th style="width: 35%;">Estadística</th>
+                    <th>Descripción</th>
+                </tr>
+                <tr><td>📅 Días con ventas</td><td>Número de días únicos con al menos una venta</td></tr>
+                <tr><td>📊 Promedio diario</td><td>Ingresos totales / días con ventas</td></tr>
+                <tr><td>🎂 Primer día venta</td><td>Fecha de la primera venta registrada</td></tr>
+                <tr><td>👥 Clientes diferentes</td><td>Cantidad de clientes únicos</td></tr>
+            </table>
+
+            <h3>📈 Gráfico de ventas diarias</h3>
+            <p>Muestra las ventas de los últimos 7 días con los siguientes controles:</p>
+            <ul>
+                <li><strong>◀ ▶</strong> — Navegar entre semanas</li>
+                <li><strong>Tipo</strong> — Barras, Línea o Pastel</li>
+                <li><strong>🖼️</strong> — Exportar como imagen PNG</li>
+                <li><strong>📄</strong> — Exportar como PDF</li>
+            </ul>
+
+            <div class="card-help info">
+                <div class="card-help-title">🎨 Colores del gráfico</div>
+                <ul>
+                    <li>🥇 <strong>Verde:</strong> Día con mayor venta de la semana</li>
+                    <li>📉 <strong>Rojo:</strong> Día con menor venta de la semana</li>
+                    <li>⭐ <strong>Amarillo:</strong> Día actual</li>
+                </ul>
+            </div>
+
+            <h3>⚙️ Personalización del Dashboard</h3>
+            <p>Puedes elegir qué secciones ver desde tu <strong>Perfil → Elementos visibles en el Dashboard</strong>:</p>
+            <ul>
+                <li>⚡ Horario de corriente hoy</li>
+                <li>🏆 Mejores clientes</li>
+                <li>🏷️ Productos más vendidos</li>
+                <li>💵 Análisis de efectivo y banco</li>
+                <li>💳 Métodos de pago</li>
+                <li>🔗 Botones de acción rápida</li>
+                <li>🏦 QR de cuenta bancaria</li>
+                <li>🏆 Premios</li>
+            </ul>
+        </section>
+
+        <!-- ============================================================
+             PEDIDOS
+             ============================================================ -->
+        <section class="help-section" id="orders">
+            <h2>📋 Pedidos</h2>
+            
+            <p>El módulo de <strong>Pedidos</strong> gestiona todas las reservas y solicitudes de clientes. Los pedidos <strong>no son deudas</strong> hasta que se entregan.</p>
+
+            <h3>📌 Estados de un pedido</h3>
+            <table class="help-table">
+                <tr>
+                    <th style="width: 35%;">Estado</th>
+                    <th>Descripción</th>
+                </tr>
+                <tr><td>⏳ Pendiente</td><td>Recién creado, sin confirmar</td></tr>
+                <tr><td>✅ Confirmado</td><td>Cliente confirmó el pedido</td></tr>
+                <tr><td>🔨 En producción</td><td>Se está elaborando</td></tr>
+                <tr><td>📦 Listo</td><td>Listo para entregar</td></tr>
+                <tr><td>🚚 Entregado</td><td>Ya entregado (crea venta)</td></tr>
+                <tr><td>❌ Cancelado</td><td>Cancelado (repone stock)</td></tr>
+                <tr><td>⏰ En lista de espera</td><td>Cliente en cola</td></tr>
+                <tr><td>🔄 Compró por lista</td><td>Atendido desde lista</td></tr>
+            </table>
+
+            <h3>🆕 Crear pedidos</h3>
+
+            <h4>Pedido individual</h4>
+            <ol>
+                <li>Clic en <strong>➕ Nuevo Pedido</strong></li>
+                <li>Completa cliente, teléfono, fecha de entrega</li>
+                <li>Selecciona sesión de recogida (mañana/tarde/noche)</li>
+                <li>Agrega productos con cantidades y precios</li>
+                <li>Guarda el pedido</li>
+            </ol>
+
+            <h4>Reserva por período</h4>
+            <p>Permite crear <strong>múltiples pedidos a la vez</strong> con el mismo cliente y productos:</p>
+            <ul>
+                <li><strong>Rango completo:</strong> Todos los días del rango</li>
+                <li><strong>Paridad:</strong> Solo pares o solo impares</li>
+                <li><strong>Días de la semana:</strong> Solo martes, etc.</li>
+                <li><strong>Días específicos:</strong> 1, 15, 30 del mes</li>
+            </ul>
+
+            <div class="card-help info">
+                <div class="card-help-title">💡 Sesiones de recogida</div>
+                <ul>
+                    <li>🌅 <strong>Mañana:</strong> 10:00 AM</li>
+                    <li>☀️ <strong>Tarde:</strong> 3:00 PM</li>
+                    <li>🌙 <strong>Noche:</strong> 7:00 PM</li>
+                </ul>
+            </div>
+
+            <h3>⏰ Lista de espera</h3>
+            <p>Cuando la demanda supera la oferta, los clientes se ponen en lista de espera. Al haber disponibilidad:</p>
+            <ul>
+                <li>Se les notifica por orden de posición</li>
+                <li>Puedes atenderlos completos o parcialmente</li>
+                <li>Se reindexa la lista automáticamente</li>
+            </ul>
+
+            <h3>🔄 Auto-cancelación</h3>
+            <p>Los pedidos pendientes/confirmados con más de <strong>48 horas</strong> sin procesar se cancelan automáticamente.</p>
+
+            <h3>🔗 Acciones sobre un pedido</h3>
+            <ul>
+                <li><strong>👁️ Ver:</strong> Detalle completo del pedido</li>
+                <li><strong>✏️ Editar:</strong> Modificar cliente, productos, etc.</li>
+                <li><strong>🚚 Entregar:</strong> Crea la venta automáticamente</li>
+                <li><strong>⏰ Lista de espera:</strong> Añadir a la cola</li>
+                <li><strong>❌ Cancelar:</strong> Repone el stock</li>
+            </ul>
+        </section>
+
+        <!-- ============================================================
+             INSUMOS
+             ============================================================ -->
+        <section class="help-section" id="insumos">
+            <h2>🛒 Insumos</h2>
+            
+            <p>Los <strong>insumos</strong> son todo lo que compras para producir: harina, levadura, yogur, mantequilla, etc.</p>
+
+            <h3>📋 Campos de un insumo</h3>
+            <table class="help-table">
+                <tr>
+                    <th style="width: 30%;">Campo</th>
+                    <th>Descripción</th>
+                </tr>
+                <tr><td>📛 Nombre</td><td>Nombre del insumo (Ej: Harina de trigo)</td></tr>
+                <tr><td>📏 Unidad</td><td>Unidad de medida (kg, g, L, unid)</td></tr>
+                <tr><td>💰 Costo unitario</td><td>Precio por unidad</td></tr>
+                <tr><td>📦 Stock</td><td>Cantidad actual disponible</td></tr>
+                <tr><td>📉 Stock mínimo</td><td>Nivel para alerta de reposición</td></tr>
+            </table>
+
+            <h3>📊 Indicadores visuales</h3>
+            <ul>
+                <li><span class="badge-help badge-success">✅ Stock OK</span> — Stock por encima del mínimo</li>
+                <li><span class="badge-help badge-warning">⚠️ Stock bajo</span> — Stock igual o por debajo del mínimo</li>
+                <li><span class="badge-help badge-danger">🚫 Sin stock</span> — Stock agotado</li>
+            </ul>
+
+            <h3>🔄 Descuento automático</h3>
+            <p>Al vender un producto o confirmar un pedido, el stock se descuenta automáticamente según la receta asociada.</p>
+
+            <h3>📊 Reporte de insumos</h3>
+            <p>Genera un PDF con:</p>
+            <ul>
+                <li>Listado completo de insumos</li>
+                <li>Valor total del inventario</li>
+                <li>Alertas de stock bajo</li>
+                <li>Insumos sin stock</li>
+            </ul>
+        </section>
+
+        <!-- ============================================================
+             RECETAS
+             ============================================================ -->
+        <section class="help-section" id="recipes">
+            <h2>📖 Recetas</h2>
+            
+            <p>Las <strong>recetas</strong> son las fórmulas de producción. Indican qué insumos se necesitan y en qué cantidad.</p>
+
+            <h3>📋 Campos de una receta</h3>
+            <ul>
+                <li><strong>📛 Nombre:</strong> Ej: "Pan de Yogur"</li>
+                <li><strong>📝 Descripción:</strong> Breve descripción</li>
+                <li><strong>📦 Rendimiento:</strong> Cuántas unidades produce (Ej: 33 panes)</li>
+                <li><strong>🛒 Insumos:</strong> Lista de insumos con cantidades</li>
+                <li><strong>📋 Instrucciones:</strong> Pasos de preparación</li>
+            </ul>
+
+            <h3>💰 Cálculo de costos</h3>
+            <p>El costo se calcula automáticamente:</p>
+            <pre><code>Costo total = Σ (cantidad × costo_unitario)
+Costo por unidad = Costo total / rendimiento</code></pre>
+
+            <h3>🔄 Recalcular receta</h3>
+            <p>Permite ajustar una receta para un nuevo rendimiento usando regla de 3:</p>
+            <ol>
+                <li>Abre la receta → clic en <strong>🔄 Recalcular</strong></li>
+                <li>Ingresa el nuevo rendimiento (Ej: 50 panes)</li>
+                <li>Ve la vista previa con los valores ajustados</li>
+                <li>Elige:
+                    <ul>
+                        <li><strong>✏️ Modificar esta receta:</strong> Sobrescribe</li>
+                        <li><strong>📋 Crear nueva receta:</strong> Crea una copia</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <div class="card-help info">
+                <div class="card-help-title">🔢 Regla de redondeo</div>
+                <ul>
+                    <li>Si el resultado es entero → dejarlo entero</li>
+                    <li>Si es decimal → redondear hacia arriba manteniendo decimales</li>
+                    <li>Ejemplos:
+                        <ul>
+                            <li>1.005 kg → 1.01 kg</li>
+                            <li>0.333 kg → 0.34 kg</li>
+                            <li>1.0 kg → 1 kg</li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+
+            <h3>💬 Compartir recetas</h3>
+            <p>Puedes compartir recetas por:</p>
+            <ul>
+                <li>💬 <strong>WhatsApp</strong> — Envía texto formateado</li>
+                <li>📱 <strong>Messenger</strong> — Copia y abre Messenger</li>
+                <li>📧 <strong>Email</strong> — Abre cliente de correo</li>
+                <li>📋 <strong>Copiar</strong> — Al portapapeles</li>
+            </ul>
+
+            <h3>📄 Exportar receta a PDF</h3>
+            <p>Genera un PDF con el nombre, ingredientes, costos e instrucciones de la receta.</p>
+        </section>
+
+        <!-- ============================================================
+             PRODUCTOS
+             ============================================================ -->
+        <section class="help-section" id="productos">
+            <h2>🏷️ Productos</h2>
+            
+            <p>Los <strong>productos</strong> son los artículos que vendes al cliente.</p>
+
+            <h3>📋 Campos de un producto</h3>
+            <table class="help-table">
+                <tr>
+                    <th style="width: 30%;">Campo</th>
+                    <th>Descripción</th>
+                </tr>
+                <tr><td>📛 Nombre</td><td>Ej: "Jaba de Pan"</td></tr>
+                <tr><td>📝 Descripción</td><td>Breve descripción (opcional)</td></tr>
+                <tr><td>💰 Precio de venta</td><td>Precio al público</td></tr>
+                <tr><td>📦 Unidad de venta</td><td>unidad, jaba, docena, etc.</td></tr>
+                <tr><td>📊 Cantidad por unidad</td><td>Cuántas unidades contiene</td></tr>
+                <tr><td>📋 Receta asociada</td><td>Receta que usa este producto</td></tr>
+            </table>
+
+            <h3>💡 Ejemplo práctico</h3>
+            <div class="card-help primary">
+                <div class="card-help-title">Jaba de Pan</div>
+                <ul>
+                    <li><strong>Precio:</strong> $550</li>
+                    <li><strong>Unidad:</strong> jaba</li>
+                    <li><strong>Cantidad:</strong> 10 panes por jaba</li>
+                    <li><strong>Receta:</strong> Pan de Yogur (33 panes)</li>
+                </ul>
+                <p>Al vender 1 jaba, se descuentan 0.303 kg de harina, 0.003 kg de levadura, etc.</p>
+            </div>
+
+            <h3>📈 Margen de ganancia</h3>
+            <p>Se calcula automáticamente: <code>(precio - costo) / precio × 100</code></p>
+        </section>
+
+        <!-- ============================================================
+             VENTAS
+             ============================================================ -->
+        <section class="help-section" id="sales">
+            <h2>💰 Ventas</h2>
+            
+            <p>El módulo de <strong>Ventas</strong> gestiona todas las transacciones y finanzas del negocio.</p>
+
+            <h3>📌 Tipos de venta</h3>
+            <table class="help-table">
+                <tr>
+                    <th style="width: 35%;">Tipo</th>
+                    <th>Descripción</th>
+                </tr>
+                <tr><td>💰 Venta normal</td><td>Con cliente identificado</td></tr>
+                <tr><td>🚀 Venta liberada</td><td>Sin cliente (mostrador anónimo)</td></tr>
+                <tr><td>💳 Venta a deuda</td><td>Cliente paga después</td></tr>
+                <tr><td>📋 Venta desde pedido</td><td>Al entregar un pedido</td></tr>
+                <tr><td>🔄 Venta desde lista</td><td>Cliente de lista de espera</td></tr>
+            </table>
+
+            <h3>💳 Métodos de pago</h3>
+            <ul>
+                <li>💵 <strong>Efectivo:</strong> Afecta al saldo de caja</li>
+                <li>🏦 <strong>Transferencia:</strong> Afecta al saldo del banco</li>
+                <li>💳 <strong>Deuda:</strong> Queda pendiente de cobro</li>
+                <li>🔄 <strong>Otra:</strong> Otros métodos</li>
+            </ul>
+
+            <h3>📤 Gastos</h3>
+            <p>Los gastos se registran con:</p>
+            <ul>
+                <li><strong>📝 Concepto:</strong> Descripción del gasto</li>
+                <li><strong>💰 Monto:</strong> Cantidad gastada</li>
+                <li><strong>📂 Categoría:</strong> Insumos, materiales, transporte, inversión, otros</li>
+                <li><strong>💳 Origen del pago:</strong> Efectivo, transferencia, otra</li>
+                <li><strong>📅 Fecha:</strong> Cuándo se realizó</li>
+            </ul>
+
+            <h3>📊 Reportes disponibles</h3>
+            <ul>
+                <li><strong>📊 Reporte de Ventas:</strong> Filtros por fecha, cliente, producto, método de pago</li>
+                <li><strong>📊 Reporte de Gastos:</strong> Filtros por fecha, categoría, origen del pago</li>
+                <li><strong>💳 Reporte de Deudas:</strong> Solo ventas no pagadas</li>
+            </ul>
+
+            <h3>🔍 Filtros del listado</h3>
+            <ul>
+                <li><strong>💰 Ventas:</strong> Solo ventas</li>
+                <li><strong>📤 Gastos:</strong> Solo gastos</li>
+                <li><strong>📊 Todo:</strong> Ambos mezclados</li>
+                <li><strong>💳 Deudas:</strong> Solo pendientes de cobro</li>
+            </ul>
+
+            <div class="card-help warning">
+                <div class="card-help-title">⚠️ Importante: Pedidos vs Deudas</div>
+                <p>Los <strong>pedidos pendientes NO son deudas</strong>. Solo se consideran deudas las <strong>ventas</strong> con <code>is_debt = 1</code> y <code>paid = 0</code>.</p>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             CORRIENTE
+             ============================================================ -->
+        <section class="help-section" id="corriente">
+            <h2>⚡ Corriente</h2>
+            
+            <p>El módulo de <strong>Corriente</strong> permite planificar la producción según los horarios eléctricos.</p>
+
+            <h3>🔧 Configuración</h3>
+            <p>Ve a <strong>⚙️ Herramientas → ⚡ Gestionar Horarios</strong>:</p>
+            <ol>
+                <li><strong>Patrón:</strong> Define cuántas horas hay corriente y cuántas no (Ej: 3h corriente / 12h apagón)</li>
+                <li><strong>Referencia inicial:</strong> Una fecha y hora conocida donde hubo corriente (Ej: Hoy de 10:00 a 13:00)</li>
+                <li>Guarda la configuración</li>
+            </ol>
+
+            <h3>📅 Calendario</h3>
+            <p>Muestra el mes actual con colores:</p>
+            <ul>
+                <li><span class="badge-help badge-warning">🟠 Naranja</span> — Días con corriente</li>
+                <li><span class="badge-help badge-info">⚪ Gris</span> — Días sin corriente</li>
+                <li><span class="badge-help badge-danger">🔴 Rojo</span> — Día actual</li>
+            </ul>
+            <p>Navega con <strong>◀ ▶</strong> y vuelve al mes actual con <strong>🔄 Hoy</strong>.</p>
+
+            <h3>📊 Reporte PDF</h3>
+            <p>Genera un reporte semanal o mensual con los bloques de corriente de cada día.</p>
+
+            <h3>🔗 Integración</h3>
+            <p>Los horarios aparecen en:</p>
+            <ul>
+                <li>📋 Pedidos: banner con bloques del día</li>
+                <li>💰 Ventas: banner con bloques del día</li>
+                <li>📊 Dashboard: tarjeta "Corriente hoy"</li>
+            </ul>
+        </section>
+
+        <!-- ============================================================
+             PREMIOS
+             ============================================================ -->
+        <section class="help-section" id="rewards">
+            <h2>🏆 Premios</h2>
+            
+            <p>El <strong>Sistema de Premios</strong> fideliza clientes premiando al que más compra.</p>
+
+            <h3>⚙️ Configuración</h3>
+            <p>Ve a <strong>💰 Ventas → 🏆 Premios</strong>:</p>
+            <ul>
+                <li><strong>🎁 Activar sistema:</strong> Toggle para activar/desactivar</li>
+                <li><strong>🥇 Premio mensual:</strong> Ej: "Media jaba de pan"</li>
+                <li><strong>🏆 Premio anual:</strong> Ej: "Jaba completa de pan"</li>
+            </ul>
+
+            <h3>📊 Cálculo automático</h3>
+            <p>El sistema calcula automáticamente:</p>
+            <ul>
+                <li><strong>Mejor cliente del mes:</strong> Suma de compras en el mes actual</li>
+                <li><strong>Mejor cliente del año:</strong> Suma de compras en el año actual</li>
+                <li><strong>Top 5 del mes:</strong> Ranking de los 5 mejores</li>
+            </ul>
+
+            <h3>📢 Notificaciones</h3>
+            <p>Al inicio de cada mes (días 1-5), el sistema notifica:</p>
+            <ul>
+                <li>🏆 Al ganador del mes anterior</li>
+                <li>📊 El total gastado y número de compras</li>
+                <li>🎁 El premio a entregar</li>
+            </ul>
+
+            <h3>📊 Tarjeta en Dashboard</h3>
+            <p>Se muestra una tarjeta con:</p>
+            <ul>
+                <li>🥇 Mejor cliente del mes</li>
+                <li>🏆 Mejor cliente del año</li>
+                <li>🎁 Premio asociado a cada uno</li>
+            </ul>
+
+            <div class="card-help success">
+                <div class="card-help-title">💡 Consejos para usar premios</div>
+                <ul>
+                    <li>Define premios atractivos pero sostenibles</li>
+                    <li>Comunica el sistema a tus clientes</li>
+                    <li>Entrega el premio al inicio del mes siguiente</li>
+                    <li>Publica el ganador en redes sociales</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             NOTIFICACIONES
+             ============================================================ -->
+        <section class="help-section" id="notifications">
+            <h2>🔔 Notificaciones</h2>
+            
+            <p>El sistema de <strong>Notificaciones</strong> te mantiene informado de todo lo importante.</p>
+
+            <h3>📌 Tipos de notificación</h3>
+            <table class="help-table">
+                <tr>
+                    <th style="width: 20%;">Tipo</th>
+                    <th>Descripción</th>
+                </tr>
+                <tr><td>✅ Éxito</td><td>Operaciones completadas</td></tr>
+                <tr><td>❌ Error</td><td>Problemas que requieren atención</td></tr>
+                <tr><td>⚠️ Advertencia</td><td>Alertas importantes</td></tr>
+                <tr><td>ℹ️ Información</td><td>Datos relevantes</td></tr>
+                <tr><td>📋 Pedido</td><td>Pedidos para hoy/mañana</td></tr>
+                <tr><td>💰 Deuda</td><td>Deudas pendientes de cobro</td></tr>
+                <tr><td>🛒 Stock</td><td>Insumos con stock bajo</td></tr>
+            </table>
+
+            <h3>🔔 Campanita</h3>
+            <p>El icono 🔔 en la barra superior muestra:</p>
+            <ul>
+                <li>Badge rojo con el número de notificaciones no leídas</li>
+                <li>Al hacer clic → abre el modal de notificaciones</li>
+                <li>Al abrir el modal → se marcan como vistas</li>
+            </ul>
+
+            <h3>🎵 Sonido configurable</h3>
+            <p>Ve a <strong>👤 Perfil → 🔔 Sonido de notificaciones</strong>:</p>
+            <ul>
+                <li><strong>Toggle:</strong> Activar/desactivar sonido</li>
+                <li><strong>🔔 Beep:</strong> Tono corto</li>
+                <li><strong>🎵 Chime:</strong> Tono medio</li>
+                <li><strong>💧 Pop:</strong> Tono corto y agudo</li>
+                <li><strong>⚠️ Alert:</strong> Tono grave</li>
+                <li><strong>✅ Success:</strong> Tono agudo y largo</li>
+                <li><strong>🔊 Probar:</strong> Escuchar cada sonido</li>
+            </ul>
+
+            <h3>📌 Marcador de estado</h3>
+            <ul>
+                <li><strong>No leída:</strong> Badge rojo</li>
+                <li><strong>👁️ Vista:</strong> Se abrió el modal</li>
+                <li><strong>✅ Resuelta:</strong> Atendida por el usuario</li>
+            </ul>
+
+            <h3>🚫 Sin duplicados</h3>
+            <p>Si una notificación idéntica ya está visible, no se muestra de nuevo. Se agrupa automáticamente.</p>
+        </section>
+
+        <!-- ============================================================
+             PERFIL
+             ============================================================ -->
+        <section class="help-section" id="profile">
+            <h2>👤 Perfil</h2>
+            
+            <p>En tu <strong>Perfil</strong> puedes gestionar tu cuenta y preferencias.</p>
+
+            <h3>📋 Información personal</h3>
+            <ul>
+                <li>👤 Nombre completo</li>
+                <li>🏢 Nombre del negocio</li>
+                <li>📧 Email</li>
+                <li>📞 Teléfono</li>
+                <li>📷 Foto de perfil</li>
+                <li>🌓 Tema (claro/oscuro)</li>
+            </ul>
+
+            <h3>🚀 Guía rápida</h3>
+            <p>Toggle para mostrar/ocultar la guía al inicio de la app.</p>
+
+            <h3>🔔 Sonido de notificaciones</h3>
+            <p>Configuración de sonido (ver sección <a href="#notifications">Notificaciones</a>).</p>
+
+            <h3>📊 Elementos visibles en el Dashboard</h3>
+            <p>7 interruptores para personalizar el Dashboard:</p>
+            <ul>
+                <li>⚡ Horario de corriente hoy</li>
+                <li>🏆 Mejores clientes</li>
+                <li>🏷️ Productos más vendidos</li>
+                <li>💵 Análisis de efectivo y banco</li>
+                <li>💳 Métodos de pago</li>
+                <li>🔗 Botones de acción rápida</li>
+                <li>🏦 QR de cuenta bancaria</li>
+                <li>🏆 Premios</li>
+            </ul>
+
+            <h3>🏦 Datos bancarios</h3>
+            <p>Gestiona tus cuentas bancarias:</p>
+            <ul>
+                <li>🏦 Nombre del banco</li>
+                <li>👤 Nombre del propietario de la tarjeta</li>
+                <li>📋 Número de cuenta</li>
+                <li>📞 Teléfono de confirmación</li>
+                <li>📷 Código QR de la cuenta</li>
+            </ul>
+
+            <h3>❓ Ayuda y tutoriales</h3>
+            <ul>
+                <li><strong>🚀 Guía rápida:</strong> 5 pasos para empezar</li>
+                <li><strong>🎯 Tutorial interactivo:</strong> Recorrido guiado</li>
+                <li><strong>❓ Preguntas frecuentes:</strong> FAQ con 50+ preguntas</li>
+            </ul>
+        </section>
+
+        <!-- ============================================================
+             HERRAMIENTAS
+             ============================================================ -->
+        <section class="help-section" id="settings">
+            <h2>⚙️ Herramientas</h2>
+            
+            <p>En <strong>Herramientas</strong> puedes gestionar la configuración avanzada y los datos.</p>
+
+            <h3>⚡ Horarios de corriente</h3>
+            <p>Configuración de la planificación eléctrica (ver sección <a href="#corriente">Corriente</a>).</p>
+
+            <h3>📊 Reporte de gastos</h3>
+            <p>Genera un reporte parametrizable de gastos por:</p>
+            <ul>
+                <li>📅 Rango de fechas</li>
+                <li>📂 Categoría</li>
+                <li>💳 Origen del pago</li>
+                <li>📝 Concepto</li>
+            </ul>
+
+            <h3>📤 Exportar base de datos</h3>
+            <p>Descarga una copia de seguridad completa en formato <code>.db</code>.</p>
+
+            <h3>🧩 Salva diferencial</h3>
+            <p>Exporta/importa <strong>solo recetas y productos</strong> en formato <code>.json</code>. No afecta a ventas, pedidos ni insumos.</p>
+
+            <h3>📥 Importar base de datos</h3>
+            <p>Restaura una copia de seguridad desde un archivo <code>.db</code>.</p>
+
+            <h3>👤 Recordar usuario</h3>
+            <p>Olvida el último usuario guardado.</p>
+
+            <h3>🧹 Limpiar datos eliminados</h3>
+            <p>Elimina permanentemente los registros con soft-delete.</p>
+
+            <h3>🚨 Eliminación por error</h3>
+            <p>Elimina permanentemente pedidos o ventas creados por error.</p>
+
+            <h3>🚨 Reiniciar base de datos</h3>
+            <p>Elimina TODOS los datos excepto usuarios y temas. <strong>Contraseña: "panario"</strong>.</p>
+
+            <div class="card-help danger">
+                <div class="card-help-title">⚠️ Advertencia</div>
+                <p>Las operaciones de <strong>eliminación</strong> y <strong>reinicio</strong> no se pueden deshacer. Haz copia de seguridad antes.</p>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             FAQ
+             ============================================================ -->
+        <section class="help-section" id="faq">
+            <h2>❓ Preguntas frecuentes</h2>
+
+            <h3>🏠 Generales</h3>
+
+            <details class="faq-item">
+                <summary>¿Qué es Panario?</summary>
+                <div class="faq-answer">Es una aplicación PWA para la gestión integral de una panadería artesanal. Permite gestionar insumos, recetas, productos, ventas, pedidos y finanzas.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Funciona sin conexión?</summary>
+                <div class="faq-answer">Sí, Panario funciona completamente offline. Todos tus datos están guardados localmente en tu dispositivo.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Dónde se guardan mis datos?</summary>
+                <div class="faq-answer">En SQLite (base de datos local) y localStorage. Todo queda en tu dispositivo. Nada se envía a servidores externos.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo hago una copia de seguridad?</summary>
+                <div class="faq-answer">Ve a ⚙️ Herramientas → 📥 Descargar copia de seguridad. Se descarga un archivo .db con todos tus datos.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo restauro una copia de seguridad?</summary>
+                <div class="faq-answer">En ⚙️ Herramientas → 📤 Importar copia de seguridad → selecciona el archivo .db. Se reemplazarán todos los datos actuales.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Puedo exportar solo recetas y productos?</summary>
+                <div class="faq-answer">Sí. En Herramientas usa "🧩 Salva diferencial" para exportar/importar solo las recetas y productos, sin afectar al resto de la base de datos.</div>
+            </details>
+
+            <h3>📊 Dashboard</h3>
+
+            <details class="faq-item">
+                <summary>¿Puedo personalizar qué veo en el Dashboard?</summary>
+                <div class="faq-answer">Sí. Ve a tu Perfil y en la sección "📊 Elementos visibles en el Dashboard" activa o desactiva las secciones que quieres ver.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué significa "Días con ventas"?</summary>
+                <div class="faq-answer">Es el número de días únicos en los que registraste al menos una venta. No cuenta días sin actividad.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo se calcula el "Promedio diario"?</summary>
+                <div class="faq-answer">Se divide el total de ingresos entre los días con ventas. Ej: si vendiste $1000 en 5 días, el promedio es $200/día.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Por qué los pedidos pendientes no aparecen como deudas?</summary>
+                <div class="faq-answer">Porque un pedido es una solicitud, no una venta ejecutada. Solo se considera deuda cuando se ha completado la venta y el cliente no ha pagado.</div>
+            </details>
+
+            <h3>🛒 Insumos</h3>
+
+            <details class="faq-item">
+                <summary>¿Qué es un insumo?</summary>
+                <div class="faq-answer">Es todo lo que compras para producir: harina, levadura, yogur, mantequilla, etc.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Los insumos se descuentan automáticamente?</summary>
+                <div class="faq-answer">Sí. Al vender un producto o confirmar un pedido, el stock de los insumos se descuenta según la receta asociada.</div>
+            </details>
+
+            <h3>📖 Recetas</h3>
+
+            <details class="faq-item">
+                <summary>¿Qué hace el botón "🔄 Recalcular"?</summary>
+                <div class="faq-answer">Permite ajustar una receta para un nuevo rendimiento usando regla de 3. Ej: receta para 33 panes → quiero 50 panes.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo comparto una receta?</summary>
+                <div class="faq-answer">En la vista de detalle de la receta, clic en "💬 Compartir". Puedes enviarla por WhatsApp, Messenger, Email o copiarla al portapapeles.</div>
+            </details>
+
+            <h3>💰 Ventas</h3>
+
+            <details class="faq-item">
+                <summary>¿Qué es una "venta liberada"?</summary>
+                <div class="faq-answer">Es una venta sin cliente identificado, tipo "mostrador anónimo". Se agrupa visualmente y no permite deuda.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo cobro una deuda?</summary>
+                <div class="faq-answer">En Ventas, ve al filtro "💳 Deudas", encuentra al cliente y haz clic en "💰 Cobrar".</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Puedo anular una venta?</summary>
+                <div class="faq-answer">Sí. En el detalle de la venta, clic en "🚫 Anular". Se repondrá el stock automáticamente.</div>
+            </details>
+
+            <h3>📋 Pedidos</h3>
+
+            <details class="faq-item">
+                <summary>¿Cuál es la diferencia entre pedido y venta?</summary>
+                <div class="faq-answer">Un pedido es una solicitud de un cliente. Una venta es una transacción completada. Los pedidos no son deudas hasta que se entregan.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué es la lista de espera?</summary>
+                <div class="faq-answer">Cuando la demanda supera la oferta, los clientes se ponen en cola. Al haber disponibilidad, se les atiende en orden.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo funciona la reserva por período?</summary>
+                <div class="faq-answer">Permite crear múltiples pedidos a la vez para el mismo cliente. Elige el patrón: rango completo, días de la semana o días específicos.</div>
+            </details>
+
+            <h3>⚡ Corriente</h3>
+
+            <details class="faq-item">
+                <summary>¿Cómo funcionan los horarios de corriente?</summary>
+                <div class="faq-answer">Define el patrón (ej: 3h corriente / 12h apagón) y el sistema calcula automáticamente todos los bloques de cada día.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo descargo el reporte de corriente en PDF?</summary>
+                <div class="faq-answer">En el modal de corriente → pestaña 📊 Reporte → selecciona el rango → clic en 📄 Semanal o 📄 Mensual.</div>
+            </details>
+
+            <h3>🏆 Premios</h3>
+
+            <details class="faq-item">
+                <summary>¿Cómo funciona el sistema de premios?</summary>
+                <div class="faq-answer">Premia a tus mejores clientes. Se calcula automáticamente el cliente con mayor total gastado en el mes y en el año.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Dónde configuro los premios?</summary>
+                <div class="faq-answer">Ve a 💰 Ventas → botón 🏆 Premios. Ahí puedes activar/desactivar y editar los premios.</div>
+            </details>
+
+            <h3>🔔 Notificaciones</h3>
+
+            <details class="faq-item">
+                <summary>¿Puedo cambiar el sonido de las notificaciones?</summary>
+                <div class="faq-answer">Sí. Ve a tu Perfil → 🔔 Sonido de notificaciones. Puedes elegir entre 5 sonidos embutidos o desactivarlo.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Por qué no se repiten las notificaciones?</summary>
+                <div class="faq-answer">Una vez que abres el modal de notificaciones, se marcan como vistas y no se vuelven a mostrar hasta que sean necesarias de nuevo o inicies sesión.</div>
+            </details>
+
+            <h3>⚙️ Herramientas</h3>
+
+            <details class="faq-item">
+                <summary>¿Qué hace "Reiniciar base de datos"?</summary>
+                <div class="faq-answer">Elimina TODOS los datos excepto usuarios y temas. Se conservan las cuentas de usuario para que puedas volver a entrar. Contraseña: "panario".</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué diferencia hay entre "Limpiar datos eliminados" y "Eliminación por error"?</summary>
+                <div class="faq-answer">"Limpiar datos eliminados" borra permanentemente los registros con soft-delete. "Eliminación por error" permite seleccionar pedidos o ventas específicos para eliminar permanentemente.</div>
+            </details>
+
+            <h3>👤 Perfil y multiusuario</h3>
+
+            <details class="faq-item">
+                <summary>¿Puedo tener varios usuarios en el mismo negocio?</summary>
+                <div class="faq-answer">Sí. Al registrarte puedes crear un negocio nuevo o unirte a uno existente con un código de invitación de 8 caracteres.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo comparto el código de invitación?</summary>
+                <div class="faq-answer">En tu Perfil, junto al nombre del negocio, verás el código con un botón "📋 Copiar". Envíaselo a quien quieras invitar.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Quién es el administrador del negocio?</summary>
+                <div class="faq-answer">El primer usuario que crea el negocio es el administrador. Los siguientes usuarios que se unan tendrán rol de vendedor o panadero.</div>
+            </details>
+        </section>
+
+        <!-- ============================================================
+             ATAJOS
+             ============================================================ -->
+        <section class="help-section" id="atajos">
+            <h2>⌨️ Atajos y consejos</h2>
+
+            <h3>🖱️ Navegación rápida</h3>
+            <table class="help-table">
+                <tr>
+                    <th style="width: 30%;">Acción</th>
+                    <th>Cómo hacerlo</th>
+                </tr>
+                <tr><td>Ir al inicio</td><td>Clic en el logo 🍞 o botón ⬆️</td></tr>
+                <tr><td>Ir al final</td><td>Botón ⬇️ flotante</td></tr>
+                <tr><td>Abrir ayuda</td><td>Clic en ❓ de la barra superior</td></tr>
+                <tr><td>Abrir notificaciones</td><td>Clic en 🔔 de la barra superior</td></tr>
+                <tr><td>Menú de usuario</td><td>Clic en tu nombre o avatar</td></tr>
+                <tr><td>Cerrar modal</td><td>Tecla Escape o clic fuera</td></tr>
+            </table>
+
+            <h3>💡 Consejos de uso</h3>
+            <ul>
+                <li>Configura el <strong>stock mínimo</strong> de cada insumo para recibir alertas</li>
+                <li>Usa <strong>ventas liberadas</strong> para clientes ocasionales</li>
+                <li>Aprovecha la <strong>reserva por período</strong> para clientes frecuentes</li>
+                <li>Activa el <strong>sistema de premios</strong> para fidelizar</li>
+                <li>Revisa el <strong>Dashboard</strong> cada mañana</li>
+                <li>Haz <strong>copias de seguridad</strong> semanales</li>
+            </ul>
+
+            <h3>📱 Instalación como app</h3>
+            <ol>
+                <li>Abre Panario en el navegador (Chrome recomendado)</li>
+                <li>Menú → "Añadir a pantalla de inicio"</li>
+                <li>La app se instalará como PWA</li>
+                <li>Funcionará offline y como app nativa</li>
+            </ol>
+        </section>
+
+        <!-- ============================================================
+             CRÉDITOS
+             ============================================================ -->
+        <section class="help-section" id="creditos">
+            <h2>👨‍💻 Créditos</h2>
+
+            <div style="text-align: center; padding: 20px;">
+                <div style="font-size: 72px; margin-bottom: 12px;">🍞</div>
+                <h3 style="color: var(--primary); margin: 0;">Panario</h3>
+                <p style="color: var(--text-light); margin: 4px 0 20px 0;">"Tu panadería en orden"</p>
+
+                <div style="background: var(--bg-alt); border-radius: var(--radius); padding: 24px; max-width: 400px; margin: 0 auto; text-align: left;">
+                    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+                        <div style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #0ea5e9, #0284c7); display: flex; align-items: center; justify-content: center; font-size: 40px; flex-shrink: 0;">👨‍💻</div>
+                        <div>
+                            <div style="font-weight: 700; font-size: 18px;">Ricardo Castillo Valdés</div>
+                            <div style="font-size: 13px; color: var(--text-light);">Desarrollador y Diseñador</div>
+                        </div>
+                    </div>
+
+                    <div style="border-top: 1px solid var(--border); padding-top: 16px;">
+                        <div style="font-size: 12px; font-weight: 600; color: var(--text-light); margin-bottom: 10px; text-transform: uppercase;">📞 Contacto</div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <div style="display: flex; align-items: center; gap: 10px; font-size: 14px;">
+                                <span style="font-size: 20px;">💬</span>
+                                <span><strong>WhatsApp:</strong> +53 55031725</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px; font-size: 14px;">
+                                <span style="font-size: 20px;">📧</span>
+                                <span><strong>Email:</strong> 3sayricardo@gmail.com</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 24px; color: var(--text-light); font-size: 12px; line-height: 1.7;">
+                    <p><strong>Panario v2.0.2</strong></p>
+                    <p>© 2026 Ricardo Castillo Valdés</p>
+                    <p>Todos los derechos reservados</p>
+                    <p style="margin-top: 12px;">Hecho con ❤️ para panaderos artesanales</p>
+                    <p>Desarrollado en Cuba 🇨🇺</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<!-- ============================================================
+     BOTÓN VOLVER ARRIBA
+     ============================================================ -->
+<button class="back-to-top" id="back-to-top" onclick="scrollToTop()" title="Volver arriba">
+    ⬆
+</button>
+
+<!-- ============================================================
+     FOOTER
+     ============================================================ -->
+<footer class="help-footer">
+    <p>🍞 <strong>Panario v2.0.2</strong> — Ayuda Completa</p>
+    <p style="margin-top: 4px;">Desarrollado por Ricardo Castillo Valdés — © 2026</p>
+</footer>
+
+<!-- ============================================================
+     JAVASCRIPT
+     ============================================================ -->
+<script>
+// ============================================================
+// TEMA
+// ============================================================
+
+function toggleTheme() {
+    const html = document.documentElement;
+    const currentTheme = html.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    html.setAttribute('data-theme', newTheme);
+    localStorage.setItem('ayuda-panario-theme', newTheme);
+    updateThemeIcon(newTheme);
+}
+
+function updateThemeIcon(theme) {
+    const icon = document.getElementById('theme-icon');
+    if (icon) {
+        icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
+}
+
+function initTheme() {
+    const saved = localStorage.getItem('ayuda-panario-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const theme = saved || (prefersDark ? 'dark' : 'light');
+    
+    document.documentElement.setAttribute('data-theme', theme);
+    updateThemeIcon(theme);
+}
+
+// ============================================================
+// SCROLL TO TOP
+// ============================================================
+
+function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function handleScroll() {
+    const btn = document.getElementById('back-to-top');
+    if (btn) {
+        if (window.scrollY > 300) {
+            btn.classList.add('visible');
+        } else {
+            btn.classList.remove('visible');
+        }
+    }
+}
+
+// ============================================================
+// FILTRO DE BÚSQUEDA EN SIDEBAR
+// ============================================================
+
+function filterSidebar() {
+    const query = document.getElementById('sidebar-search').value.toLowerCase().trim();
+    const nav = document.getElementById('sidebar-nav');
+    const links = nav.querySelectorAll('li a');
+    const sections = nav.querySelectorAll('.nav-section');
+    
+    links.forEach(link => {
+        const text = link.textContent.toLowerCase();
+        const matches = text.includes(query);
+        link.parentElement.style.display = matches || !query ? '' : 'none';
+    });
+    
+    // Mostrar/ocultar secciones
+    sections.forEach(section => {
+        let hasVisibleLinks = false;
+        let next = section.nextElementSibling;
+        while (next && !next.classList.contains('nav-section')) {
+            if (next.style.display !== 'none') {
+                hasVisibleLinks = true;
+                break;
+            }
+            next = next.nextElementSibling;
+        }
+        section.style.display = hasVisibleLinks || !query ? '' : 'none';
+    });
+}
+
+// ============================================================
+// NAVEGACIÓN ACTIVA
+// ============================================================
+
+function updateActiveNav() {
+    const sections = document.querySelectorAll('section.help-section');
+    const links = document.querySelectorAll('.sidebar-nav a');
+    
+    let currentSection = '';
+    
+    sections.forEach(section => {
+        const rect = section.getBoundingClientRect();
+        if (rect.top <= 150 && rect.bottom > 150) {
+            currentSection = section.id;
+        }
+    });
+    
+    links.forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('href') === '#' + currentSection) {
+            link.classList.add('active');
+        }
+    });
+}
+
+// ============================================================
+// SMOOTH SCROLL
+// ============================================================
+
+function initSmoothScroll() {
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function(e) {
+            const targetId = this.getAttribute('href');
+            if (targetId === '#') return;
+            
+            const target = document.querySelector(targetId);
+            if (target) {
+                e.preventDefault();
+                const offset = 90;
+                const targetPosition = target.getBoundingClientRect().top + window.scrollY - offset;
+                window.scrollTo({ top: targetPosition, behavior: 'smooth' });
+            }
+        });
+    });
+}
+
+// ============================================================
+// INICIALIZACIÓN
+// ============================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    initTheme();
+    initSmoothScroll();
+    
+    window.addEventListener('scroll', function() {
+        handleScroll();
+        updateActiveNav();
+    });
+    
+    handleScroll();
+    updateActiveNav();
+    
+    console.log('📖 Ayuda de Panario cargada correctamente');
+});
+</script>
+
+</body>
+</html>

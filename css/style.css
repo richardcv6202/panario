@@ -1,0 +1,977 @@
+:root {
+    --bg: #fdf6e3;
+    --bg-card: #ffffff;
+    --bg-input: #ffffff;
+    --text: #2d2d2d;
+    --text-light: #666;
+    --text-label: #444;
+    --primary: #f5a623;
+    --primary-dark: #d4891b;
+    --primary-light: #fef3d6;
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
+    --shadow-hover: 0 4px 20px rgba(0,0,0,0.12);
+    --radius: 16px;
+    --nav-height: 68px;
+    --header-height: 60px;
+    --max-width: 480px;
+    --border-color: #e0d5c0;
+    --border-color-light: #f0ebe0;
+    --input-radius: 10px;
+    --input-padding: 12px 16px;
+    --input-font-size: 15px;
+    --transition-speed: 0.3s;
+    --success: #10b981;
+    --success-bg: #10b98120;
+    --danger: #ef4444;
+    --danger-bg: #ef444420;
+    --warning: #f59e0b;
+    --warning-bg: #f59e0b20;
+    --info: #3b82f6;
+    --info-bg: #3b82f620;
+    --safe-area-inset-top: env(safe-area-inset-top, 0px);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-inset-left: env(safe-area-inset-left, 0px);
+    --safe-area-inset-right: env(safe-area-inset-right, 0px);
+}
+
+/* ============================================================
+   MODO OSCURO MEJORADO
+   ============================================================ */
+
+[data-theme="dark"] {
+    --bg: #0d0d0d;
+    --bg-card: #1a1a1a;
+    --bg-input: #2a2a2a;
+    --text: #e8e0d5;
+    --text-light: #a0a0a0;
+    --text-label: #b0b0b0;
+    --shadow: 0 2px 12px rgba(0,0,0,0.6);
+    --shadow-hover: 0 4px 20px rgba(0,0,0,0.8);
+    --border-color: #3a3a3a;
+    --border-color-light: #2a2a2a;
+    --primary: #f5a623;
+    --primary-dark: #d4891b;
+    --primary-light: #2a2010;
+    --success: #34d399;
+    --success-bg: #34d39920;
+    --danger: #f87171;
+    --danger-bg: #f8717120;
+    --warning: #fbbf24;
+    --warning-bg: #fbbf2420;
+    --info: #60a5fa;
+    --info-bg: #60a5fa20;
+}
+
+/* ============================================================
+   TRANSICIÓN SUAVE PARA CAMBIO DE TEMA
+   ============================================================ */
+
+* {
+    transition: background-color var(--transition-speed) ease,
+                color var(--transition-speed) ease,
+                border-color var(--transition-speed) ease,
+                box-shadow var(--transition-speed) ease;
+}
+
+/* ============================================================
+   GENERAL
+   ============================================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    transition: background var(--transition-speed), color var(--transition-speed);
+    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.screen {
+    display: none;
+    width: 100%;
+    height: 100vh;
+    flex-direction: column;
+    overflow: hidden;
+}
+.screen.active { 
+    display: flex; 
+}
+
+/* ============================================================
+   APLICAR SAFE AREA
+   ============================================================ */
+
+#appScreen {
+    padding-top: var(--safe-area-inset-top);
+    padding-bottom: var(--safe-area-inset-bottom);
+    padding-left: var(--safe-area-inset-left);
+    padding-right: var(--safe-area-inset-right);
+}
+
+/* ============================================================
+   AUTH
+   ============================================================ */
+
+.auth-wrapper {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    background: var(--bg);
+}
+
+.auth-container {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 32px 28px;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: var(--shadow-hover);
+    transition: all var(--transition-speed);
+    margin: 0 auto;
+    border: 1px solid var(--border-color);
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: 28px;
+}
+.auth-header .logo { 
+    font-size: 56px; 
+    display: block;
+    margin-bottom: 4px;
+}
+.auth-header h1 { 
+    font-size: 28px; 
+    color: var(--primary);
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+.auth-header .subtitle { 
+    color: var(--text-light);
+    font-size: 14px;
+    margin-top: 2px;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* ============================================================
+   FORM GROUP
+   ============================================================ */
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.form-group label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-label);
+    margin-bottom: 2px;
+}
+
+/* ============================================================
+   INPUTS HOMOGÉNEOS - MODO OSCURO MEJORADO
+   ============================================================ */
+
+.input-field,
+.input-select,
+.input-textarea,
+.auth-container input,
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: var(--input-padding);
+    border: 2px solid var(--border-color);
+    border-radius: var(--input-radius);
+    font-size: var(--input-font-size);
+    background: var(--bg-input);
+    color: var(--text);
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    outline: none;
+    font-family: inherit;
+    line-height: 1.5;
+}
+
+.input-field:focus,
+.input-select:focus,
+.input-textarea:focus,
+.auth-container input:focus,
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.15);
+    background: var(--bg-input);
+}
+
+.input-field::placeholder,
+.auth-container input::placeholder,
+.form-group input::placeholder {
+    color: var(--text-light);
+    opacity: 0.6;
+}
+
+.input-textarea,
+.form-group textarea {
+    resize: vertical;
+    min-height: 60px;
+    font-family: inherit;
+    line-height: 1.6;
+}
+
+.input-select,
+.form-group select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
+    cursor: pointer;
+}
+
+[data-theme="dark"] .input-select,
+[data-theme="dark"] .form-group select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0a0a0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+}
+
+.input-select:focus,
+.form-group select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.15);
+}
+
+/* ============================================================
+   BOTONES - MODO OSCURO MEJORADO
+   ============================================================ */
+
+.btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: var(--input-radius);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+    font-family: inherit;
+    line-height: 1.5;
+}
+.btn.primary {
+    background: var(--primary);
+    color: #fff;
+}
+.btn.primary:hover { 
+    background: var(--primary-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(245, 166, 35, 0.3);
+}
+.btn.secondary {
+    background: transparent;
+    color: var(--text-light);
+    border: 2px solid var(--border-color);
+}
+.btn.secondary:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+.btn.danger {
+    background: var(--danger);
+    color: #fff;
+}
+.btn.danger:hover {
+    background: #dc2626;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+.btn.success {
+    background: var(--success);
+    color: #fff;
+}
+.btn.success:hover {
+    background: #059669;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+.btn.warning {
+    background: var(--warning);
+    color: #fff;
+}
+.btn.warning:hover {
+    background: #d97706;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.error {
+    color: var(--danger);
+    font-size: 13px;
+    min-height: 20px;
+    text-align: center;
+    margin-top: 4px;
+}
+
+.auth-footer {
+    text-align: center;
+    margin-top: 20px;
+    color: var(--text-light);
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+/* ============================================================
+   APP HEADER - MODO OSCURO MEJORADO
+   ============================================================ */
+
+header {
+    height: var(--header-height);
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg-card);
+    box-shadow: var(--shadow);
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+    z-index: 10;
+    padding-top: calc(12px + var(--safe-area-inset-top, 0px));
+    padding-left: calc(16px + var(--safe-area-inset-left, 0px));
+    padding-right: calc(16px + var(--safe-area-inset-right, 0px));
+}
+header h1 { 
+    font-size: 20px; 
+    flex: 1;
+    font-weight: 700;
+    color: var(--text);
+}
+#userDisplay {
+    font-size: 14px;
+    color: var(--text);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    background: var(--bg);
+}
+#userDisplay:hover {
+    background: var(--border-color);
+    border-color: var(--primary);
+}
+#userDisplay .user-avatar-img {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    overflow: hidden;
+    vertical-align: middle;
+    border: 1px solid var(--border-color);
+}
+#userDisplay .user-avatar-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.icon-btn {
+    background: none;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 8px;
+    transition: all 0.2s;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.icon-btn:hover {
+    background: var(--bg);
+    transform: scale(1.05);
+}
+.icon-btn.logout-btn {
+    color: var(--danger);
+}
+.icon-btn.logout-btn:hover {
+    background: var(--danger-bg);
+}
+
+/* ============================================================
+   MENÚ DE USUARIO - MODO OSCURO MEJORADO
+   ============================================================ */
+
+#userMenu {
+    animation: slideDown 0.2s ease;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-hover);
+}
+#userMenu button {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    color: var(--text);
+}
+#userMenu button:hover {
+    background: var(--bg) !important;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ============================================================
+   MAIN CONTENT
+   ============================================================ */
+
+main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    padding-bottom: calc(var(--nav-height) + 80px + var(--safe-area-inset-bottom, 0px));
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+@supports not (padding-bottom: env(safe-area-inset-bottom)) {
+    main {
+        padding-bottom: calc(var(--nav-height) + 100px) !important;
+    }
+}
+
+/* ============================================================
+   BOTTOM NAV - MODO OSCURO MEJORADO
+   ============================================================ */
+
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--nav-height);
+    background: var(--bg-card);
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    border-top: 1px solid var(--border-color);
+    max-width: 800px;
+    margin: 0 auto;
+    z-index: 100;
+    padding-bottom: var(--safe-area-inset-bottom, 0px);
+}
+
+[data-theme="dark"] .bottom-nav {
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.4);
+}
+
+.nav-item {
+    background: none;
+    border: none;
+    font-size: 26px;
+    padding: 8px 16px;
+    border-radius: 12px;
+    opacity: 0.5;
+    transition: all 0.2s;
+    cursor: pointer;
+    color: var(--text);
+}
+.nav-item:hover {
+    opacity: 0.8;
+}
+.nav-item.active {
+    opacity: 1;
+    background: var(--primary);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(245, 166, 35, 0.3);
+}
+
+/* ============================================================
+   CARDS - MODO OSCURO MEJORADO
+   ============================================================ */
+
+.card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 14px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border-color);
+    transition: all var(--transition-speed);
+}
+.card h2 {
+    margin-bottom: 12px;
+    font-size: 20px;
+    color: var(--text);
+}
+.card h3 {
+    color: var(--text);
+}
+.card h4 {
+    color: var(--text);
+}
+.card p {
+    color: var(--text-light);
+    line-height: 1.6;
+}
+.card:hover {
+    box-shadow: var(--shadow-hover);
+}
+
+[data-theme="dark"] .card {
+    border-color: var(--border-color);
+}
+
+hr {
+    margin: 16px 0;
+    border: none;
+    border-top: 1px solid var(--border-color);
+}
+
+/* ============================================================
+   BADGES - MODO OSCURO MEJORADO
+   ============================================================ */
+
+.badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.badge-success {
+    background: var(--success-bg);
+    color: var(--success);
+}
+
+.badge-danger {
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
+.badge-warning {
+    background: var(--warning-bg);
+    color: var(--warning);
+}
+
+.badge-info {
+    background: var(--info-bg);
+    color: var(--info);
+}
+
+.badge-void {
+    background: #94a3b820;
+    color: #94a3b8;
+}
+
+/* ============================================================
+   SCROLLBAR - MODO OSCURO MEJORADO
+   ============================================================ */
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 10px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-track {
+    background: var(--bg);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: var(--primary-dark);
+}
+
+/* ============================================================
+   BOTONES FLOTANTES - MODO OSCURO MEJORADO
+   ============================================================ */
+
+.scroll-buttons {
+    position: fixed;
+    bottom: calc(var(--nav-height) + 20px + var(--safe-area-inset-bottom, 0px));
+    right: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 90;
+}
+
+.scroll-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow);
+    transition: all 0.2s;
+    opacity: 0.7;
+}
+
+.scroll-btn:hover {
+    opacity: 1;
+    transform: scale(1.05);
+    border-color: var(--primary);
+}
+
+[data-theme="dark"] .scroll-btn {
+    border-color: var(--border-color);
+    background: var(--bg-card);
+    color: var(--text);
+}
+
+/* ============================================================
+   TABLAS - MODO OSCURO MEJORADO
+   ============================================================ */
+
+.table-header {
+    display: grid;
+    background: var(--bg);
+    padding: 8px 12px;
+    border-radius: 8px 8px 0 0;
+    border-bottom: 2px solid var(--border-color);
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text-label);
+    gap: 6px;
+}
+
+.table-row {
+    display: grid;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+}
+
+.table-row:last-child {
+    border-bottom: none;
+}
+
+[data-theme="dark"] .table-header {
+    background: var(--bg);
+    border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .table-row {
+    border-bottom-color: var(--border-color);
+}
+
+/* ============================================================
+   SOFT-DELETE - MODO OSCURO MEJORADO
+   ============================================================ */
+
+.deleted-item {
+    opacity: 0.5;
+    text-decoration: line-through;
+    background: var(--bg);
+    border-left: 4px solid #94a3b8 !important;
+}
+
+.deleted-item .card {
+    opacity: 0.5;
+}
+
+.deleted-badge {
+    font-size: 10px;
+    background: #94a3b8;
+    color: #fff;
+    padding: 1px 8px;
+    border-radius: 12px;
+    margin-left: 6px;
+}
+
+/* ============================================================
+   ANIMACIONES PARA MODALES
+   ============================================================ */
+
+@keyframes modalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes modalSlideUp {
+    from { opacity: 0; transform: translateY(30px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes modalFadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(120%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOutRight {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(120%); opacity: 0; }
+}
+
+@keyframes bellRing {
+    0% { transform: rotate(0deg); }
+    20% { transform: rotate(15deg); }
+    40% { transform: rotate(-15deg); }
+    60% { transform: rotate(10deg); }
+    80% { transform: rotate(-10deg); }
+    100% { transform: rotate(0deg); }
+}
+
+/* ============================================================
+   RESPONSIVE - MODO OSCURO MEJORADO
+   ============================================================ */
+
+/* Móviles pequeños (Samsung A05, iPhone SE, etc.) */
+@media (max-width: 480px) {
+    .auth-container {
+        padding: 24px 18px;
+    }
+    .auth-header .logo { font-size: 44px; }
+    .auth-header h1 { font-size: 24px; }
+    .auth-container input { 
+        padding: 11px 14px;
+        font-size: 14px;
+    }
+    .btn { 
+        padding: 12px;
+        font-size: 15px;
+    }
+    
+    header {
+        height: 50px;
+        padding: 0 10px;
+        padding-top: calc(8px + var(--safe-area-inset-top, 0px));
+        padding-left: calc(10px + var(--safe-area-inset-left, 0px));
+        padding-right: calc(10px + var(--safe-area-inset-right, 0px));
+    }
+    header h1 {
+        font-size: 17px;
+    }
+    #userDisplay {
+        font-size: 12px;
+        padding: 2px 8px;
+    }
+    #userMenu {
+        min-width: 160px;
+        right: 8px;
+        top: 50px !important;
+    }
+    .icon-btn {
+        font-size: 18px;
+        padding: 2px 6px;
+    }
+    
+    main {
+        padding: 12px;
+        padding-bottom: calc(var(--nav-height) + 100px + var(--safe-area-inset-bottom, 0px));
+        padding-bottom: calc(var(--nav-height) + 100px + env(safe-area-inset-bottom, 0px));
+    }
+    
+    .bottom-nav {
+        height: 56px;
+        padding-bottom: var(--safe-area-inset-bottom, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .nav-item {
+        font-size: 20px;
+        padding: 4px 8px;
+    }
+    
+    .scroll-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+    .scroll-buttons {
+        bottom: calc(var(--nav-height) + 30px + var(--safe-area-inset-bottom, 0px));
+        right: 8px;
+    }
+    
+    .card {
+        padding: 14px !important;
+        margin-bottom: 10px;
+    }
+    .card h2 {
+        font-size: 17px;
+    }
+    
+    #dashboard-charts {
+        grid-template-columns: 1fr !important;
+    }
+    #dashboard-stats {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+    #dashboard-stats .card {
+        padding: 10px !important;
+    }
+    #dashboard-stats .card div:first-child {
+        font-size: 10px !important;
+    }
+    #dashboard-stats .card div:last-child {
+        font-size: 18px !important;
+    }
+    #payment-methods {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 6px !important;
+    }
+    #payment-methods > div {
+        padding: 8px 4px !important;
+    }
+    #payment-methods > div div {
+        font-size: 11px !important;
+    }
+    #quick-actions {
+        flex-direction: column !important;
+    }
+    #quick-actions .btn {
+        width: 100% !important;
+        flex: none !important;
+        min-width: unset !important;
+        padding: 8px 12px !important;
+        font-size: 13px !important;
+    }
+}
+
+/* Móviles medianos */
+@media (max-width: 600px) {
+    #dashboard-charts {
+        grid-template-columns: 1fr !important;
+    }
+    #dashboard-stats {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    #payment-methods {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+/* Tablets y desktop */
+@media (min-width: 768px) {
+    .auth-container {
+        padding: 48px 40px;
+        max-width: 440px;
+    }
+    .auth-header .logo { font-size: 64px; }
+    .auth-header h1 { font-size: 32px; }
+    
+    main {
+        padding: 24px;
+        padding-bottom: calc(var(--nav-height) + 40px);
+        max-width: 900px;
+    }
+    
+    .bottom-nav {
+        max-width: 900px;
+        height: 72px;
+    }
+    .nav-item {
+        font-size: 30px;
+        padding: 10px 24px;
+    }
+    
+    header h1 { font-size: 24px; }
+    #userDisplay { font-size: 15px; }
+    .icon-btn { font-size: 24px; }
+}
+
+/* Desktop grande */
+@media (min-width: 1200px) {
+    main {
+        max-width: 1100px;
+        padding: 32px;
+        padding-bottom: calc(var(--nav-height) + 50px);
+    }
+    .bottom-nav {
+        max-width: 1100px;
+    }
+    .card {
+        padding: 28px;
+    }
+}
+
+/* Ajuste para pantallas muy anchas */
+@media (min-width: 1400px) {
+    .bottom-nav {
+        left: 50%;
+        transform: translateX(-50%);
+        width: 1100px;
+    }
+}
+
+main > *:last-child {
+    margin-bottom: 8px;
+}
+
+/* Fix específico para Samsung y Android con gesture bar */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    main {
+        padding-bottom: calc(var(--nav-height) + 100px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    .bottom-nav {
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    }
+    .scroll-buttons {
+        bottom: calc(var(--nav-height) + 30px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+}
+
+@media (max-width: 480px) and (orientation: portrait) {
+    main {
+        padding-bottom: calc(var(--nav-height) + 120px + var(--safe-area-inset-bottom, 0px)) !important;
+        padding-bottom: calc(var(--nav-height) + 120px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    .card:last-child {
+        margin-bottom: 30px;
+    }
+    .bottom-nav {
+        padding-bottom: var(--safe-area-inset-bottom, 0px) !important;
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    }
+    .scroll-buttons {
+        bottom: calc(var(--nav-height) + 40px + var(--safe-area-inset-bottom, 0px)) !important;
+        bottom: calc(var(--nav-height) + 40px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+}
+
+@media (max-width: 400px) {
+    main {
+        padding-bottom: calc(var(--nav-height) + 130px + var(--safe-area-inset-bottom, 0px)) !important;
+    }
+}

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Panario - Panadería Artesanal</title>
+    
+    <!-- ============================================================ -->
+    <!-- 📱 ICONOS Y FAVICON -->
+    <!-- ============================================================ -->
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon16.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon32.ico">
+    <link rel="apple-touch-icon" href="assets/icon-192.png">
+    
+    <!-- ============================================================ -->
+    <!-- 📱 PWA -->
+    <!-- ============================================================ -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#f5a623">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Panario">
+    
+    <!-- ============================================================ -->
+    <!-- 📦 ESTILOS -->
+    <!-- ============================================================ -->
+    <link rel="stylesheet" href="css/style.css">
+    
+</head>
+<body>
+    <!-- ============================================================ -->
+    <!-- PANTALLA DE LOGIN/REGISTRO -->
+    <!-- ============================================================ -->
+    <div id="authScreen" class="screen active">
+        <div class="auth-wrapper">
+            <div class="auth-container">
+                <div class="auth-header">
+                    <div class="logo">🍞</div>
+                    <h1>Panario</h1>
+                    <p class="subtitle">Tu panadería en orden</p>
+                </div>
+                
+                <div id="loginForm" class="auth-form">
+                    <div class="form-group">
+                        <label for="loginUser">👤 Usuario</label>
+                        <input type="text" id="loginUser" placeholder="Ej: richard_pan" autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPass">🔒 Contraseña</label>
+                        <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password">
+                    </div>
+                    <button id="loginBtn" class="btn primary">Iniciar sesión</button>
+                    <button id="showRegisterBtn" class="btn secondary">📝 Registrarme</button>
+                    <div id="loginError" class="error"></div>
+                </div>
+
+                <div id="registerForm" class="auth-form" style="display:none">
+                    <div class="form-group">
+                        <label for="regUser">👤 Usuario</label>
+                        <input type="text" id="regUser" placeholder="Elige un nombre de usuario" autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="regPass">🔒 Contraseña</label>
+                        <input type="password" id="regPass" placeholder="Mínimo 4 caracteres" autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="regName">📛 Nombre completo</label>
+                        <input type="text" id="regName" placeholder="Tu nombre y apellidos">
+                    </div>
+                    
+                    <!-- 🆕 SELECCIÓN DE MODO DE NEGOCIO -->
+                    <div class="form-group">
+                        <label>🏢 Modo de negocio</label>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <label class="negocio-mode-option" 
+                                   style="flex: 1; min-width: 120px; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--primary); cursor: pointer; text-align: center; background: var(--primary-light); transition: all 0.2s;"
+                                   onclick="selectNegocioMode('crear')">
+                                <input type="radio" name="negocioMode" value="crear" checked style="display: none;">
+                                <div style="font-size: 24px; margin-bottom: 4px;">🆕</div>
+                                <div style="font-size: 13px; font-weight: 600;">Crear negocio</div>
+                                <div style="font-size: 10px; color: var(--text-light);">Soy el administrador</div>
+                            </label>
+                            <label class="negocio-mode-option"
+                                   style="flex: 1; min-width: 120px; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg); transition: all 0.2s;"
+                                   onclick="selectNegocioMode('unirse')">
+                                <input type="radio" name="negocioMode" value="unirse" style="display: none;">
+                                <div style="font-size: 24px; margin-bottom: 4px;">🔗</div>
+                                <div style="font-size: 13px; font-weight: 600;">Unirme a uno</div>
+                                <div style="font-size: 10px; color: var(--text-light);">Tengo un código</div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Campo para NOMBRE DEL NEGOCIO (visible si "crear") -->
+                    <div class="form-group" id="negocio-name-group">
+                        <label for="regBusiness">🏪 Nombre del negocio</label>
+                        <input type="text" id="regBusiness" placeholder="Ej: Panadería La Esquina">
+                    </div>
+                    
+                    <!-- Campo para CÓDIGO DE INVITACIÓN (visible si "unirse") -->
+                    <div class="form-group" id="negocio-code-group" style="display: none;">
+                        <label for="regCodigo">🔑 Código de invitación</label>
+                        <input type="text" id="regCodigo" placeholder="Ej: ABC12345" maxlength="8" 
+                               style="text-transform: uppercase; letter-spacing: 2px; font-weight: 600;"
+                               oninput="previewNegocio(this.value)">
+                        <div id="negocio-preview" style="margin-top: 6px; font-size: 12px;"></div>
+                        <small style="font-size: 11px; color: var(--text-light);">Pídele el código al administrador del negocio</small>
+                    </div>
+                    
+                    <button id="registerBtn" class="btn primary">Crear cuenta</button>
+                    <button id="showLoginBtn" class="btn secondary">← Ya tengo cuenta</button>
+                    <div id="registerError" class="error"></div>
+                </div>
+
+                <div class="auth-footer">
+                    <small>💾 Datos guardados localmente en tu dispositivo</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- APP PRINCIPAL (LOGUEADO) -->
+    <!-- ============================================================ -->
+    <div id="appScreen" class="screen">
+        <!-- HEADER -->
+        <header>
+            <h1>🍞 Panario</h1>
+            <div style="display: flex; align-items: center; gap: 8px; position: relative;">
+                
+                <!-- 🔔 CAMPANITA DE NOTIFICACIONES -->
+                <div id="notification-bell" 
+                     onclick="window.NotificationsModule?.showNotificationsModal()" 
+                     style="position: relative; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 22px; padding: 4px 8px; border-radius: 8px; transition: all 0.2s; color: var(--text); user-select: none;"
+                     onmouseover="this.style.background='var(--bg)'" 
+                     onmouseout="this.style.background='transparent'"
+                     title="Notificaciones">
+                    <span style="font-size: 22px; line-height: 1;">🔔</span>
+                    <span id="bell-badge" style="position: absolute; top: -2px; right: -4px; background: #ef4444; color: #fff; font-size: 10px; font-weight: 700; min-width: 18px; height: 18px; border-radius: 50%; display: none; align-items: center; justify-content: center; padding: 0 4px; border: 2px solid var(--bg-card); box-shadow: 0 2px 4px rgba(0,0,0,0.2); line-height: 1; font-family: system-ui, -apple-system, sans-serif;">0</span>
+                </div>
+                
+                <!-- ❓ BOTÓN DE AYUDA -->
+                <div id="help-button" 
+                     onclick="if(window.HelpModule && window.HelpModule.showHelpMenu) window.HelpModule.showHelpMenu(); else if(window.showHelpMenu) window.showHelpMenu(); else window.showToast('❓ Centro de ayuda no disponible', 'warning', 3000);" 
+                     style="cursor: pointer; font-size: 20px; padding: 4px 8px; border-radius: 8px; transition: all 0.2s; color: var(--text);" 
+                     title="Centro de Ayuda"
+                     onmouseover="this.style.background='var(--bg)'" 
+                     onmouseout="this.style.background='transparent'">
+                    ❓
+                </div>
+                
+                <!-- AVATAR Y NOMBRE DE USUARIO -->
+                <span id="userDisplay" onclick="toggleUserMenu()" style="cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; background: var(--bg); border: 1px solid var(--border-color); transition: all 0.2s;">
+                    👤 <span id="userNameDisplay">Usuario</span>
+                </span>
+                
+                <!-- BOTÓN DE CERRAR SESIÓN -->
+                <button id="logoutHeaderBtn" onclick="handleLogout()" class="icon-btn" title="Cerrar sesión" style="background: none; border: none; font-size: 22px; cursor: pointer; padding: 4px 8px; border-radius: 8px; transition: background 0.2s; color: var(--text); display: flex; align-items: center; gap: 4px;">
+                    🚪
+                </button>
+            </div>
+        </header>
+
+        <!-- MENÚ DE USUARIO -->
+        <div id="userMenu" style="display: none; position: fixed; top: 60px; right: 16px; background: var(--bg-card); border-radius: var(--radius); box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid var(--border-color); min-width: 200px; z-index: 9999; overflow: hidden;">
+            <div style="padding: 12px 16px; border-bottom: 1px solid var(--border-color);">
+                <div style="font-weight: 600; font-size: 14px;" id="menuUserName">Usuario</div>
+                <div style="font-size: 12px; color: var(--text-light);" id="menuUserEmail">usuario@email.com</div>
+            </div>
+            <div style="padding: 8px 0;">
+                <button onclick="window.navigate('profile'); document.getElementById('userMenu').style.display='none'" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 16px; border: none; background: none; cursor: pointer; font-size: 14px; color: var(--text); transition: background 0.2s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
+                    👤 Mi Perfil
+                </button>
+                <button onclick="handleLogout()" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 16px; border: none; background: none; cursor: pointer; font-size: 14px; color: #ef4444; transition: background 0.2s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
+                    🚪 Cerrar sesión
+                </button>
+            </div>
+        </div>
+
+        <!-- CONTENIDO DINÁMICO -->
+        <main id="mainContent">
+            <!-- Se carga por JS -->
+        </main>
+
+        <!-- MENÚ INFERIOR -->
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-section="dashboard" title="Panel">📊</button>
+            <button class="nav-item" data-section="orders" title="Pedidos">📋</button>
+            <button class="nav-item" data-section="insumos" title="Insumos">🛒</button>
+            <button class="nav-item" data-section="recipes" title="Recetas">📖</button>
+            <button class="nav-item" data-section="productos" title="Productos">🏷️</button>
+            <button class="nav-item" data-section="sales" title="Ventas">💰</button>
+            <button class="nav-item" data-section="settings" title="Herramientas">⚙️</button>
+            <button class="nav-item" data-section="profile" title="Perfil">👤</button>
+        </nav>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- 📦 CARGAR SQLITE (SQL.js) - LOCAL -->
+    <!-- ============================================================ -->
+    <script src="lib/sql-wasm.js"></script>
+    
+    <!-- ============================================================ -->
+    <!-- 📦 CARGAR LIBRERÍA QRCODE - LOCAL -->
+    <!-- ============================================================ -->
+    <script src="lib/qrcode.js"></script>
+    
+    <!-- ============================================================ -->
+    <!-- 📦 SCRIPTS DE PANARIO - TODOS LOS MÓDULOS -->
+    <!-- ============================================================ -->
+    
+    <!-- Módulo de modales (DEBE IR PRIMERO) -->
+    <script src="js/modal.js"></script>
+    
+    <!-- Módulos base -->
+    <script src="js/db.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/theme.js"></script>
+    <script src="js/profile.js"></script>
+    
+    <!-- Módulo de notificaciones -->
+    <script src="js/notifications.js"></script>
+    
+    <!-- Módulo de corriente (utilidades compartidas) -->
+    <script src="js/corriente-utils.js"></script>
+    
+    <!-- Módulo de pedidos -->
+    <script src="js/orders.js"></script>
+    <script src="js/ui-orders.js"></script>
+    
+    <!-- Módulo de insumos -->
+    <script src="js/ui-insumos.js"></script>
+    
+    <!-- Módulo de recetas -->
+    <script src="js/recipes.js"></script>
+    <script src="js/ui-recipes.js"></script>
+    
+    <!-- Módulo de productos -->
+    <script src="js/ui-productos.js"></script>
+    
+    <!-- Módulo de ventas -->
+    <script src="js/sales.js"></script>
+    <script src="js/ui-sales.js"></script>
+    
+    <!-- Módulo de dashboard -->
+    <script src="js/dashboard.js"></script>
+    
+    <!-- Módulo de herramientas -->
+    <script src="js/ui-settings.js"></script>
+    
+    <!-- Módulo de reportes -->
+    <script src="js/reports.js"></script>
+    
+    <!-- Módulo de premios (FASE 12) -->
+    <script src="js/rewards.js"></script>
+    
+    <!-- Módulo de ayuda -->
+    <script src="js/help.js"></script>
+    
+    <!-- Controlador principal (siempre al final) -->
+    <script src="js/app.js"></script>
+
+</body>
+</html>
