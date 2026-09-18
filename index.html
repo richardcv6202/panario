@@ -262,5 +262,297 @@
     <!-- Controlador principal (siempre al final) -->
     <script src="js/app.js"></script>
 
+    <!-- ============================================================ -->
+    <!-- 🆕 SERVICE WORKER - REGISTRO Y ACTUALIZACIÓN -->
+    <!-- ============================================================ -->
+    <script>
+    // ============================================================
+    // SERVICE WORKER REGISTRATION
+    // ============================================================
+    // Registra el SW con ruta RELATIVA (./sw.js) para que funcione
+    // tanto en localhost como en GitHub Pages (subcarpeta).
+    // 
+    // - Detecta nuevas versiones del SW y avisa al usuario.
+    // - Maneja errores sin bloquear la app.
+    // - Solo registra en contextos seguros (HTTPS o localhost).
+    // ============================================================
+    
+    (function() {
+        'use strict';
+        
+        // ============================================================
+        // VERIFICAR SOPORTE
+        // ============================================================
+        if (!('serviceWorker' in navigator)) {
+            console.log('ℹ️ Service Worker no soportado en este navegador');
+            return;
+        }
+        
+        // ============================================================
+        // VERIFICAR CONTEXTO SEGURO
+        // ============================================================
+        // GitHub Pages sirve por HTTPS ✅
+        // localhost también es contexto seguro ✅
+        // file:// NO es contexto seguro ❌
+        const isSecureContext = (
+            window.location.protocol === 'https:' ||
+            window.location.hostname === 'localhost' ||
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname === '[::1]'
+        );
+        
+        if (!isSecureContext) {
+            console.log('ℹ️ Service Worker solo se registra en HTTPS o localhost');
+            return;
+        }
+        
+        // ============================================================
+        // REGISTRAR SERVICE WORKER
+        // ============================================================
+        // Ruta RELATIVA: './sw.js'
+        // Funciona en:
+        //   - https://usuario.github.io/panario/sw.js
+        //   - http://localhost:8000/sw.js
+        //   - http://localhost:3000/panario/sw.js
+        // ============================================================
+        
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('./sw.js', {
+                // scope relativo al directorio del SW
+                scope: './'
+            })
+            .then(function(registration) {
+                console.log('✅ Service Worker registrado correctamente');
+                console.log('   📍 Scope:', registration.scope);
+                
+                // ============================================================
+                // DETECTAR ACTUALIZACIONES DEL SERVICE WORKER
+                // ============================================================
+                registration.addEventListener('updatefound', function() {
+                    const newWorker = registration.installing;
+                    if (!newWorker) return;
+                    
+                    console.log('🔄 Nueva versión del SW detectada, instalando...');
+                    
+                    newWorker.addEventListener('statechange', function() {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            // Hay una nueva versión lista para activar
+                            console.log('✨ Nueva versión lista. Mostrando aviso al usuario.');
+                            
+                            // Solo mostrar si la app ya está cargada
+                            setTimeout(function() {
+                                if (window.ModalModule && window.ModalModule.showConfirm) {
+                                    window.ModalModule.showConfirm({
+                                        title: '✨ Actualización disponible',
+                                        message: 'Hay una nueva versión de Panario disponible.\n\n¿Quieres actualizar ahora?\n\nSe recargará la página.',
+                                        confirmText: '🔄 Sí, actualizar',
+                                        cancelText: '⏰ Más tarde',
+                                        icon: '✨',
+                                        confirmColor: '#f5a623'
+                                    }).then(function(confirm) {
+                                        if (confirm) {
+                                            // Enviar mensaje al SW para que se active
+                                            newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                            
+                                            // Recargar cuando el nuevo SW tome control
+                                            let refreshing = false;
+                                            navigator.serviceWorker.addEventListener('controllerchange', function() {
+                                                if (refreshing) return;
+                                                refreshing = true;
+                                                window.location.reload();
+                                            });
+                                            
+                                            // Fallback por si controllerchange no dispara
+                                            setTimeout(function() {
+                                                if (!refreshing) {
+                                                    refreshing = true;
+                                                    window.location.reload();
+                                                }
+                                            }, 3000);
+                                        }
+                                    });
+                                } else if (window.confirm) {
+                                    // Fallback: usar confirm nativo si el ModalModule no está listo
+                                    if (window.confirm('✨ Nueva versión de Panario disponible.\n\n¿Actualizar ahora?')) {
+                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                        setTimeout(function() {
+                                            window.location.reload();
+                                        }, 500);
+                                    }
+                                }
+                            }, 1500);
+                        }
+                    });
+                });
+                
+                // ============================================================
+                // VERIFICAR ACTUALIZACIONES CADA 30 MINUTOS
+                // ============================================================
+                setInterval(function() {
+                    registration.update().catch(function(err) {
+                        // Silenciar errores de actualización (offline, etc.)
+                    });
+                }, 30 * 60 * 1000);
+                
+                // ============================================================
+                // VERIFICAR ACTUALIZACIONES AL VOLVER A LA PESTAÑA
+                // ============================================================
+                document.addEventListener('visibilitychange', function() {
+                    if (document.visibilityState === 'visible') {
+                        registration.update().catch(function() {});
+                    }
+                });
+                
+            })
+            .catch(function(error) {
+                console.warn('⚠️ Error registrando Service Worker:', error.message);
+                console.warn('   La app funcionará sin modo offline.');
+            });
+        });
+        
+        // ============================================================
+        // MANEJO DE CAMBIOS DE CONTROLADOR
+        // ============================================================
+        // Cuando el SW toma control de la página por primera vez,
+        // no recargamos automáticamente para evitar loops.
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function() {
+            if (refreshing) return;
+            // No recargar aquí automáticamente para evitar loops
+            // Solo marcar que el SW está controlando
+            console.log('🔧 Service Worker ahora controla la página');
+        });
+        
+        // ============================================================
+        // VERIFICAR SI HAY ACTUALIZACIONES PENDIENTES AL CARGAR
+        // ============================================================
+        navigator.serviceWorker.ready.then(function(registration) {
+            console.log('✅ Service Worker listo');
+            console.log('   📦 Scope:', registration.scope);
+            console.log('   🎯 Estado:', registration.active ? 'activo' : 'inactivo');
+        });
+        
+    })();
+    
+    // ============================================================
+    // PROCESAR PARÁMETRO ?section= DE LA URL (Shortcuts del manifest)
+    // ============================================================
+    // Los shortcuts del manifest abren: index.html?section=dashboard
+    // Este código redirige a la sección correcta tras el login.
+    // ============================================================
+    (function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const sectionParam = urlParams.get('section');
+        
+        if (sectionParam) {
+            console.log('🧭 Sección solicitada por URL:', sectionParam);
+            
+            // Guardar para que app.js la use tras el login
+            window._pendingSection = sectionParam;
+            
+            // Limpiar la URL (sin recargar)
+            const cleanUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, cleanUrl);
+            
+            // Escuchar el evento de login para navegar
+            document.addEventListener('panario:logged-in', function() {
+                setTimeout(function() {
+                    if (window._pendingSection && window.navigate) {
+                        console.log('🧭 Navegando a sección pendiente:', window._pendingSection);
+                        window.navigate(window._pendingSection);
+                        window._pendingSection = null;
+                    }
+                }, 500);
+            });
+        }
+    })();
+    
+    // ============================================================
+    // PWA: MANEJO DE INSTALACIÓN (beforeinstallprompt)
+    // ============================================================
+    // Captura el evento de instalación de la PWA y permite
+    // al usuario instalarla desde un botón en la app.
+    // ============================================================
+    (function() {
+        let deferredPrompt = null;
+        
+        window.addEventListener('beforeinstallprompt', function(e) {
+            // Prevenir el banner por defecto del navegador
+            e.preventDefault();
+            
+            // Guardar el evento para usarlo después
+            deferredPrompt = e;
+            
+            console.log('📱 PWA: Disponible para instalar');
+            
+            // Exponer función global para que la app pueda llamarla
+            window._installPWA = function() {
+                if (!deferredPrompt) {
+                    console.log('ℹ️ PWA: No hay prompt de instalación disponible');
+                    return false;
+                }
+                
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(function(choiceResult) {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('✅ PWA: Usuario aceptó la instalación');
+                        if (window.showToast) {
+                            window.showToast('✅ Panario instalado correctamente', 'success', 3000);
+                        }
+                    } else {
+                        console.log('ℹ️ PWA: Usuario canceló la instalación');
+                    }
+                    deferredPrompt = null;
+                });
+                
+                return true;
+            };
+        });
+        
+        // ============================================================
+        // DETECTAR SI YA ESTÁ INSTALADA
+        // ============================================================
+        window.addEventListener('appinstalled', function() {
+            console.log('✅ PWA: Panario instalado');
+            deferredPrompt = null;
+        });
+        
+        // ============================================================
+        // DETECTAR MODO STANDALONE (ya instalada)
+        // ============================================================
+        if (window.matchMedia('(display-mode: standalone)').matches || 
+            window.navigator.standalone === true) {
+            console.log('📱 PWA: Ejecutándose en modo standalone (instalada)');
+            document.documentElement.setAttribute('data-pwa-installed', 'true');
+        }
+    })();
+    
+    // ============================================================
+    // PWA: DETECTAR CAMBIOS DE CONECTIVIDAD
+    // ============================================================
+    (function() {
+        window.addEventListener('online', function() {
+            console.log('🌐 Conexión restaurada');
+            if (window.showToast) {
+                window.showToast('🌐 Conexión restaurada', 'success', 2000);
+            }
+        });
+        
+        window.addEventListener('offline', function() {
+            console.log('📡 Sin conexión — Panario sigue funcionando offline');
+            if (window.showToast) {
+                window.showToast('📡 Sin conexión — Panario sigue funcionando', 'info', 3000);
+            }
+        });
+        
+        // Estado inicial
+        if (!navigator.onLine) {
+            console.log('📡 Iniciando sin conexión — modo offline activo');
+        }
+    })();
+    
+    console.log('📦 PWA Scripts cargados correctamente');
+    </script>
+
 </body>
 </html>
