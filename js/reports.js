@@ -4,9 +4,43 @@
 // CORREGIDO FASE 2 (160926):
 //   - generateOrdersReport() ahora procesa filtros client/product/onlyDebts (Problema #10)
 //   - generateSalesReport() ahora acepta más filtros (Problema #7)
+// AÑADIDO (180926 v4):
+//   - Nombre del negocio en el encabezado y pie de TODOS los reportes
+//   - getNombreNegocioReporte() helper local
 // ============================================================
 
 window.ReportsModule = {};
+
+// ============================================================
+// 🆕 HELPER: OBTENER NOMBRE DEL NEGOCIO PARA REPORTES
+// ============================================================
+
+/**
+ * Devuelve el nombre del negocio actual para usar en reportes.
+ * Usa window.getNombreNegocio() si existe (definido en app.js).
+ * Fallback: "Panario".
+ * 
+ * @returns {string} Nombre del negocio
+ */
+function getNombreNegocioReporte() {
+    try {
+        if (typeof window.getNombreNegocio === 'function') {
+            return window.getNombreNegocio();
+        }
+        
+        // Fallback: intentar obtener del usuario actual
+        const user = window.AuthModule?.getCurrentUser();
+        if (user) {
+            if (user.negocio && user.negocio.nombre) return user.negocio.nombre;
+            if (user.business_name) return user.business_name;
+        }
+        
+        return 'Panario';
+    } catch (e) {
+        console.warn('⚠️ Error obteniendo nombre del negocio para reporte:', e);
+        return 'Panario';
+    }
+}
 
 // ============================================================
 // REPORTE DE VENTAS (CON FILTROS AMPLIADOS - Problema #7)
@@ -42,34 +76,34 @@ function generateSalesReport(filters = {}) {
             params.push(filters.payment_method);
         }
 
-        // 🆕 FASE 2 (Problema #7): Filtro por cliente
+        // Filtro por cliente
         if (filters.client) {
             sql += ' AND LOWER(s.buyer) LIKE LOWER(?)';
             params.push('%' + filters.client + '%');
         }
 
-        // 🆕 FASE 2 (Problema #7): Filtro por producto
+        // Filtro por producto
         if (filters.product) {
             sql += ' AND (LOWER(s.product_name) LIKE LOWER(?) OR LOWER(p.nombre) LIKE LOWER(?))';
             const productTerm = '%' + filters.product + '%';
             params.push(productTerm, productTerm);
         }
 
-        // 🆕 FASE 2 (Problema #7): Solo ventas liberadas
+        // Solo ventas liberadas
         if (filters.is_liberated === true) {
             sql += ' AND s.is_liberated = 1';
         } else if (filters.is_liberated === false) {
             sql += ' AND s.is_liberated = 0';
         }
 
-        // 🆕 FASE 2 (Problema #7): Solo deudas
+        // Solo deudas
         if (filters.is_debt === true) {
             sql += ' AND s.is_debt = 1 AND s.paid = 0';
         } else if (filters.is_debt === false) {
             sql += ' AND s.is_debt = 0';
         }
 
-        // 🆕 FASE 2 (Problema #7): Filtro por sesión
+        // Filtro por sesión
         if (filters.session) {
             sql += ' AND s.session = ?';
             params.push(filters.session);
@@ -101,7 +135,7 @@ function generateSalesReport(filters = {}) {
             products[name].total += s.total;
         });
 
-        // 🆕 FASE 2 (Problema #7): Clientes con más compras (si no se filtró por cliente)
+        // Clientes con más compras (si no se filtró por cliente)
         const clients = {};
         if (!filters.client) {
             sales.forEach(s => {
@@ -125,6 +159,8 @@ function generateSalesReport(filters = {}) {
 }
 
 function generateSalesReportHTML(sales, totalVentas, totalIngresos, totalDeudas, totalLiberadas, countLiberadas, paymentMethods, products, clients, filters) {
+    const nombreNegocio = getNombreNegocioReporte();
+    
     const periodo = filters.from_date && filters.to_date ? 
         `${formatDateReport(filters.from_date)} al ${formatDateReport(filters.to_date)}` : 
         'Todos los períodos';
@@ -190,11 +226,12 @@ function generateSalesReportHTML(sales, totalVentas, totalIngresos, totalDeudas,
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Reporte de Ventas - Panario</title>
+            <title>Reporte de Ventas - ${nombreNegocio}</title>
             <style>
                 * { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
                 body { padding: 20px; background: #fff; font-size: 14px; }
                 .header { text-align: center; margin-bottom: 25px; border-bottom: 3px solid #f5a623; padding-bottom: 15px; }
+                .header .negocio { color: #2d2d2d; font-size: 16px; font-weight: 700; margin-bottom: 4px; }
                 .header h1 { color: #f5a623; font-size: 24px; }
                 .header p { color: #666; font-size: 13px; margin-top: 2px; }
                 .filters-info { background: #fef3d6; padding: 8px 12px; border-radius: 6px; margin-bottom: 15px; font-size: 12px; color: #92400e; }
@@ -214,6 +251,7 @@ function generateSalesReportHTML(sales, totalVentas, totalIngresos, totalDeudas,
                 tr:nth-child(even) { background: #fafafa; }
                 .total-row { font-weight: 700; background: #f8f9fa; }
                 .footer { margin-top: 25px; text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #eee; padding-top: 15px; }
+                .footer .negocio { color: #666; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
                 .debt-highlight { color: #ef4444; font-weight: 600; }
                 .liberated-highlight { color: #8b5cf6; font-weight: 600; }
                 @media print {
@@ -234,6 +272,7 @@ function generateSalesReportHTML(sales, totalVentas, totalIngresos, totalDeudas,
         </head>
         <body>
             <div class="header">
+                <div class="negocio">🏢 ${nombreNegocio}</div>
                 <h1>📊 Reporte de Ventas</h1>
                 <p>${periodo}</p>
                 <p style="font-size: 12px; color: #94a3b8;">Generado: ${new Date().toLocaleString('es-ES')}</p>
@@ -348,6 +387,7 @@ function generateSalesReportHTML(sales, totalVentas, totalIngresos, totalDeudas,
             </div>
 
             <div class="footer">
+                <div class="negocio">🏢 ${nombreNegocio}</div>
                 Reporte generado desde Panario 🍞 - ${new Date().toLocaleString('es-ES')}
             </div>
         </body>
@@ -367,7 +407,6 @@ function generateOrdersReport(filters = {}) {
     }
 
     try {
-        // 🔧 CORRECCIÓN FASE 2: Consulta simplificada que funciona sin GROUP_CONCAT problemático
         let sql = `
             SELECT o.*
             FROM orders o
@@ -388,13 +427,13 @@ function generateOrdersReport(filters = {}) {
             params.push(filters.to_date);
         }
 
-        // 🆕 FASE 2 (Problema #10): Filtro por cliente (búsqueda "contiene")
+        // Filtro por cliente (búsqueda "contiene")
         if (filters.client) {
             sql += ' AND LOWER(o.client_name) LIKE LOWER(?)';
             params.push('%' + filters.client + '%');
         }
 
-        // 🆕 FASE 2 (Problema #10): Filtro por producto
+        // Filtro por producto
         if (filters.product) {
             sql += ` AND EXISTS (
                 SELECT 1 FROM order_items oi 
@@ -409,7 +448,7 @@ function generateOrdersReport(filters = {}) {
 
         const orders = window.DBModule.query(sql, params);
 
-        // 🔧 CORRECCIÓN: Cargar items por separado para cada pedido
+        // Cargar items por separado para cada pedido
         let ordersWithItems = orders.map(order => {
             const items = window.DBModule.query(`
                 SELECT oi.*, p.nombre as producto_nombre
@@ -425,7 +464,7 @@ function generateOrdersReport(filters = {}) {
             };
         });
 
-        // 🆕 FASE 2 (Problema #10): Filtro "solo con deuda pendiente"
+        // Filtro "solo con deuda pendiente"
         if (filters.onlyDebts) {
             ordersWithItems = ordersWithItems.filter(o => {
                 const totalPaid = window.DBModule.query(
@@ -470,6 +509,8 @@ function generateOrdersReport(filters = {}) {
 }
 
 function generateOrdersReportHTML(orders, totalPedidos, totalEntregados, totalPendientes, totalCancelados, totalEnEspera, statusCount, statusLabels, filters) {
+    const nombreNegocio = getNombreNegocioReporte();
+    
     const periodo = filters.from_date && filters.to_date ? 
         `${formatDateReport(filters.from_date)} al ${formatDateReport(filters.to_date)}` : 
         'Todos los períodos';
@@ -497,11 +538,12 @@ function generateOrdersReportHTML(orders, totalPedidos, totalEntregados, totalPe
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Reporte de Pedidos - Panario</title>
+            <title>Reporte de Pedidos - ${nombreNegocio}</title>
             <style>
                 * { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
                 body { padding: 20px; background: #fff; font-size: 14px; }
                 .header { text-align: center; margin-bottom: 25px; border-bottom: 3px solid #3b82f6; padding-bottom: 15px; }
+                .header .negocio { color: #2d2d2d; font-size: 16px; font-weight: 700; margin-bottom: 4px; }
                 .header h1 { color: #3b82f6; font-size: 24px; }
                 .header p { color: #666; font-size: 13px; margin-top: 2px; }
                 .filters-info { background: #dbeafe; padding: 8px 12px; border-radius: 6px; margin-bottom: 15px; font-size: 12px; color: #1e40af; }
@@ -524,6 +566,7 @@ function generateOrdersReportHTML(orders, totalPedidos, totalEntregados, totalPe
                 td { padding: 6px 10px; border-bottom: 1px solid #eee; }
                 tr:nth-child(even) { background: #fafafa; }
                 .footer { margin-top: 25px; text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #eee; padding-top: 15px; }
+                .footer .negocio { color: #666; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
                 .status-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; }
                 .status-pending { background: #f59e0b20; color: #f59e0b; }
                 .status-delivered { background: #10b98120; color: #10b981; }
@@ -547,6 +590,7 @@ function generateOrdersReportHTML(orders, totalPedidos, totalEntregados, totalPe
         </head>
         <body>
             <div class="header">
+                <div class="negocio">🏢 ${nombreNegocio}</div>
                 <h1>📋 Reporte de Pedidos</h1>
                 <p>${periodo}</p>
                 <p style="font-size: 12px; color: #94a3b8;">Generado: ${new Date().toLocaleString('es-ES')}</p>
@@ -629,6 +673,7 @@ function generateOrdersReportHTML(orders, totalPedidos, totalEntregados, totalPe
             </div>
 
             <div class="footer">
+                <div class="negocio">🏢 ${nombreNegocio}</div>
                 Reporte generado desde Panario 🍞 - ${new Date().toLocaleString('es-ES')}
             </div>
         </body>
@@ -666,17 +711,20 @@ function generateInsumosReport() {
 }
 
 function generateInsumosReportHTML(insumos, totalInsumos, totalValor, stockBajo, sinStock) {
+    const nombreNegocio = getNombreNegocioReporte();
+    
     return `
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Reporte de Insumos - Panario</title>
+            <title>Reporte de Insumos - ${nombreNegocio}</title>
             <style>
                 * { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
                 body { padding: 20px; background: #fff; font-size: 14px; }
                 .header { text-align: center; margin-bottom: 25px; border-bottom: 3px solid #10b981; padding-bottom: 15px; }
+                .header .negocio { color: #2d2d2d; font-size: 16px; font-weight: 700; margin-bottom: 4px; }
                 .header h1 { color: #10b981; font-size: 24px; }
                 .header p { color: #666; font-size: 13px; margin-top: 2px; }
                 .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 25px; }
@@ -697,6 +745,7 @@ function generateInsumosReportHTML(insumos, totalInsumos, totalValor, stockBajo,
                 .sin-stock { color: #ef4444; font-weight: 600; }
                 .stock-ok { color: #10b981; }
                 .footer { margin-top: 25px; text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #eee; padding-top: 15px; }
+                .footer .negocio { color: #666; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
                 @media print {
                     body { padding: 10px; }
                     .summary-card { padding: 8px 12px; }
@@ -714,6 +763,7 @@ function generateInsumosReportHTML(insumos, totalInsumos, totalValor, stockBajo,
         </head>
         <body>
             <div class="header">
+                <div class="negocio">🏢 ${nombreNegocio}</div>
                 <h1>🛒 Reporte de Insumos</h1>
                 <p>Inventario actual</p>
                 <p style="font-size: 12px; color: #94a3b8;">Generado: ${new Date().toLocaleString('es-ES')}</p>
@@ -773,6 +823,7 @@ function generateInsumosReportHTML(insumos, totalInsumos, totalValor, stockBajo,
             </div>
 
             <div class="footer">
+                <div class="negocio">🏢 ${nombreNegocio}</div>
                 Reporte generado desde Panario 🍞 - ${new Date().toLocaleString('es-ES')}
             </div>
         </body>
@@ -781,7 +832,7 @@ function generateInsumosReportHTML(insumos, totalInsumos, totalValor, stockBajo,
 }
 
 // ============================================================
-// REPORTE DE DEUDAS (CORREGIDO - SOLO VENTAS)
+// REPORTE DE DEUDAS
 // ============================================================
 
 function generateDebtsReport() {
@@ -811,17 +862,20 @@ function generateDebtsReport() {
 }
 
 function generateDebtsReportHTML(debtSales, totalDebtSales) {
+    const nombreNegocio = getNombreNegocioReporte();
+    
     return `
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Reporte de Deudas - Panario</title>
+            <title>Reporte de Deudas - ${nombreNegocio}</title>
             <style>
                 * { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
                 body { padding: 20px; background: #fff; font-size: 14px; }
                 .header { text-align: center; margin-bottom: 25px; border-bottom: 3px solid #ef4444; padding-bottom: 15px; }
+                .header .negocio { color: #2d2d2d; font-size: 16px; font-weight: 700; margin-bottom: 4px; }
                 .header h1 { color: #ef4444; font-size: 24px; }
                 .header p { color: #666; font-size: 13px; margin-top: 2px; }
                 .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 25px; }
@@ -836,6 +890,7 @@ function generateDebtsReportHTML(debtSales, totalDebtSales) {
                 tr:nth-child(even) { background: #fafafa; }
                 .total-row { font-weight: 700; background: #fef2f2; }
                 .footer { margin-top: 25px; text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #eee; padding-top: 15px; }
+                .footer .negocio { color: #666; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
                 .debt-highlight { color: #ef4444; font-weight: 600; }
                 @media print {
                     body { padding: 10px; }
@@ -854,6 +909,7 @@ function generateDebtsReportHTML(debtSales, totalDebtSales) {
         </head>
         <body>
             <div class="header">
+                <div class="negocio">🏢 ${nombreNegocio}</div>
                 <h1>💳 Reporte de Deudas</h1>
                 <p>Deudas pendientes de cobro (solo ventas)</p>
                 <p style="font-size: 12px; color: #94a3b8;">Generado: ${new Date().toLocaleString('es-ES')}</p>
@@ -901,6 +957,7 @@ function generateDebtsReportHTML(debtSales, totalDebtSales) {
             </div>
 
             <div class="footer">
+                <div class="negocio">🏢 ${nombreNegocio}</div>
                 Reporte generado desde Panario 🍞 - ${new Date().toLocaleString('es-ES')}
             </div>
         </body>
@@ -928,17 +985,20 @@ async function generateRecipesReport() {
             if (fullRecipe) recipes.push(fullRecipe);
         }
         
+        const nombreNegocio = getNombreNegocioReporte();
+        
         let html = `
             <!DOCTYPE html>
             <html>
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Reporte de Recetas - Panario</title>
+                <title>Reporte de Recetas - ${nombreNegocio}</title>
                 <style>
                     * { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
                     body { padding: 20px; background: #fff; font-size: 14px; }
                     .header { text-align: center; margin-bottom: 25px; border-bottom: 3px solid #8b5cf6; padding-bottom: 15px; }
+                    .header .negocio { color: #2d2d2d; font-size: 16px; font-weight: 700; margin-bottom: 4px; }
                     .header h1 { color: #8b5cf6; font-size: 24px; }
                     .header p { color: #666; font-size: 13px; margin-top: 2px; }
                     .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 25px; }
@@ -957,6 +1017,7 @@ async function generateRecipesReport() {
                     .shared-badge { display: inline-block; background: #3b82f620; color: #3b82f6; padding: 1px 8px; border-radius: 10px; font-size: 11px; margin-left: 6px; }
                     .fecha { font-size: 11px; color: #94a3b8; margin-top: 4px; }
                     .footer { margin-top: 25px; text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #eee; padding-top: 15px; }
+                    .footer .negocio { color: #666; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
                     @media print {
                         body { padding: 10px; }
                         .summary-card { padding: 8px 12px; }
@@ -971,6 +1032,7 @@ async function generateRecipesReport() {
             </head>
             <body>
                 <div class="header">
+                    <div class="negocio">🏢 ${nombreNegocio}</div>
                     <h1>📖 Reporte de Recetas</h1>
                     <p>${recipes.length} recetas registradas</p>
                     <p style="font-size: 12px; color: #94a3b8;">Generado: ${new Date().toLocaleString('es-ES')}</p>
@@ -1039,6 +1101,7 @@ async function generateRecipesReport() {
                 </div>
 
                 <div class="footer">
+                    <div class="negocio">🏢 ${nombreNegocio}</div>
                     Reporte generado desde Panario 🍞 - ${new Date().toLocaleString('es-ES')}
                 </div>
             </body>
@@ -1097,7 +1160,9 @@ window.ReportsModule = {
     generateInsumosReport: generateInsumosReport,
     generateDebtsReport: generateDebtsReport,
     generateRecipesReport: generateRecipesReport,
-    printReport: printReport
+    printReport: printReport,
+    // 🆕 Helper exportado
+    getNombreNegocioReporte: getNombreNegocioReporte
 };
 
-console.log('📦 Reports Module cargado correctamente v2.0.2 (FASE 2: filtros client/product/onlyDebts)');
+console.log('📦 Reports Module cargado correctamente v2.0.4 (nombre del negocio en encabezados y pies)');

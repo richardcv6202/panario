@@ -1,8 +1,42 @@
 // ============================================================
 // 📦 RECIPES MODULE - Panario (Recetas con recálculo y compartir)
+// AÑADIDO (180926 v4):
+//   - Nombre del negocio en el texto al compartir recetas
+//   - generarTextoReceta() usa getNombreNegocio()
+//   - compartirRecetaEmail() incluye el negocio en el asunto
 // ============================================================
 
 window.RecipesModule = {};
+
+// ============================================================
+// 🆕 HELPER: OBTENER NOMBRE DEL NEGOCIO
+// ============================================================
+
+/**
+ * Devuelve el nombre del negocio actual para usar en textos compartidos.
+ * Usa window.getNombreNegocio() si existe (definido en app.js).
+ * Fallback: "Panario".
+ * 
+ * @returns {string} Nombre del negocio
+ */
+function getNombreNegocioRecetas() {
+    try {
+        if (typeof window.getNombreNegocio === 'function') {
+            return window.getNombreNegocio();
+        }
+        
+        const user = window.AuthModule?.getCurrentUser();
+        if (user) {
+            if (user.negocio && user.negocio.nombre) return user.negocio.nombre;
+            if (user.business_name) return user.business_name;
+        }
+        
+        return 'Panario';
+    } catch (e) {
+        console.warn('⚠️ Error obteniendo nombre del negocio en recetas:', e);
+        return 'Panario';
+    }
+}
 
 // ============================================================
 // RECETAS CRUD
@@ -410,13 +444,11 @@ function calculateRecipeCost(recipe) {
 }
 
 // ============================================================
-// 🆕 RECALCULAR RECETA (REGLA DE 3 CON REDONDEO)
+// RECALCULAR RECETA (REGLA DE 3 CON REDONDEO)
 // ============================================================
 
 /**
- * Redondea una cantidad según las reglas del documento:
- * - Si es entero → entero
- * - Si es decimal → redondear por encima con los mismos decimales
+ * Redondea una cantidad según las reglas del documento.
  * 
  * Ejemplos:
  * - 1.005 kg → 1.01 kg
@@ -428,15 +460,12 @@ function calculateRecipeCost(recipe) {
 function redondearCantidad(cantidad) {
     if (cantidad === 0) return 0;
     
-    // Si es entero, devolverlo tal cual
     if (Number.isInteger(cantidad)) return cantidad;
     
-    // Determinar cuántos decimales tiene el original
     const cantidadStr = cantidad.toString();
     const parteDecimal = cantidadStr.split('.')[1];
     const decimales = parteDecimal ? parteDecimal.length : 0;
     
-    // Redondear siempre hacia arriba (Math.ceil) manteniendo la precisión
     const factor = Math.pow(10, decimales);
     const redondeado = Math.ceil(cantidad * factor) / factor;
     
@@ -445,9 +474,6 @@ function redondearCantidad(cantidad) {
 
 /**
  * Recalcula una receta para un nuevo rendimiento usando regla de 3.
- * @param {object} recipe - Receta completa con insumos
- * @param {number} nuevoRendimiento - Nueva cantidad de unidades
- * @returns {object} Receta recalculada con insumos ajustados
  */
 function recalcularReceta(recipe, nuevoRendimiento) {
     if (!recipe) return { success: false, error: 'Receta no encontrada' };
@@ -459,7 +485,6 @@ function recalcularReceta(recipe, nuevoRendimiento) {
         return { success: false, error: 'Nuevo rendimiento no válido' };
     }
     
-    // Recalcular insumos
     const insumosRecalculados = [];
     if (recipe.receta_insumos && recipe.receta_insumos.length > 0) {
         for (const ri of recipe.receta_insumos) {
@@ -478,7 +503,6 @@ function recalcularReceta(recipe, nuevoRendimiento) {
         }
     }
     
-    // Recalcular ingredients (compatibilidad)
     const ingredientsRecalculados = [];
     if (recipe.ingredients && recipe.ingredients.length > 0) {
         for (const ing of recipe.ingredients) {
@@ -495,7 +519,6 @@ function recalcularReceta(recipe, nuevoRendimiento) {
         }
     }
     
-    // Calcular costos nuevos
     const costoTotalNuevo = insumosRecalculados.reduce((sum, ri) => sum + ri.subtotal_nuevo, 0);
     const costoPorUnidadNuevo = nuevoRendimiento > 0 ? costoTotalNuevo / nuevoRendimiento : 0;
     
@@ -517,11 +540,13 @@ function recalcularReceta(recipe, nuevoRendimiento) {
 
 /**
  * Genera el texto formateado de la receta para compartir.
+ * 🆕 v4: Incluye el nombre del negocio en el pie.
  */
 function generarTextoReceta(recipe) {
     if (!recipe) return '';
     
     const costo = calculateRecipeCost(recipe);
+    const nombreNegocio = getNombreNegocioRecetas();
     
     let texto = `🍞 *${recipe.name}*\n\n`;
     
@@ -553,7 +578,8 @@ function generarTextoReceta(recipe) {
         texto += `📋 *Instrucciones:*\n${recipe.instructions}\n\n`;
     }
     
-    texto += `_Compartido desde Panario 🍞_`;
+    // 🆕 v4: Nombre del negocio en el pie
+    texto += `_Compartido desde ${nombreNegocio} 🍞_`;
     
     return texto;
 }
@@ -573,7 +599,6 @@ function compartirRecetaWhatsApp(recipe) {
  */
 function compartirRecetaMessenger(recipe) {
     const texto = generarTextoReceta(recipe);
-    // Messenger web no acepta texto directo, copiamos al portapapeles y abrimos Messenger
     navigator.clipboard.writeText(texto).then(() => {
         window.showToast('📋 Receta copiada. Pégala en Messenger', 'success', 4000);
         window.open('https://www.messenger.com/', '_blank');
@@ -584,10 +609,12 @@ function compartirRecetaMessenger(recipe) {
 
 /**
  * Compartir receta por Email
+ * 🆕 v4: Incluye el nombre del negocio en el asunto
  */
 function compartirRecetaEmail(recipe) {
-    const texto = generarTextoReceta(recipe).replace(/\*/g, ''); // Quitar formato markdown
-    const subject = `Receta: ${recipe.name}`;
+    const texto = generarTextoReceta(recipe).replace(/\*/g, ''); // Quitar markdown
+    const nombreNegocio = getNombreNegocioRecetas();
+    const subject = `Receta: ${recipe.name} - ${nombreNegocio}`;
     const url = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(texto)}`;
     window.open(url, '_blank');
 }
@@ -708,14 +735,16 @@ window.RecipesModule = {
     calculateRecipeCost,
     validarStockReceta,
     descontarStockReceta,
-    // 🆕 Recalcular y compartir
+    // Recalcular y compartir
     redondearCantidad,
     recalcularReceta,
     generarTextoReceta,
     compartirRecetaWhatsApp,
     compartirRecetaMessenger,
     compartirRecetaEmail,
-    copiarRecetaAlPortapapeles
+    copiarRecetaAlPortapapeles,
+    // 🆕 v4: Helper
+    getNombreNegocioRecetas
 };
 
-console.log('📦 Recipes Module cargado correctamente (con recálculo y compartir)');
+console.log('📦 Recipes Module cargado correctamente v2.0.4 (nombre del negocio al compartir)');

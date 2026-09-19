@@ -7,7 +7,7 @@
 // AÑADIDO: FASE 12 - Tabla premios_config + funciones de premios
 // CORREGIDO FASE 1 (160926): 
 //   - exportRecetasProductosSalva/importRecetasProductosSalva/readSalvaFile
-//     ahora SÍ se exportan en window.DBModule (antes no funcionaba la salva diferencial)
+//     ahora SÍ se exportan en window.DBModule
 //   - reloadFromStorageAndNotify() para forzar recarga tras importaciones
 //   - forceReloadFromStorage() ahora resetea dbInitialized correctamente
 // CORREGIDO FASE A.3 (170926):
@@ -20,6 +20,10 @@
 //   - getCurrentUserId() helper para auditoría
 //   - Funciones de guardado ahora incluyen created_by/modified_by
 //   - Función getUsuarioNombre(id) para mostrar nombre del creador
+// AÑADIDO (180926 v4):
+//   - slugifyNombreNegocio() helper
+//   - downloadDatabase() incluye el nombre del negocio en el archivo
+//   - exportRecetasProductosSalva() incluye el nombre del negocio en el archivo
 // ============================================================
 
 let db = null;
@@ -35,6 +39,76 @@ window.DBModule = {};
 const BACKUP_META_TABLE = '_panario_meta';
 const BACKUP_TYPE_COMPLETE = 'complete';
 const BACKUP_TYPE_DATA_ONLY = 'data_only';
+
+// ============================================================
+// 🆕 v4 HELPER: SLUGIFY NOMBRE DEL NEGOCIO
+// ============================================================
+
+/**
+ * Convierte el nombre del negocio en un slug válido para nombres de archivo.
+ * 
+ * Ejemplos:
+ *   "Panadería La Esquina"  → "panaderia-la-esquina"
+ *   "Pan de Casa"           → "pan-de-casa"
+ *   "Ñoño & Cía."           → "nono-cia"
+ *   ""                      → "panario"
+ * 
+ * @param {string} nombre - Nombre del negocio
+ * @returns {string} Slug válido para nombre de archivo
+ */
+function slugifyNombreNegocio(nombre) {
+    if (!nombre || typeof nombre !== 'string') return 'panario';
+    
+    try {
+        // Normalizar: quitar acentos y diacríticos
+        let slug = nombre
+            .normalize('NFD')                       // Descomponer caracteres acentuados
+            .replace(/[\u0300-\u036f]/g, '')        // Quitar los diacríticos
+            .toLowerCase()                          // Todo minúsculas
+            .replace(/ñ/g, 'n')                     // ñ → n (por si acaso)
+            .replace(/[^a-z0-9\s-]/g, '')           // Solo letras, números, espacios y guiones
+            .trim()                                 // Quitar espacios al inicio/fin
+            .replace(/\s+/g, '-')                   // Espacios → guiones
+            .replace(/-+/g, '-')                    // Múltiples guiones → uno
+            .replace(/^-+|-+$/g, '');               // Quitar guiones al inicio/fin
+        
+        return slug || 'panario';
+    } catch (e) {
+        console.warn('⚠️ Error slugificando nombre:', e);
+        return 'panario';
+    }
+}
+
+/**
+ * Obtiene el nombre actual del negocio (o 'panario' como fallback).
+ */
+function getNombreNegocioDB() {
+    try {
+        if (typeof window.getNombreNegocio === 'function') {
+            return window.getNombreNegocio();
+        }
+        
+        const user = window.AuthModule?.getCurrentUser();
+        if (user) {
+            if (user.negocio && user.negocio.nombre) return user.negocio.nombre;
+            if (user.business_name) return user.business_name;
+        }
+        
+        return 'Panario';
+    } catch (e) {
+        return 'Panario';
+    }
+}
+
+/**
+ * Devuelve el prefijo para nombres de archivo de backup.
+ * Ejemplo: "panario_panaderia-la-esquina"
+ */
+function getPrefijoBackup() {
+    const nombreNegocio = getNombreNegocioDB();
+    const slug = slugifyNombreNegocio(nombreNegocio);
+    return `panario_${slug}`;
+}
 
 // ============================================================
 // 🆕 FASE A.4 - HELPER DE AUDITORÍA
@@ -134,7 +208,7 @@ async function initDB() {
         await createNegocioIdIndexes(db);
         // FASE 16.3
         await ensureIsAdminColumn(db);
-        // 🆕 FASE A.4: Auditoría
+        // FASE A.4: Auditoría
         await ensureAuditColumns(db);
         // ---
         await migrateToNewStructure(db);
@@ -154,7 +228,7 @@ async function initDB() {
 }
 
 // ============================================================
-// 🆕 FASE A.4 - COLUMNAS DE AUDITORÍA
+// FASE A.4 - COLUMNAS DE AUDITORÍA
 // ============================================================
 
 async function ensureAuditColumns(db) {
@@ -200,7 +274,6 @@ async function ensureAuditColumns(db) {
                 }
             }
             
-            // Índices para búsquedas rápidas por usuario
             try {
                 db.run(`CREATE INDEX IF NOT EXISTS idx_${table}_created_by ON ${table}(created_by)`);
                 db.run(`CREATE INDEX IF NOT EXISTS idx_${table}_modified_by ON ${table}(modified_by)`);
@@ -215,7 +288,7 @@ async function ensureAuditColumns(db) {
 }
 
 // ============================================================
-// 🆕 FORZAR RECARGA DE LA BASE DE DATOS DESDE LOCALSTORAGE
+// FORZAR RECARGA DE LA BASE DE DATOS DESDE LOCALSTORAGE
 // ============================================================
 
 function forceReloadFromStorage() {
@@ -269,7 +342,7 @@ function reloadFromStorageAndNotify() {
 }
 
 // ============================================================
-// 🆕 VERIFICAR COLUMNAS DE BANK_ACCOUNTS
+// VERIFICAR COLUMNAS DE BANK_ACCOUNTS
 // ============================================================
 
 async function ensureBankAccountsColumns(db) {
@@ -1246,7 +1319,6 @@ async function createAllTables(db) {
             )
         `);
 
-        // FASE 12 - Premios
         db.run(`
             CREATE TABLE IF NOT EXISTS premios_config (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1563,7 +1635,7 @@ function writeBackupMeta(db, backupType) {
         `, [
             backupType,
             new Date().toISOString(),
-            '2.0.2',
+            '2.0.3',
             negocioId,
             negocio?.nombre || 'Desconocido',
             user?.username || 'Desconocido',
@@ -1657,7 +1729,6 @@ function saveBankAccount(accountData) {
         const isFirst = existing.length === 0;
         
         if (accountData.id) {
-            // 🆕 FASE A.4: modified_by en UPDATE
             execute(`
                 UPDATE bank_accounts 
                 SET bank = ?, owner_name = ?, account_number = ?, phone = ?, qr_code = ?,
@@ -1681,7 +1752,6 @@ function saveBankAccount(accountData) {
             
             return { success: true, id: accountData.id };
         } else {
-            // 🆕 FASE A.4: created_by y modified_by en INSERT
             const result = execute(`
                 INSERT INTO bank_accounts (user_id, negocio_id, bank, owner_name, account_number, phone, qr_code, is_default, created_by, modified_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1729,6 +1799,7 @@ function setDefaultBankAccount(id) {
 
 // ============================================================
 // SALVA DIFERENCIAL (RECETAS Y PRODUCTOS)
+// 🆕 v4: El nombre del archivo incluye el negocio
 // ============================================================
 
 function exportRecetasProductosSalva() {
@@ -1767,10 +1838,11 @@ function exportRecetasProductosSalva() {
         const salva = {
             _meta: {
                 app: 'Panario',
-                version: '2.0.2',
+                version: '2.0.3',
                 type: 'salva_recetas_productos',
                 exportDate: new Date().toISOString(),
                 negocio_id: negocioId,
+                negocio_nombre: getNombreNegocioDB(),
                 counts: {
                     recipes: recipes.length,
                     recipeIngredients: recipeIngredients.length,
@@ -1788,7 +1860,9 @@ function exportRecetasProductosSalva() {
         const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
 
         const date = new Date().toISOString().split('T')[0];
-        const filename = `panario_salva_recetas_productos_${date}.json`;
+        // 🆕 v4: Incluir slug del negocio en el nombre del archivo
+        const prefijo = getPrefijoBackup();
+        const filename = `${prefijo}_salva_recetas_productos_${date}.json`;
 
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1857,7 +1931,6 @@ function importRecetasProductosSalva(salvaData, mode = 'merge') {
                 let newRecipeId;
 
                 if (existingRecipe) {
-                    // 🆕 FASE A.4: modified_by en UPDATE
                     db.run(`
                         UPDATE recipes 
                         SET description = ?, instructions = ?, yield_units = ?, 
@@ -1871,7 +1944,6 @@ function importRecetasProductosSalva(salvaData, mode = 'merge') {
                     newRecipeId = existingRecipe.id;
                     skipped.recipes++;
                 } else {
-                    // 🆕 FASE A.4: created_by y modified_by en INSERT
                     db.run(`
                         INSERT INTO recipes (user_id, negocio_id, name, description, instructions, 
                             yield_units, yield_unit_type, shared, created_by, modified_by)
@@ -1970,7 +2042,6 @@ function importRecetasProductosSalva(salvaData, mode = 'merge') {
                 }
 
                 if (existingProduct) {
-                    // 🆕 FASE A.4: modified_by en UPDATE
                     db.run(`
                         UPDATE productos 
                         SET descripcion = ?, precio_venta = ?, unidad_venta = ?,
@@ -1983,7 +2054,6 @@ function importRecetasProductosSalva(salvaData, mode = 'merge') {
                     ]);
                     skipped.productos++;
                 } else {
-                    // 🆕 FASE A.4: created_by y modified_by en INSERT
                     db.run(`
                         INSERT INTO productos (user_id, negocio_id, nombre, descripcion, precio_venta, 
                             unidad_venta, cantidad_por_unidad, receta_id, created_by, modified_by)
@@ -2064,7 +2134,6 @@ function saveProducto(productoData) {
 
     try {
         if (productoData.id) {
-            // 🆕 FASE A.4: modified_by en UPDATE
             execute(`
                 UPDATE productos 
                 SET nombre = ?, descripcion = ?, precio_venta = ?, 
@@ -2080,7 +2149,6 @@ function saveProducto(productoData) {
             ]);
             return { success: true, id: productoData.id };
         } else {
-            // 🆕 FASE A.4: created_by y modified_by en INSERT
             const result = execute(`
                 INSERT INTO productos (user_id, negocio_id, nombre, descripcion, precio_venta, unidad_venta, cantidad_por_unidad, receta_id, created_by, modified_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -2139,7 +2207,6 @@ function saveInsumo(insumoData) {
 
     try {
         if (insumoData.id) {
-            // 🆕 FASE A.4: modified_by en UPDATE
             execute(`
                 UPDATE insumos 
                 SET nombre = ?, unidad = ?, costo_unitario = ?, stock = ?, stock_minimo = ?,
@@ -2153,7 +2220,6 @@ function saveInsumo(insumoData) {
             ]);
             return { success: true, id: insumoData.id };
         } else {
-            // 🆕 FASE A.4: created_by y modified_by en INSERT
             const result = execute(`
                 INSERT INTO insumos (user_id, negocio_id, nombre, unidad, costo_unitario, stock, stock_minimo, created_by, modified_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -2190,7 +2256,6 @@ function actualizarStockInsumo(id, cantidad) {
         const nuevoStock = (insumo.stock || 0) + cantidad;
         if (nuevoStock < 0) return { success: false, error: 'Stock insuficiente' };
         
-        // 🆕 FASE A.4: modified_by también en actualización de stock
         execute(`
             UPDATE insumos SET stock = ?, modified_by = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ? AND negocio_id = ?
@@ -2418,7 +2483,6 @@ function saveCorrienteConfig(config) {
         const existing = getCorrienteConfig();
         
         if (existing) {
-            // 🆕 FASE A.4: modified_by en UPDATE
             execute(`
                 UPDATE corriente_config 
                 SET horas_corriente = ?, horas_apagon = ?, 
@@ -2431,7 +2495,6 @@ function saveCorrienteConfig(config) {
                 config.horaFinReferencia || null, currentUserId, negocioId
             ]);
         } else {
-            // 🆕 FASE A.4: created_by y modified_by en INSERT
             execute(`
                 INSERT INTO corriente_config 
                 (user_id, negocio_id, horas_corriente, horas_apagon, fecha_referencia, 
@@ -2504,7 +2567,6 @@ function addToWaitingList(orderId) {
 
         const position = getNextWaitingPosition();
 
-        // 🆕 FASE A.4: created_by y modified_by en INSERT
         const result = execute(`
             INSERT INTO waiting_list (user_id, negocio_id, order_id, position, status, client_name, client_phone, product_name, quantity, created_by, modified_by)
             SELECT ?, ?, o.id, ?, 'waiting', o.client_name, o.client_phone,
@@ -2736,7 +2798,6 @@ function savePremiosConfig(config) {
         );
         
         if (existing.length > 0) {
-            // 🆕 FASE A.4: modified_by en UPDATE
             execute(`
                 UPDATE premios_config 
                 SET activo = ?, premio_mensual = ?, premio_anual = ?, modified_by = ?, updated_at = CURRENT_TIMESTAMP
@@ -2749,7 +2810,6 @@ function savePremiosConfig(config) {
                 negocioId
             ]);
         } else {
-            // 🆕 FASE A.4: created_by y modified_by en INSERT
             execute(`
                 INSERT INTO premios_config (negocio_id, activo, premio_mensual, premio_anual, created_by, modified_by)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -2856,6 +2916,7 @@ function calcularMejorClienteDelAño() {
 
 // ============================================================
 // EXPORTAR E IMPORTAR BASE DE DATOS
+// 🆕 v4: El nombre del archivo incluye el negocio
 // ============================================================
 
 function exportDatabase(backupType = BACKUP_TYPE_COMPLETE) {
@@ -2916,8 +2977,10 @@ function downloadDatabase(backupType = BACKUP_TYPE_COMPLETE) {
         const url = URL.createObjectURL(blob);
         
         const date = new Date().toISOString().split('T')[0];
-        const prefix = backupType === BACKUP_TYPE_COMPLETE ? 'panario_backup_completo' : 'panario_backup_datos';
-        const filename = `${prefix}_${date}.db`;
+        // 🆕 v4: Usar prefijo con slug del negocio
+        const prefijo = getPrefijoBackup();
+        const sufijo = backupType === BACKUP_TYPE_COMPLETE ? 'completo' : 'datos';
+        const filename = `${prefijo}_${sufijo}_${date}.db`;
         
         const a = document.createElement('a');
         a.href = url;
@@ -3333,8 +3396,10 @@ window.DBModule = {
     ensureOrderIdColumn, ensureWaitingListColumns, ensureBankAccountsColumns,
     ensureCorrienteConfigTable, ensureIsLiberatedColumn, ensureDashboardColumns,
     ensurePremiosConfigTable,
-    // 🆕 FASE A.4
+    // FASE A.4
     ensureAuditColumns, getCurrentUserId, getUsuarioNombre,
+    // 🆕 v4
+    slugifyNombreNegocio, getNombreNegocioDB, getPrefijoBackup,
     ensureNegociosTable, ensureNegocioIdColumn, migrateToMultiUser,
     ensureNegocioIdInAllTables, migrateNegocioIdToAllTables, createNegocioIdIndexes,
     ensureIsAdminColumn,
@@ -3372,4 +3437,4 @@ window.DBModule = {
     BACKUP_TYPE_DATA_ONLY
 };
 
-console.log('📦 DB Module cargado correctamente v2.0.2 (FASE A.4: auditoría con created_by/modified_by)');
+console.log('📦 DB Module cargado correctamente v2.0.5 (nombre del negocio en archivos de backup)');

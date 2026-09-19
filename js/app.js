@@ -29,10 +29,74 @@
 //   - loadDashboardData() pasa chartMode
 //   - Botón ▶ se deshabilita cuando isCurrentRange === true
 //   - updateChartModeUI() sincroniza el selector y el label
+// AÑADIDO (180926 v4):
+//   - Nombre del negocio en el header del Dashboard
+//   - Título de la pestaña dinámico (<title>Negocio - Panario</title>)
+//   - getNombreNegocio() helper global
+//   - El header de la app usa el nombre del negocio (fallback: Panario)
 // ============================================================
 
 let currentUser = null;
 let dbReady = false;
+
+// ============================================================
+// 🆕 HELPER: OBTENER NOMBRE DEL NEGOCIO ACTUAL
+// ============================================================
+
+/**
+ * Devuelve el nombre del negocio actual del usuario logueado.
+ * Fallback en cascada:
+ *   1. user.negocio.nombre (cargado en login)
+ *   2. user.business_name (legacy)
+ *   3. "Panario" (fallback final)
+ * 
+ * @returns {string} Nombre del negocio
+ */
+function getNombreNegocio() {
+    try {
+        const user = window.AuthModule?.getCurrentUser();
+        if (!user) return 'Panario';
+        
+        // 1. Intentar desde user.negocio.nombre (cargado en login)
+        if (user.negocio && user.negocio.nombre) {
+            return user.negocio.nombre;
+        }
+        
+        // 2. Intentar cargar el negocio desde la BD
+        if (user.negocio_id && window.DBModule) {
+            const negocio = window.DBModule.getNegocio(user.negocio_id);
+            if (negocio && negocio.nombre) {
+                // Cachear en el usuario
+                user.negocio = negocio;
+                window.AuthModule.setCurrentUser(user);
+                return negocio.nombre;
+            }
+        }
+        
+        // 3. Fallback: business_name legacy
+        if (user.business_name) {
+            return user.business_name;
+        }
+        
+        // 4. Fallback final
+        return 'Panario';
+    } catch (e) {
+        console.warn('⚠️ Error obteniendo nombre del negocio:', e);
+        return 'Panario';
+    }
+}
+
+/**
+ * Devuelve la inicial del nombre del negocio (para favicon dinámico, etc.)
+ */
+function getInicialNegocio() {
+    const nombre = getNombreNegocio();
+    return nombre.charAt(0).toUpperCase() || '🍞';
+}
+
+// Exportar globalmente
+window.getNombreNegocio = getNombreNegocio;
+window.getInicialNegocio = getInicialNegocio;
 
 // ============================================================
 // 🔧 HELPERS DE FECHA (SIN CONVERSIÓN UTC)
@@ -41,18 +105,10 @@ let dbReady = false;
 /**
  * Convierte una fecha UTC (string o Date) a fecha local del navegador
  * en formato YYYY-MM-DD.
- * 
- * Usar esta función en lugar de `DATE(fecha, 'localtime')` de SQLite,
- * porque sql.js en WASM no respeta la zona horaria del navegador.
- * 
- * 🔧 FIX v4: Maneja correctamente los strings "YYYY-MM-DD" (sin hora, sin Z)
- * que JavaScript interpretaría como UTC medianoche y desplazaría al día anterior
- * en zonas horarias negativas (ej: UTC-4).
  */
 function fechaLocalYYYYMMDD(fechaUTC) {
     if (!fechaUTC) return null;
     
-    // Si ya es un Date
     if (fechaUTC instanceof Date) {
         if (isNaN(fechaUTC.getTime())) return null;
         const year = fechaUTC.getFullYear();
@@ -61,23 +117,19 @@ function fechaLocalYYYYMMDD(fechaUTC) {
         return `${year}-${month}-${day}`;
     }
     
-    // Si es string
     if (typeof fechaUTC === 'string') {
         const str = fechaUTC.trim();
         
-        // 🔧 FIX: Si es "YYYY-MM-DD" exacto (sin hora), devolverlo tal cual
         const matchSoloFecha = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
         if (matchSoloFecha) {
             return `${matchSoloFecha[1]}-${matchSoloFecha[2]}-${matchSoloFecha[3]}`;
         }
         
-        // 🔧 FIX: Si es "YYYY-MM-DDTHH:mm" SIN Z, extraer solo YYYY-MM-DD
         const matchSinZ = str.match(/^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(:\d{2})?(\.\d+)?$/);
         if (matchSinZ) {
             return `${matchSinZ[1]}-${matchSinZ[2]}-${matchSinZ[3]}`;
         }
         
-        // Si tiene Z o offset de zona horaria, usar new Date() (conversión correcta)
         try {
             const d = new Date(str);
             if (isNaN(d.getTime())) return null;
@@ -90,7 +142,6 @@ function fechaLocalYYYYMMDD(fechaUTC) {
         }
     }
     
-    // Fallback
     try {
         const d = new Date(fechaUTC);
         if (isNaN(d.getTime())) return null;
@@ -103,17 +154,10 @@ function fechaLocalYYYYMMDD(fechaUTC) {
     }
 }
 
-/**
- * Devuelve la fecha de hoy en formato YYYY-MM-DD (zona horaria local).
- */
 function hoyYYYYMMDD() {
     return fechaLocalYYYYMMDD(new Date());
 }
 
-/**
- * Devuelve un string formateado con día de la semana abreviado, día y mes.
- * Ej: "Jue, 17 de Sept."
- */
 function formatearFechaConDiaSemana(date = new Date()) {
     if (!(date instanceof Date)) date = new Date(date);
     const diasAbrev = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -121,10 +165,6 @@ function formatearFechaConDiaSemana(date = new Date()) {
     return `${diasAbrev[date.getDay()]}, ${date.getDate()} de ${mesesAbrev[date.getMonth()]}.`;
 }
 
-/**
- * 🔧 FIX v3: Formatea una fecha que YA VIENE en formato YYYY-MM-DD
- * SIN pasarla por new Date() para evitar conversión a UTC.
- */
 function formatearFechaYYYYMMDD(fechaStr, opciones = {}) {
     if (!fechaStr) return '—';
     
@@ -159,9 +199,6 @@ function formatearFechaYYYYMMDD(fechaStr, opciones = {}) {
     return `${String(day).padStart(2, '0')} ${mesesCorto[month]} ${year}`;
 }
 
-/**
- * 🔧 FIX v3: formatDate() reescrita SIN conversión UTC.
- */
 function formatDate(dateStr) {
     if (!dateStr) return '—';
     
@@ -181,7 +218,6 @@ function formatDate(dateStr) {
     }
 }
 
-// Exportar helpers globalmente
 window.fechaLocalYYYYMMDD = fechaLocalYYYYMMDD;
 window.hoyYYYYMMDD = hoyYYYYMMDD;
 window.formatearFechaConDiaSemana = formatearFechaConDiaSemana;
@@ -710,6 +746,8 @@ async function handleLogout() {
             localStorage.removeItem('panario-theme');
             currentUser = null;
             dbReady = false;
+            // Restaurar título genérico
+            document.title = 'Panario - Panadería Artesanal';
             window.location.reload(true);
         } catch (e) {
             console.error('❌ Error cerrando sesión:', e);
@@ -771,6 +809,7 @@ function updateTopBarAvatar(photoData) {
 
 // ============================================================
 // MOSTRAR APP
+// 🆕 Actualiza el título de la pestaña con el nombre del negocio
 // ============================================================
 
 function showApp(user) {
@@ -809,8 +848,73 @@ function showApp(user) {
     }
     
     updateUserMenuInfo(user);
+    
+    // 🆕 Actualizar el título de la pestaña con el nombre del negocio
+    updateDocumentTitle();
+    
+    // 🆕 Actualizar el header de la app con el nombre del negocio
+    updateAppHeader();
+    
+    // Emitir evento para que otros módulos sepan que el login se completó
+    document.dispatchEvent(new CustomEvent('panario:logged-in'));
+    
     navigate('dashboard');
 }
+
+/**
+ * 🆕 Actualiza el <title> de la pestaña con el nombre del negocio.
+ * Formato: "Panadería La Esquina - Panario"
+ */
+function updateDocumentTitle() {
+    try {
+        const nombreNegocio = getNombreNegocio();
+        if (nombreNegocio && nombreNegocio !== 'Panario') {
+            document.title = `${nombreNegocio} - Panario`;
+        } else {
+            document.title = 'Panario - Panadería Artesanal';
+        }
+        console.log('📑 Título actualizado:', document.title);
+    } catch (e) {
+        console.warn('⚠️ Error actualizando título:', e);
+    }
+}
+
+/**
+ * 🆕 Actualiza el header de la app con el nombre del negocio.
+ * El header actual tiene: <h1>🍞 Panario</h1>
+ * Lo cambiamos a: <h1>🍞 Panadería La Esquina</h1>
+ * con un tooltip "Panario - Sistema de gestión"
+ */
+function updateAppHeader() {
+    try {
+        const header = document.querySelector('#appScreen header h1');
+        if (!header) return;
+        
+        const nombreNegocio = getNombreNegocio();
+        const inicial = getInicialNegocio();
+        
+        if (nombreNegocio && nombreNegocio !== 'Panario') {
+            // Truncar si es muy largo (máx 20 caracteres)
+            const nombreMostrar = nombreNegocio.length > 20 
+                ? nombreNegocio.substring(0, 18) + '…' 
+                : nombreNegocio;
+            
+            header.innerHTML = `🍞 ${nombreMostrar}`;
+            header.setAttribute('title', `Panario - ${nombreNegocio}`);
+            header.style.cursor = 'default';
+        } else {
+            header.innerHTML = `🍞 Panario`;
+            header.setAttribute('title', 'Panario - Panadería Artesanal');
+        }
+        
+        console.log('🏢 Header actualizado:', header.textContent);
+    } catch (e) {
+        console.warn('⚠️ Error actualizando header:', e);
+    }
+}
+
+window.updateDocumentTitle = updateDocumentTitle;
+window.updateAppHeader = updateAppHeader;
 
 // ============================================================
 // NAVEGACIÓN
@@ -1045,6 +1149,7 @@ function renderTarjetaPedidosHoy(stats) {
 // ============================================================
 // RENDER DASHBOARD VIEW
 // 🆕 FASE C: Añadido selector de modo del gráfico
+// 🆕 v4: Nombre del negocio en el header
 // ============================================================
 
 function renderDashboardView() {
@@ -1054,7 +1159,6 @@ function renderDashboardView() {
         window._weekOffset = 0;
     }
     
-    // 🆕 FASE C: Inicializar modo del gráfico si no existe
     if (window._chartMode === undefined) {
         window._chartMode = 'last7';
     }
@@ -1081,13 +1185,21 @@ function renderDashboardView() {
         }
     }
     
-    console.log('📊 Renderizando dashboard con config:', dashConfig, '| chartMode:', window._chartMode);
+    // 🆕 Obtener el nombre del negocio
+    const nombreNegocio = getNombreNegocio();
+    
+    console.log('📊 Renderizando dashboard con config:', dashConfig, '| chartMode:', window._chartMode, '| negocio:', nombreNegocio);
     
     const tarjetaCorriente = dashConfig.show_corriente ? renderTarjetaCorrienteHoy() : '';
     
     main.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
-            <h2 style="margin: 0;">📊 Panel de Control</h2>
+            <div>
+                <h2 style="margin: 0;">📊 Panel de Control</h2>
+                <div style="font-size: 13px; color: var(--primary); font-weight: 600; margin-top: 2px;">
+                    🏢 ${nombreNegocio}
+                </div>
+            </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <button onclick="refreshDashboard()" class="btn secondary" style="padding: 6px 16px; font-size: 13px; width: auto;">
                     🔄 Actualizar
@@ -1318,7 +1430,6 @@ function renderDashboardView() {
         ` : ''}
     `;
     
-    // Inicializar el selector de modo del gráfico con el valor actual
     setTimeout(() => {
         const modeSelector = document.getElementById('chart-mode-selector');
         if (modeSelector) {
@@ -1483,14 +1594,9 @@ async function downloadDashboardQR(bank, accountNumber) {
 // 🆕 FASE C: NAVEGACIÓN POR SEMANAS CON MODO CONFIGURABLE
 // ============================================================
 
-/**
- * Cambia el modo del gráfico (last7 / dom-sab / lun-dom)
- * Resetea el weekOffset a 0 y recarga el gráfico.
- */
 function changeChartMode(mode) {
     console.log('🔄 [FASE C] Cambiando modo del gráfico a:', mode);
     
-    // Validar modo
     const validModes = ['last7', 'dom-sab', 'lun-dom'];
     if (!validModes.includes(mode)) {
         console.warn('⚠️ Modo inválido:', mode, '- usando last7');
@@ -1500,37 +1606,25 @@ function changeChartMode(mode) {
     window._chartMode = mode;
     window._weekOffset = 0;
     
-    // Sincronizar selector
     const selector = document.getElementById('chart-mode-selector');
     if (selector) selector.value = mode;
     
-    // Recargar gráfico
     reloadChartWithWeekOffset();
 }
 
-/**
- * Navega entre semanas/días según el modo actual.
- * delta = -1 → anterior, +1 → siguiente (deshabilitado si estamos en actual)
- */
 function changeWeek(delta) {
     if (window._weekOffset === undefined) window._weekOffset = 0;
     
-    // No permitir avanzar más allá de la ventana actual
     const nuevoOffset = window._weekOffset + delta;
     if (nuevoOffset > 0) return;
     
     window._weekOffset = nuevoOffset;
     
-    // Actualizar label
     updateChartModeUI();
     
     reloadChartWithWeekOffset();
 }
 
-/**
- * 🆕 Actualiza el label del rango y el estado del botón ▶
- * según el modo actual y el offset.
- */
 function updateChartModeUI() {
     const label = document.getElementById('week-label');
     const btnNext = document.getElementById('btn-next-week');
@@ -1539,10 +1633,8 @@ function updateChartModeUI() {
     const mode = window._chartMode || 'last7';
     const offset = window._weekOffset || 0;
     
-    // Sincronizar selector
     if (selector) selector.value = mode;
     
-    // Label según modo y offset
     let labelText = '';
     if (mode === 'last7') {
         if (offset === 0) {
@@ -1558,7 +1650,6 @@ function updateChartModeUI() {
     
     if (label) label.textContent = labelText;
     
-    // Botón ▶ deshabilitado si estamos en el rango actual (offset >= 0)
     if (btnNext) {
         const isCurrent = offset >= 0;
         btnNext.disabled = isCurrent;
@@ -1567,9 +1658,6 @@ function updateChartModeUI() {
     }
 }
 
-/**
- * 🆕 Recarga el gráfico pasando el modo actual.
- */
 async function reloadChartWithWeekOffset() {
     try {
         const stats = await window.DashboardModule.getDashboardStats({
@@ -1580,7 +1668,6 @@ async function reloadChartWithWeekOffset() {
         if (stats && stats.dailySales) {
             window._dailySalesData = stats.dailySales;
             
-            // Actualizar UI del modo
             updateChartModeUI();
             
             renderChart();
@@ -1973,7 +2060,6 @@ function renderPieChartCanvas(container, chartData) {
 
 // ============================================================
 // CARGAR DATOS DEL DASHBOARD
-// 🆕 FASE C: Ahora pasa chartMode
 // ============================================================
 
 async function loadDashboardData() {
@@ -2037,7 +2123,6 @@ async function loadDashboardData() {
             debtTotalEl.textContent = '$' + (stats.totalDebts || 0).toFixed(2);
         }
 
-        // 🆕 FASE C: Actualizar UI del selector y del label antes de renderizar
         updateChartModeUI();
         
         setTimeout(renderChart, 100);
@@ -2203,10 +2288,13 @@ function exportDashboardReport() {
             return;
         }
 
+        const nombreNegocio = getNombreNegocio();
+
         const report = `
 ========================================
     📊 PANARIO - REPORTE DE NEGOCIO
 ========================================
+Negocio: ${nombreNegocio}
 Fecha: ${new Date().toLocaleString('es-ES')}
 ----------------------------------------
 
@@ -2239,13 +2327,14 @@ ${stats.topProducts.map((p, i) => `  ${i+1}. ${p.product_name}: ${p.sales_count}
 
 ----------------------------------------
 Reporte generado desde Panario 🍞
+${nombreNegocio}
 `;
 
         const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `reporte-panario-${new Date().toISOString().split('T')[0]}.txt`;
+        a.download = `reporte-${nombreNegocio.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.txt`;
         a.click();
         URL.revokeObjectURL(url);
 
@@ -2415,6 +2504,7 @@ function exportChartAsPDF() {
     
     try {
         let imageSrc = '';
+        const nombreNegocio = getNombreNegocio();
         
         const canvas = container.querySelector('canvas');
         if (canvas) {
@@ -2441,7 +2531,7 @@ function exportChartAsPDF() {
             ctx.fillStyle = '#2d2d2d';
             ctx.font = 'bold 16px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('📈 Ventas diarias - Panario', width / 2, 30);
+            ctx.fillText('📈 Ventas diarias - ' + nombreNegocio, width / 2, 30);
             
             ctx.fillStyle = '#666';
             ctx.font = '11px sans-serif';
@@ -2548,18 +2638,21 @@ function exportChartAsPDF() {
 
 function generatePDFWithImage(imageSrc) {
     const today = new Date().toLocaleDateString('es-ES');
+    const nombreNegocio = getNombreNegocio();
+    
     const html = `
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Gráfico de Ventas - Panario</title>
+            <title>Gráfico de Ventas - ${nombreNegocio}</title>
             <style>
                 * { font-family: system-ui, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
                 body { padding: 30px; background: #fff; text-align: center; }
                 .header { margin-bottom: 20px; border-bottom: 3px solid #f5a623; padding-bottom: 15px; }
                 .header h1 { color: #f5a623; font-size: 24px; }
+                .header .negocio { color: #2d2d2d; font-size: 18px; font-weight: 600; margin-top: 4px; }
                 .header p { color: #666; font-size: 14px; margin-top: 4px; }
                 .chart-container { margin: 20px auto; max-width: 100%; }
                 .chart-container img { max-width: 100%; height: auto; border-radius: 8px; }
@@ -2569,6 +2662,7 @@ function generatePDFWithImage(imageSrc) {
         <body>
             <div class="header">
                 <h1>📊 Gráfico de Ventas Diarias</h1>
+                <div class="negocio">🏢 ${nombreNegocio}</div>
                 <p>${today}</p>
             </div>
             <div class="chart-container">
@@ -2593,12 +2687,6 @@ function generatePDFWithImage(imageSrc) {
         win.print();
     }, 500);
 }
-
-// ============================================================
-// UTILIDADES
-// ============================================================
-
-// formatDate ya está definido arriba con el fix v3
 
 // ============================================================
 // SELECCIÓN DE MODO DE NEGOCIO EN REGISTRO
@@ -2706,8 +2794,12 @@ window.fechaLocalYYYYMMDD = fechaLocalYYYYMMDD;
 window.hoyYYYYMMDD = hoyYYYYMMDD;
 window.formatearFechaConDiaSemana = formatearFechaConDiaSemana;
 window.cerrarTodosLosModalesRespaldo = cerrarTodosLosModalesRespaldo;
+window.getNombreNegocio = getNombreNegocio;
+window.getInicialNegocio = getInicialNegocio;
+window.updateDocumentTitle = updateDocumentTitle;
+window.updateAppHeader = updateAppHeader;
 
-console.log('📦 App Controller cargado correctamente v2.0.3 (FASE C: selector de modo del gráfico - last7 / dom-sab / lun-dom)');
+console.log('📦 App Controller cargado correctamente v2.0.4 (Negocio en header, título y reportes)');
 
 // ============================================================
 // INICIALIZACIÓN AUTOMÁTICA
