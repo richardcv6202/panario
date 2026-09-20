@@ -1,5 +1,5 @@
 // ============================================================
-// PANARIO - Service Worker (PWA) v2.1.0
+// PANARIO - Service Worker (PWA) v2.1.5
 // Estrategia: Cache First + Network Fallback + Offline
 // HISTORIAL DE CAMBIOS:
 //   v2.0.3 (180926):
@@ -13,11 +13,20 @@
 //     - CACHE_NAME nuevo fuerza descarga limpia en móviles con v2.0.3
 //     - Precache COMPLETO con todos los módulos JS
 //     - Timeout de red ajustado a 5s
+//   v2.1.5 (200926 v2):
+//     - 🎯 FASE 4.2 (#13, #14, #15, #21): interruptor ventas liberadas,
+//       persistencia del gráfico, cálculo anual configurable,
+//       bloqueo de recetas a no-admin.
+//     - 🎯 FASE 5 (#2, #3, #19, #20, #27): botón Ayuda Detallada,
+//       FAQs ampliadas, logo → dashboard, días sin ventas,
+//       animación "Probar todos" los sonidos.
+//     - CACHE_NAME nuevo (panario-v2.1.5) fuerza reinstalación limpia
+//       y descarga de los nuevos archivos JS en todos los dispositivos.
 // ============================================================
 
-const CACHE_NAME = 'panario-v2.1.0';
-const CACHE_STATIC = 'panario-static-v2.1.0';
-const CACHE_DYNAMIC = 'panario-dynamic-v2.1.0';
+const CACHE_NAME = 'panario-v2.1.5';
+const CACHE_STATIC = 'panario-static-v2.1.5';
+const CACHE_DYNAMIC = 'panario-dynamic-v2.1.5';
 const OFFLINE_URL = './offline.html';
 
 // Timeout para peticiones de red (ms)
@@ -143,7 +152,7 @@ self.addEventListener('install', function(event) {
         );
       })
       .then(function() {
-        console.log('✅ SW Panario: Instalación completada (v2.1.0)');
+        console.log('✅ SW Panario: Instalación completada (v2.1.5)');
         return self.skipWaiting();
       })
       .catch(function(error) {
@@ -417,6 +426,6 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-console.log('📦 SW Panario v2.1.0 cargado correctamente');
+console.log('📦 SW Panario v2.1.5 cargado correctamente');
 console.log('   📋 Assets precacheados:', CRITICAL_ASSETS.length);
 console.log('   🎯 CACHE_NAME:', CACHE_NAME);

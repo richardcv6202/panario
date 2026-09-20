@@ -14,6 +14,13 @@
 //   - Tarjetas resumen: total clientes, unidades, monto
 //   - Compatible con el botón "📄 Reporte PDF" del modal de gestión
 //     de lista de espera en ui-orders.js
+// 🆕 FASE 5 (#20) (200926 v6):
+//   - NUEVO: generateDiasSinVentasReport() — reporte PDF de días sin ventas
+//   - Muestra: fecha, día de la semana, motivo (con color), nota
+//   - Tarjetas resumen: total días, motivo más frecuente, rango
+//   - Gráfico de distribución por motivo
+//   - Compatible con el botón "📄 Reporte PDF" del modal de días sin ventas
+//     en ui-sales.js
 // ============================================================
 
 window.ReportsModule = {};
@@ -47,6 +54,25 @@ function getNombreNegocioReporte() {
         console.warn('⚠️ Error obteniendo nombre del negocio para reporte:', e);
         return 'Panario';
     }
+}
+
+// ============================================================
+// MOTIVOS DE DÍAS SIN VENTAS (para el reporte)
+// ============================================================
+
+const MOTIVOS_REPORTE_DIAS_SIN_VENTAS = {
+    'apagon':        { label: '⚡ Apagón',           color: '#f59e0b' },
+    'falta_insumos': { label: '🛒 Falta de insumos', color: '#ef4444' },
+    'feriado':       { label: '🎉 Feriado',          color: '#8b5cf6' },
+    'vacaciones':    { label: '🏖️ Vacaciones',       color: '#06b6d4' },
+    'enfermedad':    { label: '🏥 Enfermedad',       color: '#ef4444' },
+    'mantenimiento': { label: '🔧 Mantenimiento',    color: '#3b82f6' },
+    'clima':         { label: '🌧️ Mal clima',        color: '#3b82f6' },
+    'otro':          { label: '🔄 Otro',             color: '#94a3b8' }
+};
+
+function _getMotivoDSV(value) {
+    return MOTIVOS_REPORTE_DIAS_SIN_VENTAS[value] || MOTIVOS_REPORTE_DIAS_SIN_VENTAS['otro'];
 }
 
 // ============================================================
@@ -1125,7 +1151,7 @@ async function generateRecipesReport() {
 }
 
 // ============================================================
-// 🆕 FASE 2.2: REPORTE DE LISTA DE ESPERA
+// REPORTE DE LISTA DE ESPERA (FASE 2.2)
 // ============================================================
 
 /**
@@ -1327,6 +1353,263 @@ async function generateWaitingListReport() {
 }
 
 // ============================================================
+// 🆕 FASE 5 (#20): REPORTE DE DÍAS SIN VENTAS
+// ============================================================
+
+/**
+ * Genera el reporte PDF de días sin ventas.
+ * 
+ * Muestra:
+ *  - Encabezado con nombre del negocio
+ *  - Tarjetas resumen: total días, motivo más frecuente, rango
+ *  - Distribución por motivo
+ *  - Tabla detallada: fecha, día de la semana, motivo, nota
+ * 
+ * @returns {Promise<string|null>} HTML del reporte o null si falla
+ */
+async function generateDiasSinVentasReport() {
+    try {
+        // Verificar módulo de BD
+        if (!window.DBModule || typeof window.DBModule.getDiasSinVentas !== 'function') {
+            window.showToast('⚠️ Módulo de base de datos no disponible', 'warning');
+            return null;
+        }
+        
+        // Obtener todos los días sin ventas
+        const dias = window.DBModule.getDiasSinVentas();
+        
+        if (!dias || dias.length === 0) {
+            window.showToast('⚠️ No hay días sin ventas registrados', 'warning', 3000);
+            return null;
+        }
+        
+        const nombreNegocio = getNombreNegocioReporte();
+        
+        // Calcular totales
+        const totalDias = dias.length;
+        
+        // Contar por motivo
+        const porMotivo = {};
+        dias.forEach(d => {
+            const motivo = d.motivo || 'otro';
+            if (!porMotivo[motivo]) porMotivo[motivo] = 0;
+            porMotivo[motivo]++;
+        });
+        
+        // Motivo más frecuente
+        let motivoFrecuente = null;
+        let maxCount = 0;
+        Object.entries(porMotivo).forEach(([motivo, count]) => {
+            if (count > maxCount) {
+                maxCount = count;
+                motivoFrecuente = motivo;
+            }
+        });
+        const motivoFrecuenteObj = motivoFrecuente ? _getMotivoDSV(motivoFrecuente) : null;
+        
+        // Rango de fechas
+        const fechasOrdenadas = dias.map(d => d.fecha).sort();
+        const fechaMin = fechasOrdenadas[0];
+        const fechaMax = fechasOrdenadas[fechasOrdenadas.length - 1];
+        
+        // Nombre del día de la semana
+        const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        const MESES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+        
+        function formatearFechaConDia(fechaStr) {
+            if (!fechaStr) return '—';
+            try {
+                const parts = fechaStr.split('-');
+                const fecha = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                return `${DIAS_SEMANA[fecha.getDay()]}, ${parseInt(parts[2])} ${MESES_CORTO[fecha.getMonth()]} ${parseInt(parts[0])}`;
+            } catch (e) {
+                return fechaStr;
+            }
+        }
+        
+        function formatearFechaCorta(fechaStr) {
+            if (!fechaStr) return '—';
+            try {
+                const parts = fechaStr.split('-');
+                return `${parseInt(parts[2])} ${MESES_CORTO[parseInt(parts[1]) - 1]} ${parseInt(parts[0])}`;
+            } catch (e) {
+                return fechaStr;
+            }
+        }
+        
+        // Filas de la tabla (ordenadas por fecha descendente)
+        const filasHtml = dias.map(d => {
+            const motivoObj = _getMotivoDSV(d.motivo);
+            const fechaConDia = formatearFechaConDia(d.fecha);
+            
+            return `
+                <tr>
+                    <td style="white-space: nowrap;">${formatearFechaCorta(d.fecha)}</td>
+                    <td style="font-size: 12px; color: #666;">${fechaConDia.split(',')[0]}</td>
+                    <td>
+                        <span style="display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; background: ${motivoObj.color}20; color: ${motivoObj.color};">
+                            ${motivoObj.label}
+                        </span>
+                    </td>
+                    <td style="font-size: 12px; color: #666; font-style: italic;">
+                        ${d.nota ? d.nota : '—'}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        // Distribución por motivo
+        const motivosStatsHtml = Object.entries(porMotivo)
+            .sort((a, b) => b[1] - a[1])
+            .map(([motivo, count]) => {
+                const obj = _getMotivoDSV(motivo);
+                const porcentaje = ((count / totalDias) * 100).toFixed(1);
+                return `
+                    <tr>
+                        <td>
+                            <span style="display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; background: ${obj.color}20; color: ${obj.color};">
+                                ${obj.label}
+                            </span>
+                        </td>
+                        <td style="text-align: center;">${count}</td>
+                        <td style="text-align: right;">${porcentaje}%</td>
+                    </tr>
+                `;
+            }).join('');
+        
+        // Construir HTML completo
+        const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Días sin Ventas - ${nombreNegocio}</title>
+                <style>
+                    * { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
+                    body { padding: 20px; background: #fff; font-size: 14px; }
+                    .header { text-align: center; margin-bottom: 25px; border-bottom: 3px solid #06b6d4; padding-bottom: 15px; }
+                    .header .negocio { color: #2d2d2d; font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+                    .header h1 { color: #06b6d4; font-size: 24px; }
+                    .header p { color: #666; font-size: 13px; margin-top: 2px; }
+                    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 25px; }
+                    .summary-card { background: #f8f9fa; padding: 12px 16px; border-radius: 8px; text-align: center; border-left: 4px solid #06b6d4; }
+                    .summary-card .number { font-size: 22px; font-weight: 700; color: #06b6d4; }
+                    .summary-card .label { font-size: 11px; color: #666; }
+                    .summary-card .sub { font-size: 10px; color: #94a3b8; margin-top: 4px; }
+                    .section { margin-top: 20px; }
+                    .section h3 { color: #333; margin-bottom: 10px; font-size: 16px; border-bottom: 2px solid #eee; padding-bottom: 6px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+                    th { background: #06b6d4; color: #fff; padding: 8px 10px; text-align: left; font-size: 12px; }
+                    td { padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
+                    tr:nth-child(even) { background: #fafafa; }
+                    .total-row { font-weight: 700; background: #ecfeff; }
+                    .footer { margin-top: 25px; text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #eee; padding-top: 15px; }
+                    .footer .negocio { color: #666; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
+                    .info-box { background: #ecfeff; border: 1px solid #06b6d4; border-radius: 8px; padding: 10px 14px; margin-bottom: 15px; font-size: 12px; color: #0e7490; }
+                    @media print {
+                        body { padding: 10px; }
+                        .summary-card { padding: 8px 12px; }
+                        .summary-card .number { font-size: 18px; }
+                        th, td { font-size: 11px; padding: 4px 8px; }
+                        .info-box { display: none; }
+                    }
+                    @media (max-width: 600px) {
+                        body { padding: 10px; }
+                        .header h1 { font-size: 18px; }
+                        .summary { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+                        .summary-card .number { font-size: 16px; }
+                        th, td { font-size: 10px; padding: 3px 6px; }
+                        table { font-size: 11px; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div class="negocio">🏢 ${nombreNegocio}</div>
+                    <h1>📅 Reporte de Días sin Ventas</h1>
+                    <p>Días sin actividad registrados</p>
+                    <p style="font-size: 12px; color: #94a3b8;">Generado: ${new Date().toLocaleString('es-ES')}</p>
+                </div>
+
+                <div class="info-box">
+                    💡 <strong>¿Qué es esto?</strong> Estos son los días en los que <strong>no tuviste actividad</strong> (apagones, vacaciones, feriados, etc.). Registrarlos ayuda a entender mejor las estadísticas y a excluirlos de los cálculos de promedio.
+                </div>
+
+                <div class="summary">
+                    <div class="summary-card">
+                        <div class="number">${totalDias}</div>
+                        <div class="label">📅 Total días</div>
+                    </div>
+                    ${motivoFrecuenteObj ? `
+                    <div class="summary-card" style="border-left-color: ${motivoFrecuenteObj.color};">
+                        <div class="number" style="color: ${motivoFrecuenteObj.color};">${motivoFrecuenteObj.label}</div>
+                        <div class="label">📌 Motivo más frecuente (${maxCount})</div>
+                    </div>
+                    ` : ''}
+                    <div class="summary-card">
+                        <div class="number" style="font-size: 14px;">${formatearFechaCorta(fechaMin)}</div>
+                        <div class="sub">→ ${formatearFechaCorta(fechaMax)}</div>
+                        <div class="label">📅 Rango de fechas</div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>📊 Distribución por Motivo</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Motivo</th>
+                                <th style="text-align: center;">Cantidad</th>
+                                <th style="text-align: right;">%</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${motivosStatsHtml}
+                            <tr class="total-row">
+                                <td style="text-align: right;">TOTAL</td>
+                                <td style="text-align: center;">${totalDias}</td>
+                                <td style="text-align: right;">100%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="section">
+                    <h3>📋 Detalle de Días sin Ventas (${totalDias})</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 110px;">Fecha</th>
+                                <th style="width: 90px;">Día</th>
+                                <th style="width: 180px;">Motivo</th>
+                                <th>Nota</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filasHtml}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="footer">
+                    <div class="negocio">🏢 ${nombreNegocio}</div>
+                    Reporte generado desde Panario 🍞 - ${new Date().toLocaleString('es-ES')}
+                </div>
+            </body>
+            </html>
+        `;
+        
+        return html;
+        
+    } catch (error) {
+        console.error('❌ Error generando reporte de días sin ventas:', error);
+        window.showToast('❌ Error: ' + error.message, 'error', 5000);
+        return null;
+    }
+}
+
+// ============================================================
 // FUNCIONES AUXILIARES
 // ============================================================
 
@@ -1371,9 +1654,11 @@ window.ReportsModule = {
     generateRecipesReport: generateRecipesReport,
     // 🆕 FASE 2.2
     generateWaitingListReport: generateWaitingListReport,
+    // 🆕 FASE 5 (#20)
+    generateDiasSinVentasReport: generateDiasSinVentasReport,
     printReport: printReport,
     // 🆕 Helper exportado
     getNombreNegocioReporte: getNombreNegocioReporte
 };
 
-console.log('📦 Reports Module cargado correctamente v2.0.5 (FASE 2.2: reporte de lista de espera)');
+console.log('📦 Reports Module cargado correctamente v2.1.1 (FASE 5 #20: reporte de días sin ventas)');

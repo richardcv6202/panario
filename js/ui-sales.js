@@ -49,6 +49,14 @@
 //   - Aviso visual cuando hay ventas ocultas
 //   - El resumen (updateSummary) NO cambia: siempre muestra el total
 //   - No afecta a la vista de deudas
+// 🆕 FASE 5 (#20) (200926 v7): UI DE DÍAS SIN VENTAS
+//   - NUEVO botón "📅 Días sin ventas" en el header
+//   - NUEVO modal showDiasSinVentasModal(): lista con filtros
+//   - NUEVO formulario showDiaSinVentaForm(): fecha + motivo + nota
+//   - Motivos predefinidos: apagón, insumos, feriado, vacaciones, etc.
+//   - Detección inteligente: avisa si ya hay ventas ese día
+//   - Botón "📄 Reporte PDF" (delegado a ReportsModule)
+//   - Todo lo demás del archivo se mantiene intacto
 // ============================================================
 
 // ============================================================
@@ -284,9 +292,32 @@ function updateShowLiberatedToggleVisual() {
 }
 
 // ============================================================
+// 🆕 FASE 5 (#20): CONSTANTES PARA DÍAS SIN VENTAS
+// ============================================================
+
+const MOTIVOS_DIAS_SIN_VENTAS = [
+    { value: 'apagon', label: '⚡ Apagón', color: '#f59e0b' },
+    { value: 'falta_insumos', label: '🛒 Falta de insumos', color: '#ef4444' },
+    { value: 'feriado', label: '🎉 Feriado', color: '#8b5cf6' },
+    { value: 'vacaciones', label: '🏖️ Vacaciones', color: '#06b6d4' },
+    { value: 'enfermedad', label: '🏥 Enfermedad', color: '#ef4444' },
+    { value: 'mantenimiento', label: '🔧 Mantenimiento', color: '#3b82f6' },
+    { value: 'clima', label: '🌧️ Mal clima', color: '#3b82f6' },
+    { value: 'otro', label: '🔄 Otro', color: '#94a3b8' }
+];
+
+/**
+ * Devuelve el objeto de motivo para un valor dado.
+ */
+function getMotivoDiaSinVenta(value) {
+    return MOTIVOS_DIAS_SIN_VENTAS.find(m => m.value === value) || MOTIVOS_DIAS_SIN_VENTAS[MOTIVOS_DIAS_SIN_VENTAS.length - 1];
+}
+
+// ============================================================
 // RENDER SALES VIEW
 // 🆕 FASE 3.5: 5 tarjetas de resumen con alturas homogéneas
 // 🆕 FASE 4.2 (#13): Toggle de mostrar/ocultar liberadas
+// 🆕 FASE 5 (#20): Botón "Días sin ventas"
 // ============================================================
 
 function renderSalesView() {
@@ -313,6 +344,10 @@ function renderSalesView() {
                 </button>
                 <button onclick="showExpenseForm()" class="btn secondary" style="padding: 8px 16px; font-size: 14px; width: auto;">
                     📤 Registrar Gasto
+                </button>
+                <!-- 🆕 FASE 5 (#20): Botón Días sin ventas -->
+                <button onclick="showDiasSinVentasModal()" class="btn secondary" style="padding: 8px 16px; font-size: 14px; width: auto; background: #06b6d4; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    📅 Días sin ventas
                 </button>
                 <button onclick="showBalanceView()" class="btn secondary" style="padding: 8px 16px; font-size: 14px; width: auto;">
                     📊 Balance
@@ -359,7 +394,6 @@ function renderSalesView() {
                 <div style="font-size: 20px; font-weight: 700; color: #ef4444;" id="total-debts">$0.00</div>
             </div>
             
-            <!-- 🆕 FASE 3.5: Nueva tarjeta de Ventas liberadas -->
             <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-left: 4px solid #8b5cf6;">
                 <div style="font-size: 20px; margin-bottom: 4px;">🚀</div>
                 <div style="font-size: 11px; color: var(--text-light);">Ventas liberadas</div>
@@ -1385,7 +1419,575 @@ async function updateSummary() {
 }
 
 // ============================================================
-// FORMULARIO: VENTA LIBERADA
+// 🆕 FASE 5 (#20): DÍAS SIN VENTAS — MODAL PRINCIPAL
+// ============================================================
+
+/**
+ * Abre el modal de gestión de días sin ventas.
+ */
+async function showDiasSinVentasModal() {
+    const existingModal = document.getElementById('dias-sin-ventas-modal');
+    if (existingModal) existingModal.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'dias-sin-ventas-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 999999; padding: 15px;
+        animation: modalFadeIn 0.25s ease;
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Guardar referencia para poder refrescar
+    window._diasSinVentasModal = modal;
+    
+    // Render inicial
+    await renderDiasSinVentasContent();
+    
+    // Cierre con click fuera
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeDiasSinVentasModal();
+    });
+    
+    // Cierre con Escape
+    const escHandler = function(e) {
+        if (e.key === 'Escape') {
+            closeDiasSinVentasModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+}
+
+/**
+ * Renderiza el contenido del modal (o lo refresca).
+ */
+async function renderDiasSinVentasContent() {
+    const modal = document.getElementById('dias-sin-ventas-modal');
+    if (!modal) return;
+    
+    try {
+        // Leer filtros actuales
+        const fromDate = document.getElementById('dsv-filter-from')?.value || '';
+        const toDate = document.getElementById('dsv-filter-to')?.value || '';
+        const motivoFilter = document.getElementById('dsv-filter-motivo')?.value || '';
+        
+        const filters = {};
+        if (fromDate) filters.from_date = fromDate;
+        if (toDate) filters.to_date = toDate;
+        if (motivoFilter) filters.motivo = motivoFilter;
+        
+        const dias = window.DBModule.getDiasSinVentas(filters);
+        
+        // Estadísticas generales (sin filtros)
+        const todos = window.DBModule.getDiasSinVentas();
+        const totalDias = todos.length;
+        
+        // Contar por motivo
+        const porMotivo = {};
+        todos.forEach(d => {
+            porMotivo[d.motivo] = (porMotivo[d.motivo] || 0) + 1;
+        });
+        
+        // HTML de la lista
+        let listaHtml = '';
+        if (dias.length === 0) {
+            listaHtml = `
+                <div style="text-align: center; padding: 40px 20px; color: var(--text-light);">
+                    <span style="font-size: 56px;">📅</span>
+                    <p style="margin-top: 12px; font-size: 15px; font-weight: 600;">No hay días sin ventas registrados</p>
+                    <p style="font-size: 13px;">Registra los días en los que no tuviste actividad</p>
+                </div>
+            `;
+        } else {
+            listaHtml = dias.map(d => {
+                const motivo = getMotivoDiaSinVenta(d.motivo);
+                const fechaLarga = formatearFechaLarga(d.fecha);
+                
+                return `
+                    <div style="background: var(--bg); border-radius: 10px; padding: 12px; margin-bottom: 8px; border-left: 4px solid ${motivo.color}; display: flex; align-items: flex-start; gap: 10px;">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+                                <span style="font-weight: 700; font-size: 14px; color: var(--text);">📅 ${fechaLarga}</span>
+                                <span style="font-size: 11px; background: ${motivo.color}20; color: ${motivo.color}; padding: 2px 8px; border-radius: 10px; font-weight: 600;">${motivo.label}</span>
+                            </div>
+                            ${d.nota ? `<div style="font-size: 12px; color: var(--text-light); font-style: italic;">📝 ${d.nota}</div>` : ''}
+                        </div>
+                        <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                            <button onclick="showDiaSinVentaForm(${d.id})" class="btn secondary" style="padding: 4px 10px; font-size: 11px; width: auto;" title="Editar">✏️</button>
+                            <button onclick="confirmDeleteDiaSinVenta(${d.id}, '${fechaLarga.replace(/'/g, "\\'")}')" class="btn secondary" style="padding: 4px 10px; font-size: 11px; width: auto; color: #ef4444; border-color: #ef4444;" title="Eliminar">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // Estadísticas por motivo
+        let motivosStatsHtml = '';
+        if (Object.keys(porMotivo).length > 0) {
+            motivosStatsHtml = Object.entries(porMotivo)
+                .sort((a, b) => b[1] - a[1])
+                .map(([motivo, count]) => {
+                    const m = getMotivoDiaSinVenta(motivo);
+                    return `<span style="font-size: 11px; background: ${m.color}20; color: ${m.color}; padding: 2px 10px; border-radius: 10px; font-weight: 600;">${m.label}: ${count}</span>`;
+                }).join(' ');
+        }
+        
+        modal.innerHTML = `
+            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 20px; max-width: 650px; width: 100%; max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.5); border: 1px solid var(--border-color);">
+                
+                <!-- HEADER -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 2px solid #06b6d4; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 28px;">📅</span>
+                        <div>
+                            <h2 style="margin: 0; font-size: 18px; color: #06b6d4;">Días sin ventas</h2>
+                            <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">Registra los días sin actividad</p>
+                        </div>
+                    </div>
+                    <button onclick="closeDiasSinVentasModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+                </div>
+                
+                <!-- ESTADÍSTICAS -->
+                <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
+                    <div style="background: #06b6d415; border-left: 3px solid #06b6d4; padding: 8px 14px; border-radius: 8px;">
+                        <span style="font-size: 18px; font-weight: 700; color: #06b6d4;">${totalDias}</span>
+                        <span style="font-size: 11px; color: var(--text-light); margin-left: 4px;">días registrados</span>
+                    </div>
+                    ${motivosStatsHtml}
+                </div>
+                
+                <!-- ACCIONES -->
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+                    <button onclick="showDiaSinVentaForm()" 
+                            class="btn primary" 
+                            style="padding: 8px 16px; font-size: 13px; width: auto; background: #06b6d4; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        ➕ Registrar día
+                    </button>
+                    <button onclick="reporteDiasSinVentas()" 
+                            class="btn secondary" 
+                            style="padding: 8px 16px; font-size: 13px; width: auto; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        📄 Reporte PDF
+                    </button>
+                    <button onclick="refrescarDiasSinVentas()" 
+                            class="btn secondary" 
+                            style="padding: 8px 16px; font-size: 13px; width: auto; margin-left: auto;">
+                        🔄 Refrescar
+                    </button>
+                </div>
+                
+                <!-- FILTROS -->
+                <div style="background: var(--bg); padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
+                    <div style="flex: 1; min-width: 100px;">
+                        <label style="font-size: 11px; font-weight: 600; color: var(--text-label); display: block; margin-bottom: 2px;">📅 Desde</label>
+                        <input type="date" id="dsv-filter-from" value="${fromDate}" 
+                               onchange="refrescarDiasSinVentas()"
+                               style="width: 100%; padding: 6px 8px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 12px;">
+                    </div>
+                    <div style="flex: 1; min-width: 100px;">
+                        <label style="font-size: 11px; font-weight: 600; color: var(--text-label); display: block; margin-bottom: 2px;">📅 Hasta</label>
+                        <input type="date" id="dsv-filter-to" value="${toDate}" 
+                               onchange="refrescarDiasSinVentas()"
+                               style="width: 100%; padding: 6px 8px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 12px;">
+                    </div>
+                    <div style="flex: 1; min-width: 120px;">
+                        <label style="font-size: 11px; font-weight: 600; color: var(--text-label); display: block; margin-bottom: 2px;">📌 Motivo</label>
+                        <select id="dsv-filter-motivo" onchange="refrescarDiasSinVentas()"
+                                style="width: 100%; padding: 6px 8px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-card); color: var(--text); font-size: 12px;">
+                            <option value="">Todos los motivos</option>
+                            ${MOTIVOS_DIAS_SIN_VENTAS.map(m => `
+                                <option value="${m.value}" ${motivoFilter === m.value ? 'selected' : ''}>${m.label}</option>
+                            `).join('')}
+                        </select>
+                    </div>
+                    <button onclick="limpiarFiltrosDiasSinVentas()" 
+                            class="btn secondary" 
+                            style="padding: 6px 12px; font-size: 11px; width: auto;">
+                        🗑️
+                    </button>
+                </div>
+                
+                <!-- LISTA -->
+                <div style="flex: 1; overflow-y: auto; max-height: 400px; padding-right: 4px;">
+                    ${listaHtml}
+                </div>
+                
+                <!-- FOOTER -->
+                <div style="display: flex; justify-content: flex-end; padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--border-color);">
+                    <button onclick="closeDiasSinVentasModal()" class="btn secondary" style="padding: 10px 20px; font-size: 14px; width: auto;">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('❌ Error renderizando días sin ventas:', error);
+        modal.innerHTML = `
+            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; text-align: center;">
+                <span style="font-size: 48px;">❌</span>
+                <h2 style="margin: 12px 0 8px;">Error</h2>
+                <p style="color: var(--text-light); font-size: 13px;">${error.message}</p>
+                <button onclick="closeDiasSinVentasModal()" class="btn secondary" style="margin-top: 12px; padding: 8px 20px; width: auto;">
+                    Cerrar
+                </button>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Refresca el contenido del modal preservando los filtros.
+ */
+async function refrescarDiasSinVentas() {
+    await renderDiasSinVentasContent();
+}
+
+/**
+ * Limpia los filtros del modal.
+ */
+function limpiarFiltrosDiasSinVentas() {
+    const from = document.getElementById('dsv-filter-from');
+    const to = document.getElementById('dsv-filter-to');
+    const motivo = document.getElementById('dsv-filter-motivo');
+    if (from) from.value = '';
+    if (to) to.value = '';
+    if (motivo) motivo.value = '';
+    refrescarDiasSinVentas();
+}
+
+/**
+ * Cierra el modal de días sin ventas.
+ */
+function closeDiasSinVentasModal() {
+    const modal = document.getElementById('dias-sin-ventas-modal');
+    if (modal) {
+        modal.style.animation = 'modalFadeOut 0.2s ease forwards';
+        setTimeout(() => { if (modal.parentNode) modal.remove(); }, 200);
+        setTimeout(() => {
+            const still = document.getElementById('dias-sin-ventas-modal');
+            if (still && still.parentNode) still.remove();
+        }, 500);
+    }
+    window._diasSinVentasModal = null;
+}
+
+// ============================================================
+// 🆕 FASE 5 (#20): FORMULARIO DE DÍA SIN VENTA
+// ============================================================
+
+/**
+ * Abre el formulario para registrar o editar un día sin ventas.
+ * 
+ * @param {number|null} id - ID del día a editar, o null para crear
+ */
+async function showDiaSinVentaForm(id = null) {
+    const existingModal = document.getElementById('dia-sin-venta-form-modal');
+    if (existingModal) existingModal.remove();
+    
+    const isEdit = id !== null && id !== undefined;
+    let diaExistente = null;
+    
+    if (isEdit) {
+        diaExistente = window.DBModule.getDiaSinVenta(id);
+        if (!diaExistente) {
+            window.showToast('❌ Día sin ventas no encontrado', 'error');
+            return;
+        }
+    }
+    
+    const hoyStr = new Date().toISOString().split('T')[0];
+    const fechaValue = diaExistente?.fecha || hoyStr;
+    const motivoValue = diaExistente?.motivo || 'apagon';
+    const notaValue = diaExistente?.nota || '';
+    
+    const modal = document.createElement('div');
+    modal.id = 'dia-sin-venta-form-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 999999999; padding: 20px;
+        animation: modalFadeIn 0.25s ease;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 440px; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #06b6d4;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 28px;">📅</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 18px; color: #06b6d4;">
+                            ${isEdit ? 'Editar día sin ventas' : 'Registrar día sin ventas'}
+                        </h2>
+                        <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">
+                            ${isEdit ? 'Modifica los datos del día' : 'Añade un día sin actividad'}
+                        </p>
+                    </div>
+                </div>
+                <button onclick="closeDiaSinVentaForm()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+            </div>
+            
+            <div style="background: #06b6d415; border: 1px solid #06b6d4; border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; font-size: 12px; color: #06b6d4;">
+                💡 <strong>¿Para qué sirve?</strong><br>
+                Registra los días en los que no vendiste (apagón, vacaciones, etc.) para llevar un historial y entender mejor tus estadísticas.
+            </div>
+            
+            <form id="dia-sin-venta-form" style="display: flex; flex-direction: column; gap: 12px;">
+                
+                <div class="form-group">
+                    <label>📅 Fecha <span style="color: #ef4444;">*</span></label>
+                    <input type="date" id="dsv-fecha" value="${fechaValue}" required
+                           style="width: 100%; padding: 12px 16px; border: 2px solid var(--border-color); border-radius: 10px; font-size: 15px; background: var(--bg-input); color: var(--text);">
+                </div>
+                
+                <div class="form-group">
+                    <label>📌 Motivo <span style="color: #ef4444;">*</span></label>
+                    <select id="dsv-motivo" required
+                            style="width: 100%; padding: 12px 16px; border: 2px solid var(--border-color); border-radius: 10px; font-size: 15px; background: var(--bg-input); color: var(--text);">
+                        ${MOTIVOS_DIAS_SIN_VENTAS.map(m => `
+                            <option value="${m.value}" ${motivoValue === m.value ? 'selected' : ''}>${m.label}</option>
+                        `).join('')}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>📝 Nota (opcional)</label>
+                    <textarea id="dsv-nota" rows="3" placeholder="Ej: Apagón programado de 8 horas"
+                              style="width: 100%; padding: 12px 16px; border: 2px solid var(--border-color); border-radius: 10px; font-size: 15px; background: var(--bg-input); color: var(--text); font-family: inherit; resize: vertical;">${notaValue}</textarea>
+                </div>
+                
+                <div id="dsv-warning" style="display: none; background: #fef9e7; border: 1px solid #f59e0b; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #92400e;"></div>
+                
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button type="submit" class="btn primary" 
+                            style="flex: 1; padding: 12px; font-size: 14px; background: #06b6d4; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        💾 ${isEdit ? 'Guardar cambios' : 'Registrar día'}
+                    </button>
+                    <button type="button" onclick="closeDiaSinVentaForm()" class="btn secondary" style="flex: 1;">
+                        ❌ Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Verificar si ya hay ventas en la fecha (aviso inteligente)
+    const fechaInput = document.getElementById('dsv-fecha');
+    const warningEl = document.getElementById('dsv-warning');
+    
+    function verificarVentasEnFecha() {
+        const fecha = fechaInput.value;
+        if (!fecha) {
+            warningEl.style.display = 'none';
+            return;
+        }
+        
+        try {
+            const negocioId = window.DBModule.getNegocioIdActual();
+            const ventasCount = window.DBModule.query(
+                `SELECT COUNT(*) as count FROM sales 
+                 WHERE negocio_id = ? AND DATE(sale_date, "localtime") = DATE(?) 
+                 AND deleted_at IS NULL AND voided = 0`,
+                [negocioId, fecha]
+            );
+            const count = ventasCount[0]?.count || 0;
+            
+            if (count > 0) {
+                warningEl.innerHTML = `⚠️ <strong>Atención:</strong> Ya existen <strong>${count} venta(s)</strong> registradas en esa fecha. Si registras el día como "sin ventas", puede haber inconsistencias en las estadísticas. ¿Estás seguro?`;
+                warningEl.style.display = 'block';
+            } else {
+                warningEl.style.display = 'none';
+            }
+        } catch (e) {
+            warningEl.style.display = 'none';
+        }
+    }
+    
+    fechaInput.addEventListener('change', verificarVentasEnFecha);
+    
+    // Verificar al abrir (en edición no es necesario avisar)
+    if (!isEdit) {
+        setTimeout(verificarVentasEnFecha, 100);
+    }
+    
+    // Submit
+    const form = document.getElementById('dia-sin-venta-form');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await submitDiaSinVentaForm(isEdit ? id : null);
+    });
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeDiaSinVentaForm();
+    });
+}
+
+/**
+ * Procesa el envío del formulario de día sin ventas.
+ */
+async function submitDiaSinVentaForm(id = null) {
+    const fecha = document.getElementById('dsv-fecha')?.value;
+    const motivo = document.getElementById('dsv-motivo')?.value;
+    const nota = document.getElementById('dsv-nota')?.value?.trim() || '';
+    
+    if (!fecha) {
+        window.showToast('⚠️ La fecha es obligatoria', 'error');
+        return;
+    }
+    if (!motivo) {
+        window.showToast('⚠️ El motivo es obligatorio', 'error');
+        return;
+    }
+    
+    // Verificación de duplicado (solo si es nuevo)
+    if (!id) {
+        const existente = window.DBModule.getDiaSinVentaByFecha(fecha);
+        if (existente) {
+            const confirm = await window.ModalModule.showConfirm({
+                title: '⚠️ Ya existe',
+                message: `Ya hay un día sin ventas registrado para el ${formatearFechaLarga(fecha)}.\n\n¿Quieres reemplazarlo?`,
+                confirmText: 'Sí, reemplazar',
+                cancelText: 'Cancelar',
+                icon: '⚠️',
+                confirmColor: '#f59e0b'
+            });
+            if (!confirm) return;
+            id = existente.id;
+        }
+    }
+    
+    const data = {
+        fecha: fecha,
+        motivo: motivo,
+        nota: nota || null
+    };
+    
+    if (id) data.id = id;
+    
+    try {
+        const result = window.DBModule.saveDiaSinVenta(data);
+        
+        if (result.success) {
+            window.showToast(
+                id ? '✅ Día sin ventas actualizado' : '✅ Día sin ventas registrado',
+                'success'
+            );
+            
+            closeDiaSinVentaForm();
+            
+            // Refrescar el modal principal (si sigue abierto)
+            setTimeout(() => {
+                if (document.getElementById('dias-sin-ventas-modal')) {
+                    refrescarDiasSinVentas();
+                }
+            }, 300);
+            
+            // Refrescar dashboard si está visible
+            if (typeof window.loadDashboardData === 'function') {
+                setTimeout(window.loadDashboardData, 500);
+            }
+        } else {
+            window.showToast('❌ Error: ' + result.error, 'error');
+        }
+    } catch (error) {
+        console.error('❌ Error guardando día sin ventas:', error);
+        window.showToast('❌ Error: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Cierra el formulario de día sin ventas.
+ */
+function closeDiaSinVentaForm() {
+    const modal = document.getElementById('dia-sin-venta-form-modal');
+    if (modal) {
+        modal.style.animation = 'modalFadeOut 0.2s ease forwards';
+        setTimeout(() => { if (modal.parentNode) modal.remove(); }, 200);
+        setTimeout(() => {
+            const still = document.getElementById('dia-sin-venta-form-modal');
+            if (still && still.parentNode) still.remove();
+        }, 500);
+    }
+}
+
+// ============================================================
+// 🆕 FASE 5 (#20): ELIMINAR DÍA SIN VENTAS
+// ============================================================
+
+/**
+ * Confirma y elimina un día sin ventas.
+ */
+async function confirmDeleteDiaSinVenta(id, fechaStr) {
+    const confirm = await window.ModalModule.showConfirm({
+        title: '🗑️ Eliminar día sin ventas',
+        message: `¿Eliminar el día sin ventas del ${fechaStr}?\n\nEsta acción se puede deshacer solo desde "Limpiar datos eliminados".`,
+        confirmText: '🗑️ Sí, eliminar',
+        cancelText: '❌ Cancelar',
+        icon: '🗑️',
+        confirmColor: '#ef4444'
+    });
+    
+    if (!confirm) return;
+    
+    try {
+        const result = window.DBModule.deleteDiaSinVenta(id);
+        
+        if (result.success) {
+            window.showToast('🗑️ Día sin ventas eliminado', 'success', 3000);
+            
+            setTimeout(() => {
+                if (document.getElementById('dias-sin-ventas-modal')) {
+                    refrescarDiasSinVentas();
+                }
+            }, 300);
+        } else {
+            window.showToast('❌ Error: ' + result.error, 'error');
+        }
+    } catch (error) {
+        console.error('❌ Error eliminando:', error);
+        window.showToast('❌ Error: ' + error.message, 'error');
+    }
+}
+
+// ============================================================
+// 🆕 FASE 5 (#20): REPORTE PDF DE DÍAS SIN VENTAS
+// ============================================================
+
+/**
+ * Genera el reporte PDF de días sin ventas.
+ * Delega a ReportsModule.generateDiasSinVentasReport() si existe.
+ */
+async function reporteDiasSinVentas() {
+    try {
+        if (window.ReportsModule && typeof window.ReportsModule.generateDiasSinVentasReport === 'function') {
+            window.showToast('⏳ Generando reporte...', 'info', 2000);
+            
+            const html = await window.ReportsModule.generateDiasSinVentasReport();
+            
+            if (html) {
+                window.ReportsModule.printReport(html);
+                window.showToast('✅ Reporte generado', 'success', 3000);
+            } else {
+                window.showToast('⚠️ No hay datos para el reporte', 'warning', 3000);
+            }
+        } else {
+            window.showToast('⚠️ Módulo de reportes no disponible aún', 'warning', 4000);
+        }
+    } catch (error) {
+        console.error('❌ Error generando reporte:', error);
+        window.showToast('❌ Error: ' + error.message, 'error', 5000);
+    }
+}
+
+// ============================================================
+// 🆕 FASE 4.2 (#13): (ya existente) FORMULARIO: VENTA LIBERADA
 // 🆕 FIX 2: usa normalizarFechaVenta()
 // ============================================================
 
@@ -2903,5 +3505,18 @@ window.getShowLiberatedSales = getShowLiberatedSales;
 window.setShowLiberatedSales = setShowLiberatedSales;
 window.onShowLiberatedChange = onShowLiberatedChange;
 window.updateShowLiberatedToggleVisual = updateShowLiberatedToggleVisual;
+// 🆕 FASE 5 (#20)
+window.showDiasSinVentasModal = showDiasSinVentasModal;
+window.closeDiasSinVentasModal = closeDiasSinVentasModal;
+window.renderDiasSinVentasContent = renderDiasSinVentasContent;
+window.refrescarDiasSinVentas = refrescarDiasSinVentas;
+window.limpiarFiltrosDiasSinVentas = limpiarFiltrosDiasSinVentas;
+window.showDiaSinVentaForm = showDiaSinVentaForm;
+window.closeDiaSinVentaForm = closeDiaSinVentaForm;
+window.submitDiaSinVentaForm = submitDiaSinVentaForm;
+window.confirmDeleteDiaSinVenta = confirmDeleteDiaSinVenta;
+window.reporteDiasSinVentas = reporteDiasSinVentas;
+window.getMotivoDiaSinVenta = getMotivoDiaSinVenta;
+window.MOTIVOS_DIAS_SIN_VENTAS = MOTIVOS_DIAS_SIN_VENTAS;
 
-console.log('📦 UI Sales Module v2.1.1 (FASE 4.2 #13: interruptor ventas liberadas)');
+console.log('📦 UI Sales Module v2.1.2 (FASE 5 #20: días sin ventas)');
