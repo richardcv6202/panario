@@ -7,6 +7,13 @@
 // AÑADIDO (180926 v4):
 //   - Nombre del negocio en el encabezado y pie de TODOS los reportes
 //   - getNombreNegocioReporte() helper local
+// 🆕 FASE 2.2 (200926 v5):
+//   - NUEVO: generateWaitingListReport() — reporte PDF de la lista de espera
+//   - Muestra posición, cliente, teléfono, producto, cantidad, total,
+//     fecha de entrega y notas
+//   - Tarjetas resumen: total clientes, unidades, monto
+//   - Compatible con el botón "📄 Reporte PDF" del modal de gestión
+//     de lista de espera en ui-orders.js
 // ============================================================
 
 window.ReportsModule = {};
@@ -1118,6 +1125,208 @@ async function generateRecipesReport() {
 }
 
 // ============================================================
+// 🆕 FASE 2.2: REPORTE DE LISTA DE ESPERA
+// ============================================================
+
+/**
+ * Genera el reporte PDF de la lista de espera actual.
+ * 
+ * Muestra:
+ *  - Encabezado con nombre del negocio y fecha de generación
+ *  - Tarjetas resumen: total clientes, unidades, monto
+ *  - Tabla detallada: posición, cliente, teléfono, producto,
+ *    cantidad, total, fecha de entrega, notas
+ * 
+ * @returns {Promise<string|null>} HTML del reporte o null si falla
+ */
+async function generateWaitingListReport() {
+    try {
+        // Verificar módulos
+        if (!window.OrdersModule || typeof window.OrdersModule.getWaitingListWithDetails !== 'function') {
+            window.showToast('⚠️ Módulo de pedidos no disponible', 'warning');
+            return null;
+        }
+        
+        // Obtener la lista actual
+        const lista = await window.OrdersModule.getWaitingListWithDetails();
+        
+        if (!lista || lista.length === 0) {
+            window.showToast('⚠️ La lista de espera está vacía', 'warning', 3000);
+            return null;
+        }
+        
+        const nombreNegocio = getNombreNegocioReporte();
+        
+        // Calcular totales
+        const totalItems = lista.length;
+        const totalCantidad = lista.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        const totalMonto = lista.reduce((sum, item) => sum + (item.order_total || 0), 0);
+        
+        // HTML de las filas
+        const filasHtml = lista.map((item, index) => {
+            const posicion = item.position || (index + 1);
+            const cliente = item.client_name || 'Cliente sin nombre';
+            const telefono = item.client_phone || '—';
+            const producto = item.product_name || 'Producto';
+            const cantidad = item.quantity || 0;
+            const total = item.order_total || 0;
+            
+            let fechaEntrega = '—';
+            if (item.delivery_date) {
+                try {
+                    const fecha = new Date(item.delivery_date);
+                    if (!isNaN(fecha.getTime())) {
+                        fechaEntrega = fecha.toLocaleDateString('es-ES', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric'
+                        });
+                    }
+                } catch (e) {
+                    fechaEntrega = item.delivery_date.split('T')[0] || '—';
+                }
+            }
+            
+            const notas = item.notes ? item.notes.trim() : '';
+            
+            return `
+                <tr>
+                    <td style="text-align: center; font-weight: 700; color: #f59e0b;">#${posicion}</td>
+                    <td>
+                        <strong>${cliente}</strong>
+                        ${notas ? `<br><span style="font-size: 11px; color: #94a3b8; font-style: italic;">📝 ${notas}</span>` : ''}
+                    </td>
+                    <td>${telefono}</td>
+                    <td>${producto}</td>
+                    <td style="text-align: center;">${cantidad}</td>
+                    <td style="text-align: right; font-weight: 600; color: #f5a623;">$${total.toFixed(2)}</td>
+                    <td style="text-align: center; font-size: 12px;">${fechaEntrega}</td>
+                </tr>
+            `;
+        }).join('');
+        
+        // Construir HTML completo
+        const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Lista de Espera - ${nombreNegocio}</title>
+                <style>
+                    * { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
+                    body { padding: 20px; background: #fff; font-size: 14px; }
+                    .header { text-align: center; margin-bottom: 25px; border-bottom: 3px solid #f59e0b; padding-bottom: 15px; }
+                    .header .negocio { color: #2d2d2d; font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+                    .header h1 { color: #f59e0b; font-size: 24px; }
+                    .header p { color: #666; font-size: 13px; margin-top: 2px; }
+                    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 25px; }
+                    .summary-card { background: #f8f9fa; padding: 12px 16px; border-radius: 8px; text-align: center; border-left: 4px solid #f59e0b; }
+                    .summary-card .number { font-size: 22px; font-weight: 700; color: #f59e0b; }
+                    .summary-card .label { font-size: 11px; color: #666; }
+                    .summary-card.unidades { border-left-color: #8b5cf6; }
+                    .summary-card.unidades .number { color: #8b5cf6; }
+                    .summary-card.monto { border-left-color: #10b981; }
+                    .summary-card.monto .number { color: #10b981; }
+                    .section { margin-top: 20px; }
+                    .section h3 { color: #333; margin-bottom: 10px; font-size: 16px; border-bottom: 2px solid #eee; padding-bottom: 6px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+                    th { background: #f59e0b; color: #fff; padding: 8px 10px; text-align: left; font-size: 12px; }
+                    td { padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+                    tr:nth-child(even) { background: #fafafa; }
+                    .footer { margin-top: 25px; text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #eee; padding-top: 15px; }
+                    .footer .negocio { color: #666; font-weight: 600; font-size: 12px; margin-bottom: 4px; }
+                    .info-box { background: #fef9e7; border: 1px solid #f59e0b; border-radius: 8px; padding: 10px 14px; margin-bottom: 15px; font-size: 12px; color: #92400e; }
+                    @media print {
+                        body { padding: 10px; }
+                        .summary-card { padding: 8px 12px; }
+                        .summary-card .number { font-size: 18px; }
+                        th, td { font-size: 11px; padding: 5px 8px; }
+                        .info-box { display: none; }
+                    }
+                    @media (max-width: 600px) {
+                        body { padding: 10px; }
+                        .header h1 { font-size: 18px; }
+                        .summary { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+                        .summary-card .number { font-size: 16px; }
+                        th, td { font-size: 10px; padding: 4px 6px; }
+                        table { font-size: 11px; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div class="negocio">🏢 ${nombreNegocio}</div>
+                    <h1>⏰ Lista de Espera</h1>
+                    <p>Clientes pendientes de atención</p>
+                    <p style="font-size: 12px; color: #94a3b8;">Generado: ${new Date().toLocaleString('es-ES')}</p>
+                </div>
+
+                <div class="info-box">
+                    💡 <strong>Lista de espera:</strong> Clientes que están aguardando disponibilidad de producto. Se atienden en orden de llegada (posición #1 primero).
+                </div>
+
+                <div class="summary">
+                    <div class="summary-card">
+                        <div class="number">${totalItems}</div>
+                        <div class="label">👥 Clientes en espera</div>
+                    </div>
+                    <div class="summary-card unidades">
+                        <div class="number">${totalCantidad}</div>
+                        <div class="label">📦 Unidades solicitadas</div>
+                    </div>
+                    <div class="summary-card monto">
+                        <div class="number">$${totalMonto.toFixed(2)}</div>
+                        <div class="label">💰 Monto total</div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>📋 Detalle de la lista (${totalItems} ${totalItems === 1 ? 'cliente' : 'clientes'})</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="text-align: center; width: 50px;">#</th>
+                                <th>Cliente</th>
+                                <th style="width: 120px;">Teléfono</th>
+                                <th>Producto</th>
+                                <th style="text-align: center; width: 60px;">Cant.</th>
+                                <th style="text-align: right; width: 90px;">Total</th>
+                                <th style="text-align: center; width: 100px;">Entrega</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filasHtml}
+                        </tbody>
+                        <tfoot>
+                            <tr style="background: #fef3d6; font-weight: 700;">
+                                <td colspan="4" style="text-align: right; border-top: 2px solid #f59e0b;">TOTAL</td>
+                                <td style="text-align: center; border-top: 2px solid #f59e0b;">${totalCantidad}</td>
+                                <td style="text-align: right; color: #f59e0b; border-top: 2px solid #f59e0b;">$${totalMonto.toFixed(2)}</td>
+                                <td style="border-top: 2px solid #f59e0b;"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <div class="footer">
+                    <div class="negocio">🏢 ${nombreNegocio}</div>
+                    Reporte generado desde Panario 🍞 - ${new Date().toLocaleString('es-ES')}
+                </div>
+            </body>
+            </html>
+        `;
+        
+        return html;
+        
+    } catch (error) {
+        console.error('❌ Error generando reporte de lista de espera:', error);
+        window.showToast('❌ Error: ' + error.message, 'error', 5000);
+        return null;
+    }
+}
+
+// ============================================================
 // FUNCIONES AUXILIARES
 // ============================================================
 
@@ -1160,9 +1369,11 @@ window.ReportsModule = {
     generateInsumosReport: generateInsumosReport,
     generateDebtsReport: generateDebtsReport,
     generateRecipesReport: generateRecipesReport,
+    // 🆕 FASE 2.2
+    generateWaitingListReport: generateWaitingListReport,
     printReport: printReport,
     // 🆕 Helper exportado
     getNombreNegocioReporte: getNombreNegocioReporte
 };
 
-console.log('📦 Reports Module cargado correctamente v2.0.4 (nombre del negocio en encabezados y pies)');
+console.log('📦 Reports Module cargado correctamente v2.0.5 (FASE 2.2: reporte de lista de espera)');

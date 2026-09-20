@@ -1,9 +1,67 @@
 // ============================================================
 // 📦 SALES MODULE - Panario (Ventas y Finanzas con soporte para
 // ventas liberadas, modificación de cliente y FIX de duplicados)
+// AÑADIDO FASE 1.3.2 (190926):
+//   - saveSale() genera uuid para sales y transactions
+//   - registerTransaction() genera uuid para transactions
+//   - saveLiberatedSale() hereda uuid desde saveSale()
+// 🆕 FIX 2 (190926 v2):
+//   - normalizarFechaVenta() helper para evitar fechas YYYY-MM-DD sin hora
+//   - saveSale() normaliza saleData.sale_date antes de INSERT/UPDATE
+//   - registerTransaction() normaliza transactionData.transaction_date
+//   - Defensa en profundidad: aunque la UI ya normaliza, aquí se re-valida
 // ============================================================
 
 window.SalesModule = {};
+
+// ============================================================
+// 🆕 FIX 2: NORMALIZACIÓN DE FECHAS
+// ============================================================
+// 
+// PROBLEMA:
+//   new Date("2026-09-17") → 17 sept 00:00 UTC → 16 sept 20:00 local (UTC-4) ❌
+//   new Date("2026-09-17T00:00:00") → 17 sept 00:00 LOCAL ✅
+//   Pero si SQLite lo interpreta como UTC → 16 sept 20:00 local ❌
+//
+// SOLUCIÓN:
+//   - Si la fecha es HOY → usar hora actual (new Date().toISOString())
+//   - Si la fecha es otra → usar mediodía UTC (T12:00:00.000Z)
+//   
+//   Mediodía UTC siempre cae en el mismo día local en cualquier zona
+//   horaria razonable (UTC-12 a UTC+12).
+// ============================================================
+
+function normalizarFechaVenta(fechaInput) {
+    // Si no hay fecha, usar hora actual
+    if (!fechaInput) {
+        return new Date().toISOString();
+    }
+    
+    // Si ya viene con hora (ISO completo), respetarla
+    if (typeof fechaInput === 'string' && fechaInput.includes('T')) {
+        return fechaInput;
+    }
+    
+    // Si viene como YYYY-MM-DD (de <input type="date">)
+    const fechaStr = String(fechaInput).trim();
+    
+    // Validar formato YYYY-MM-DD
+    const match = fechaStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+        console.warn('⚠️ [normalizarFechaVenta] Formato no reconocido:', fechaInput);
+        return new Date().toISOString();
+    }
+    
+    // ¿Es hoy?
+    const hoyStr = new Date().toISOString().split('T')[0];
+    if (fechaStr === hoyStr) {
+        // Hoy → hora actual real (preserva la hora exacta de la venta)
+        return new Date().toISOString();
+    }
+    
+    // Otra fecha → mediodía UTC (garantiza el mismo día local)
+    return `${fechaStr}T12:00:00.000Z`;
+}
 
 // ============================================================
 // VENTAS
@@ -87,6 +145,8 @@ async function getSale(id) {
 
 // ============================================================
 // 🆕 GUARDAR VENTA - CON FIX DE DUPLICADOS EN TRANSACCIONES
+// 🆕 FASE 1.3.2: Genera uuid para sales y transactions
+// 🆕 FIX 2: Normaliza sale_date antes de INSERT/UPDATE
 // ============================================================
 
 async function saveSale(saleData) {
@@ -101,6 +161,12 @@ async function saveSale(saleData) {
         if (!saleData.total) {
             saleData.total = saleData.quantity * saleData.unit_price;
         }
+
+        // 🆕 FIX 2: Normalizar sale_date (defensa en profundidad)
+        // Aunque la UI ya llama a normalizarFechaVenta(), re-validamos aquí
+        // por si algún caller olvidó hacerlo.
+        const saleDateNormalizada = normalizarFechaVenta(saleData.sale_date);
+        console.log('📅 [saveSale] Fecha normalizada:', saleData.sale_date, '→', saleDateNormalizada);
 
         let result;
         let isUpdate = false;
@@ -152,7 +218,7 @@ async function saveSale(saleData) {
                 buyer || null,
                 isDebt,
                 paid,
-                saleData.sale_date || new Date().toISOString(),
+                saleDateNormalizada,  // 🆕 FIX 2
                 saleData.session || null,
                 isLiberated,
                 saleData.id,
@@ -168,10 +234,13 @@ async function saveSale(saleData) {
             console.log('🗑️ Transacciones anteriores eliminadas por sale_id:', saleData.id);
             
         } else {
+            // 🆕 FASE 1.3.2: Generar uuid para la venta
+            const saleUuid = window.DBModule.generateUuidForTable('sales');
+            
             result = window.DBModule.execute(`
                 INSERT INTO sales (user_id, product_name, producto_id, receta_id, quantity, unit_price, 
-                    total, payment_method, buyer, is_debt, paid, sale_date, session, is_liberated, voided)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                    total, payment_method, buyer, is_debt, paid, sale_date, session, is_liberated, voided, uuid)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
             `, [
                 user.id,
                 saleData.product_name || null,
@@ -184,10 +253,13 @@ async function saveSale(saleData) {
                 buyer || null,
                 isDebt,
                 paid,
-                saleData.sale_date || new Date().toISOString(),
+                saleDateNormalizada,  // 🆕 FIX 2
                 saleData.session || null,
-                isLiberated
+                isLiberated,
+                saleUuid
             ]);
+            
+            console.log(`✅ [saveSale] Venta #${result.lastId} creada con uuid ${saleUuid}`);
         }
 
         const saleId = isUpdate ? saleData.id : result.lastId;
@@ -227,7 +299,7 @@ async function saveSale(saleData) {
                 amount: saleData.total,
                 payment_method: paymentMethod,
                 sale_id: saleId,
-                transaction_date: saleData.sale_date || new Date().toISOString()
+                transaction_date: saleDateNormalizada  // 🆕 FIX 2: misma fecha que la venta
             });
             console.log('✅ Transacción creada para venta:', saleId);
         } else {
@@ -453,6 +525,9 @@ async function updateExpense(id, expenseData) {
         if (!existing) return { success: false, error: 'Gasto no encontrado' };
         if (existing.voided === 1) return { success: false, error: 'No se puede editar un gasto anulado' };
 
+        // 🆕 FIX 2: Normalizar fecha de gasto
+        const fechaNormalizada = normalizarFechaVenta(expenseData.transaction_date);
+
         window.DBModule.execute(`
             UPDATE transactions 
             SET concept = ?, amount = ?, category = ?, payment_method = ?, transaction_date = ?
@@ -460,7 +535,7 @@ async function updateExpense(id, expenseData) {
         `, [
             expenseData.concept, expenseData.amount, expenseData.category || 'otros',
             expenseData.payment_method || 'cash',
-            expenseData.transaction_date || new Date().toISOString(), id, user.id
+            fechaNormalizada, id, user.id
         ]);
 
         window.DBModule.saveAndNotify();
@@ -534,6 +609,8 @@ async function deleteExpense(id) {
 
 // ============================================================
 // TRANSACCIONES
+// 🆕 FASE 1.3.2: registerTransaction() genera uuid
+// 🆕 FIX 2: registerTransaction() normaliza transaction_date
 // ============================================================
 
 async function getTransactions(filters = {}) {
@@ -559,15 +636,22 @@ async function registerTransaction(transactionData) {
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
 
     try {
+        // 🆕 FASE 1.3.2: Generar uuid para la transacción
+        const txUuid = window.DBModule.generateUuidForTable('transactions');
+        
+        // 🆕 FIX 2: Normalizar fecha de transacción
+        const fechaNormalizada = normalizarFechaVenta(transactionData.transaction_date);
+        
         const result = window.DBModule.execute(`
-            INSERT INTO transactions (user_id, type, category, concept, amount, payment_method, sale_id, transaction_date, voided)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+            INSERT INTO transactions (user_id, type, category, concept, amount, payment_method, sale_id, transaction_date, voided, uuid)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
         `, [
             user.id, transactionData.type || 'income',
             transactionData.category || 'general', transactionData.concept,
             transactionData.amount, transactionData.payment_method || 'cash',
             transactionData.sale_id || null,
-            transactionData.transaction_date || new Date().toISOString()
+            fechaNormalizada,  // 🆕 FIX 2
+            txUuid
         ]);
 
         window.DBModule.saveAndNotify();
@@ -671,7 +755,9 @@ window.SalesModule = {
     getExpenses, getExpense, updateExpense, deleteExpense,
     registerExpense, voidExpense, unvoidExpense,
     getTransactions, registerTransaction, getBalance,
-    reponerStockVenta
+    reponerStockVenta,
+    // 🆕 FIX 2
+    normalizarFechaVenta
 };
 
-console.log('📦 Sales Module cargado correctamente (con FIX de duplicados)');
+console.log('📦 Sales Module v2.0.9 (FASE 1.3.2 + FIX 2: normalización de fechas)');

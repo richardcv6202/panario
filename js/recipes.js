@@ -4,6 +4,9 @@
 //   - Nombre del negocio en el texto al compartir recetas
 //   - generarTextoReceta() usa getNombreNegocio()
 //   - compartirRecetaEmail() incluye el negocio en el asunto
+// AÑADIDO FASE 1.3.2 (190926 v5):
+//   - saveRecipe() genera uuid para recipes, recipe_ingredients y receta_insumos
+//   - cloneRecipe() genera uuid para la copia y sus dependencias
 // ============================================================
 
 window.RecipesModule = {};
@@ -122,6 +125,7 @@ async function saveRecipe(recipeData) {
         }
 
         if (recipeId) {
+            // UPDATE: no se regenera uuid
             window.DBModule.execute(`
                 UPDATE recipes 
                 SET name = ?, description = ?, instructions = ?, 
@@ -150,12 +154,14 @@ async function saveRecipe(recipeData) {
             );
 
         } else {
+            // 🆕 FASE 1.3.2: Generar uuid para la receta nueva
             const db = window.DBModule.getDB();
+            const recetaUuid = window.DBModule.generateUuidForTable('recipes');
             
             db.run(`
                 INSERT INTO recipes (user_id, name, description, instructions, 
-                    yield_units, yield_unit_type, shared)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                    yield_units, yield_unit_type, shared, uuid)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `, [
                 user.id,
                 recipeData.name,
@@ -163,11 +169,14 @@ async function saveRecipe(recipeData) {
                 recipeData.instructions || null,
                 recipeData.yield_units || 1,
                 recipeData.yield_unit_type || 'unidades',
-                recipeData.shared ? 1 : 0
+                recipeData.shared ? 1 : 0,
+                recetaUuid
             ]);
             
             const idResult = db.exec('SELECT last_insert_rowid() as id');
             recipeId = idResult[0]?.values?.[0]?.[0] || null;
+            
+            console.log(`✅ [saveRecipe] Receta #${recipeId} creada con uuid ${recetaUuid}`);
             
             window.DBModule.saveDatabase();
         }
@@ -182,15 +191,19 @@ async function saveRecipe(recipeData) {
             for (const ingredient of recipeData.ingredients) {
                 const ingName = ingredient.name || ingredient.ingredient_name;
                 if (ingName && ingredient.quantity > 0) {
+                    // 🆕 FASE 1.3.2: Generar uuid para cada ingrediente
+                    const ingUuid = window.DBModule.generateUuidForTable('recipe_ingredients');
+                    
                     db.run(`
-                        INSERT INTO recipe_ingredients (recipe_id, ingredient_name, quantity, unit, price)
-                        VALUES (?, ?, ?, ?, ?)
+                        INSERT INTO recipe_ingredients (recipe_id, ingredient_name, quantity, unit, price, uuid)
+                        VALUES (?, ?, ?, ?, ?, ?)
                     `, [
                         recipeId,
                         ingName.trim(),
                         parseFloat(ingredient.quantity) || 0,
                         ingredient.unit || 'kg',
-                        ingredient.price || 0
+                        ingredient.price || 0,
+                        ingUuid
                     ]);
                 }
             }
@@ -199,14 +212,18 @@ async function saveRecipe(recipeData) {
         if (recipeData.receta_insumos && recipeData.receta_insumos.length > 0) {
             for (const ri of recipeData.receta_insumos) {
                 if (ri.insumo_id && ri.cantidad > 0) {
+                    // 🆕 FASE 1.3.2: Generar uuid para cada receta_insumo
+                    const riUuid = window.DBModule.generateUuidForTable('receta_insumos');
+                    
                     window.DBModule.execute(`
-                        INSERT INTO receta_insumos (receta_id, insumo_id, cantidad, unidad)
-                        VALUES (?, ?, ?, ?)
+                        INSERT INTO receta_insumos (receta_id, insumo_id, cantidad, unidad, uuid)
+                        VALUES (?, ?, ?, ?, ?)
                     `, [
                         recipeId,
                         ri.insumo_id,
                         ri.cantidad,
-                        ri.unidad || 'kg'
+                        ri.unidad || 'kg',
+                        riUuid
                     ]);
                 }
             }
@@ -231,10 +248,13 @@ async function cloneRecipe(originalId, newData) {
 
         const db = window.DBModule.getDB();
         
+        // 🆕 FASE 1.3.2: Generar uuid para la copia
+        const recetaUuid = window.DBModule.generateUuidForTable('recipes');
+        
         db.run(`
             INSERT INTO recipes (user_id, name, description, instructions, 
-                yield_units, yield_unit_type, shared)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                yield_units, yield_unit_type, shared, uuid)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             user.id,
             newData.name || original.name + ' (copia)',
@@ -242,11 +262,14 @@ async function cloneRecipe(originalId, newData) {
             newData.instructions || original.instructions,
             newData.yield_units || original.yield_units,
             newData.yield_unit_type || original.yield_unit_type,
-            newData.shared ? 1 : 0
+            newData.shared ? 1 : 0,
+            recetaUuid
         ]);
 
         const idResult = db.exec('SELECT last_insert_rowid() as id');
         const newId = idResult[0]?.values?.[0]?.[0] || null;
+        
+        console.log(`✅ [cloneRecipe] Copia #${newId} creada con uuid ${recetaUuid}`);
         
         window.DBModule.saveDatabase();
 
@@ -256,23 +279,29 @@ async function cloneRecipe(originalId, newData) {
 
         if (original.ingredients && original.ingredients.length > 0) {
             for (const ing of original.ingredients) {
+                // 🆕 FASE 1.3.2: Generar uuid para cada ingrediente clonado
+                const ingUuid = window.DBModule.generateUuidForTable('recipe_ingredients');
+                
                 db.run(`
-                    INSERT INTO recipe_ingredients (recipe_id, ingredient_name, quantity, unit, price)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO recipe_ingredients (recipe_id, ingredient_name, quantity, unit, price, uuid)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 `, [
                     newId, ing.ingredient_name, ing.quantity,
-                    ing.unit || 'kg', ing.price || 0
+                    ing.unit || 'kg', ing.price || 0, ingUuid
                 ]);
             }
         }
 
         if (original.receta_insumos && original.receta_insumos.length > 0) {
             for (const ri of original.receta_insumos) {
+                // 🆕 FASE 1.3.2: Generar uuid para cada receta_insumo clonado
+                const riUuid = window.DBModule.generateUuidForTable('receta_insumos');
+                
                 db.run(`
-                    INSERT INTO receta_insumos (receta_id, insumo_id, cantidad, unidad)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO receta_insumos (receta_id, insumo_id, cantidad, unidad, uuid)
+                    VALUES (?, ?, ?, ?, ?)
                 `, [
-                    newId, ri.insumo_id, ri.cantidad, ri.unidad || 'kg'
+                    newId, ri.insumo_id, ri.cantidad, ri.unidad || 'kg', riUuid
                 ]);
             }
         }
@@ -747,4 +776,4 @@ window.RecipesModule = {
     getNombreNegocioRecetas
 };
 
-console.log('📦 Recipes Module cargado correctamente v2.0.4 (nombre del negocio al compartir)');
+console.log('📦 Recipes Module v2.0.5 (FASE 1.3.2: UUID en recipes, recipe_ingredients y receta_insumos)');

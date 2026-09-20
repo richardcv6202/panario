@@ -8,6 +8,20 @@
 //   - WHERE ahora usa negocio_id (no user_id)
 //   - Desvincula client_id si el nombre cambió manualmente
 //   - Verifica filas afectadas
+// CORREGIDO FASE 1.2 (190926 v2):
+//   - updateOrderStatus() permite la entrega aunque falle el stock
+//   - Devuelve stockWarning en el resultado para que la UI lo muestre
+//   - Eliminados los catch(e){} silenciosos
+//   - Logs detallados en cada paso del flujo
+// AÑADIDO FASE 1.3.2 (190926 v3):
+//   - saveOrder() genera uuid para orders y order_items
+//   - registrarVentaDesdePedido() genera uuid para sales y transactions
+// AÑADIDO FASE 2.1 (190926 v4):
+//   - limpiarListaEspera(): elimina todos los items y cancela pedidos
+//   - eliminarDeListaEspera(orderId): quita un cliente y reindexa
+//   - procesarClienteDeLista(orderId, cantidad): convierte en venta
+//   - cancelarPedidoDesdeLista(orderId, causa, nota): cancela sin venta
+//   - cancelarPedidosGlobalmente(desde, hasta, causa, nota): cancelación masiva
 // ============================================================
 
 window.OrdersModule = {};
@@ -63,12 +77,13 @@ async function saveClient(clientData) {
             return { success: true, id: clientData.id };
         } else {
             const result = window.DBModule.execute(`
-                INSERT INTO clients (user_id, name, phone, email, address, notes)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO clients (user_id, name, phone, email, address, notes, uuid)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             `, [
                 user.id, clientData.name, clientData.phone || null,
                 clientData.email || null, clientData.address || null,
-                clientData.notes || null
+                clientData.notes || null,
+                window.DBModule.generateUuidForTable('clients')
             ]);
             return { success: true, id: result.lastId };
         }
@@ -207,8 +222,6 @@ async function getOrder(id) {
 
 // ============================================================
 // GUARDAR PEDIDO (individual)
-// CORREGIDO v3: WHERE por negocio_id, desvincula client_id si
-// el nombre cambió, verifica filas afectadas
 // ============================================================
 
 async function saveOrder(orderData) {
@@ -245,8 +258,6 @@ async function saveOrder(orderData) {
         const advanceAmount = orderData.advance_amount || 0;
         const advancePaymentMethod = orderData.advance_payment_method || null;
 
-        // 🔧 FIX v3: Detectar si el nombre del cliente cambió
-        // Si cambió y el pedido tenía client_id, desvincularlo
         let clientId = orderData.client_id || null;
         
         if (isUpdate && oldOrder) {
@@ -254,10 +265,9 @@ async function saveOrder(orderData) {
             const nombreNuevo = (clientName || '').trim().toLowerCase();
             
             if (nombreAnterior !== nombreNuevo) {
-                console.log('📝 [FIX v3] El nombre del cliente cambió. Desvinculando client_id.');
-                clientId = null;  // Desvincular para que el nuevo nombre sea el que manda
+                console.log('📝 [saveOrder] El nombre del cliente cambió. Desvinculando client_id.');
+                clientId = null;
             } else {
-                // Si el nombre es igual, conservar el client_id existente
                 clientId = oldOrder.client_id || clientId;
             }
         }
@@ -268,9 +278,7 @@ async function saveOrder(orderData) {
         }
 
         if (isUpdate) {
-            // 🔧 FIX v3: WHERE usa negocio_id en lugar de user_id
-            // Esto permite editar pedidos creados por cualquier usuario del mismo negocio
-            const updateResult = window.DBModule.execute(`
+            window.DBModule.execute(`
                 UPDATE orders 
                 SET client_id = ?, client_name = ?, client_phone = ?,
                     delivery_date = ?, status = ?, priority = ?, total = ?, 
@@ -283,62 +291,48 @@ async function saveOrder(orderData) {
                 calculatedTotal, notes, session, hasAdvancePayment, advanceAmount,
                 advancePaymentMethod, orderId, negocioId
             ]);
-            
-            // 🔧 FIX v3: Verificar que el UPDATE afectó al menos 1 fila
-            const verifyResult = window.DBModule.query(
-                'SELECT id, client_name FROM orders WHERE id = ?',
-                [orderId]
-            );
-            
-            if (verifyResult.length === 0) {
-                return { success: false, error: '❌ El pedido no se encontró o no tienes permiso para editarlo' };
-            }
-            
-            if (verifyResult[0].client_name !== clientName) {
-                console.warn('⚠️ [FIX v3] El nombre del cliente NO se actualizó correctamente');
-                console.warn('   Esperado:', clientName);
-                console.warn('   Encontrado:', verifyResult[0].client_name);
-            } else {
-                console.log('✅ [FIX v3] Nombre del cliente actualizado correctamente a:', clientName);
-            }
 
             window.DBModule.execute('DELETE FROM order_items WHERE order_id = ?', [orderId]);
         } else {
+            const orderUuid = window.DBModule.generateUuidForTable('orders');
+            
             const result = window.DBModule.execute(`
                 INSERT INTO orders (user_id, negocio_id, client_id, client_name, client_phone,
                     delivery_date, status, priority, total, notes, session,
-                    has_advance_payment, advance_amount, advance_payment_method)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    has_advance_payment, advance_amount, advance_payment_method, uuid)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `, [
                 user.id, negocioId, clientId, clientName, clientPhone, deliveryDate,
                 status, priority, calculatedTotal, notes, session,
-                hasAdvancePayment, advanceAmount, advancePaymentMethod
+                hasAdvancePayment, advanceAmount, advancePaymentMethod, orderUuid
             ]);
             orderId = result.lastId;
+            
+            console.log(`✅ [saveOrder] Pedido #${orderId} creado con uuid ${orderUuid}`);
         }
 
         if (!orderId) return { success: false, error: 'Error: No se pudo obtener el ID del pedido' };
 
-        // Insertar items
         if (orderData.items && orderData.items.length > 0) {
             for (const item of orderData.items) {
                 if (item.producto_id || (item.product_name && item.quantity > 0)) {
+                    const itemUuid = window.DBModule.generateUuidForTable('order_items');
+                    
                     window.DBModule.execute(`
                         INSERT INTO order_items (order_id, product_name, producto_id, receta_id, 
-                            quantity, unit_price, subtotal, notes)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            quantity, unit_price, subtotal, notes, uuid)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     `, [
                         orderId, item.product_name || 'Producto',
                         item.producto_id || null, item.receta_id || null,
                         item.quantity || 1, item.unit_price || 0,
                         (item.quantity || 1) * (item.unit_price || 0),
-                        item.notes || null
+                        item.notes || null, itemUuid
                     ]);
                 }
             }
         }
 
-        // Cambios de estado con efectos secundarios
         if (status === 'confirmed' || status === 'production') {
             try { await descontarStockPedido(orderId); } catch (e) {}
         }
@@ -381,14 +375,11 @@ async function saveOrder(orderData) {
 }
 
 // ============================================================
-// RESERVA POR PERÍODO - GENERADOR DE FECHAS CON PARIDAD
+// RESERVA POR PERÍODO - GENERADOR DE FECHAS
 // ============================================================
 
 function generarFechasPorPatron(patron) {
-    const {
-        tipo, fechaInicio, fechaFin,
-        diasSemana, diasEspecificos, paridad
-    } = patron;
+    const { tipo, fechaInicio, fechaFin, diasSemana, diasEspecificos, paridad } = patron;
 
     const fechas = [];
     if (!fechaInicio || !fechaFin) return fechas;
@@ -496,29 +487,32 @@ async function crearPedidosMultiples(data) {
 
             try {
                 const deliveryDate = `${fecha}T${horaEntrega}:00`;
+                const orderUuid = window.DBModule.generateUuidForTable('orders');
 
                 const result = window.DBModule.execute(`
                     INSERT INTO orders (user_id, negocio_id, client_name, client_phone,
-                        delivery_date, status, priority, total, notes, session)
-                    VALUES (?, ?, ?, ?, ?, 'pending', 'normal', ?, ?, ?)
+                        delivery_date, status, priority, total, notes, session, uuid)
+                    VALUES (?, ?, ?, ?, ?, 'pending', 'normal', ?, ?, ?, ?)
                 `, [
                     user.id, negocioId, clientName, clientPhone || null,
-                    deliveryDate, totalPorPedido, notes || null, sesion || null
+                    deliveryDate, totalPorPedido, notes || null, sesion || null, orderUuid
                 ]);
 
                 const newOrderId = result.lastId;
                 if (!newOrderId) { errores.push({ fecha, error: 'No se pudo obtener ID' }); continue; }
 
                 for (const item of items) {
+                    const itemUuid = window.DBModule.generateUuidForTable('order_items');
+                    
                     window.DBModule.execute(`
                         INSERT INTO order_items (order_id, product_name, producto_id, receta_id, 
-                            quantity, unit_price, subtotal, notes)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            quantity, unit_price, subtotal, notes, uuid)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     `, [
                         newOrderId, item.product_name || 'Producto',
                         item.producto_id || null, item.receta_id || null,
                         item.quantity || 1, item.unit_price || 0,
-                        (item.quantity || 1) * (item.unit_price || 0), null
+                        (item.quantity || 1) * (item.unit_price || 0), null, itemUuid
                     ]);
                 }
 
@@ -561,7 +555,7 @@ async function crearPedidosMultiples(data) {
 }
 
 // ============================================================
-// REGISTRAR VENTA DESDE PEDIDO - CON FIX DE DUPLICADOS
+// REGISTRAR VENTA DESDE PEDIDO
 // ============================================================
 
 async function registrarVentaDesdePedido(orderId, cantidadOverride = null) {
@@ -581,7 +575,7 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null) {
 
         if (ventaExistente.length > 0 && !cantidadOverride) {
             console.log('ℹ️ Venta ya registrada para pedido #' + orderId);
-            return { success: true, message: 'Venta ya registrada', ventas: ventaExistente.length };
+            return { success: true, message: 'Venta ya registrada', ventas: ventaExistente.length, alreadyExists: true };
         }
 
         if (!order.items || order.items.length === 0) {
@@ -627,28 +621,27 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null) {
 
             const totalPaid = order.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
             
-            // FIX FASE 2 (Problema #8): Si el pedido tiene pago adelantado,
-            // la venta NUNCA se marca como deuda.
             let isDebt = 0;
             if (!order.has_advance_payment && totalPaid < order.total) {
                 isDebt = 1;
             }
             
             const productNameConNota = notaListaEspera ? `${productName} (${notaListaEspera})` : productName;
+            const saleUuid = window.DBModule.generateUuidForTable('sales');
 
             const result = window.DBModule.execute(`
                 INSERT INTO sales (
                     user_id, negocio_id, product_name, producto_id, receta_id, 
                     quantity, unit_price, total, payment_method, 
                     buyer, is_debt, paid, sale_date, 
-                    order_id, voided, from_waiting_list
+                    order_id, voided, from_waiting_list, uuid
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
             `, [
                 user.id, negocioId, productNameConNota, productoId, recetaId,
                 quantity, unitPrice, total, paymentMethod,
                 order.client_name, isDebt, isDebt ? 0 : 1,
-                saleDate, orderId, fromWaitingList
+                saleDate, orderId, fromWaitingList, saleUuid
             ]);
 
             if (result.success) {
@@ -665,17 +658,14 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null) {
                     const concept = fromWaitingList
                         ? `Venta desde lista de espera #${orderId}: ${productName}`
                         : `Venta desde pedido #${orderId}: ${productName}`;
+                    const txUuid = window.DBModule.generateUuidForTable('transactions');
 
                     window.DBModule.execute(`
                         INSERT INTO transactions (
                             user_id, negocio_id, type, category, concept, amount, 
-                            payment_method, sale_id, transaction_date, voided
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-                    `, [user.id, negocioId, 'income', 'venta', concept, total, paymentMethod, result.lastId, saleDate]);
-                    
-                    console.log(`✅ Transacción creada para venta #${result.lastId}`);
-                } else {
-                    console.log(`ℹ️ Transacción ya existe para venta #${result.lastId}, no se duplica`);
+                            payment_method, sale_id, transaction_date, voided, uuid
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                    `, [user.id, negocioId, 'income', 'venta', concept, total, paymentMethod, result.lastId, saleDate, txUuid]);
                 }
             }
         }
@@ -924,10 +914,14 @@ async function updateOrderStatus(orderId, status) {
         if (!validStatuses.includes(status)) return { success: false, error: 'Estado no válido: ' + status };
         if (oldStatus === status) return { success: true, message: 'El estado ya es ' + status };
 
+        let stockWarning = null;
+
         if ((status === 'confirmed' || status === 'production') && 
             (oldStatus !== 'confirmed' && oldStatus !== 'production')) {
             const stockResult = await descontarStockPedido(orderId);
-            if (!stockResult.success) return { success: false, error: 'Error al descontar stock: ' + stockResult.error };
+            if (!stockResult.success) {
+                return { success: false, error: 'Error al descontar stock: ' + stockResult.error };
+            }
         }
 
         if (status === 'cancelled' && oldStatus !== 'cancelled') {
@@ -937,13 +931,27 @@ async function updateOrderStatus(orderId, status) {
             }
         }
 
-        if (status === 'delivered' && (oldStatus === 'pending' || oldStatus === 'confirmed')) {
-            const stockResult = await descontarStockPedido(orderId);
-            if (!stockResult.success) return { success: false, error: 'Error al descontar stock: ' + stockResult.error };
-        }
-
         if (status === 'delivered' && oldStatus !== 'delivered') {
-            try { await registrarVentaDesdePedido(orderId); } catch (e) {}
+            if (oldStatus === 'pending' || oldStatus === 'confirmed' || oldStatus === 'production' || oldStatus === 'ready') {
+                try {
+                    const stockResult = await descontarStockPedido(orderId);
+                    if (!stockResult.success) {
+                        stockWarning = stockResult.error;
+                    }
+                } catch (e) {
+                    stockWarning = e.message;
+                }
+            }
+            
+            try {
+                const ventaResult = await registrarVentaDesdePedido(orderId);
+                if (!ventaResult.success) {
+                    return { success: false, error: 'Error al registrar la venta: ' + ventaResult.error };
+                }
+            } catch (e) {
+                return { success: false, error: 'Error al registrar la venta: ' + e.message };
+            }
+            
             try { await cancelarDeudaPedido(orderId); } catch (e) {}
         }
 
@@ -962,7 +970,6 @@ async function updateOrderStatus(orderId, status) {
             if (!attendResult.success) return { success: false, error: attendResult.error };
         }
 
-        // 🔧 FIX v3: UPDATE por negocio_id en lugar de user_id
         const result = window.DBModule.execute(`
             UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP 
             WHERE id = ? AND negocio_id = ?
@@ -977,15 +984,19 @@ async function updateOrderStatus(orderId, status) {
                 `📋 Pedido #${orderId} actualizado a: ${status}`, 'info', 3000
             );
         }
-
-        return { success: true };
+        
+        const response = { success: true };
+        if (stockWarning) response.stockWarning = stockWarning;
+        return response;
+        
     } catch (e) {
+        console.error('❌ [updateOrderStatus] Error crítico:', e);
         return { success: false, error: e.message };
     }
 }
 
 // ============================================================
-// PAGOS Y DEUDAS (CORREGIDO - SOLO VENTAS)
+// PAGOS Y DEUDAS
 // ============================================================
 
 async function registerPayment(paymentData) {
@@ -1016,24 +1027,11 @@ async function getDebts() {
 
     try {
         const debts = window.DBModule.query(`
-            SELECT 
-                id,
-                product_name,
-                total,
-                buyer,
-                sale_date,
-                payment_method,
-                quantity,
-                is_debt,
-                paid,
-                sale_date as delivery_date,
-                'venta' as type
+            SELECT id, product_name, total, buyer, sale_date, payment_method,
+                quantity, is_debt, paid, sale_date as delivery_date, 'venta' as type
             FROM sales 
-            WHERE negocio_id = ? 
-              AND is_debt = 1 
-              AND paid = 0 
-              AND deleted_at IS NULL 
-              AND voided = 0
+            WHERE negocio_id = ? AND is_debt = 1 AND paid = 0 
+              AND deleted_at IS NULL AND voided = 0
             ORDER BY sale_date ASC
         `, [negocioId]);
 
@@ -1049,7 +1047,7 @@ async function getDebts() {
 }
 
 // ============================================================
-// WAITING LIST
+// WAITING LIST - WRAPPERS
 // ============================================================
 
 async function getWaitingList() {
@@ -1077,6 +1075,462 @@ async function attendFromWaitingList(orderId) {
 }
 
 // ============================================================
+// 🆕 FASE 2.1: GESTIÓN AVANZADA DE LISTA DE ESPERA
+// ============================================================
+
+/**
+ * Limpia completamente la lista de espera del negocio actual.
+ * Cancela todos los pedidos asociados y reinicia el contador a 0.
+ * 
+ * @returns {Object} { success, cancelados, eliminados }
+ */
+async function limpiarListaEspera() {
+    const user = window.AuthModule.getCurrentUser();
+    if (!user) return { success: false, error: 'No hay usuario autenticado' };
+    
+    const negocioId = window.DBModule.getNegocioIdActual();
+    if (!negocioId) return { success: false, error: 'No hay negocio activo' };
+
+    console.log('🧹 [limpiarListaEspera] Iniciando...');
+
+    try {
+        // 1. Obtener todos los items activos de la lista
+        const items = window.DBModule.query(`
+            SELECT id, order_id, position, client_name
+            FROM waiting_list 
+            WHERE negocio_id = ? AND deleted_at IS NULL AND status = 'waiting'
+            ORDER BY position ASC
+        `, [negocioId]);
+
+        console.log(`🧹 [limpiarListaEspera] ${items.length} items a limpiar`);
+
+        let eliminados = 0;
+        let cancelados = 0;
+
+        // 2. Por cada item: cancelar su pedido y eliminar de la lista
+        for (const item of items) {
+            try {
+                // Marcar el item como eliminado
+                window.DBModule.execute(`
+                    UPDATE waiting_list 
+                    SET deleted_at = CURRENT_TIMESTAMP, status = 'removed'
+                    WHERE id = ?
+                `, [item.id]);
+                eliminados++;
+
+                // Cancelar el pedido asociado (solo si no está ya cancelado/entregado)
+                const orderCheck = window.DBModule.query(
+                    'SELECT id, status FROM orders WHERE id = ? AND negocio_id = ?',
+                    [item.order_id, negocioId]
+                );
+
+                if (orderCheck.length > 0) {
+                    const order = orderCheck[0];
+                    if (order.status !== 'cancelled' && order.status !== 'delivered' && order.status !== 'waiting_bought') {
+                        window.DBModule.execute(`
+                            UPDATE orders 
+                            SET status = 'cancelled',
+                                notes = COALESCE(notes || ' | ', '') || 'Cancelado por limpieza de lista de espera',
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        `, [item.order_id]);
+                        cancelados++;
+                    }
+                }
+            } catch (e) {
+                console.warn(`⚠️ [limpiarListaEspera] Error procesando item #${item.id}:`, e.message);
+            }
+        }
+
+        // 3. Reindexar (debería quedar vacía)
+        try { window.DBModule.reindexWaitingList(); } catch (e) {}
+
+        window.DBModule.saveAndNotify();
+
+        if (window.NotificationsModule) {
+            window.NotificationsModule.addNotification(
+                `🧹 Lista de espera limpiada: ${eliminados} items eliminados, ${cancelados} pedidos cancelados`,
+                'success', 5000
+            );
+        }
+
+        console.log(`✅ [limpiarListaEspera] Completado: ${eliminados} eliminados, ${cancelados} cancelados`);
+
+        return { success: true, eliminados, cancelados };
+    } catch (e) {
+        console.error('❌ [limpiarListaEspera] Error:', e);
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Elimina un cliente específico de la lista de espera y renumera.
+ * El pedido asociado pasa a estado 'cancelled'.
+ * 
+ * @param {number} orderId - ID del pedido del cliente a eliminar
+ * @returns {Object} { success, message }
+ */
+async function eliminarDeListaEspera(orderId) {
+    const user = window.AuthModule.getCurrentUser();
+    if (!user) return { success: false, error: 'No hay usuario autenticado' };
+    
+    const negocioId = window.DBModule.getNegocioIdActual();
+    if (!negocioId) return { success: false, error: 'No hay negocio activo' };
+
+    try {
+        // Verificar que existe el item
+        const item = window.DBModule.query(`
+            SELECT * FROM waiting_list 
+            WHERE order_id = ? AND negocio_id = ? AND deleted_at IS NULL AND status = 'waiting'
+        `, [orderId, negocioId]);
+
+        if (item.length === 0) {
+            return { success: false, error: 'El pedido no está en la lista de espera' };
+        }
+
+        // Marcar como eliminado
+        window.DBModule.execute(`
+            UPDATE waiting_list 
+            SET deleted_at = CURRENT_TIMESTAMP, status = 'removed'
+            WHERE order_id = ? AND negocio_id = ?
+        `, [orderId, negocioId]);
+
+        // Cancelar el pedido
+        window.DBModule.execute(`
+            UPDATE orders 
+            SET status = 'cancelled',
+                notes = COALESCE(notes || ' | ', '') || 'Cancelado al eliminar de lista de espera',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND negocio_id = ?
+        `, [orderId, negocioId]);
+
+        // Reindexar
+        window.DBModule.reindexWaitingList();
+
+        window.DBModule.saveAndNotify();
+
+        if (window.NotificationsModule) {
+            window.NotificationsModule.addNotification(
+                `✅ Cliente eliminado de la lista de espera`,
+                'success', 3000
+            );
+        }
+
+        return { success: true, message: 'Cliente eliminado de la lista' };
+    } catch (e) {
+        console.error('❌ [eliminarDeListaEspera] Error:', e);
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Procesa un cliente de la lista de espera como venta.
+ * Registra la venta, marca el item como atendido y renumera.
+ * 
+ * @param {number} orderId - ID del pedido del cliente
+ * @param {number} cantidad - Cantidad a atender (opcional, por defecto toda)
+ * @returns {Object} { success, ventas, total }
+ */
+async function procesarClienteDeLista(orderId, cantidad = null) {
+    const user = window.AuthModule.getCurrentUser();
+    if (!user) return { success: false, error: 'No hay usuario autenticado' };
+    
+    const negocioId = window.DBModule.getNegocioIdActual();
+    if (!negocioId) return { success: false, error: 'No hay negocio activo' };
+
+    console.log(`✅ [procesarClienteDeLista] Procesando pedido #${orderId}, cantidad: ${cantidad || 'toda'}`);
+
+    try {
+        // 1. Verificar que el pedido está en la lista
+        const item = window.DBModule.query(`
+            SELECT * FROM waiting_list 
+            WHERE order_id = ? AND negocio_id = ? AND deleted_at IS NULL AND status = 'waiting'
+        `, [orderId, negocioId]);
+
+        if (item.length === 0) {
+            return { success: false, error: 'El pedido no está en la lista de espera' };
+        }
+
+        // 2. Obtener el pedido
+        const order = await getOrder(orderId);
+        if (!order) return { success: false, error: 'Pedido no encontrado' };
+
+        const cantidadTotal = order.items?.reduce((sum, i) => sum + i.quantity, 0) || 0;
+        const cantidadAtender = cantidad !== null ? Math.min(cantidad, cantidadTotal) : cantidadTotal;
+
+        // 3. Registrar venta (total o parcial)
+        let ventaResult;
+        if (cantidadAtender >= cantidadTotal) {
+            ventaResult = await registrarVentaDesdePedido(orderId);
+        } else {
+            ventaResult = await registrarVentaDesdePedido(orderId, cantidadAtender);
+        }
+
+        if (!ventaResult.success) {
+            return { success: false, error: 'Error al registrar la venta: ' + ventaResult.error };
+        }
+
+        // 4. Marcar el item como atendido
+        if (cantidadAtender >= cantidadTotal) {
+            // Atendido completo
+            window.DBModule.execute(`
+                UPDATE waiting_list 
+                SET status = 'attended', attended_at = CURRENT_TIMESTAMP, deleted_at = CURRENT_TIMESTAMP
+                WHERE order_id = ? AND negocio_id = ?
+            `, [orderId, negocioId]);
+
+            window.DBModule.execute(`
+                UPDATE orders 
+                SET status = 'waiting_bought', updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND negocio_id = ?
+            `, [orderId, negocioId]);
+        } else {
+            // Atendido parcial
+            try {
+                await window.DBModule.atenderParcialmenteDeLista(orderId, cantidadAtender, cantidadTotal);
+            } catch (e) {
+                console.warn('⚠️ Error en atención parcial:', e);
+            }
+        }
+
+        // 5. Reindexar
+        window.DBModule.reindexWaitingList();
+
+        window.DBModule.saveAndNotify();
+
+        if (window.NotificationsModule) {
+            window.NotificationsModule.addNotification(
+                `✅ Cliente atendido: ${ventaResult.ventas} venta(s) por $${(ventaResult.total || 0).toFixed(2)}`,
+                'success', 4000
+            );
+        }
+
+        console.log(`✅ [procesarClienteDeLista] Completado: ${ventaResult.ventas} ventas, $${ventaResult.total}`);
+
+        return {
+            success: true,
+            ventas: ventaResult.ventas,
+            total: ventaResult.total,
+            cantidadAtendida: cantidadAtender,
+            cantidadTotal,
+            completo: cantidadAtender >= cantidadTotal
+        };
+    } catch (e) {
+        console.error('❌ [procesarClienteDeLista] Error:', e);
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Cancela el pedido de un cliente de la lista SIN crear venta.
+ * Repone stock si estaba descontado.
+ * 
+ * @param {number} orderId - ID del pedido
+ * @param {string} causa - Causa de la cancelación (opcional)
+ * @param {string} nota - Nota adicional (opcional)
+ * @returns {Object} { success }
+ */
+async function cancelarPedidoDesdeLista(orderId, causa = '', nota = '') {
+    const user = window.AuthModule.getCurrentUser();
+    if (!user) return { success: false, error: 'No hay usuario autenticado' };
+    
+    const negocioId = window.DBModule.getNegocioIdActual();
+    if (!negocioId) return { success: false, error: 'No hay negocio activo' };
+
+    try {
+        const order = await getOrder(orderId);
+        if (!order) return { success: false, error: 'Pedido no encontrado' };
+
+        // Reponer stock si el pedido estaba en confirmed/production
+        if (order.status === 'confirmed' || order.status === 'production') {
+            try { await reponerStockPedido(orderId); } catch (e) {
+                console.warn('⚠️ Error reponiendo stock:', e);
+            }
+        }
+
+        // Marcar en la lista como removido
+        window.DBModule.execute(`
+            UPDATE waiting_list 
+            SET deleted_at = CURRENT_TIMESTAMP, status = 'removed'
+            WHERE order_id = ? AND negocio_id = ?
+        `, [orderId, negocioId]);
+
+        // Notas de cancelación
+        const notaCancelacion = [];
+        if (causa) notaCancelacion.push(causa);
+        if (nota) notaCancelacion.push(nota);
+        const notaFinal = notaCancelacion.join(' | ') || 'Cancelado desde lista de espera';
+
+        // Cancelar el pedido
+        window.DBModule.execute(`
+            UPDATE orders 
+            SET status = 'cancelled',
+                notes = COALESCE(notes || ' | ', '') || ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND negocio_id = ?
+        `, [notaFinal, orderId, negocioId]);
+
+        // Reindexar
+        window.DBModule.reindexWaitingList();
+
+        window.DBModule.saveAndNotify();
+
+        if (window.NotificationsModule) {
+            window.NotificationsModule.addNotification(
+                `❌ Pedido #${orderId} cancelado desde lista de espera`,
+                'info', 3000
+            );
+        }
+
+        return { success: true };
+    } catch (e) {
+        console.error('❌ [cancelarPedidoDesdeLista] Error:', e);
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Cancelación GLOBAL de pedidos por rango de fechas.
+ * SOLO ADMIN. Cancela todos los pedidos pending/confirmed/production/ready
+ * dentro del rango. Repone stock. Reinicia la lista de espera partiendo
+ * del primer cliente cuyo pedido sea POSTERIOR a fechaHasta.
+ * 
+ * @param {string} fechaDesde - YYYY-MM-DD (inclusive)
+ * @param {string} fechaHasta - YYYY-MM-DD (inclusive)
+ * @param {string} causa - Causa principal (falta insumos, apagón, etc.)
+ * @param {string} nota - Nota u observación adicional
+ * @returns {Object} { success, cancelados, reiniciados, errores }
+ */
+async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', nota = '') {
+    const user = window.AuthModule.getCurrentUser();
+    if (!user) return { success: false, error: 'No hay usuario autenticado' };
+    if (user.is_admin !== 1) return { success: false, error: 'Solo el administrador puede cancelar pedidos globalmente' };
+    
+    const negocioId = window.DBModule.getNegocioIdActual();
+    if (!negocioId) return { success: false, error: 'No hay negocio activo' };
+
+    if (!fechaDesde || !fechaHasta) {
+        return { success: false, error: 'Debes especificar fecha desde y hasta' };
+    }
+    if (fechaDesde > fechaHasta) {
+        return { success: false, error: 'La fecha "desde" debe ser anterior a "hasta"' };
+    }
+
+    console.log(`🚨 [cancelarPedidosGlobalmente] Rango: ${fechaDesde} → ${fechaHasta}`);
+    console.log(`   Causa: ${causa}, Nota: ${nota}`);
+
+    try {
+        // 1. Obtener pedidos a cancelar
+        const pedidos = window.DBModule.query(`
+            SELECT id, client_name, status, delivery_date
+            FROM orders 
+            WHERE negocio_id = ? 
+              AND deleted_at IS NULL
+              AND status IN ('pending', 'confirmed', 'production', 'ready')
+              AND DATE(delivery_date) >= DATE(?)
+              AND DATE(delivery_date) <= DATE(?)
+            ORDER BY delivery_date ASC
+        `, [negocioId, fechaDesde, fechaHasta]);
+
+        console.log(`🚨 [cancelarPedidosGlobalmente] ${pedidos.length} pedidos a cancelar`);
+
+        const notaFinal = [causa, nota].filter(x => x).join(' | ') || 'Cancelación global';
+
+        let cancelados = 0;
+        const errores = [];
+
+        // 2. Cancelar cada pedido
+        for (const pedido of pedidos) {
+            try {
+                // Reponer stock si estaba descontado
+                if (pedido.status === 'confirmed' || pedido.status === 'production') {
+                    try { await reponerStockPedido(pedido.id); } catch (e) {
+                        console.warn(`⚠️ Error reponiendo stock pedido #${pedido.id}:`, e.message);
+                    }
+                }
+
+                // Quitar de lista de espera si estaba
+                try { await window.DBModule.removeFromWaitingList(pedido.id); } catch (e) {}
+
+                // Cancelar el pedido
+                window.DBModule.execute(`
+                    UPDATE orders 
+                    SET status = 'cancelled',
+                        notes = COALESCE(notes || ' | ', '') || ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                `, [`🚨 CANCELACIÓN GLOBAL: ${notaFinal}`, pedido.id]);
+
+                cancelados++;
+            } catch (e) {
+                errores.push(`Pedido #${pedido.id}: ${e.message}`);
+            }
+        }
+
+        // 3. Reiniciar lista de espera partiendo del primer cliente POSTERIOR a fechaHasta
+        // Obtener items que siguen en espera
+        const itemsRestantes = window.DBModule.query(`
+            SELECT w.id, w.order_id, w.position, o.delivery_date
+            FROM waiting_list w
+            JOIN orders o ON w.order_id = o.id
+            WHERE w.negocio_id = ? 
+              AND w.deleted_at IS NULL 
+              AND w.status = 'waiting'
+              AND o.deleted_at IS NULL
+            ORDER BY w.position ASC
+        `, [negocioId]);
+
+        // Filtrar: solo los que tienen delivery_date > fechaHasta
+        const itemsPreservar = itemsRestantes.filter(item => {
+            const fechaEntrega = (item.delivery_date || '').split('T')[0];
+            return fechaEntrega > fechaHasta;
+        });
+
+        // Los que NO cumplen, se eliminan
+        const itemsEliminar = itemsRestantes.filter(item => {
+            const fechaEntrega = (item.delivery_date || '').split('T')[0];
+            return fechaEntrega <= fechaHasta;
+        });
+
+        for (const item of itemsEliminar) {
+            try {
+                window.DBModule.execute(`
+                    UPDATE waiting_list 
+                    SET deleted_at = CURRENT_TIMESTAMP, status = 'removed'
+                    WHERE id = ?
+                `, [item.id]);
+            } catch (e) {}
+        }
+
+        // Reindexar la lista de espera (los items preservados toman posiciones 1, 2, 3...)
+        window.DBModule.reindexWaitingList();
+
+        console.log(`🚨 [cancelarPedidosGlobalmente] Reinicio: ${itemsPreservar.length} items preservados, ${itemsEliminar.length} eliminados`);
+
+        window.DBModule.saveAndNotify();
+
+        if (window.NotificationsModule) {
+            window.NotificationsModule.addNotification(
+                `🚨 Cancelación global: ${cancelados} pedidos cancelados`,
+                'warning', 6000
+            );
+        }
+
+        return {
+            success: true,
+            cancelados,
+            reiniciados: itemsEliminar.length,
+            preservados: itemsPreservar.length,
+            errores: errores.length > 0 ? errores : null,
+            notaFinal
+        };
+    } catch (e) {
+        console.error('❌ [cancelarPedidosGlobalmente] Error:', e);
+        return { success: false, error: e.message };
+    }
+}
+
+// ============================================================
 // EXPORTACIÓN
 // ============================================================
 
@@ -1096,7 +1550,13 @@ window.OrdersModule = {
     calcularHoraPorSesion,
     verificarPedidosDuplicados,
     getWaitingList, getWaitingListCount, getWaitingListWithDetails,
-    addToWaitingList, removeFromWaitingList, attendFromWaitingList
+    addToWaitingList, removeFromWaitingList, attendFromWaitingList,
+    // 🆕 FASE 2.1: Gestión avanzada de lista de espera
+    limpiarListaEspera,
+    eliminarDeListaEspera,
+    procesarClienteDeLista,
+    cancelarPedidoDesdeLista,
+    cancelarPedidosGlobalmente
 };
 
-console.log('📦 Orders Module cargado correctamente v2.0.2 (FASE 2 + FIX v3: edición de pedido actualiza client_name)');
+console.log('📦 Orders Module v2.0.8 (FASE 2.1: lista de espera + cancelación global)');

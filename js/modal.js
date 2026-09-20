@@ -1,15 +1,20 @@
 // ============================================================
 // 📦 MODAL MODULE - Panario (Modales personalizados + progreso)
 // CORREGIDO FASE A.2 (170926):
-//   - z-index elevado a 9999999999 (superior a ui-orders.js)
+//   - z-index elevado a 9999999999
 //   - closeModalAndResolve() ahora fuerza el cierre limpio
 //   - closeProgressModal() con timeout de seguridad
 //   - createModal() cierra con tecla Escape
-//   - Nueva función cerrarTodosLosModales() para casos de bloqueo
 // CORREGIDO FASE A.3 (170926 v2):
-//   - showProgressModal() ahora tiene AUTO-CIERRE DE SEGURIDAD a los 30s
-//   - Si nadie llama a success/error/close en 30s, se cierra solo
-//   - Se puede cancelar el auto-cierre llamando a success/error/close
+//   - showProgressModal() con auto-cierre de seguridad a los 30s
+// CORREGIDO FASE 1.4 (190926 v3): 🔧 FIX DEFINITIVO
+//   - Referencia ÚNICA al modal actual (window._currentModal)
+//   - closeModal() elimina SOLO el modal actual (no getElementById)
+//   - Los setTimeout de seguridad usan la referencia local, NO el id
+//   - Esto soluciona el bug de "modales huérfanos" y "prompt que se
+//     cierra solo por setTimeouts viejos"
+//   - Nueva función limpiarModalesHuerfanos() que limpia al arrancar
+//   - Bloqueo anti-apilamiento: cerrar modal anterior si se abre otro
 // ============================================================
 
 window.ModalModule = {};
@@ -18,9 +23,82 @@ window.ModalModule = {};
 // CONSTANTES
 // ============================================================
 
-const MODAL_Z_INDEX = 9999999999;       // Superior a cualquier modal de módulo
-const PROGRESS_Z_INDEX = 9999999999;    // Superior a cualquier modal de módulo
-const PROGRESS_SAFETY_TIMEOUT_MS = 30000; // 30 segundos
+const MODAL_Z_INDEX = 9999999999;
+const PROGRESS_Z_INDEX = 9999999999;
+const PROGRESS_SAFETY_TIMEOUT_MS = 30000;
+
+// ============================================================
+// 🆕 FASE 1.4: REFERENCIA ÚNICA AL MODAL ACTUAL
+// ============================================================
+
+// En lugar de buscar por `getElementById('custom-modal')` (que devuelve
+// el PRIMER elemento con ese id), guardamos una referencia directa.
+let _currentModal = null;
+let _currentModalTimeoutId = null;
+
+/**
+ * Limpia TODOS los modales huérfanos del DOM.
+ * Se llama al cargar el módulo para limpiar acumulaciones previas.
+ */
+function limpiarModalesHuerfanos() {
+    try {
+        // Eliminar TODOS los custom-modal (huérfanos)
+        const customModals = document.querySelectorAll('#custom-modal');
+        customModals.forEach(m => {
+            try { m.remove(); } catch (e) {}
+        });
+        
+        // Eliminar TODOS los modales conocidos que puedan estar abiertos
+        const modalesConocidos = [
+            'progress-modal', 'order-modal', 'order-view-modal',
+            'add-product-modal', 'insumo-modal', 'recipe-modal',
+            'recipe-view-modal', 'producto-modal', 'sale-modal',
+            'sale-view-modal', 'expense-modal', 'expense-view-modal',
+            'corriente-modal', 'horario-detalle-modal',
+            'waiting-processing-modal', 'multi-order-modal',
+            'multi-add-product-modal', 'notifications-modal',
+            'help-menu-modal', 'readme-modal', 'credits-modal',
+            'faq-modal', 'quickstart-modal', 'users-modal',
+            'delete-selector-modal', 'sales-report-modal',
+            'orders-report-modal', 'expenses-report-modal',
+            'recalcular-modal', 'compartir-modal',
+            'edit-bank-account-modal', 'bank-accounts-modal',
+            'qr-view-modal', 'tour-overlay', 'tour-highlight',
+            'tour-tooltip', 'liberated-sale-modal',
+            'edit-user-modal', 'create-user-modal',
+            'change-password-modal'
+        ];
+        
+        let limpiados = 0;
+        for (const id of modalesConocidos) {
+            const modales = document.querySelectorAll(`#${id}`);
+            modales.forEach(m => {
+                try { m.remove(); limpiados++; } catch (e) {}
+            });
+        }
+        
+        if (customModals.length > 0 || limpiados > 0) {
+            console.log(`🧹 Modal: Limpieza inicial — ${customModals.length} custom-modal(s) + ${limpiados} otros modales eliminados`);
+        }
+        
+        // Resetear estado de resolución
+        window._modalResolve = null;
+        window._modalResolved = false;
+        _currentModal = null;
+        
+        return customModals.length + limpiados;
+    } catch (e) {
+        console.warn('⚠️ Error en limpiarModalesHuerfanos:', e);
+        return 0;
+    }
+}
+
+// Ejecutar limpieza al cargar el módulo (con pequeño delay para esperar al DOM)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(limpiarModalesHuerfanos, 100));
+} else {
+    setTimeout(limpiarModalesHuerfanos, 100);
+}
 
 // ============================================================
 // FUNCIONES PRINCIPALES
@@ -32,6 +110,12 @@ const PROGRESS_SAFETY_TIMEOUT_MS = 30000; // 30 segundos
 function showConfirm(options) {
     return new Promise((resolve) => {
         console.log('📦 Modal: showConfirm llamado', options);
+        
+        // 🆕 FASE 1.4: Cerrar modal anterior si existe
+        if (_currentModal) {
+            console.log('📦 Modal: cerrando modal anterior antes de abrir nuevo');
+            closeCurrentModalImmediate();
+        }
         
         const {
             title = 'Confirmar',
@@ -62,6 +146,7 @@ function showConfirm(options) {
         window._modalResolved = false;
 
         document.body.appendChild(modal);
+        _currentModal = modal;
     });
 }
 
@@ -70,6 +155,12 @@ function showConfirm(options) {
  */
 function showAlert(options) {
     return new Promise((resolve) => {
+        // 🆕 FASE 1.4: Cerrar modal anterior si existe
+        if (_currentModal) {
+            console.log('📦 Modal: cerrando modal anterior antes de abrir alert');
+            closeCurrentModalImmediate();
+        }
+        
         const {
             title = 'Aviso',
             message = '',
@@ -102,6 +193,7 @@ function showAlert(options) {
         window._modalResolved = false;
 
         document.body.appendChild(modal);
+        _currentModal = modal;
     });
 }
 
@@ -110,6 +202,12 @@ function showAlert(options) {
  */
 function showPrompt(options) {
     return new Promise((resolve) => {
+        // 🆕 FASE 1.4: Cerrar modal anterior si existe
+        if (_currentModal) {
+            console.log('📦 Modal: cerrando modal anterior antes de abrir prompt');
+            closeCurrentModalImmediate();
+        }
+        
         const {
             title = 'Ingresar dato',
             message = '',
@@ -149,6 +247,7 @@ function showPrompt(options) {
         window._modalResolved = false;
 
         document.body.appendChild(modal);
+        _currentModal = modal;
 
         setTimeout(() => {
             const input = document.getElementById('modal-input');
@@ -168,8 +267,7 @@ function showPrompt(options) {
 }
 
 // ============================================================
-// 🆕 MODAL DE PROGRESO (CON RELOJ DE ARENA)
-// CORREGIDO FASE A.3: añadido AUTO-CIERRE DE SEGURIDAD
+// MODAL DE PROGRESO (CON RELOJ DE ARENA)
 // ============================================================
 
 function showProgressModal(options = {}) {
@@ -182,7 +280,6 @@ function showProgressModal(options = {}) {
     const existing = document.getElementById('progress-modal');
     if (existing) existing.remove();
 
-    // 🔧 FASE A.3: Limpiar timeout anterior si existe
     if (window._progressSafetyTimeout) {
         clearTimeout(window._progressSafetyTimeout);
         window._progressSafetyTimeout = null;
@@ -241,8 +338,6 @@ function showProgressModal(options = {}) {
     document.body.appendChild(modal);
     window._progressModal = modal;
 
-    // 🔧 FASE A.3: AUTO-CIERRE DE SEGURIDAD a los 30 segundos
-    // Si nadie llama a success/error/close, se cierra solo para no bloquear la app
     window._progressSafetyTimeout = setTimeout(() => {
         console.warn('⚠️ Progress modal: timeout de seguridad alcanzado (30s). Cerrando automáticamente.');
         const stillThere = document.getElementById('progress-modal');
@@ -284,7 +379,6 @@ function updateProgressModal(message, percent = null) {
 }
 
 function showProgressSuccess(message = 'Operación completada') {
-    // 🔧 FASE A.3: Cancelar el timeout de seguridad
     if (window._progressSafetyTimeout) {
         clearTimeout(window._progressSafetyTimeout);
         window._progressSafetyTimeout = null;
@@ -312,7 +406,6 @@ function showProgressSuccess(message = 'Operación completada') {
 }
 
 function showProgressError(message = 'Ocurrió un error') {
-    // 🔧 FASE A.3: Cancelar el timeout de seguridad
     if (window._progressSafetyTimeout) {
         clearTimeout(window._progressSafetyTimeout);
         window._progressSafetyTimeout = null;
@@ -339,12 +432,7 @@ function showProgressError(message = 'Ocurrió un error') {
     }, 3000);
 }
 
-/**
- * Cierra el modal de progreso.
- * CORREGIDO: añadido timeout de seguridad para forzar el cierre.
- */
 function closeProgressModal() {
-    // 🔧 FASE A.3: Cancelar el timeout de seguridad
     if (window._progressSafetyTimeout) {
         clearTimeout(window._progressSafetyTimeout);
         window._progressSafetyTimeout = null;
@@ -354,13 +442,11 @@ function closeProgressModal() {
     if (modal) {
         modal.style.animation = 'modalFadeOut 0.25s ease forwards';
         
-        // 🔧 FIX: Timeout de seguridad por si la animación falla
         setTimeout(() => {
             if (modal.parentNode) modal.remove();
             window._progressModal = null;
         }, 250);
         
-        // 🔧 FIX: Forzar remoción tras 1s por si algo se quedó colgado
         setTimeout(() => {
             const stillThere = document.getElementById('progress-modal');
             if (stillThere && stillThere.parentNode) {
@@ -373,82 +459,37 @@ function closeProgressModal() {
 }
 
 // ============================================================
-// 🆕 CERRAR TODOS LOS MODALES (para casos de bloqueo)
+// 🆕 FASE 1.4: CIERRE INMEDIATO DEL MODAL ACTUAL
 // ============================================================
 
 /**
- * Cierra TODOS los modales abiertos de la app.
- * Útil cuando la UI se queda bloqueada con modales fantasma.
- * 
- * NO cierra el progress modal (ese se cierra solo).
- * NO resuelve promesas pendientes (las deja colgadas intencionalmente
- * para que el siguiente showConfirm no se confunda).
+ * Cierra el modal actual SIN esperar la animación.
+ * Se usa cuando hay que abrir otro modal inmediatamente.
  */
-function cerrarTodosLosModales() {
-    const modalesACerrar = [
-        'custom-modal',
-        'order-modal',
-        'order-view-modal',
-        'add-product-modal',
-        'insumo-modal',
-        'recipe-modal',
-        'recipe-view-modal',
-        'producto-modal',
-        'sale-modal',
-        'sale-view-modal',
-        'expense-modal',
-        'expense-view-modal',
-        'corriente-modal',
-        'horario-detalle-modal',
-        'waiting-processing-modal',
-        'multi-order-modal',
-        'multi-add-product-modal',
-        'notifications-modal',
-        'help-menu-modal',
-        'readme-modal',
-        'credits-modal',
-        'faq-modal',
-        'quickstart-modal',
-        'users-modal',
-        'delete-selector-modal',
-        'sales-report-modal',
-        'orders-report-modal',
-        'expenses-report-modal',
-        'recalcular-modal',
-        'compartir-modal',
-        'edit-bank-account-modal',
-        'bank-accounts-modal',
-        'qr-view-modal',
-        'tour-overlay',
-        'tour-highlight',
-        'tour-tooltip'
-    ];
+function closeCurrentModalImmediate() {
+    if (!_currentModal) return;
     
-    let cerrados = 0;
-    
-    for (const id of modalesACerrar) {
-        const modal = document.getElementById(id);
-        if (modal) {
-            modal.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => {
-                if (modal.parentNode) modal.remove();
-            }, 200);
-            // Forzar remoción inmediata también
-            setTimeout(() => {
-                const still = document.getElementById(id);
-                if (still && still.parentNode) still.remove();
-            }, 400);
-            cerrados++;
+    try {
+        // Cancelar timeout pendiente si existe
+        if (_currentModalTimeoutId) {
+            clearTimeout(_currentModalTimeoutId);
+            _currentModalTimeoutId = null;
         }
+        
+        // Eliminar el modal actual
+        if (_currentModal.parentNode) {
+            _currentModal.remove();
+        }
+        
+        _currentModal = null;
+        
+        // Resetear estado de resolución
+        window._modalResolve = null;
+        window._modalResolved = false;
+        
+    } catch (e) {
+        console.warn('⚠️ Error en closeCurrentModalImmediate:', e);
     }
-    
-    // Limpiar el estado de resolución de promesas
-    window._modalResolve = null;
-    window._modalResolved = false;
-    
-    console.log(`🔧 cerrarTodosLosModales(): ${cerrados} modales cerrados`);
-    
-    return cerrados;
 }
 
 // ============================================================
@@ -465,11 +506,18 @@ function closeModalAndResolve(value) {
     
     const resolveFn = window._modalResolve;
     const resolved = value;
+    const modalToClose = _currentModal; // ⚠️ Referencia LOCAL
     
     window._modalResolved = true;
     
-    closeModal();
+    // Cerrar el modal USANDO LA REFERENCIA LOCAL (no getElementById)
+    if (modalToClose) {
+        closeModalByReference(modalToClose);
+    }
     
+    _currentModal = null;
+    
+    // Resolver la promesa
     if (resolveFn) {
         console.log('📦 Modal: resolviendo con:', resolved);
         try {
@@ -483,6 +531,39 @@ function closeModalAndResolve(value) {
     }
 }
 
+/**
+ * Cierra un modal usando su REFERENCIA directa.
+ * Los setTimeout solo afectan a ESE modal.
+ */
+function closeModalByReference(modal) {
+    if (!modal || !modal.parentNode) return;
+    
+    try {
+        modal.style.animation = 'modalFadeOut 0.2s ease forwards';
+        
+        // ⚠️ CLAVE: Guardar la referencia en una variable local
+        // para que el setTimeout NO busque por id
+        const modalRef = modal;
+        
+        setTimeout(() => {
+            // Solo eliminar SI es el mismo modal y sigue en el DOM
+            if (modalRef && modalRef.parentNode) {
+                modalRef.remove();
+            }
+        }, 200);
+        
+        // Timeout de seguridad: solo elimina ESTE modal
+        setTimeout(() => {
+            if (modalRef && modalRef.parentNode) {
+                modalRef.remove();
+            }
+        }, 500);
+        
+    } catch (e) {
+        console.warn('⚠️ Error en closeModalByReference:', e);
+    }
+}
+
 // ============================================================
 // FUNCIONES INTERNAS DE CREACIÓN Y CIERRE
 // ============================================================
@@ -490,8 +571,11 @@ function closeModalAndResolve(value) {
 function createModal(options) {
     const { title, icon, body, footer } = options;
 
-    const existing = document.getElementById('custom-modal');
-    if (existing) existing.remove();
+    // Limpiar TODOS los modales huérfanos antes de crear uno nuevo
+    const huerfanos = document.querySelectorAll('#custom-modal');
+    huerfanos.forEach(m => {
+        try { m.remove(); } catch (e) {}
+    });
 
     const overlay = document.createElement('div');
     overlay.id = 'custom-modal';
@@ -549,7 +633,7 @@ function createModal(options) {
         </div>
     `;
 
-    // 🔧 FIX: Cerrar con Escape
+    // Cerrar con Escape
     setTimeout(() => {
         const escHandler = function(e) {
             if (e.key === 'Escape') {
@@ -564,27 +648,88 @@ function createModal(options) {
 }
 
 function closeModal() {
-    const modal = document.getElementById('custom-modal');
-    if (modal) {
-        modal.style.animation = 'modalFadeOut 0.2s ease forwards';
-        setTimeout(() => {
-            if (modal.parentNode) {
-                modal.remove();
-            }
-        }, 200);
-        
-        // 🔧 FIX: Timeout de seguridad
-        setTimeout(() => {
-            const still = document.getElementById('custom-modal');
-            if (still && still.parentNode) still.remove();
-        }, 500);
-    }
+    // ⚠️ FASE 1.4: Usar closeCurrentModalImmediate para no dejar huérfanos
+    closeCurrentModalImmediate();
 }
 
 function confirmPromptAndResolve() {
     const input = document.getElementById('modal-input');
     const value = input ? input.value : '';
     closeModalAndResolve(value);
+}
+
+// ============================================================
+// 🆕 FASE 1.4: CERRAR TODOS LOS MODALES (sigue siendo útil)
+// ============================================================
+
+function cerrarTodosLosModales() {
+    const modalesACerrar = [
+        'custom-modal',
+        'order-modal',
+        'order-view-modal',
+        'add-product-modal',
+        'insumo-modal',
+        'recipe-modal',
+        'recipe-view-modal',
+        'producto-modal',
+        'sale-modal',
+        'sale-view-modal',
+        'expense-modal',
+        'expense-view-modal',
+        'corriente-modal',
+        'horario-detalle-modal',
+        'waiting-processing-modal',
+        'multi-order-modal',
+        'multi-add-product-modal',
+        'notifications-modal',
+        'help-menu-modal',
+        'readme-modal',
+        'credits-modal',
+        'faq-modal',
+        'quickstart-modal',
+        'users-modal',
+        'delete-selector-modal',
+        'sales-report-modal',
+        'orders-report-modal',
+        'expenses-report-modal',
+        'recalcular-modal',
+        'compartir-modal',
+        'edit-bank-account-modal',
+        'bank-accounts-modal',
+        'qr-view-modal',
+        'tour-overlay',
+        'tour-highlight',
+        'tour-tooltip',
+        'liberated-sale-modal',
+        'edit-user-modal',
+        'create-user-modal',
+        'change-password-modal'
+    ];
+    
+    let cerrados = 0;
+    
+    for (const id of modalesACerrar) {
+        const modales = document.querySelectorAll(`#${id}`);
+        modales.forEach(modal => {
+            try {
+                modal.remove();
+                cerrados++;
+            } catch (e) {}
+        });
+    }
+    
+    window._modalResolve = null;
+    window._modalResolved = false;
+    _currentModal = null;
+    
+    if (window._currentModalTimeoutId) {
+        clearTimeout(window._currentModalTimeoutId);
+        window._currentModalTimeoutId = null;
+    }
+    
+    console.log(`🔧 cerrarTodosLosModales(): ${cerrados} modales cerrados`);
+    
+    return cerrados;
 }
 
 // ============================================================
@@ -603,7 +748,10 @@ window.ModalModule = {
     closeModal,
     closeModalAndResolve,
     confirmPromptAndResolve,
-    cerrarTodosLosModales  // 🆕
+    cerrarTodosLosModales,
+    // 🆕 FASE 1.4
+    limpiarModalesHuerfanos,
+    closeCurrentModalImmediate
 };
 
 // Para compatibilidad con código existente
@@ -613,6 +761,7 @@ window.customPrompt = showPrompt;
 window.showProgressModal = showProgressModal;
 window.updateProgressModal = updateProgressModal;
 window.closeProgressModal = closeProgressModal;
-window.cerrarTodosLosModales = cerrarTodosLosModales;  // 🆕
+window.cerrarTodosLosModales = cerrarTodosLosModales;
+window.limpiarModalesHuerfanos = limpiarModalesHuerfanos;
 
-console.log('📦 Modal Module cargado correctamente v6 (FASE A.3: auto-cierre 30s en progress)');
+console.log('📦 Modal Module v2.0.8 (FASE 1.4: FIX DEFINITIVO - referencia única, sin huérfanos)');

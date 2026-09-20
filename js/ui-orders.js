@@ -13,24 +13,125 @@
 //   - "Ver → Editar" cierra el modal de vista antes de abrir el de edición
 //   - updateOrderStatusAndReload() cierra todos los modales antes del confirm
 // CORREGIDO FASE A.2 (170926 v2):
-//   - Modales de ui-orders usan z-index 9999999998 (un dígito menos que
-//     custom-modal que es 9999999999), garantizando que las confirmaciones
-//     SIEMPRE queden al frente.
-//   - Se reemplazaron todos los setTimeout frágiles por cerrarTodosLosModales()
-//     con await, garantizando eliminación completa del DOM antes de abrir
-//     cualquier confirmación.
-//   - Se eliminó la dependencia de fixes.js (ya no se carga).
+//   - Modales de ui-orders usan z-index 9999999998
+//   - Se reemplazaron setTimeout frágiles por cerrarTodosLosModales()
 // AÑADIDO FASE A.4 (170926 v3):
-//   - viewOrder() muestra sección de Auditoría (Creado por / Modificado por)
-//   - Usa window.DBModule.getUsuarioNombre() para resolver el nombre del usuario
+//   - viewOrder() muestra sección de Auditoría
+// AÑADIDO FASE 1.2 (190926 v3):
+//   - updateOrderStatusAndReload() REFACTORIZADA:
+//     * Pide confirmación ANTES de cerrar modales
+//     * Cierra el modal de vista tras confirmar
+//     * Llama a updateOrderStatus()
+//     * Si hay stockWarning, muestra modal informativo
+//     * Solo refresca si fue exitoso
+//   - Nueva función mostrarAlertaStockWarning()
+//   - Eliminado uso frágil de waitForModalRemoval en el flujo de entrega
+//   - Logs detallados en cada paso
+// CORREGIDO FASE 2.1 FIX (200926):
+//   - updateOrderTotal() ahora está DEFINIDA GLOBALMENTE al principio
+//     del archivo (antes estaba dentro de showOrderForm() y fallaba
+//     al invocarse desde otros puntos como removeOrderItem o clearOrderItems)
+//   - Eliminada la definición local duplicada dentro de showOrderForm()
+//   - Eliminada la asignación duplicada window.updateOrderTotal al final
+//     de showOrderForm()
+// 🆕 FIX 2 (190926 v4):
+//   - normalizarFechaVenta() helper (fallback defensivo por si orders.js no cargó)
+//   - submitOrderForm() normaliza deliveryDate antes de enviar
+//   - Defensa en profundidad: orders.js también normaliza
+// 🆕 FASE 2.2 (200926 v5):
+//   - NUEVO: Botón "⏰ Lista de espera" en el header (accesible a todos)
+//   - NUEVA: showWaitingListManagerModal() — modal completo de gestión
+//     * Lista en vivo con posición, cliente, producto, cantidad, total
+//     * Procesar → venta (individual)
+//     * Cancelar → sin venta (individual)
+//     * Eliminar → quitar de la lista (individual)
+//     * Limpiar lista → cancela TODOS (con doble confirmación)
+//     * Reporte PDF → generateWaitingListReport()
+//   - NO modifica el flujo existente de pedidos ni reservas por período
 // ============================================================
+
+// ============================================================
+// 🆕 FIX 2: NORMALIZACIÓN DE FECHAS (fallback defensivo)
+// ============================================================
+// 
+// Esta función replica la de orders.js y sales.js. Se define aquí
+// como fallback por si ui-orders.js se carga antes que orders.js
+// o por si algún navegador tiene caché de una versión antigua.
+// 
+// En el flujo normal, OrdersModule.saveOrder() ya normaliza la fecha.
+// Aquí la normalizamos ANTES de pasarla, para que el log de la UI
+// también muestre la fecha correcta y por doble seguridad.
+// ============================================================
+
+if (typeof window.normalizarFechaVenta !== 'function') {
+    window.normalizarFechaVenta = function(fechaInput) {
+        // Si no hay fecha, usar hora actual
+        if (!fechaInput) {
+            return new Date().toISOString();
+        }
+        
+        // Si ya viene con hora (ISO completo), respetarla
+        if (typeof fechaInput === 'string' && fechaInput.includes('T')) {
+            return fechaInput;
+        }
+        
+        // Si viene como YYYY-MM-DD (de <input type="date">)
+        const fechaStr = String(fechaInput).trim();
+        
+        // Validar formato YYYY-MM-DD
+        const match = fechaStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!match) {
+            console.warn('⚠️ [normalizarFechaVenta] Formato no reconocido:', fechaInput);
+            return new Date().toISOString();
+        }
+        
+        // ¿Es hoy?
+        const hoyStr = new Date().toISOString().split('T')[0];
+        if (fechaStr === hoyStr) {
+            return new Date().toISOString();
+        }
+        
+        // Otra fecha → mediodía UTC
+        return `${fechaStr}T12:00:00.000Z`;
+    };
+}
 
 // ============================================================
 // CONSTANTE DE Z-INDEX PARA MODALES DE PEDIDOS
-// (Un dígito menos que custom-modal = 9999999999)
 // ============================================================
 
 const ORDERS_MODAL_Z_INDEX = 9999999998;
+
+// ============================================================
+// 🆕 FIX: DEFINICIÓN GLOBAL DE updateOrderTotal
+// ============================================================
+// Esta función estaba declarada dentro de showOrderForm() y expuesta
+// al final de esa función mediante `window.updateOrderTotal = updateOrderTotal;`.
+// El problema: si se invocaba ANTES de abrir el form (por ejemplo, desde
+// un evento residual, o desde removeOrderItem en un modal ya cerrado),
+// fallaba con "updateOrderTotal is not defined".
+// 
+// SOLUCIÓN: definirla globalmente al principio del archivo. Como usa
+// querySelector para encontrar los elementos (.order-item, .item-quantity,
+// .item-price, #order-total-display), funciona perfectamente cuando
+// el form está abierto y no rompe cuando está cerrado.
+// ============================================================
+
+window.updateOrderTotal = function() {
+    try {
+        const items = document.querySelectorAll('.order-item');
+        let total = 0;
+        items.forEach(item => {
+            const qty = parseFloat(item.querySelector('.item-quantity')?.value) || 0;
+            const price = parseFloat(item.querySelector('.item-price')?.value) || 0;
+            total += qty * price;
+        });
+        const display = document.getElementById('order-total-display');
+        if (display) display.textContent = total.toFixed(2);
+    } catch (e) {
+        console.warn('⚠️ [updateOrderTotal] Error:', e.message);
+    }
+};
 
 // ============================================================
 // HELPER: Espera a que un modal se elimine del DOM
@@ -46,7 +147,6 @@ function waitForModalRemoval(modalId, timeoutMs = 600) {
                 return;
             }
             if (Date.now() - start > timeoutMs) {
-                // Forzar remoción si se pasa el tiempo
                 if (el.parentNode) el.remove();
                 resolve(false);
                 return;
@@ -58,16 +158,9 @@ function waitForModalRemoval(modalId, timeoutMs = 600) {
 }
 
 // ============================================================
-// 🆕 FASE A.4: HELPER DE AUDITORÍA
+// HELPER DE AUDITORÍA
 // ============================================================
 
-/**
- * Genera el HTML de la sección de auditoría para una entidad.
- * Solo se muestra si hay datos de auditoría disponibles.
- * 
- * @param {object} entity - Registro con created_by, modified_by, created_at, updated_at
- * @returns {string} HTML de la sección o cadena vacía
- */
 function renderAuditoriaHTML(entity) {
     if (!entity) return '';
     
@@ -76,13 +169,11 @@ function renderAuditoriaHTML(entity) {
     const createdAt = entity.created_at;
     const updatedAt = entity.updated_at;
     
-    // Si no hay created_by, no mostramos la sección
     if (!createdBy) return '';
     
     const nombreCreador = window.DBModule.getUsuarioNombre(createdBy) || 'Desconocido';
     const nombreModificador = modifiedBy ? (window.DBModule.getUsuarioNombre(modifiedBy) || 'Desconocido') : null;
     
-    // Formatear fechas
     const fechaCreacion = createdAt 
         ? new Date(createdAt).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
         : '—';
@@ -91,7 +182,6 @@ function renderAuditoriaHTML(entity) {
         ? new Date(updatedAt).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
         : null;
     
-    // Determinar si fue modificado por alguien distinto al creador
     const fueModificado = modifiedBy && modifiedBy !== createdBy && fechaModificacion;
     const fueModificadoPorMismo = modifiedBy && modifiedBy === createdBy && fechaModificacion;
     
@@ -137,6 +227,550 @@ function renderAuditoriaHTML(entity) {
 }
 
 // ============================================================
+// 🆕 FASE 1.2: MODAL DE ADVERTENCIA POR FALLO DE STOCK
+// ============================================================
+
+async function mostrarAlertaStockWarning(orderId, stockWarning) {
+    try {
+        await window.ModalModule.showAlert({
+            title: '⚠️ Entregado con advertencia',
+            message: `El pedido #${orderId} se entregó correctamente y la venta se creó.\n\n` +
+                     `⚠️ Sin embargo, hubo un problema al descontar el stock:\n\n` +
+                     `"${stockWarning}"\n\n` +
+                     `💡 Esto puede deberse a que las recetas o insumos asociados al producto no existen en este dispositivo, o a que las cantidades de stock no eran suficientes.\n\n` +
+                     `✅ La venta ya está registrada y el pedido está entregado.\n` +
+                     `📦 Revisa manualmente el stock de insumos si es necesario.`,
+            icon: '⚠️',
+            type: 'warning',
+            buttonText: '✅ Entendido'
+        });
+    } catch (e) {
+        console.warn('⚠️ Error mostrando alerta de stockWarning:', e);
+        if (window.showToast) {
+            window.showToast(`⚠️ Pedido #${orderId} entregado con advertencia de stock`, 'warning', 6000);
+        }
+    }
+}
+
+// ============================================================
+// 🆕 FASE 2.2: MODAL DE GESTIÓN DE LISTA DE ESPERA
+// ============================================================
+
+/**
+ * Abre el modal de gestión completa de la lista de espera.
+ * 
+ * Funcionalidades:
+ *  - Ver lista en vivo de clientes en espera
+ *  - Procesar cliente → venta (individual)
+ *  - Cancelar pedido → sin venta (individual)
+ *  - Eliminar de la lista → quitar sin cancelar pedido (individual)
+ *  - Limpiar toda la lista → cancela TODOS los pedidos (global)
+ *  - Reporte PDF de la lista actual
+ * 
+ * Accesible a TODOS los usuarios (no solo admin).
+ */
+async function showWaitingListManagerModal() {
+    // Cerrar cualquier otro modal abierto
+    const existingModal = document.getElementById('waiting-manager-modal');
+    if (existingModal) existingModal.remove();
+    
+    // Verificar módulo disponible
+    if (!window.OrdersModule) {
+        window.showToast('❌ Módulo de pedidos no disponible', 'error');
+        return;
+    }
+    
+    const modal = document.createElement('div');
+    modal.id = 'waiting-manager-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: ${ORDERS_MODAL_Z_INDEX + 10}; padding: 15px;
+    `;
+    
+    document.body.appendChild(modal);
+    
+    window._waitingManagerModal = modal;
+    
+    // Render inicial (con loading)
+    await renderWaitingManagerContent();
+    
+    // Cierre con click fuera
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeWaitingManagerModal();
+    });
+    
+    // Cierre con Escape
+    const escHandler = function(e) {
+        if (e.key === 'Escape') {
+            closeWaitingManagerModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+}
+
+/**
+ * Renderiza (o re-renderiza) el contenido del modal de gestión de lista.
+ * Se llama al abrir y después de cada acción para refrescar la lista.
+ */
+async function renderWaitingManagerContent() {
+    const modal = document.getElementById('waiting-manager-modal');
+    if (!modal) return;
+    
+    try {
+        // Obtener la lista actualizada
+        const lista = await window.OrdersModule.getWaitingListWithDetails();
+        
+        // Calcular totales
+        const totalItems = lista.length;
+        const totalCantidad = lista.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        const totalMonto = lista.reduce((sum, item) => sum + (item.order_total || 0), 0);
+        
+        // Construir lista HTML
+        let listaHtml = '';
+        
+        if (lista.length === 0) {
+            listaHtml = `
+                <div style="text-align: center; padding: 40px 20px; color: var(--text-light);">
+                    <span style="font-size: 56px;">🎉</span>
+                    <p style="margin-top: 12px; font-size: 15px; font-weight: 600;">No hay clientes en espera</p>
+                    <p style="font-size: 13px;">La lista está vacía</p>
+                </div>
+            `;
+        } else {
+            listaHtml = lista.map(item => {
+                const cantidad = item.quantity || 0;
+                const total = item.order_total || 0;
+                const fechaEntrega = item.delivery_date 
+                    ? formatearFechaLarga(item.delivery_date.split('T')[0]) 
+                    : '—';
+                
+                return `
+                    <div class="waiting-item" data-order-id="${item.order_id}" 
+                         style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: var(--bg); border-radius: 10px; border-left: 4px solid #f59e0b; margin-bottom: 8px;">
+                        
+                        <!-- POSICIÓN -->
+                        <div style="background: #f59e0b; color: #fff; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0;">
+                            ${item.position}
+                        </div>
+                        
+                        <!-- INFO -->
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 600; font-size: 15px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                👤 ${item.client_name || 'Cliente sin nombre'}
+                            </div>
+                            ${item.client_phone ? `<div style="font-size: 12px; color: var(--text-light);">📞 ${item.client_phone}</div>` : ''}
+                            <div style="font-size: 12px; color: var(--text-light); margin-top: 4px;">
+                                📦 ${item.product_name || 'Producto'} <strong>× ${cantidad}</strong>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-light);">
+                                📅 Entrega: ${fechaEntrega}
+                            </div>
+                            ${item.notes ? `<div style="font-size: 11px; color: var(--text-light); font-style: italic; margin-top: 2px;">📝 ${item.notes}</div>` : ''}
+                        </div>
+                        
+                        <!-- MONTO + ACCIONES -->
+                        <div style="text-align: right; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
+                            <div style="font-weight: 700; color: var(--primary); font-size: 15px;">$${total.toFixed(2)}</div>
+                            <div style="display: flex; gap: 4px; margin-top: 4px;">
+                                <button onclick="event.stopPropagation(); procesarClienteDeListaUI(${item.order_id})" 
+                                        class="btn secondary" 
+                                        style="padding: 3px 8px; font-size: 11px; width: auto; background: #10b981; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;"
+                                        title="Convertir en venta">
+                                    ✅ Procesar
+                                </button>
+                                <button onclick="event.stopPropagation(); cancelarClienteDeListaUI(${item.order_id}, '${(item.client_name || '').replace(/'/g, "\\'")}')" 
+                                        class="btn secondary" 
+                                        style="padding: 3px 8px; font-size: 11px; width: auto; color: #ef4444; border-color: #ef4444;"
+                                        title="Cancelar pedido (sin venta)">
+                                    ❌ Cancelar
+                                </button>
+                                <button onclick="event.stopPropagation(); eliminarClienteDeListaUI(${item.order_id}, '${(item.client_name || '').replace(/'/g, "\\'")}')" 
+                                        class="btn secondary" 
+                                        style="padding: 3px 8px; font-size: 11px; width: auto; color: #94a3b8; border-color: #94a3b8;"
+                                        title="Quitar de la lista (el pedido vuelve a pendiente)">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // HTML completo del modal
+        modal.innerHTML = `
+            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 20px; max-width: 720px; width: 100%; max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.5); border: 1px solid var(--border-color);">
+                
+                <!-- HEADER -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 2px solid #f59e0b; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 28px;">⏰</span>
+                        <div>
+                            <h2 style="margin: 0; font-size: 18px; color: #f59e0b;">Gestión de Lista de Espera</h2>
+                            <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">Administra los clientes en cola</p>
+                        </div>
+                    </div>
+                    <button onclick="closeWaitingManagerModal()" 
+                            style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+                </div>
+                
+                <!-- RESUMEN -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin-bottom: 14px;">
+                    <div style="background: #f59e0b15; border-left: 3px solid #f59e0b; padding: 8px 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 20px; font-weight: 700; color: #f59e0b;">${totalItems}</div>
+                        <div style="font-size: 11px; color: var(--text-light);">👥 Clientes</div>
+                    </div>
+                    <div style="background: #8b5cf615; border-left: 3px solid #8b5cf6; padding: 8px 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 20px; font-weight: 700; color: #8b5cf6;">${totalCantidad}</div>
+                        <div style="font-size: 11px; color: var(--text-light);">📦 Unidades</div>
+                    </div>
+                    <div style="background: #10b98115; border-left: 3px solid #10b981; padding: 8px 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 20px; font-weight: 700; color: #10b981;">$${totalMonto.toFixed(2)}</div>
+                        <div style="font-size: 11px; color: var(--text-light);">💰 Total</div>
+                    </div>
+                </div>
+                
+                <!-- ACCIONES GLOBALES -->
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+                    <button onclick="reporteListaEspera()" 
+                            class="btn secondary" 
+                            style="padding: 6px 14px; font-size: 12px; width: auto; background: #3b82f6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                        📄 Reporte PDF
+                    </button>
+                    ${totalItems > 0 ? `
+                        <button onclick="limpiarListaEsperaUI()" 
+                                class="btn secondary" 
+                                style="padding: 6px 14px; font-size: 12px; width: auto; background: #ef4444; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                            🧹 Limpiar lista (${totalItems})
+                        </button>
+                    ` : ''}
+                    <button onclick="refrescarListaEsperaUI()" 
+                            class="btn secondary" 
+                            style="padding: 6px 14px; font-size: 12px; width: auto; margin-left: auto;">
+                        🔄 Refrescar
+                    </button>
+                </div>
+                
+                <!-- INFO -->
+                <div style="background: #fef9e7; border: 1px solid #f59e0b; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: #92400e;">
+                    💡 <strong>Procesar</strong> → crea la venta · <strong>Cancelar</strong> → cancela el pedido · <strong>🗑️</strong> → solo quita de la lista
+                </div>
+                
+                <!-- LISTA -->
+                <div id="waiting-manager-list" style="flex: 1; overflow-y: auto; max-height: 500px; padding-right: 4px;">
+                    ${listaHtml}
+                </div>
+                
+                <!-- FOOTER -->
+                <div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--border-color);">
+                    <button onclick="closeWaitingManagerModal()" 
+                            class="btn secondary" 
+                            style="padding: 10px 20px; font-size: 14px; width: auto;">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('❌ Error renderizando modal de lista de espera:', error);
+        modal.innerHTML = `
+            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; text-align: center;">
+                <span style="font-size: 48px;">❌</span>
+                <h2 style="margin: 12px 0 8px;">Error</h2>
+                <p style="color: var(--text-light); font-size: 13px;">${error.message}</p>
+                <button onclick="closeWaitingManagerModal()" class="btn secondary" style="margin-top: 12px; padding: 8px 20px; width: auto;">
+                    Cerrar
+                </button>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Cierra el modal de gestión de lista de espera.
+ */
+function closeWaitingManagerModal() {
+    const modal = document.getElementById('waiting-manager-modal');
+    if (modal) {
+        modal.style.animation = 'modalFadeOut 0.2s ease forwards';
+        setTimeout(() => { if (modal.parentNode) modal.remove(); }, 200);
+        setTimeout(() => {
+            const still = document.getElementById('waiting-manager-modal');
+            if (still && still.parentNode) still.remove();
+        }, 500);
+    }
+    window._waitingManagerModal = null;
+}
+
+/**
+ * Refresca el contenido del modal (sin cerrarlo).
+ */
+async function refrescarListaEsperaUI() {
+    const modal = document.getElementById('waiting-manager-modal');
+    if (!modal) return;
+    
+    // Mostrar indicador de carga
+    const lista = document.getElementById('waiting-manager-list');
+    if (lista) {
+        lista.innerHTML = `
+            <div style="text-align: center; padding: 40px;">
+                <span style="font-size: 32px;">⏳</span>
+                <p style="color: var(--text-light); font-size: 13px;">Refrescando...</p>
+            </div>
+        `;
+    }
+    
+    await renderWaitingManagerContent();
+    window.showToast('🔄 Lista actualizada', 'success', 1500);
+}
+
+/**
+ * Procesa un cliente de la lista de espera (crea venta).
+ * Pide confirmación antes de ejecutar.
+ */
+async function procesarClienteDeListaUI(orderId) {
+    if (!orderId) return;
+    
+    // Confirmar
+    const confirm = await window.ModalModule.showConfirm({
+        title: '✅ Procesar cliente',
+        message: `¿Procesar al cliente de la posición #${orderId}?\n\n✅ Se creará la VENTA automáticamente.\n✅ Se descontará del stock.\n✅ El cliente saldrá de la lista.`,
+        confirmText: '✅ SÍ, PROCESAR',
+        cancelText: '❌ Cancelar',
+        icon: '✅',
+        confirmColor: '#10b981'
+    });
+    
+    if (!confirm) return;
+    
+    try {
+        window.showToast('⏳ Procesando cliente...', 'info', 2000);
+        
+        const result = await window.OrdersModule.procesarClienteDeLista(orderId);
+        
+        if (result.success) {
+            const msg = `✅ Venta creada: ${result.ventas} item(s) por $${(result.total || 0).toFixed(2)}`;
+            window.showToast(msg, 'success', 4000);
+            
+            // Refrescar el modal y la lista de pedidos si está abierta
+            await refrescarListaEsperaUI();
+            
+            // Refrescar lista de pedidos en background
+            if (typeof loadOrders === 'function') {
+                try { await loadOrders(); } catch (e) {}
+            }
+            
+            // Refrescar dashboard si está visible
+            if (typeof window.loadDashboardData === 'function') {
+                setTimeout(window.loadDashboardData, 500);
+            }
+        } else {
+            window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 6000);
+        }
+    } catch (error) {
+        console.error('❌ Error procesando cliente:', error);
+        window.showToast('❌ Error: ' + error.message, 'error', 6000);
+    }
+}
+
+/**
+ * Cancela un pedido de la lista SIN crear venta.
+ * Pide confirmación antes de ejecutar.
+ */
+async function cancelarClienteDeListaUI(orderId, clientName) {
+    if (!orderId) return;
+    
+    const nombre = clientName || 'Cliente';
+    
+    // Confirmar
+    const confirm = await window.ModalModule.showConfirm({
+        title: '❌ Cancelar pedido',
+        message: `¿Cancelar el pedido de "${nombre}"?\n\n⚠️ NO se creará venta.\n⚠️ Se repondrá el stock si estaba descontado.\n⚠️ El cliente saldrá de la lista.`,
+        confirmText: '❌ SÍ, CANCELAR',
+        cancelText: 'Volver',
+        icon: '❌',
+        confirmColor: '#ef4444'
+    });
+    
+    if (!confirm) return;
+    
+    // Pedir motivo (opcional)
+    const motivo = await window.ModalModule.showPrompt({
+        title: '📝 Motivo de cancelación',
+        message: 'Ingresa el motivo (opcional):',
+        placeholder: 'Ej: Cliente no se presentó',
+        icon: '📝',
+        defaultValue: 'Cancelado desde lista de espera'
+    });
+    
+    if (motivo === null || motivo === undefined) {
+        // Usuario canceló el prompt → abortar
+        window.showToast('❌ Operación cancelada', 'info', 2000);
+        return;
+    }
+    
+    try {
+        window.showToast('⏳ Cancelando pedido...', 'info', 2000);
+        
+        const result = await window.OrdersModule.cancelarPedidoDesdeLista(orderId, motivo || 'Cancelado desde lista de espera', '');
+        
+        if (result.success) {
+            window.showToast('✅ Pedido cancelado', 'success', 3000);
+            
+            await refrescarListaEsperaUI();
+            
+            if (typeof loadOrders === 'function') {
+                try { await loadOrders(); } catch (e) {}
+            }
+            
+            if (typeof window.loadDashboardData === 'function') {
+                setTimeout(window.loadDashboardData, 500);
+            }
+        } else {
+            window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 6000);
+        }
+    } catch (error) {
+        console.error('❌ Error cancelando pedido:', error);
+        window.showToast('❌ Error: ' + error.message, 'error', 6000);
+    }
+}
+
+/**
+ * Elimina un cliente de la lista SIN cancelar el pedido.
+ * El pedido vuelve a estado 'pending'.
+ */
+async function eliminarClienteDeListaUI(orderId, clientName) {
+    if (!orderId) return;
+    
+    const nombre = clientName || 'Cliente';
+    
+    // Confirmar
+    const confirm = await window.ModalModule.showConfirm({
+        title: '🗑️ Quitar de la lista',
+        message: `¿Quitar a "${nombre}" de la lista de espera?\n\n📋 El pedido volverá a estado PENDIENTE.\n✅ NO se cancela el pedido.\n✅ NO se repone stock.`,
+        confirmText: '🗑️ SÍ, QUITAR',
+        cancelText: 'Volver',
+        icon: '🗑️',
+        confirmColor: '#94a3b8'
+    });
+    
+    if (!confirm) return;
+    
+    try {
+        window.showToast('⏳ Quitando de la lista...', 'info', 2000);
+        
+        const result = await window.OrdersModule.eliminarDeListaEspera(orderId);
+        
+        if (result.success) {
+            window.showToast('✅ Cliente quitado de la lista', 'success', 3000);
+            
+            await refrescarListaEsperaUI();
+            
+            if (typeof loadOrders === 'function') {
+                try { await loadOrders(); } catch (e) {}
+            }
+            
+            if (typeof window.loadDashboardData === 'function') {
+                setTimeout(window.loadDashboardData, 500);
+            }
+        } else {
+            window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 6000);
+        }
+    } catch (error) {
+        console.error('❌ Error quitando de la lista:', error);
+        window.showToast('❌ Error: ' + error.message, 'error', 6000);
+    }
+}
+
+/**
+ * Limpia TODA la lista de espera (cancela todos los pedidos).
+ * Requiere DOBLE confirmación por ser una operación destructiva.
+ */
+async function limpiarListaEsperaUI() {
+    // Primera confirmación
+    const confirm1 = await window.ModalModule.showConfirm({
+        title: '⚠️ Limpiar lista de espera',
+        message: `¿Estás seguro de que quieres LIMPIAR TODA la lista de espera?\n\n⚠️ Se cancelarán TODOS los pedidos en espera.\n⚠️ NO se crearán ventas.\n⚠️ Se repondrá el stock.\n\n⚠️ Esta acción no se puede deshacer.`,
+        confirmText: '⚠️ CONTINUAR',
+        cancelText: '❌ Cancelar',
+        icon: '⚠️',
+        confirmColor: '#ef4444'
+    });
+    
+    if (!confirm1) return;
+    
+    // Segunda confirmación (más explícita)
+    const confirm2 = await window.ModalModule.showConfirm({
+        title: '🚨 CONFIRMACIÓN FINAL',
+        message: `Esta es la ÚLTIMA advertencia.\n\nEscribe mentalmente: "SÍ, QUIERO LIMPIAR LA LISTA"\n\n¿Confirmas?`,
+        confirmText: '🧹 SÍ, LIMPIAR TODO',
+        cancelText: '❌ NO, cancelar',
+        icon: '🚨',
+        confirmColor: '#dc2626'
+    });
+    
+    if (!confirm2) {
+        window.showToast('❌ Operación cancelada', 'info', 2000);
+        return;
+    }
+    
+    try {
+        window.showToast('⏳ Limpiando lista de espera...', 'info', 3000);
+        
+        const result = await window.OrdersModule.limpiarListaEspera();
+        
+        if (result.success) {
+            window.showToast(`✅ Lista limpiada: ${result.eliminados} eliminados, ${result.cancelados} cancelados`, 'success', 5000);
+            
+            await refrescarListaEsperaUI();
+            
+            if (typeof loadOrders === 'function') {
+                try { await loadOrders(); } catch (e) {}
+            }
+            
+            if (typeof window.loadDashboardData === 'function') {
+                setTimeout(window.loadDashboardData, 500);
+            }
+        } else {
+            window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 6000);
+        }
+    } catch (error) {
+        console.error('❌ Error limpiando lista:', error);
+        window.showToast('❌ Error: ' + error.message, 'error', 6000);
+    }
+}
+
+/**
+ * Genera el reporte PDF de la lista de espera actual.
+ */
+async function reporteListaEspera() {
+    try {
+        if (!window.ReportsModule || typeof window.ReportsModule.generateWaitingListReport !== 'function') {
+            window.showToast('⚠️ Reporte de lista de espera no disponible aún', 'warning', 4000);
+            return;
+        }
+        
+        window.showToast('⏳ Generando reporte...', 'info', 2000);
+        
+        const html = await window.ReportsModule.generateWaitingListReport();
+        
+        if (html) {
+            window.ReportsModule.printReport(html);
+            window.showToast('✅ Reporte generado', 'success', 3000);
+        } else {
+            window.showToast('⚠️ No hay datos para el reporte', 'warning', 3000);
+        }
+    } catch (error) {
+        console.error('❌ Error generando reporte:', error);
+        window.showToast('❌ Error: ' + error.message, 'error', 5000);
+    }
+}
+
+// ============================================================
 // RENDER ORDERS VIEW
 // ============================================================
 
@@ -167,6 +801,9 @@ function renderOrdersView() {
                 <button onclick="showMultiOrderForm()" class="btn primary" style="padding: 8px 16px; font-size: 14px; width: auto; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
                     📅 Reserva por período
                 </button>
+                <button onclick="showWaitingListManagerModal()" class="btn primary" style="padding: 8px 16px; font-size: 14px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    ⏰ Lista de espera
+                </button>
                 <button onclick="showOrdersReportModal()" class="btn secondary" style="padding: 8px 16px; font-size: 14px; width: auto;">
                     📊 Reporte
                 </button>
@@ -176,7 +813,6 @@ function renderOrdersView() {
             </div>
         </div>
         
-        <!-- Filtros -->
         <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; align-items: stretch; background: var(--bg-card); padding: 12px 16px; border-radius: var(--radius); border: 1px solid var(--border-color);">
             
             <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: space-between;">
@@ -669,10 +1305,6 @@ function clearOrderFilters() {
 // ============================================================
 
 function showOrdersReportModal() {
-    if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
-        window.ModalModule.cerrarTodosLosModales();
-    }
-    
     const existingModal = document.getElementById('orders-report-modal');
     if (existingModal) existingModal.remove();
     
@@ -809,17 +1441,15 @@ function closeOrdersReportModal() {
 
 // ============================================================
 // FORMULARIO DE PEDIDO INDIVIDUAL
+// 🆕 FIX 2: submitOrderForm() normaliza deliveryDate
 // ============================================================
 
 async function showOrderForm(orderId = null) {
-    if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
-        window.ModalModule.cerrarTodosLosModales();
-    }
-    await waitForModalRemoval('order-modal', 400);
-    await waitForModalRemoval('order-view-modal', 400);
-    
     const existingModal = document.getElementById('order-modal');
     if (existingModal) existingModal.remove();
+    
+    const viewModal = document.getElementById('order-view-modal');
+    if (viewModal) viewModal.remove();
     
     const isEdit = !!orderId;
     
@@ -831,13 +1461,6 @@ async function showOrderForm(orderId = null) {
                 window.showToast('❌ Pedido no encontrado', 'error');
                 return;
             }
-            
-            console.log('🔍 [FIX v3] Cargando pedido #' + orderId + ' para edición:');
-            console.log('   client_name:', orderData.client_name);
-            console.log('   client_name_full:', orderData.client_name_full);
-            console.log('   client_id:', orderData.client_id);
-            console.log('   user_id:', orderData.user_id);
-            console.log('   negocio_id:', orderData.negocio_id);
         }
         const productos = await window.OrdersModule.getProductos();
         renderForm(orderData, productos);
@@ -1044,22 +1667,12 @@ async function showOrderForm(orderId = null) {
             fields.style.display = checked ? 'grid' : 'none';
         };
         
-        function updateOrderTotal() {
-            const items = document.querySelectorAll('.order-item');
-            let total = 0;
-            items.forEach(item => {
-                const qty = parseFloat(item.querySelector('.item-quantity')?.value) || 0;
-                const price = parseFloat(item.querySelector('.item-price')?.value) || 0;
-                total += qty * price;
-            });
-            const display = document.getElementById('order-total-display');
-            if (display) display.textContent = total.toFixed(2);
-        }
+        // Re-calcular total inicial con los valores existentes
+        window.updateOrderTotal();
         
         document.querySelectorAll('.item-quantity, .item-price').forEach(el => {
-            el.addEventListener('input', updateOrderTotal);
+            el.addEventListener('input', window.updateOrderTotal);
         });
-        window.updateOrderTotal = updateOrderTotal;
         
         const form = document.getElementById('order-form');
         form.addEventListener('submit', async (e) => {
@@ -1076,15 +1689,10 @@ async function showOrderForm(orderId = null) {
 }
 
 // ============================================================
-// RESERVA POR PERÍODO - MODAL PRINCIPAL CON PARIDAD
+// RESERVA POR PERÍODO
 // ============================================================
 
 async function showMultiOrderForm() {
-    if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
-        window.ModalModule.cerrarTodosLosModales();
-    }
-    await waitForModalRemoval('multi-order-modal', 400);
-    
     const existingModal = document.getElementById('multi-order-modal');
     if (existingModal) existingModal.remove();
     
@@ -1761,12 +2369,6 @@ async function submitMultiOrderForm() {
         patronDesc += ` (${state.patron.paridad === 'pares' ? 'solo pares' : 'solo impares'})`;
     }
     
-    if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
-        window.ModalModule.cerrarTodosLosModales();
-    }
-    await waitForModalRemoval('multi-order-modal', 400);
-    await waitForModalRemoval('multi-add-product-modal', 400);
-    
     const confirm = await window.ModalModule.showConfirm({
         title: '📅 Confirmar reserva',
         message: `Se crearán ${fechasAProcesar.length} pedido(s) para "${clientName}".\n\nPatrón: ${patronDesc}\n${Object.keys(duplicados).filter(f => duplicados[f]).length > 0 ? `⚠️ Se omitirán ${Object.keys(duplicados).filter(f => duplicados[f]).length} fecha(s) por duplicados.\n\n` : ''}¿Continuar?`,
@@ -2031,6 +2633,7 @@ function clearOrderItems() {
 
 // ============================================================
 // ENVIAR FORMULARIO INDIVIDUAL
+// 🆕 FIX 2: normaliza deliveryDate antes de enviar
 // ============================================================
 
 async function submitOrderForm(isEdit) {
@@ -2046,7 +2649,7 @@ async function submitOrderForm(isEdit) {
     
     const clientName = clientNameInput.value.trim();
     const clientPhone = clientPhoneInput.value.trim();
-    const deliveryDate = deliveryDateInput.value;
+    const deliveryDateRaw = deliveryDateInput.value;
     const status = statusInput.value;
     const priority = priorityInput.value;
     const notes = notesInput.value.trim();
@@ -2058,10 +2661,10 @@ async function submitOrderForm(isEdit) {
     const sesionRadio = document.querySelector('input[name="order-sesion"]:checked');
     if (sesionRadio) session = sesionRadio.value || null;
     
-    if (deliveryDate) localStorage.setItem('panario_last_delivery_date', deliveryDate);
+    if (deliveryDateRaw) localStorage.setItem('panario_last_delivery_date', deliveryDateRaw);
     
     if (!clientName) { window.showToast('⚠️ El nombre del cliente es obligatorio', 'error'); return; }
-    if (!deliveryDate) { window.showToast('⚠️ La fecha de entrega es obligatoria', 'error'); return; }
+    if (!deliveryDateRaw) { window.showToast('⚠️ La fecha de entrega es obligatoria', 'error'); return; }
     if (hasAdvancePayment && advanceAmount <= 0) { window.showToast('⚠️ Monto adelanto > 0', 'error'); return; }
     
     const itemElements = document.querySelectorAll('.order-item');
@@ -2095,18 +2698,29 @@ async function submitOrderForm(isEdit) {
         
         if (originalName === newName) {
             clientId = originalId || null;
-            console.log('📝 [FIX v3] Nombre sin cambios. Conservando client_id:', clientId);
         } else {
             clientId = null;
-            console.log('📝 [FIX v3] Nombre CAMBIÓ. Desvinculando client_id.');
         }
     }
+    
+    // 🆕 FIX 2: Normalizar deliveryDate antes de enviar
+    // 
+    // ANTES: delivery_date = deliveryDateRaw (ej: "2026-09-17")
+    //   → Si SQLite lo interpreta como UTC → 16 sept 20:00 local ❌
+    // 
+    // AHORA: normalizarFechaVenta() decide:
+    //   - Si es HOY → new Date().toISOString()
+    //   - Si es otra fecha → "YYYY-MM-DDT12:00:00.000Z"
+    // 
+    // NOTA: OrdersModule.saveOrder() también normaliza (defensa en profundidad)
+    const deliveryDate = window.normalizarFechaVenta(deliveryDateRaw);
+    console.log('📅 [submitOrderForm] delivery_date normalizada:', deliveryDateRaw, '→', deliveryDate);
     
     const orderData = {
         client_name: clientName, 
         client_phone: clientPhone || null,
         client_id: clientId,
-        delivery_date: deliveryDate, 
+        delivery_date: deliveryDate,  // 🆕 FIX 2
         status, 
         priority: priority || 'normal',
         notes: notes || null, 
@@ -2124,11 +2738,7 @@ async function submitOrderForm(isEdit) {
     try {
         const result = await window.OrdersModule.saveOrder(orderData);
         if (result.success) {
-            if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
-                window.ModalModule.cerrarTodosLosModales();
-            }
-            await waitForModalRemoval('order-modal', 400);
-            
+            window.closeOrderModal();
             window.showToast(`✅ Pedido ${result.updated ? 'actualizado' : 'guardado'} correctamente`, 'success');
             await loadOrders();
             if (typeof window.loadDashboardData === 'function') setTimeout(window.loadDashboardData, 500);
@@ -2142,19 +2752,15 @@ async function submitOrderForm(isEdit) {
 
 // ============================================================
 // VER PEDIDO EN DETALLE
-// CORREGIDO FASE A.4: añadida sección de Auditoría
 // ============================================================
 
 async function viewOrder(id) {
-    if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
-        window.ModalModule.cerrarTodosLosModales();
-    }
-    await waitForModalRemoval('order-view-modal', 400);
-    await waitForModalRemoval('order-modal', 400);
-    
     try {
         const order = await window.OrdersModule.getOrder(id);
         if (!order) { window.showToast('❌ Pedido no encontrado', 'error'); return; }
+        
+        const editModal = document.getElementById('order-modal');
+        if (editModal) editModal.remove();
         
         const modal = document.createElement('div');
         modal.id = 'order-view-modal';
@@ -2188,8 +2794,6 @@ async function viewOrder(id) {
         const fechaEntregaLarga = formatearFechaLarga(order.delivery_date);
         const sesionBadge = order.session ? getBadgeSesion(order.session) : '';
         const corrienteSection = getSeccionCorrienteHTML(order.delivery_date.split('T')[0]);
-        
-        // 🆕 FASE A.4: Sección de auditoría
         const auditoriaSection = renderAuditoriaHTML(order);
         
         let statusButtons = '';
@@ -2280,7 +2884,6 @@ async function viewOrder(id) {
                 
                 ${order.notes ? `<hr><h3 style="margin: 12px 0 8px;">📝 Notas</h3><p style="font-size: 14px; color: var(--text-light);">${order.notes}</p>` : ''}
                 
-                <!-- 🆕 FASE A.4: Sección de Auditoría -->
                 ${auditoriaSection}
                 
                 <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;">
@@ -2302,24 +2905,11 @@ async function viewOrder(id) {
     }
 }
 
-// ============================================================
-// ABRIR EDICIÓN DESDE LA VISTA
-// ============================================================
-
 async function abrirEdicionDesdeVista(orderId) {
-    console.log('✏️ [FIX A.2] Abriendo edición desde vista del pedido #' + orderId);
-    
-    if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
-        window.ModalModule.cerrarTodosLosModales();
-    }
-    await waitForModalRemoval('order-view-modal', 500);
-    
+    window.closeOrderViewModal();
+    await new Promise(r => setTimeout(r, 250));
     showOrderForm(orderId);
 }
-
-// ============================================================
-// ACTUALIZAR ESTADO DEL PEDIDO
-// ============================================================
 
 async function updateOrderStatusAndReload(orderId, status) {
     if (!orderId) { window.showToast('❌ ID no válido', 'error'); return; }
@@ -2327,22 +2917,26 @@ async function updateOrderStatusAndReload(orderId, status) {
     const order = await window.OrdersModule.getOrder(orderId);
     if (!order) { window.showToast('❌ Pedido no encontrado', 'error'); return; }
     
+    let confirmTitle = 'Cambiar estado';
     let confirmMsg = `¿Seguro que quieres cambiar el estado del pedido #${orderId} a "${status}"?`;
     let confirmText = 'Sí, cambiar';
     let icon = '📋';
     let confirmColor = 'var(--primary)';
     
     if (status === 'delivered') {
-        confirmMsg = `⚠️ ¿ENTREGAR el pedido #${orderId}?\n\n✅ Se creará la venta.\n✅ Se cancelará la deuda.\n✅ Se descontará stock.`;
+        confirmTitle = '🚚 Entregar pedido';
+        confirmMsg = `⚠️ ¿ENTREGAR el pedido #${orderId}?\n\n✅ Se creará la venta.\n✅ Se cancelará la deuda.\n⚠️ Se intentará descontar stock (si falla, la venta se creará igual).`;
         confirmText = '✅ SÍ, ENTREGAR';
         icon = '🚚';
         confirmColor = '#10b981';
     } else if (status === 'waiting') {
+        confirmTitle = '⏰ Lista de espera';
         confirmMsg = `⏰ ¿Poner pedido #${orderId} en LISTA DE ESPERA?`;
         confirmText = '✅ SÍ';
         icon = '⏰';
         confirmColor = '#f59e0b';
     } else if (status === 'waiting_bought') {
+        confirmTitle = '🔄 Compró por lista';
         confirmMsg = `🔄 ¿Marcar pedido #${orderId} como COMPRO POR LISTA DE ESPERA?\n\n✅ Se creará la venta.\n✅ Se cancelará la deuda.`;
         confirmText = '✅ SÍ, COMPRÓ';
         icon = '🔄';
@@ -2354,9 +2948,7 @@ async function updateOrderStatusAndReload(orderId, status) {
         if (estabaEnLista || waitingCount > 0) {
             const candidatos = await window.OrdersModule.getWaitingListWithDetails(orderId);
             if (candidatos.length > 0) {
-                if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
-                    window.ModalModule.cerrarTodosLosModales();
-                }
+                window.closeOrderViewModal();
                 await waitForModalRemoval('order-view-modal', 400);
                 
                 const cantidadDisponible = order.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
@@ -2365,52 +2957,61 @@ async function updateOrderStatusAndReload(orderId, status) {
             }
         }
         
+        confirmTitle = '❌ Cancelar pedido';
         confirmMsg = `❌ ¿CANCELAR pedido #${orderId}?\n\n⚠️ Stock se repondrá.`;
         confirmText = '❌ SÍ, CANCELAR';
         icon = '❌';
         confirmColor = '#ef4444';
     }
     
-    if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
-        window.ModalModule.cerrarTodosLosModales();
-    }
-    await waitForModalRemoval('order-view-modal', 400);
-    await waitForModalRemoval('order-modal', 400);
-    
     const confirm = await window.ModalModule.showConfirm({
-        title: status === 'delivered' ? '🚚 Entregar pedido' : 
-               status === 'waiting' ? '⏰ Lista de espera' :
-               status === 'waiting_bought' ? '🔄 Compró por lista' :
-               status === 'cancelled' ? '❌ Cancelar pedido' : 'Cambiar estado',
-        message: confirmMsg, confirmText, cancelText: 'Cancelar', icon, confirmColor
+        title: confirmTitle,
+        message: confirmMsg,
+        confirmText: confirmText,
+        cancelText: 'Cancelar',
+        icon: icon,
+        confirmColor: confirmColor
     });
     
     if (!confirm) return;
+    
+    window.closeOrderViewModal();
+    await waitForModalRemoval('order-view-modal', 400);
     
     try {
         window.showToast('⏳ Actualizando...', 'info', 2000);
         const result = await window.OrdersModule.updateOrderStatus(orderId, status);
         
-        if (result.success) {
-            window.showToast(`✅ Estado actualizado a: ${status}`, 'success');
-            
-            if (status === 'delivered' || status === 'waiting_bought') {
-                window.showToast('💰 Venta creada automáticamente', 'success', 4000);
-            }
-            if (status === 'waiting' || status === 'waiting_bought') {
-                if (window.OrdersModule.getWaitingListCount) {
-                    const count = await window.OrdersModule.getWaitingListCount();
-                    updateWaitingBadge(count);
-                }
-            }
-            
-            await loadOrders();
-            if (typeof window.loadDashboardData === 'function') setTimeout(window.loadDashboardData, 500);
-        } else {
-            window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error');
+        if (!result.success) {
+            window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 6000);
+            return;
         }
+        
+        window.showToast(`✅ Estado actualizado a: ${status}`, 'success');
+        
+        if (status === 'delivered' || status === 'waiting_bought') {
+            window.showToast('💰 Venta creada automáticamente', 'success', 4000);
+        }
+        if (status === 'waiting' || status === 'waiting_bought') {
+            if (window.OrdersModule.getWaitingListCount) {
+                const count = await window.OrdersModule.getWaitingListCount();
+                updateWaitingBadge(count);
+            }
+        }
+        
+        if (result.stockWarning) {
+            await mostrarAlertaStockWarning(orderId, result.stockWarning);
+        }
+        
+        await loadOrders();
+        
+        if (typeof window.loadDashboardData === 'function') {
+            setTimeout(window.loadDashboardData, 500);
+        }
+        
     } catch (error) {
-        window.showToast('❌ Error: ' + error.message, 'error');
+        console.error('❌ Error en updateOrderStatusAndReload:', error);
+        window.showToast('❌ Error: ' + error.message, 'error', 6000);
     }
 }
 
@@ -2419,10 +3020,6 @@ async function updateOrderStatusAndReload(orderId, status) {
 // ============================================================
 
 function showWaitingListProcessingModal(order, candidatos, cantidadDisponible) {
-    if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
-        window.ModalModule.cerrarTodosLosModales();
-    }
-    
     const existingModal = document.getElementById('waiting-processing-modal');
     if (existingModal) existingModal.remove();
     
@@ -2542,18 +3139,11 @@ function showWaitingListProcessingModal(order, candidatos, cantidadDisponible) {
     updateWaitingModalCounters(modal, cantidadDisponible);
 }
 
-// ============================================================
-// CANCELAR OPERACIÓN Y VOLVER
-// ============================================================
-
 async function cancelarOperacionYVolver(orderId) {
-    console.log('❌ [FIX A.2] Cancelando operación de cancelar pedido #' + orderId);
+    const modal = document.getElementById('waiting-processing-modal');
+    if (modal) modal.remove();
     
-    if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
-        window.ModalModule.cerrarTodosLosModales();
-    }
     await waitForModalRemoval('waiting-processing-modal', 400);
-    await waitForModalRemoval('order-view-modal', 400);
     
     window.showToast('❌ Operación cancelada. El pedido conserva su estado original.', 'info', 4000);
     
@@ -2563,10 +3153,6 @@ async function cancelarOperacionYVolver(orderId) {
         }
     }, 600);
 }
-
-// ============================================================
-// PROCESAR SELECCIÓN DE LISTA DE ESPERA
-// ============================================================
 
 async function procesarSeleccionListaEspera(orderId, cantidadDisponible) {
     const modal = document.getElementById('waiting-processing-modal');
@@ -2588,9 +3174,7 @@ async function procesarSeleccionListaEspera(orderId, cantidadDisponible) {
         }
     });
     
-    if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
-        window.ModalModule.cerrarTodosLosModales();
-    }
+    modal.remove();
     await waitForModalRemoval('waiting-processing-modal', 400);
     
     const confirm = await window.ModalModule.showConfirm({
@@ -2630,14 +3214,9 @@ async function procesarSeleccionListaEspera(orderId, cantidadDisponible) {
     }
 }
 
-// ============================================================
-// OMITIR LISTA DE ESPERA
-// ============================================================
-
 async function omitirListaEspera(orderId) {
-    if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
-        window.ModalModule.cerrarTodosLosModales();
-    }
+    const modal = document.getElementById('waiting-processing-modal');
+    if (modal) modal.remove();
     await waitForModalRemoval('waiting-processing-modal', 400);
     
     const confirm = await window.ModalModule.showConfirm({
@@ -2668,10 +3247,6 @@ async function omitirListaEspera(orderId) {
         window.showToast('❌ Error: ' + error.message, 'error');
     }
 }
-
-// ============================================================
-// ACTUALIZAR CONTADORES DEL MODAL
-// ============================================================
 
 function updateWaitingModalCounters(modal, cantidadDisponible) {
     const checkboxes = modal.querySelectorAll('.waiting-checkbox:checked');
@@ -2748,7 +3323,6 @@ window.toggleDayOrders = toggleDayOrders;
 window.clearOrderFilters = clearOrderFilters;
 window.updateWaitingBadge = updateWaitingBadge;
 window.showOrdersReportModal = showOrdersReportModal;
-window.updateOrderTotal = updateOrderTotal;
 window.onOrderDateChange = onOrderDateChange;
 window.selectSesion = selectSesion;
 window.highlightSesionSelection = highlightSesionSelection;
@@ -2785,5 +3359,17 @@ window.cancelarOperacionYVolver = cancelarOperacionYVolver;
 window.abrirEdicionDesdeVista = abrirEdicionDesdeVista;
 window.waitForModalRemoval = waitForModalRemoval;
 window.renderAuditoriaHTML = renderAuditoriaHTML;
+window.mostrarAlertaStockWarning = mostrarAlertaStockWarning;
 
-console.log('📦 UI Orders Module cargado correctamente v2.0.2 (FASE A.4: auditoría en viewOrder)');
+// 🆕 FASE 2.2: Gestión de lista de espera
+window.showWaitingListManagerModal = showWaitingListManagerModal;
+window.closeWaitingManagerModal = closeWaitingManagerModal;
+window.renderWaitingManagerContent = renderWaitingManagerContent;
+window.refrescarListaEsperaUI = refrescarListaEsperaUI;
+window.procesarClienteDeListaUI = procesarClienteDeListaUI;
+window.cancelarClienteDeListaUI = cancelarClienteDeListaUI;
+window.eliminarClienteDeListaUI = eliminarClienteDeListaUI;
+window.limpiarListaEsperaUI = limpiarListaEsperaUI;
+window.reporteListaEspera = reporteListaEspera;
+
+console.log('📦 UI Orders Module v2.1.0 (FASE 2.1 + fix updateOrderTotal global + FIX 2: normalización de fechas + FASE 2.2: gestión de lista de espera)');

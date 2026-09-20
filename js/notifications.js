@@ -1,6 +1,13 @@
 // ============================================================
 // 📦 NOTIFICATIONS MODULE - Panario
 // CORREGIDO: Sin duplicados, marcador de leídas, sonido configurable
+// CORREGIDO FASE 1.4 (190926): 🔊 FIX DEFINITIVO DE SONIDO
+//   - AudioContext SINGLETON (uno solo para toda la app)
+//   - unlockAudio() en el primer gesto del usuario
+//   - resume() automático antes de reproducir
+//   - Fallback silencioso si el navegador bloquea
+//   - Sin crear nuevos AudioContexts por cada sonido
+//   - Eliminado emoji duplicado en el título de push
 // ============================================================
 
 window.NotificationsModule = {};
@@ -24,14 +31,14 @@ const NOTIFICATION_TYPES = {
     STOCK: 'stock'
 };
 
-// 🆕 Configuración de sonido
+// 🆕 FASE 1.4: Configuración de sonido
 const SOUND_CONFIG_KEY = 'panario_notification_sound_config';
 const DEFAULT_SOUND_CONFIG = {
     enabled: true,
     soundId: 'beep'
 };
 
-// 🆕 Sonidos embutidos (5 + silencio)
+// 🆕 FASE 1.4: Sonidos embutidos
 const SOUNDS = {
     'silent': { name: '🔇 Silencio', freq: 0, duration: 0 },
     'beep': { name: '🔔 Beep', freq: 800, duration: 0.15 },
@@ -40,6 +47,106 @@ const SOUNDS = {
     'alert': { name: '⚠️ Alert', freq: 400, duration: 0.25 },
     'success': { name: '✅ Success', freq: 1500, duration: 0.2 }
 };
+
+// ============================================================
+// 🆕 FASE 1.4: AUDIO CONTEXT SINGLETON
+// ============================================================
+// Un solo AudioContext reutilizado para toda la app.
+// Se desbloquea al primer gesto del usuario.
+// ============================================================
+
+let _audioContext = null;
+let _audioUnlocked = false;
+let _audioUnlockAttempts = 0;
+const MAX_UNLOCK_ATTEMPTS = 5;
+
+/**
+ * Obtiene (o crea) el AudioContext singleton.
+ * NO llama a resume() automáticamente.
+ */
+function getAudioContext() {
+    if (_audioContext) return _audioContext;
+    
+    try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) {
+            console.warn('🔇 AudioContext no soportado en este navegador');
+            return null;
+        }
+        
+        _audioContext = new AudioContextClass();
+        console.log('🔊 AudioContext creado (estado inicial:', _audioContext.state, ')');
+        return _audioContext;
+        
+    } catch (e) {
+        console.warn('🔇 Error creando AudioContext:', e);
+        return null;
+    }
+}
+
+/**
+ * Desbloquea el AudioContext.
+ * Debe llamarse en respuesta a un gesto del usuario (click, touch, key).
+ * 
+ * @returns {Promise<boolean>} true si quedó desbloqueado
+ */
+async function unlockAudio() {
+    if (_audioUnlocked && _audioContext && _audioContext.state === 'running') {
+        return true;
+    }
+    
+    _audioUnlockAttempts++;
+    if (_audioUnlockAttempts > MAX_UNLOCK_ATTEMPTS) {
+        // No seguir intentando
+        return false;
+    }
+    
+    try {
+        const ctx = getAudioContext();
+        if (!ctx) return false;
+        
+        if (ctx.state === 'suspended') {
+            await ctx.resume();
+        }
+        
+        if (ctx.state === 'running') {
+            _audioUnlocked = true;
+            console.log('🔊 AudioContext desbloqueado (intento #' + _audioUnlockAttempts + ')');
+            return true;
+        }
+        
+        return false;
+        
+    } catch (e) {
+        // Silencioso: el navegador bloquea sin gesto
+        return false;
+    }
+}
+
+// ============================================================
+// REGISTRAR UNLOCK EN EL PRIMER GESTO DEL USUARIO
+// ============================================================
+
+function setupAudioUnlockListeners() {
+    const events = ['click', 'touchstart', 'keydown'];
+    
+    const unlockHandler = () => {
+        unlockAudio().then(unlocked => {
+            if (unlocked) {
+                // Una vez desbloqueado, quitar los listeners
+                events.forEach(evt => {
+                    document.removeEventListener(evt, unlockHandler, true);
+                });
+            }
+        });
+    };
+    
+    events.forEach(evt => {
+        document.addEventListener(evt, unlockHandler, true);
+    });
+    
+    console.log('🔊 Listeners de desbloqueo de audio registrados');
+}
 
 // ============================================================
 // INICIALIZAR SISTEMA DE NOTIFICACIONES
@@ -55,6 +162,9 @@ function initNotificationSystem() {
     console.log('🔔 Campanita encontrada en el HTML');
     loadNotificationsFromStorage();
     updateBellBadge();
+    
+    // 🆕 FASE 1.4: Registrar listeners de desbloqueo de audio
+    setupAudioUnlockListeners();
     
     if (!document.getElementById('notification-styles')) {
         const style = document.createElement('style');
@@ -96,7 +206,7 @@ function initNotificationSystem() {
 }
 
 // ============================================================
-// 🆕 CONFIGURACIÓN DE SONIDO
+// CONFIGURACIÓN DE SONIDO
 // ============================================================
 
 function getSoundConfig() {
@@ -130,41 +240,88 @@ function getAvailableSounds() {
     }));
 }
 
+// ============================================================
+// 🆕 FASE 1.4: REPRODUCIR SONIDO CON AUDIO CONTEXT SINGLETON
+// ============================================================
+
 /**
- * 🆕 Reproduce un sonido por ID
+ * Reproduce un sonido por ID usando el AudioContext singleton.
+ * 
+ * @param {string} soundId - ID del sonido ('beep', 'chime', etc.)
+ * @returns {Promise<boolean>} true si se reprodujo
  */
-function playSoundById(soundId) {
+async function playSoundById(soundId) {
     const config = getSoundConfig();
     
-    if (!config.enabled) return;
+    if (!config.enabled) {
+        return false;
+    }
     
     const sound = SOUNDS[soundId] || SOUNDS['beep'];
-    if (!sound || sound.freq === 0) return;
+    if (!sound || sound.freq === 0) {
+        return false;
+    }
     
     try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
+        // Obtener el AudioContext singleton
+        const ctx = getAudioContext();
+        if (!ctx) return false;
+        
+        // Si está suspendido, intentar resume
+        if (ctx.state === 'suspended') {
+            try {
+                await ctx.resume();
+            } catch (e) {
+                // El navegador bloqueó el resume (sin gesto del usuario)
+                // Salir silenciosamente
+                return false;
+            }
+        }
+        
+        // Si aún está suspendido después de resume, no podemos reproducir
+        if (ctx.state !== 'running') {
+            return false;
+        }
+        
+        // Crear oscilador y gain node (se destruyen al terminar)
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
         
         oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
+        gainNode.connect(ctx.destination);
         
         oscillator.frequency.value = sound.freq;
         oscillator.type = 'sine';
-        gainNode.gain.value = 0.15;
         
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + sound.duration);
+        // Fade in/out para evitar clicks
+        const now = ctx.currentTime;
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(0.15, now + 0.01);
+        gainNode.gain.linearRampToValueAtTime(0, now + sound.duration);
+        
+        oscillator.start(now);
+        oscillator.stop(now + sound.duration + 0.01);
+        
+        // Limpiar después de terminar
+        oscillator.onended = () => {
+            try {
+                oscillator.disconnect();
+                gainNode.disconnect();
+            } catch (e) {}
+        };
+        
+        return true;
         
     } catch (e) {
-        console.debug('Sonido no disponible:', e);
+        // Silencioso: el navegador bloquea sin gesto
+        return false;
     }
 }
 
 /**
- * 🆕 Reproduce el sonido configurado para un tipo de notificación
+ * Reproduce el sonido configurado según el tipo de notificación.
  */
-function playNotificationSound(type) {
+async function playNotificationSound(type) {
     const config = getSoundConfig();
     if (!config.enabled) return;
     
@@ -180,26 +337,37 @@ function playNotificationSound(type) {
     };
     
     const soundToPlay = soundMap[type] || config.soundId;
-    playSoundById(soundToPlay);
+    await playSoundById(soundToPlay);
 }
 
 /**
- * 🆕 Probar todos los sonidos (para configuración)
+ * 🆕 FASE 1.4: Prueba todos los sonidos con delay.
+ * Ahora con promesas para secuenciar correctamente.
  */
-function testAllSounds() {
+async function testAllSounds() {
     const soundIds = Object.keys(SOUNDS).filter(id => id !== 'silent');
-    let i = 0;
     
-    const interval = setInterval(() => {
-        if (i >= soundIds.length) {
-            clearInterval(interval);
-            return;
-        }
-        playSoundById(soundIds[i]);
-        i++;
-    }, 500);
+    // Desbloquear el audio primero
+    await unlockAudio();
     
-    window.showToast('🔊 Probando los 5 sonidos...', 'info', 3000);
+    window.showToast('🔊 Probando los ' + soundIds.length + ' sonidos...', 'info', 6000);
+    
+    for (let i = 0; i < soundIds.length; i++) {
+        const soundId = soundIds[i];
+        const soundName = SOUNDS[soundId].name;
+        
+        console.log(`🔊 Probando ${i + 1}/${soundIds.length}: ${soundName}`);
+        window.showToast(`🔊 ${i + 1}/${soundIds.length}: ${soundName}`, 'info', 1400);
+        
+        await playSoundById(soundId);
+        await new Promise(r => setTimeout(r, 1500));
+    }
+    
+    // Restaurar el sonido configurado por el usuario
+    const config = getSoundConfig();
+    await playSoundById(config.soundId);
+    
+    window.showToast('✅ Sonidos probados. Vuelto a: ' + (SOUNDS[config.soundId]?.name || config.soundId), 'success', 3000);
 }
 
 // ============================================================
@@ -253,7 +421,7 @@ function updateBellBadge() {
 }
 
 // ============================================================
-// 🆕 MOSTRAR TOAST - CON AGRUPACIÓN Y SONIDO CONFIGURABLE
+// MOSTRAR TOAST - CON AGRUPACIÓN Y SONIDO CONFIGURABLE
 // ============================================================
 
 function showToast(message, type = 'info', duration = 8000) {
@@ -301,7 +469,7 @@ function showToast(message, type = 'info', duration = 8000) {
         [NOTIFICATION_TYPES.STOCK]: '🛒'
     };
     
-    // 🆕 CORRECCIÓN: Verificar si ya existe una notificación similar (agrupación)
+    // Verificar si ya existe una notificación similar (agrupación)
     const existingNotifications = container.querySelectorAll('.notification-item');
     let isDuplicate = false;
     existingNotifications.forEach(el => {
@@ -342,8 +510,8 @@ function showToast(message, type = 'info', duration = 8000) {
         position: relative;
     `;
     
-    // 🆕 Reproducir sonido configurado
-    playNotificationSound(type);
+    // Reproducir sonido configurado (async, no bloquea)
+    playNotificationSound(type).catch(() => {});
     
     notification.innerHTML = `
         <span style="font-size: 22px; flex-shrink: 0;">${icons[type] || 'ℹ️'}</span>
@@ -382,13 +550,12 @@ function addNotification(message, type = 'info', duration = 8000) {
         
         showToast(message, type, duration);
         
-        // 🆕 CORRECCIÓN: Verificar si ya existe una notificación idéntica
+        // Verificar si ya existe una notificación idéntica
         const existingIndex = notificationList.findIndex(n => 
             n.message === message && !n.resolved && !n.read
         );
         
         if (existingIndex !== -1) {
-            // Actualizar timestamp en vez de crear duplicado
             notificationList[existingIndex].timestamp = new Date().toISOString();
             console.log('🔔 Notificación duplicada detectada, actualizando timestamp');
             saveNotificationsToStorage();
@@ -406,8 +573,15 @@ function addNotification(message, type = 'info', duration = 8000) {
             resolved_at: null
         };
         
+        // 🆕 FASE 1.4: Enviar push si es importante (sin emoji duplicado)
         if (type === NOTIFICATION_TYPES.ERROR || type === NOTIFICATION_TYPES.WARNING) {
-            sendPushNotification('📢 ' + (message.split(' - ')[0] || 'Alerta'), message);
+            // Limpiar título: no añadir emoji extra si ya lo tiene
+            let pushTitle = message.split(' - ')[0] || 'Alerta';
+            // Si no empieza con emoji, añadir uno
+            if (!/^[\u{1F300}-\u{1F9FF}]/u.test(pushTitle)) {
+                pushTitle = '📢 ' + pushTitle;
+            }
+            sendPushNotification(pushTitle, message);
         }
         
         notificationList.unshift(notification);
@@ -428,13 +602,12 @@ function addNotification(message, type = 'info', duration = 8000) {
 }
 
 // ============================================================
-// 🆕 MOSTRAR MODAL DE NOTIFICACIONES - MARCA COMO VISTAS
+// MOSTRAR MODAL DE NOTIFICACIONES - MARCA COMO VISTAS
 // ============================================================
 
 function showNotificationsModal() {
     console.log('🔔 Abriendo modal de notificaciones');
     
-    // 🆕 CORRECCIÓN: Marcar todas como leídas Y vistas (con timestamp)
     const now = new Date().toISOString();
     notificationList.forEach(n => {
         if (!n.read) {
@@ -655,10 +828,10 @@ async function requestNotificationPermission() {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
             console.log('✅ Permiso de notificaciones concedido');
+            // 🆕 FASE 1.4: Sin emoji duplicado en el título
             sendPushNotification(
                 '🍞 Panario',
-                'Las notificaciones están activadas. Recibirás alertas de pedidos y deudas.',
-                '🍞'
+                'Las notificaciones están activadas. Recibirás alertas de pedidos y deudas.'
             );
             return true;
         } else {
@@ -673,6 +846,7 @@ async function requestNotificationPermission() {
 
 // ============================================================
 // ENVIAR NOTIFICACIÓN PUSH
+// 🆕 FASE 1.4: Sin emoji duplicado en el título
 // ============================================================
 
 function sendPushNotification(title, body, icon = '🍞', data = {}) {
@@ -681,7 +855,17 @@ function sendPushNotification(title, body, icon = '🍞', data = {}) {
     }
     
     try {
-        const notification = new Notification(title, {
+        // 🆕 FASE 1.4: Limpiar emoji duplicado en el título
+        // Si el título ya empieza con un emoji, no añadir otro
+        let cleanTitle = title.trim();
+        
+        // Si el título no empieza con emoji, añadir el icono
+        const startsWithEmoji = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}]/u.test(cleanTitle);
+        if (!startsWithEmoji && icon && icon !== '🍞') {
+            // El título ya viene con emoji desde addNotification, no añadir
+        }
+        
+        const notification = new Notification(cleanTitle, {
             body: body,
             icon: icon,
             vibrate: [200, 100, 200, 100, 200],
@@ -782,7 +966,7 @@ async function checkPendingOrders() {
         
         for (const order of todayOrders) {
             const msg = `🔔 Pedido #${order.id} - ${order.client_name} - ENTREGA HOY`;
-            const notificationId = addNotification(msg, NOTIFICATION_TYPES.ORDER, 10000);
+            addNotification(msg, NOTIFICATION_TYPES.ORDER, 10000);
             sendPushNotification(
                 '📦 Pedido para hoy',
                 `${order.client_name} - Pedido #${order.id}`,
@@ -871,17 +1055,19 @@ window.NotificationsModule = {
     startReminderSystem,
     initNotificationSystem,
     playNotificationSound,
-    // 🆕 Sonido configurable
     getSoundConfig,
     setSoundConfig,
     getAvailableSounds,
     playSoundById,
     testAllSounds,
-    SOUNDS
+    SOUNDS,
+    // 🆕 FASE 1.4
+    unlockAudio,
+    getAudioContext
 };
 
 window.showToast = function(message, type = 'info', duration = 8000) {
     window.NotificationsModule.addNotification(message, type, duration);
 };
 
-console.log('📦 Notifications Module cargado correctamente (con sonido configurable y marcador de estado)');
+console.log('📦 Notifications Module v2.0.7 (FASE 1.4: AudioContext singleton + unlock)');

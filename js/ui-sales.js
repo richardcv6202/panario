@@ -5,28 +5,134 @@
 // CORREGIDO FASE 2 (160926): Reporte de ventas con filtros ampliados
 // CORREGIDO FASE 4B (170926): 
 //   - registerSalePayment() ahora desactiva is_debt = 0 al cobrar
-//     (Problema #2)
 // AÑADIDO FASE A.4 (170926 v2):
 //   - renderAuditoriaHTML() helper compartido
 //   - viewSale() muestra sección de Auditoría
 //   - viewExpense() muestra sección de Auditoría
 // AÑADIDO (180926): 
 //   - Se muestra el #ID de cada venta en TODAS las vistas
-//     (normal, liberada, deuda, todo) para poder relacionarla
-//     con el módulo de "Eliminación por error"
+// CORREGIDO FASE 1.1 (190926):
+//   - loadSalesAndExpenses() ahora filtra por negocio_id (no user_id)
+//   - updateSummary() ahora filtra por negocio_id (no user_id)
+//   - Vista de deudas ahora filtra por negocio_id
+// CORREGIDO FASE 1.4 (190926 v2):
+//   - voidSale() AHORA FUNCIONA: espera a que el confirm-modal se elimine
+//     del DOM antes de abrir el prompt-modal. El bug era que el prompt
+//     se abría encima del confirm sin haber cerrado el anterior, y el
+//     _modalResolve se sobrescribía.
+//   - Añadido helper waitForCustomModalRemoval()
+//   - voidSale() muestra toast de éxito/error
+//   - unvoidSale() y voidExpense() con el mismo fix
+// CORREGIDO FASE 1.4 HOTFIX (190926 v3): 🔧 FIX DEFINITIVO #22
+//   - voidSale() ahora VERIFICA que cada modal se eliminó realmente
+//     antes de abrir el siguiente (doble verificación con polling)
+//   - Timeout de espera ampliado a 800ms (era 500ms)
+//   - Logs de diagnóstico detallados en cada paso
+//   - unvoidSale() y voidExpense() con el mismo refuerzo
+// 🆕 FIX 2 (190926 v4):
+//   - normalizarFechaVenta() helper para evitar fechas YYYY-MM-DD sin hora
+//   - submitSaleForm() usa normalizarFechaVenta() para sale_date
+//   - submitLiberatedSale() también usa normalizarFechaVenta()
+//   - Evita que ventas pasadas/futuras se guarden como día anterior
+//     por conversión UTC en zonas horarias negativas (Cuba UTC-4/5)
 // ============================================================
 
 // ============================================================
-// 🆕 FASE A.4: HELPER DE AUDITORÍA (COMPARTIDO)
+// 🆕 FIX 2: NORMALIZACIÓN DE FECHAS DE VENTA
+// ============================================================
+// 
+// PROBLEMA:
+//   new Date("2026-09-17") → 17 sept 00:00 UTC → 16 sept 20:00 local (UTC-4) ❌
+//   new Date("2026-09-17T00:00:00") → 17 sept 00:00 LOCAL ✅
+//   Pero si SQLite lo interpreta como UTC → 16 sept 20:00 local ❌
+//
+// SOLUCIÓN:
+//   - Si la fecha es HOY → usar hora actual (new Date().toISOString())
+//   - Si la fecha es otra → usar mediodía UTC (T12:00:00.000Z)
+//   
+//   Mediodía UTC siempre cae en el mismo día local en cualquier zona
+//   horaria razonable (UTC-12 a UTC+12).
+//
+// EJEMPLO:
+//   "2026-09-17" (pasado) → "2026-09-17T12:00:00.000Z"
+//     → 17 sept 08:00 local (UTC-4) ✅
+//     → 17 sept 13:00 local (UTC+1) ✅
+//   "2026-09-19" (hoy) → "2026-09-19T15:30:45.123Z" (hora actual)
+// ============================================================
+
+function normalizarFechaVenta(fechaInput) {
+    // Si no hay fecha, usar hora actual
+    if (!fechaInput) {
+        return new Date().toISOString();
+    }
+    
+    // Si ya viene con hora (ISO completo), respetarla
+    if (typeof fechaInput === 'string' && fechaInput.includes('T')) {
+        return fechaInput;
+    }
+    
+    // Si viene como YYYY-MM-DD (de <input type="date">)
+    const fechaStr = String(fechaInput).trim();
+    
+    // Validar formato YYYY-MM-DD
+    const match = fechaStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+        console.warn('⚠️ [normalizarFechaVenta] Formato no reconocido:', fechaInput);
+        return new Date().toISOString();
+    }
+    
+    // ¿Es hoy?
+    const hoyStr = new Date().toISOString().split('T')[0];
+    if (fechaStr === hoyStr) {
+        // Hoy → hora actual real (preserva la hora exacta de la venta)
+        return new Date().toISOString();
+    }
+    
+    // Otra fecha → mediodía UTC (garantiza el mismo día local)
+    return `${fechaStr}T12:00:00.000Z`;
+}
+
+// ============================================================
+// 🆕 FASE 1.4: HELPER PARA ESPERAR A QUE EL custom-modal SE CIERRE
 // ============================================================
 
 /**
- * Genera el HTML de la sección de auditoría para una entidad.
- * Solo se muestra si hay datos de auditoría disponibles.
+ * Espera a que el `custom-modal` (el de ModalModule) se elimine del DOM.
+ * Esto es necesario cuando se encadenan showConfirm() → showPrompt()
+ * porque el segundo showConfirm sobrescribe `window._modalResolve` 
+ * si el primero aún no terminó de cerrarse.
  * 
- * @param {object} entity - Registro con created_by, modified_by, created_at, updated_at
- * @returns {string} HTML de la sección o cadena vacía
+ * @param {number} timeoutMs - Timeout máximo de espera
+ * @returns {Promise<boolean>} - true si se cerró, false si timeout
  */
+function waitForCustomModalRemoval(timeoutMs = 800) {
+    return new Promise((resolve) => {
+        const start = Date.now();
+        const check = () => {
+            const modal = document.getElementById('custom-modal');
+            if (!modal || !modal.parentNode) {
+                resolve(true);
+                return;
+            }
+            if (Date.now() - start > timeoutMs) {
+                console.warn('⚠️ Timeout esperando cierre de custom-modal, forzando...');
+                // Forzar remoción
+                if (modal.parentNode) modal.remove();
+                window._modalResolve = null;
+                window._modalResolved = false;
+                resolve(false);
+                return;
+            }
+            setTimeout(check, 30);
+        };
+        check();
+    });
+}
+
+// ============================================================
+// FASE A.4: HELPER DE AUDITORÍA
+// ============================================================
+
 function renderAuditoriaHTML(entity) {
     if (!entity) return '';
     
@@ -35,13 +141,11 @@ function renderAuditoriaHTML(entity) {
     const createdAt = entity.created_at;
     const updatedAt = entity.updated_at;
     
-    // Si no hay created_by, no mostramos la sección
     if (!createdBy) return '';
     
     const nombreCreador = window.DBModule.getUsuarioNombre(createdBy) || 'Desconocido';
     const nombreModificador = modifiedBy ? (window.DBModule.getUsuarioNombre(modifiedBy) || 'Desconocido') : null;
     
-    // Formatear fechas
     const fechaCreacion = createdAt 
         ? new Date(createdAt).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
         : '—';
@@ -140,19 +244,19 @@ function renderSalesView() {
         
         <!-- Resumen rápido -->
         <div id="sales-summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px;">
-            <div class="card" style="padding: 12px; text-align: center;">
+            <div class="card" style="padding: 12px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;">
                 <div style="font-size: 12px; color: var(--text-light);">📈 Ventas hoy</div>
                 <div style="font-size: 20px; font-weight: 700; color: var(--primary);" id="sales-today">$0.00</div>
             </div>
-            <div class="card" style="padding: 12px; text-align: center;">
+            <div class="card" style="padding: 12px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;">
                 <div style="font-size: 12px; color: var(--text-light);">💰 Ingresos totales</div>
                 <div style="font-size: 20px; font-weight: 700; color: #10b981;" id="total-income">$0.00</div>
             </div>
-            <div class="card" style="padding: 12px; text-align: center;">
+            <div class="card" style="padding: 12px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;">
                 <div style="font-size: 12px; color: var(--text-light);">📤 Gastos totales</div>
                 <div style="font-size: 20px; font-weight: 700; color: #ef4444;" id="total-expenses">$0.00</div>
             </div>
-            <div class="card" style="padding: 12px; text-align: center;">
+            <div class="card" style="padding: 12px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;">
                 <div style="font-size: 12px; color: var(--text-light);">💳 Deudas</div>
                 <div style="font-size: 20px; font-weight: 700; color: #ef4444;" id="total-debts">$0.00</div>
             </div>
@@ -500,13 +604,29 @@ async function loadSalesAndExpenses() {
     const search = document.getElementById('filter-sales-search')?.value?.trim() || '';
     const filterType = window._currentFilterType || 'sales';
     
+    const negocioId = window.DBModule.getNegocioIdActual();
+    if (!negocioId) {
+        container.innerHTML = `<div class="card" style="text-align: center; padding: 40px; color: #ef4444;">
+            <span style="font-size: 32px;">❌</span>
+            <p>Error: No hay negocio activo</p>
+        </div>`;
+        return;
+    }
+    
     try {
         if (filterType === 'debts') {
-            const debtSales = await window.SalesModule.getSales({ 
-                is_debt: true, 
-                paid: false,
-                include_voided: true 
-            });
+            let debtQuery = `
+                SELECT * FROM sales 
+                WHERE negocio_id = ? 
+                AND is_debt = 1 
+                AND paid = 0 
+                AND deleted_at IS NULL 
+                AND voided = 0
+                ORDER BY sale_date ASC
+            `;
+            let debtParams = [negocioId];
+            
+            const debtSales = window.DBModule.query(debtQuery, debtParams);
             
             if (debtSales.length === 0) {
                 container.innerHTML = `
@@ -522,7 +642,7 @@ async function loadSalesAndExpenses() {
             
             let html = `
                 <div style="margin-bottom: 12px;">
-                    <h4 style="margin: 0 0 8px 0; color: #ef4444;">💰 Deudas de Ventas</h4>
+                    <h4 style="margin: 0 0 8px 0; color: #ef4444;">💰 Deudas de Ventas (${debtSales.length})</h4>
             `;
             html += debtSales.map(sale => {
                 const sesionBadge = sale.session ? getBadgeSesion(sale.session) : '';
@@ -564,12 +684,6 @@ async function loadSalesAndExpenses() {
             return;
         }
         
-        const user = window.AuthModule.getCurrentUser();
-        if (!user) {
-            container.innerHTML = `<div class="card"><p>Error: No hay usuario autenticado</p></div>`;
-            return;
-        }
-        
         let sales = [];
         let expenses = [];
         let allTransactions = [];
@@ -577,11 +691,11 @@ async function loadSalesAndExpenses() {
         if (filterType === 'sales' || filterType === 'all') {
             let query = `
                 SELECT * FROM sales 
-                WHERE user_id = ? 
+                WHERE negocio_id = ? 
                 AND deleted_at IS NULL 
                 AND voided = 0
             `;
-            let params = [user.id];
+            let params = [negocioId];
             
             if (fromDate) { query += ' AND DATE(sale_date, "localtime") >= DATE(?)'; params.push(fromDate); }
             if (toDate) { query += ' AND DATE(sale_date, "localtime") <= DATE(?)'; params.push(toDate); }
@@ -599,12 +713,12 @@ async function loadSalesAndExpenses() {
         if (filterType === 'expenses' || filterType === 'all') {
             let query = `
                 SELECT * FROM transactions 
-                WHERE user_id = ? 
+                WHERE negocio_id = ? 
                 AND type = "expense" 
                 AND deleted_at IS NULL 
                 AND voided = 0
             `;
-            let params = [user.id];
+            let params = [negocioId];
             
             if (fromDate) { query += ' AND DATE(transaction_date, "localtime") >= DATE(?)'; params.push(fromDate); }
             if (toDate) { query += ' AND DATE(transaction_date, "localtime") <= DATE(?)'; params.push(toDate); }
@@ -1003,34 +1117,42 @@ function toggleDaySales(dayId) {
 
 async function updateSummary() {
     try {
-        const user = window.AuthModule.getCurrentUser();
-        if (!user) return;
+        const negocioId = window.DBModule.getNegocioIdActual();
+        if (!negocioId) return;
         
         const today = new Date().toISOString().split('T')[0];
+        
         const todaySales = window.DBModule.query(
-            'SELECT SUM(total) as total FROM sales WHERE user_id = ? AND DATE(sale_date, "localtime") = DATE(?) AND deleted_at IS NULL AND voided = 0',
-            [user.id, today]
+            'SELECT SUM(total) as total FROM sales WHERE negocio_id = ? AND DATE(sale_date, "localtime") = DATE(?) AND deleted_at IS NULL AND voided = 0',
+            [negocioId, today]
         );
         const todayTotal = todaySales[0]?.total || 0;
-        document.getElementById('sales-today').textContent = '$' + todayTotal.toFixed(2);
+        const salesTodayEl = document.getElementById('sales-today');
+        if (salesTodayEl) salesTodayEl.textContent = '$' + todayTotal.toFixed(2);
         
         const incomeResult = window.DBModule.query(
-            'SELECT SUM(amount) as total FROM transactions WHERE user_id = ? AND type = "income" AND deleted_at IS NULL AND voided = 0',
-            [user.id]
+            'SELECT SUM(amount) as total FROM transactions WHERE negocio_id = ? AND type = "income" AND deleted_at IS NULL AND voided = 0',
+            [negocioId]
         );
         const totalIncome = incomeResult[0]?.total || 0;
-        document.getElementById('total-income').textContent = '$' + totalIncome.toFixed(2);
+        const totalIncomeEl = document.getElementById('total-income');
+        if (totalIncomeEl) totalIncomeEl.textContent = '$' + totalIncome.toFixed(2);
         
         const expenseResult = window.DBModule.query(
-            'SELECT SUM(amount) as total FROM transactions WHERE user_id = ? AND type = "expense" AND deleted_at IS NULL AND voided = 0',
-            [user.id]
+            'SELECT SUM(amount) as total FROM transactions WHERE negocio_id = ? AND type = "expense" AND deleted_at IS NULL AND voided = 0',
+            [negocioId]
         );
         const totalExpenses = expenseResult[0]?.total || 0;
-        document.getElementById('total-expenses').textContent = '$' + totalExpenses.toFixed(2);
+        const totalExpensesEl = document.getElementById('total-expenses');
+        if (totalExpensesEl) totalExpensesEl.textContent = '$' + totalExpenses.toFixed(2);
         
-        const debts = await window.OrdersModule?.getDebts() || [];
-        const totalDebts = debts.reduce((sum, d) => sum + (d.remaining || 0), 0);
-        document.getElementById('total-debts').textContent = '$' + totalDebts.toFixed(2);
+        const debtsResult = window.DBModule.query(
+            'SELECT SUM(total) as total FROM sales WHERE negocio_id = ? AND is_debt = 1 AND paid = 0 AND deleted_at IS NULL AND voided = 0',
+            [negocioId]
+        );
+        const totalDebts = debtsResult[0]?.total || 0;
+        const totalDebtsEl = document.getElementById('total-debts');
+        if (totalDebtsEl) totalDebtsEl.textContent = '$' + totalDebts.toFixed(2);
         
     } catch (error) {
         console.error('Error actualizando resumen:', error);
@@ -1039,6 +1161,7 @@ async function updateSummary() {
 
 // ============================================================
 // FORMULARIO: VENTA LIBERADA
+// 🆕 FIX 2: usa normalizarFechaVenta()
 // ============================================================
 
 async function showLiberatedSaleForm() {
@@ -1177,6 +1300,9 @@ async function submitLiberatedSale() {
         return;
     }
     
+    // 🆕 FIX 2: Usar normalizarFechaVenta() — venta liberada siempre es HOY
+    const saleDateNormalizada = normalizarFechaVenta(new Date().toISOString().split('T')[0]);
+    
     try {
         const result = await window.SalesModule.saveLiberatedSale({
             product_name: productName,
@@ -1185,7 +1311,7 @@ async function submitLiberatedSale() {
             quantity: quantity,
             unit_price: unitPrice,
             payment_method: paymentMethod,
-            sale_date: new Date().toISOString()
+            sale_date: saleDateNormalizada
         });
         
         if (result.success) {
@@ -1217,6 +1343,7 @@ function closeLiberatedSaleModal() {
 
 // ============================================================
 // FORMULARIO: NUEVA VENTA
+// 🆕 FIX 2: submitSaleForm() usa normalizarFechaVenta()
 // ============================================================
 
 async function showSaleForm(saleId = null) {
@@ -1485,6 +1612,7 @@ function onSaleDateChange() {
 
 // ============================================================
 // ENVIAR FORMULARIO DE VENTA
+// 🆕 FIX 2: usa normalizarFechaVenta() para sale_date
 // ============================================================
 
 async function submitSaleForm(isEdit, isDebtEdit = false) {
@@ -1523,6 +1651,19 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
     
     const total = quantity * unitPrice;
     
+    // 🆕 FIX 2: Normalizar la fecha para evitar desfase UTC
+    // 
+    // ANTES: sale_date = saleDate + 'T00:00:00' → "2026-09-17T00:00:00"
+    //   Si SQLite lo interpreta como UTC → 16 sept 20:00 local ❌
+    // 
+    // AHORA: normalizarFechaVenta() decide:
+    //   - Si es HOY → new Date().toISOString() (hora actual)
+    //   - Si es otra fecha → "YYYY-MM-DDT12:00:00.000Z" (mediodía UTC)
+    //     → siempre cae en el mismo día local ✅
+    const saleDateNormalizada = normalizarFechaVenta(saleDate);
+    
+    console.log('📅 [submitSaleForm] Fecha original:', saleDate, '→ normalizada:', saleDateNormalizada);
+    
     const saleData = {
         producto_id: productoId,
         product_name: productName,
@@ -1534,7 +1675,7 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
         buyer: buyer || null,
         is_debt: isDebt,
         paid: isDebt ? 0 : 1,
-        sale_date: saleDate + 'T00:00:00',
+        sale_date: saleDateNormalizada,
         session: session
     };
     
@@ -1562,7 +1703,6 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
 
 // ============================================================
 // VER VENTA
-// AÑADIDO FASE A.4: sección de Auditoría
 // ============================================================
 
 async function viewSale(id) {
@@ -1586,7 +1726,6 @@ async function viewSale(id) {
         const sesionBadge = sale.session ? getBadgeSesion(sale.session) : '';
         const corrienteSection = getSeccionCorrienteHTML(sale.sale_date.split('T')[0]);
         
-        // 🆕 FASE A.4: Sección de auditoría
         const auditoriaSection = renderAuditoriaHTML(sale);
         
         modal.innerHTML = `
@@ -1621,7 +1760,6 @@ async function viewSale(id) {
                 
                 ${corrienteSection}
                 
-                <!-- 🆕 FASE A.4: Sección de Auditoría -->
                 ${auditoriaSection}
                 
                 <hr>
@@ -1658,67 +1796,195 @@ async function viewSale(id) {
 }
 
 // ============================================================
-// ANULAR/RESTAURAR VENTA
+// 🆕 FASE 1.4 HOTFIX: ANULAR VENTA - FIX DEFINITIVO #22
 // ============================================================
 
 async function voidSale(id) {
-    const confirm = await window.ModalModule.showConfirm({
-        title: 'Anular venta',
-        message: '¿Seguro que quieres anular esta venta?\n\nEl stock se repondrá automáticamente.',
-        confirmText: 'Sí, anular',
-        cancelText: 'Cancelar',
-        icon: '🚫',
-        confirmColor: '#ef4444'
-    });
+    console.log('🚫 [voidSale] ========== INICIO ==========');
+    console.log('🚫 [voidSale] Anulando venta #' + id);
     
-    if (!confirm) return;
+    // ============================================================
+    // PASO 0: Verificar que no haya modales huérfanos
+    // ============================================================
+    const modalHuerfano = document.getElementById('custom-modal');
+    if (modalHuerfano) {
+        console.warn('🚫 [voidSale] Modal huérfano detectado, eliminando...');
+        modalHuerfano.remove();
+        window._modalResolve = null;
+        window._modalResolved = false;
+        await new Promise(r => setTimeout(r, 200));
+    }
     
-    const reason = await window.ModalModule.showPrompt({
-        title: 'Motivo de anulación',
-        message: 'Escribe el motivo (opcional):',
-        placeholder: 'Ej: Error en el registro',
-        icon: '📝'
-    });
+    // ============================================================
+    // PASO 1: Confirmación
+    // ============================================================
+    console.log('🚫 [voidSale] Paso 1: Mostrando confirmación...');
+    
+    let confirm = false;
+    try {
+        confirm = await window.ModalModule.showConfirm({
+            title: 'Anular venta',
+            message: '¿Seguro que quieres anular esta venta?\n\nEl stock se repondrá automáticamente.',
+            confirmText: 'Sí, anular',
+            cancelText: 'Cancelar',
+            icon: '🚫',
+            confirmColor: '#ef4444'
+        });
+    } catch (err) {
+        console.error('🚫 [voidSale] Error en showConfirm:', err);
+        window.showToast('❌ Error al mostrar confirmación', 'error', 5000);
+        return;
+    }
+    
+    console.log('🚫 [voidSale] Confirmación recibida:', confirm);
+    
+    if (!confirm) {
+        console.log('🚫 [voidSale] Usuario canceló en el paso 1');
+        window.showToast('❌ Anulación cancelada', 'info', 2000);
+        return;
+    }
+    
+    // ============================================================
+    // PASO 2: Esperar a que el confirm-modal se elimine del DOM
+    // ============================================================
+    console.log('🚫 [voidSale] Paso 2: Esperando a que el confirm-modal se cierre...');
+    
+    await waitForCustomModalRemoval(800);
+    
+    // Verificación adicional: poll hasta 3 veces
+    for (let i = 0; i < 3; i++) {
+        const stillThere = document.getElementById('custom-modal');
+        if (!stillThere) {
+            console.log(`🚫 [voidSale] Confirm-modal cerrado (verificación ${i + 1}/3)`);
+            break;
+        }
+        console.warn(`🚫 [voidSale] Confirm-modal aún presente (verificación ${i + 1}/3), esperando 200ms más...`);
+        await new Promise(r => setTimeout(r, 200));
+        if (i === 2 && stillThere) {
+            console.warn('🚫 [voidSale] Forzando eliminación del confirm-modal');
+            stillThere.remove();
+            window._modalResolve = null;
+            window._modalResolved = false;
+        }
+    }
+    
+    await new Promise(r => setTimeout(r, 150)); // Pequeño delay extra de seguridad
+    
+    // ============================================================
+    // PASO 3: Prompt de motivo
+    // ============================================================
+    console.log('🚫 [voidSale] Paso 3: Mostrando prompt de motivo...');
+    
+    let reason = null;
+    try {
+        reason = await window.ModalModule.showPrompt({
+            title: 'Motivo de anulación',
+            message: 'Escribe el motivo (opcional):',
+            placeholder: 'Ej: Error en el registro',
+            icon: '📝'
+        });
+    } catch (err) {
+        console.error('🚫 [voidSale] Error en showPrompt:', err);
+        // No bloqueamos: usamos motivo por defecto
+        reason = null;
+    }
+    
+    console.log('🚫 [voidSale] Motivo recibido:', reason);
+    
+    // Si el usuario canceló el prompt (reason === null), usar un motivo por defecto
+    const motivoFinal = (reason && String(reason).trim()) ? String(reason).trim() : 'Anulación manual';
+    
+    // ============================================================
+    // PASO 4: Ejecutar la anulación
+    // ============================================================
+    console.log('🚫 [voidSale] Paso 4: Ejecutando anulación con motivo:', motivoFinal);
     
     try {
-        const result = await window.SalesModule.voidSale(id, reason || 'Anulación manual');
-        if (result.success) {
-            window.showToast('✅ Venta anulada', 'success');
-            loadSalesAndExpenses();
-            updateSummary();
-            if (typeof window.loadDashboardData === 'function') setTimeout(window.loadDashboardData, 500);
+        const result = await window.SalesModule.voidSale(id, motivoFinal);
+        
+        console.log('🚫 [voidSale] Resultado:', result);
+        
+        if (result && result.success) {
+            window.showToast('✅ Venta anulada correctamente', 'success', 3000);
+            console.log('✅ [voidSale] Venta anulada correctamente');
+            
+            // Refrescar vistas
+            try {
+                loadSalesAndExpenses();
+                updateSummary();
+                if (typeof window.loadDashboardData === 'function') {
+                    setTimeout(window.loadDashboardData, 500);
+                }
+            } catch (e) {
+                console.warn('🚫 [voidSale] Error refrescando vistas:', e);
+            }
         } else {
-            window.showToast('❌ Error: ' + result.error, 'error');
+            const errorMsg = (result && result.error) ? result.error : 'Desconocido';
+            window.showToast('❌ Error: ' + errorMsg, 'error', 6000);
+            console.error('❌ [voidSale] Error:', errorMsg);
         }
     } catch (error) {
-        window.showToast('❌ Error: ' + error.message, 'error');
+        console.error('❌ [voidSale] Excepción:', error);
+        window.showToast('❌ Error: ' + error.message, 'error', 6000);
     }
+    
+    console.log('🚫 [voidSale] ========== FIN ==========');
 }
 
+// ============================================================
+// RESTAURAR VENTA
+// ============================================================
+
 async function unvoidSale(id) {
-    const confirm = await window.ModalModule.showConfirm({
-        title: 'Restaurar venta',
-        message: '¿Seguro que quieres restaurar esta venta anulada?',
-        confirmText: 'Sí, restaurar',
-        cancelText: 'Cancelar',
-        icon: '🔄',
-        confirmColor: '#10b981'
-    });
+    console.log('🔄 [unvoidSale] Iniciando restauración de venta #' + id);
     
-    if (!confirm) return;
+    // Verificar modales huérfanos
+    const modalHuerfano = document.getElementById('custom-modal');
+    if (modalHuerfano) {
+        modalHuerfano.remove();
+        window._modalResolve = null;
+        window._modalResolved = false;
+        await new Promise(r => setTimeout(r, 200));
+    }
+    
+    let confirm = false;
+    try {
+        confirm = await window.ModalModule.showConfirm({
+            title: 'Restaurar venta',
+            message: '¿Seguro que quieres restaurar esta venta anulada?',
+            confirmText: 'Sí, restaurar',
+            cancelText: 'Cancelar',
+            icon: '🔄',
+            confirmColor: '#10b981'
+        });
+    } catch (err) {
+        console.error('🔄 [unvoidSale] Error en showConfirm:', err);
+        return;
+    }
+    
+    if (!confirm) {
+        window.showToast('❌ Restauración cancelada', 'info', 2000);
+        return;
+    }
+    
+    // Esperar a que el confirm se cierre
+    await waitForCustomModalRemoval(800);
+    await new Promise(r => setTimeout(r, 150));
     
     try {
         const result = await window.SalesModule.unvoidSale(id);
-        if (result.success) {
-            window.showToast('✅ Venta restaurada', 'success');
+        if (result && result.success) {
+            window.showToast('✅ Venta restaurada correctamente', 'success', 3000);
             loadSalesAndExpenses();
             updateSummary();
             if (typeof window.loadDashboardData === 'function') setTimeout(window.loadDashboardData, 500);
         } else {
-            window.showToast('❌ Error: ' + result.error, 'error');
+            const errorMsg = (result && result.error) ? result.error : 'Desconocido';
+            window.showToast('❌ Error: ' + errorMsg, 'error', 6000);
         }
     } catch (error) {
-        window.showToast('❌ Error: ' + error.message, 'error');
+        console.error('❌ [unvoidSale] Excepción:', error);
+        window.showToast('❌ Error: ' + error.message, 'error', 6000);
     }
 }
 
@@ -1732,6 +1998,15 @@ async function registerSalePayment(saleId) {
         if (!sale) { window.showToast('❌ Venta no encontrada', 'error'); return; }
         if (sale.paid === 1) { window.showToast('✅ Ya está pagada', 'info'); return; }
         
+        // Verificar modales huérfanos
+        const modalHuerfano = document.getElementById('custom-modal');
+        if (modalHuerfano) {
+            modalHuerfano.remove();
+            window._modalResolve = null;
+            window._modalResolved = false;
+            await new Promise(r => setTimeout(r, 200));
+        }
+        
         const confirm = await window.ModalModule.showConfirm({
             title: '💰 Cobrar deuda',
             message: `¿Confirmas el cobro de $${sale.total.toFixed(2)} por "${sale.product_name}"?\n\n👤 Cliente: ${sale.buyer || 'Cliente sin nombre'}\n🆔 Venta: #${sale.id}`,
@@ -1742,6 +2017,9 @@ async function registerSalePayment(saleId) {
         });
         
         if (!confirm) return;
+        
+        // 🆕 FASE 1.4: Esperar a que se cierre el confirm
+        await waitForCustomModalRemoval(500);
         
         window.DBModule.execute(`
             UPDATE sales 
@@ -1766,22 +2044,6 @@ async function registerSalePayment(saleId) {
         }
         
         window.DBModule.saveAndNotify();
-        
-        const verificacion = window.DBModule.query(
-            'SELECT id, paid, is_debt FROM sales WHERE id = ?',
-            [saleId]
-        );
-        
-        if (verificacion.length > 0) {
-            const v = verificacion[0];
-            console.log(`🔍 [FASE 4B] Venta #${saleId} después de cobrar: paid=${v.paid}, is_debt=${v.is_debt}`);
-            
-            if (v.paid === 1 && v.is_debt === 0) {
-                console.log('✅ [FASE 4B] Deuda cobrada correctamente y is_debt desactivado');
-            } else {
-                console.warn('⚠️ [FASE 4B] Estado inesperado después de cobrar:', v);
-            }
-        }
         
         window.showToast(`✅ Deuda de $${sale.total.toFixed(2)} cobrada`, 'success');
         
@@ -1899,9 +2161,12 @@ async function submitExpenseForm(isEdit) {
     if (amount <= 0) { window.showToast('⚠️ El monto debe ser > 0', 'error'); return; }
     if (!expenseDate) { window.showToast('⚠️ La fecha es obligatoria', 'error'); return; }
     
+    // 🆕 FIX 2: Normalizar fecha de gasto también
+    const expenseDateNormalizada = normalizarFechaVenta(expenseDate);
+    
     const expenseData = {
         concept, amount, category, payment_method: paymentMethod,
-        transaction_date: expenseDate + 'T00:00:00'
+        transaction_date: expenseDateNormalizada
     };
     
     const idInput = document.getElementById('expense-id');
@@ -1930,7 +2195,6 @@ async function submitExpenseForm(isEdit) {
 
 // ============================================================
 // VER GASTO
-// AÑADIDO FASE A.4: sección de Auditoría
 // ============================================================
 
 async function viewExpense(id) {
@@ -1943,7 +2207,6 @@ async function viewExpense(id) {
         
         const paymentIcons = { 'cash': '💵 Efectivo', 'transfer': '🏦 Transferencia', 'other': '🔄 Otra' };
         
-        // 🆕 FASE A.4: Sección de auditoría
         const auditoriaSection = renderAuditoriaHTML(expense);
         
         const modal = document.createElement('div');
@@ -1978,7 +2241,6 @@ async function viewExpense(id) {
                     ${isVoid && expense.void_reason ? `<div><strong>📝 Motivo:</strong></div><div>${expense.void_reason}</div>` : ''}
                 </div>
                 
-                <!-- 🆕 FASE A.4: Sección de Auditoría -->
                 ${auditoriaSection}
                 
                 <hr>
@@ -2002,44 +2264,104 @@ async function viewExpense(id) {
     }
 }
 
+// ============================================================
+// 🆕 FASE 1.4: ANULAR GASTO - CON FIX DEL MODAL
+// ============================================================
+
 async function voidExpense(id) {
-    const confirm = await window.ModalModule.showConfirm({
-        title: 'Anular gasto',
-        message: '¿Seguro que quieres anular este gasto?',
-        confirmText: 'Sí, anular', cancelText: 'Cancelar',
-        icon: '🚫', confirmColor: '#ef4444'
-    });
-    if (!confirm) return;
+    console.log('🚫 [voidExpense] Iniciando anulación de gasto #' + id);
     
-    const reason = await window.ModalModule.showPrompt({
-        title: 'Motivo', message: 'Motivo (opcional):', icon: '📝'
-    });
+    // Verificar modales huérfanos
+    const modalHuerfano = document.getElementById('custom-modal');
+    if (modalHuerfano) {
+        modalHuerfano.remove();
+        window._modalResolve = null;
+        window._modalResolved = false;
+        await new Promise(r => setTimeout(r, 200));
+    }
+    
+    let confirm = false;
+    try {
+        confirm = await window.ModalModule.showConfirm({
+            title: 'Anular gasto',
+            message: '¿Seguro que quieres anular este gasto?',
+            confirmText: 'Sí, anular', cancelText: 'Cancelar',
+            icon: '🚫', confirmColor: '#ef4444'
+        });
+    } catch (err) {
+        console.error('🚫 [voidExpense] Error en showConfirm:', err);
+        return;
+    }
+    
+    if (!confirm) {
+        window.showToast('❌ Anulación cancelada', 'info', 2000);
+        return;
+    }
+    
+    // Esperar a que el confirm se cierre
+    await waitForCustomModalRemoval(800);
+    await new Promise(r => setTimeout(r, 150));
+    
+    let reason = null;
+    try {
+        reason = await window.ModalModule.showPrompt({
+            title: 'Motivo', message: 'Motivo (opcional):', icon: '📝'
+        });
+    } catch (err) {
+        reason = null;
+    }
+    
+    const motivoFinal = (reason && String(reason).trim()) ? String(reason).trim() : 'Anulación manual';
     
     try {
-        const result = await window.SalesModule.voidExpense(id, reason || 'Anulación manual');
-        if (result.success) {
-            window.showToast('✅ Gasto anulado', 'success');
+        const result = await window.SalesModule.voidExpense(id, motivoFinal);
+        if (result && result.success) {
+            window.showToast('✅ Gasto anulado', 'success', 3000);
             loadSalesAndExpenses(); updateSummary();
             if (typeof window.loadDashboardData === 'function') setTimeout(window.loadDashboardData, 500);
+        } else {
+            const errorMsg = (result && result.error) ? result.error : 'Desconocido';
+            window.showToast('❌ Error: ' + errorMsg, 'error', 6000);
         }
     } catch (error) {
-        window.showToast('❌ Error: ' + error.message, 'error');
+        console.error('❌ [voidExpense] Excepción:', error);
+        window.showToast('❌ Error: ' + error.message, 'error', 6000);
     }
 }
 
 async function unvoidExpense(id) {
-    const confirm = await window.ModalModule.showConfirm({
-        title: 'Restaurar gasto', message: '¿Restaurar este gasto?',
-        confirmText: 'Sí', cancelText: 'No', icon: '🔄', confirmColor: '#10b981'
-    });
+    // Verificar modales huérfanos
+    const modalHuerfano = document.getElementById('custom-modal');
+    if (modalHuerfano) {
+        modalHuerfano.remove();
+        window._modalResolve = null;
+        window._modalResolved = false;
+        await new Promise(r => setTimeout(r, 200));
+    }
+    
+    let confirm = false;
+    try {
+        confirm = await window.ModalModule.showConfirm({
+            title: 'Restaurar gasto', message: '¿Restaurar este gasto?',
+            confirmText: 'Sí', cancelText: 'No', icon: '🔄', confirmColor: '#10b981'
+        });
+    } catch (err) {
+        return;
+    }
+    
     if (!confirm) return;
+    
+    await waitForCustomModalRemoval(500);
     
     try {
         const result = await window.SalesModule.unvoidExpense(id);
-        if (result.success) {
+        if (result && result.success) {
             window.showToast('✅ Gasto restaurado', 'success');
             loadSalesAndExpenses(); updateSummary();
             if (typeof window.loadDashboardData === 'function') setTimeout(window.loadDashboardData, 500);
+        } else {
+            const errorMsg = (result && result.error) ? result.error : 'Desconocido';
+            window.showToast('❌ Error: ' + errorMsg, 'error', 6000);
         }
     } catch (error) {
         window.showToast('❌ Error: ' + error.message, 'error');
@@ -2355,5 +2677,9 @@ window.onCurrentMonthChangeSales = onCurrentMonthChangeSales;
 window.updateMesToggleVisualSales = updateMesToggleVisualSales;
 window.onSalesDateChange = onSalesDateChange;
 window.renderAuditoriaHTML = renderAuditoriaHTML;
+// 🆕 FASE 1.4
+window.waitForCustomModalRemoval = waitForCustomModalRemoval;
+// 🆕 FIX 2
+window.normalizarFechaVenta = normalizarFechaVenta;
 
-console.log('📦 UI Sales Module cargado correctamente v2.0.4 (Muestra #ID de venta en TODAS las vistas)');
+console.log('📦 UI Sales Module v2.0.9 (FASE 1.4 HOTFIX + FIX 2: normalización de fechas)');

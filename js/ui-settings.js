@@ -30,7 +30,6 @@
 //   - Botones nuevos en showUsersModal() para todas las acciones
 // AÑADIDO FASE E (180926):
 //   - showHorarioDetalle() muestra el día de la semana completo
-//     Ej: "martes, 15 de septiembre de 2026" en lugar de "15 de septiembre de 2026"
 // AÑADIDO (180926 v2):
 //   - showDeleteSelectorModal() ahora muestra en las ventas:
 //     - #ID, nombre del producto, total, método de pago
@@ -38,6 +37,13 @@
 //     - 📅 Fecha
 //     - Estado: 💳 Deuda / 🚀 Liberada / ✅ Pagada
 //   - Colores de borde según estado de la venta
+// AÑADIDO FASE 1.3.4 (190926):
+//   - Bloque "Importar copia de seguridad" ahora tiene 3 botones:
+//     * Importar copia (reemplaza todo)
+//     * Importar solo datos (reemplaza datos)
+//     * Fusionar bases de datos (NUEVO - merge por uuid)
+//   - importDatabaseFusionAction(): wrapper para la fusión
+//   - Modal de resultado con resumen detallado por tabla
 // ============================================================
 
 // ============================================================
@@ -86,7 +92,6 @@ function saveCorrientePattern() {
     
     if (result) {
         window.showToast(`✅ Patrón guardado: ${horasCorriente}h corriente / ${horasApagon}h apagón`, 'success');
-        
         const calendarioContent = document.getElementById('corriente-calendario-content');
         if (calendarioContent && calendarioContent.style.display !== 'none') {
             renderCorrienteCalendario();
@@ -191,7 +196,6 @@ function showCorrienteModal() {
                 </button>
             </div>
 
-            <!-- CONTENIDO: Configuración -->
             <div id="corriente-config-content" style="flex: 1; overflow-y: auto;">
                 <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 10px;">
                     <h4 style="margin: 0 0 6px 0; font-size: 14px;">⚙️ Patrón</h4>
@@ -241,7 +245,6 @@ function showCorrienteModal() {
                 </div>
             </div>
 
-            <!-- CONTENIDO: Calendario -->
             <div id="corriente-calendario-content" style="flex: 1; overflow-y: auto; display: none;">
                 <div style="display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; align-items: center;">
                     <button onclick="changeCorrienteMonth(-1)" class="btn secondary" style="padding: 2px 10px; font-size: 12px; width: auto;">◀</button>
@@ -257,7 +260,6 @@ function showCorrienteModal() {
                 </div>
             </div>
 
-            <!-- CONTENIDO: Reporte PDF -->
             <div id="corriente-reporte-content" style="flex: 1; overflow-y: auto; display: none;">
                 <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
                     <h4 style="margin: 0 0 6px 0; font-size: 14px;">📊 Generar Reporte</h4>
@@ -286,7 +288,6 @@ function showCorrienteModal() {
                 </div>
             </div>
 
-            <!-- CONTENIDO: Consultar fecha -->
             <div id="corriente-consultar-content" style="flex: 1; overflow-y: auto; display: none;">
                 <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
                     <h4 style="margin: 0 0 6px 0; font-size: 14px;">🔍 Consultar fecha</h4>
@@ -370,7 +371,7 @@ function showCorrienteModal() {
 }
 
 // ============================================================
-// IR A HOY (BOTÓN DEL CALENDARIO)
+// IR A HOY
 // ============================================================
 
 function irAHoyCorriente() {
@@ -383,7 +384,7 @@ function irAHoyCorriente() {
 }
 
 // ============================================================
-// RENDER CALENDARIO DE CORRIENTE
+// RENDER CALENDARIO
 // ============================================================
 
 function renderCorrienteCalendario() {
@@ -435,9 +436,7 @@ function renderCorrienteCalendario() {
         let bloques = [];
         try {
             bloques = window.CorrienteUtils.getBloques(dateStr);
-        } catch (e) {
-            console.warn('Error obteniendo bloques para', dateStr, e);
-        }
+        } catch (e) {}
         
         const tieneCorriente = bloques && bloques.length > 0;
         const numBloques = tieneCorriente ? bloques.length : 0;
@@ -475,8 +474,6 @@ function changeCorrienteMonth(delta) {
 
 // ============================================================
 // SHOW HORARIO DETALLE
-// FASE E: Ahora muestra el día de la semana completo
-// Ej: "martes, 15 de septiembre de 2026"
 // ============================================================
 
 function showHorarioDetalle(dateStr) {
@@ -485,7 +482,6 @@ function showHorarioDetalle(dateStr) {
 
     const bloques = window.CorrienteUtils.getBloques(dateStr);
     
-    // 🆕 FASE E: Formatear con día de la semana completo
     const dateObj = new Date(dateStr + 'T00:00:00');
     const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -597,7 +593,7 @@ function showHorarioDetalle(dateStr) {
 }
 
 // ============================================================
-// CONSULTAR HORARIOS PARA UNA FECHA
+// CONSULTAR HORARIOS
 // ============================================================
 
 function consultarHorariosFecha() {
@@ -611,7 +607,6 @@ function consultarHorariosFecha() {
 
     const bloques = window.CorrienteUtils.getBloques(fecha);
     
-    // 🆕 FASE E: Formatear con día de la semana completo
     const dateObj = new Date(fecha + 'T00:00:00');
     const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
     const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -708,10 +703,10 @@ function generarReportePDF(tipo) {
         <html>
         <head>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Reporte de Corriente - Panario</title>
             <style>
-                * { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
+                * { font-family: system-ui, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
                 body { padding: 16px; background: #fff; font-size: 14px; }
                 .header { text-align: center; margin-bottom: 20px; border-bottom: 3px solid #f59e0b; padding-bottom: 12px; }
                 .header h1 { color: #f59e0b; font-size: 22px; }
@@ -729,12 +724,6 @@ function generarReportePDF(tipo) {
                 .bloques-badge { display: inline-block; background: #f59e0b20; padding: 1px 6px; border-radius: 8px; font-size: 10px; color: #f59e0b; }
                 .footer { margin-top: 20px; text-align: center; color: #94a3b8; font-size: 10px; border-top: 1px solid #eee; padding-top: 12px; }
                 .nota { margin-top: 12px; padding: 10px; background: #fef9e7; border-radius: 6px; border-left: 3px solid #f59e0b; font-size: 11px; color: #666; }
-                @media print {
-                    body { padding: 10px; }
-                    .summary-card { padding: 6px 10px; }
-                    .summary-card .number { font-size: 16px; }
-                    th, td { font-size: 10px; padding: 4px 6px; }
-                }
             </style>
         </head>
         <body>
@@ -928,36 +917,15 @@ function generateExpensesReportFromForm() {
         return;
     }
 
-    let sql = `
-        SELECT * FROM transactions 
-        WHERE negocio_id = ? 
-          AND type = 'expense' 
-          AND deleted_at IS NULL 
-          AND voided = 0
-    `;
+    let sql = `SELECT * FROM transactions WHERE negocio_id = ? AND type = 'expense' 
+        AND deleted_at IS NULL AND voided = 0`;
     let params = [negocioId];
 
-    if (filters.from_date) {
-        sql += ' AND DATE(transaction_date, "localtime") >= DATE(?)';
-        params.push(filters.from_date);
-    }
-    if (filters.to_date) {
-        sql += ' AND DATE(transaction_date, "localtime") <= DATE(?)';
-        params.push(filters.to_date);
-    }
-    if (filters.category) {
-        sql += ' AND category = ?';
-        params.push(filters.category);
-    }
-    if (filters.payment_method) {
-        sql += ' AND payment_method = ?';
-        params.push(filters.payment_method);
-    }
-    if (filters.search) {
-        sql += ' AND concept LIKE ?';
-        params.push('%' + filters.search + '%');
-    }
-
+    if (filters.from_date) { sql += ' AND DATE(transaction_date, "localtime") >= DATE(?)'; params.push(filters.from_date); }
+    if (filters.to_date) { sql += ' AND DATE(transaction_date, "localtime") <= DATE(?)'; params.push(filters.to_date); }
+    if (filters.category) { sql += ' AND category = ?'; params.push(filters.category); }
+    if (filters.payment_method) { sql += ' AND payment_method = ?'; params.push(filters.payment_method); }
+    if (filters.search) { sql += ' AND concept LIKE ?'; params.push('%' + filters.search + '%'); }
     sql += ' ORDER BY transaction_date DESC';
 
     const expenses = window.DBModule.query(sql, params);
@@ -984,19 +952,10 @@ function generateExpensesReportFromForm() {
     });
 
     const categoriaLabels = {
-        'insumos': '🛒 Insumos',
-        'materiales': '📦 Materiales',
-        'transporte': '🚗 Transporte',
-        'inversion': '💼 Inversión',
-        'otros': '🔄 Otros',
-        'gasto': '📤 General'
+        'insumos': '🛒 Insumos', 'materiales': '📦 Materiales', 'transporte': '🚗 Transporte',
+        'inversion': '💼 Inversión', 'otros': '🔄 Otros', 'gasto': '📤 General'
     };
-
-    const origenLabels = {
-        'cash': '💵 Efectivo',
-        'transfer': '🏦 Transferencia',
-        'other': '🔄 Otra'
-    };
+    const origenLabels = { 'cash': '💵 Efectivo', 'transfer': '🏦 Transferencia', 'other': '🔄 Otra' };
 
     const periodo = filters.from_date && filters.to_date 
         ? `${new Date(filters.from_date).toLocaleDateString('es-ES')} al ${new Date(filters.to_date).toLocaleDateString('es-ES')}`
@@ -1012,7 +971,6 @@ function generateExpensesReportFromForm() {
         <html>
         <head>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Reporte de Gastos - Panario</title>
             <style>
                 * { font-family: system-ui, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
@@ -1033,10 +991,6 @@ function generateExpensesReportFromForm() {
                 tr:nth-child(even) { background: #fafafa; }
                 .total-row { font-weight: 700; background: #fef2f2; }
                 .footer { margin-top: 25px; text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #eee; padding-top: 15px; }
-                @media print {
-                    body { padding: 10px; }
-                    th, td { font-size: 11px; padding: 4px 6px; }
-                }
             </style>
         </head>
         <body>
@@ -1046,7 +1000,7 @@ function generateExpensesReportFromForm() {
                 <p style="font-size: 12px; color: #94a3b8;">Generado: ${new Date().toLocaleString('es-ES')}</p>
             </div>
 
-            ${filterDesc.length > 0 ? `<div class="filters-info">🔍 <strong>Filtros aplicados:</strong> ${filterDesc.join(' · ')}</div>` : ''}
+            ${filterDesc.length > 0 ? `<div class="filters-info">🔍 <strong>Filtros:</strong> ${filterDesc.join(' · ')}</div>` : ''}
 
             <div class="summary">
                 <div class="summary-card">
@@ -1067,12 +1021,7 @@ function generateExpensesReportFromForm() {
                 <h3>📂 Desglose por Categoría</h3>
                 <table>
                     <thead>
-                        <tr>
-                            <th>Categoría</th>
-                            <th style="text-align: center;">Cantidad</th>
-                            <th style="text-align: right;">Total</th>
-                            <th style="text-align: right;">%</th>
-                        </tr>
+                        <tr><th>Categoría</th><th style="text-align: center;">Cantidad</th><th style="text-align: right;">Total</th><th style="text-align: right;">%</th></tr>
                     </thead>
                     <tbody>
                         ${Object.entries(porCategoria).sort((a, b) => b[1].total - a[1].total).map(([cat, data]) => `
@@ -1096,12 +1045,7 @@ function generateExpensesReportFromForm() {
                 <h3>💳 Desglose por Origen del Pago</h3>
                 <table>
                     <thead>
-                        <tr>
-                            <th>Origen</th>
-                            <th style="text-align: center;">Cantidad</th>
-                            <th style="text-align: right;">Total</th>
-                            <th style="text-align: right;">%</th>
-                        </tr>
+                        <tr><th>Origen</th><th style="text-align: center;">Cantidad</th><th style="text-align: right;">Total</th><th style="text-align: right;">%</th></tr>
                     </thead>
                     <tbody>
                         ${Object.entries(porOrigen).sort((a, b) => b[1].total - a[1].total).map(([origen, data]) => `
@@ -1120,13 +1064,7 @@ function generateExpensesReportFromForm() {
                 <h3>📋 Detalle de Gastos</h3>
                 <table>
                     <thead>
-                        <tr>
-                            <th>Fecha</th>
-                            <th>Concepto</th>
-                            <th>Categoría</th>
-                            <th>Origen</th>
-                            <th style="text-align: right;">Monto</th>
-                        </tr>
+                        <tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Origen</th><th style="text-align: right;">Monto</th></tr>
                     </thead>
                     <tbody>
                         ${expenses.slice(0, 100).map(e => `
@@ -1199,7 +1137,6 @@ function renderSettingsView() {
             </button>
         </div>
         
-        <!-- 👑 INDICADOR DE ROL -->
         <div class="card" style="border-left: 4px solid ${isAdmin ? '#f59e0b' : '#3b82f6'}; background: ${isAdmin ? '#f59e0b10' : '#3b82f610'}; margin-bottom: 16px;">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <span style="font-size: 32px;">${isAdmin ? '👑' : '👤'}</span>
@@ -1217,7 +1154,6 @@ function renderSettingsView() {
             </div>
         </div>
         
-        <!-- 👥 GESTIÓN DE USUARIOS (SOLO ADMIN) -->
         ${isAdmin ? `
         <div class="card" style="border-left: 4px solid #f59e0b; border: 2px solid #f59e0b; background: linear-gradient(135deg, #f59e0b10 0%, #f59e0b05 100%);">
             <h3 style="margin: 0 0 8px 0; color: #f59e0b;">👥 Gestión de Usuarios</h3>
@@ -1230,7 +1166,6 @@ function renderSettingsView() {
         </div>
         ` : ''}
         
-        <!-- ⚡ HORARIOS DE CORRIENTE -->
         <div class="card" style="border-left: 4px solid #f59e0b; border: 2px solid #f59e0b;">
             <h3 style="margin: 0 0 8px 0; color: #f59e0b;">⚡ Horarios de Producción (Corriente)</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
@@ -1241,7 +1176,6 @@ function renderSettingsView() {
             </button>
         </div>
         
-        <!-- 📊 REPORTE DE GASTOS -->
         <div class="card" style="border-left: 4px solid #ef4444; border: 2px solid #ef4444;">
             <h3 style="margin: 0 0 8px 0; color: #ef4444;">📊 Reporte de Gastos</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
@@ -1252,7 +1186,6 @@ function renderSettingsView() {
             </button>
         </div>
         
-        <!-- 📤 EXPORTAR COPIA DE SEGURIDAD -->
         <div class="card" style="border-left: 4px solid #10b981; border: 2px solid #10b981;">
             <h3 style="margin: 0 0 8px 0; color: #10b981;">📤 Exportar copia de seguridad</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
@@ -1273,26 +1206,31 @@ function renderSettingsView() {
             </div>
         </div>
         
-        <!-- 📥 IMPORTAR COPIA DE SEGURIDAD -->
+        <!-- 🆕 FASE 1.3.4: Bloque de importar con 3 modos -->
         <div class="card" style="border-left: 4px solid #f59e0b; border: 2px solid #f59e0b;">
             <h3 style="margin: 0 0 8px 0; color: #f59e0b;">📥 Importar copia de seguridad</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
-                ${isAdmin 
-                    ? 'Como administrador, puedes importar copias <strong>completas</strong> (reemplazan todo) o copias de <strong>solo datos</strong> (conservan usuarios).'
-                    : 'Puedes importar copias de <strong>solo datos</strong>. Se restaurarán los datos operativos pero se conservarán tus usuarios y el código de invitación.'
-                }
+                Elige cómo quieres importar el archivo <code>.db</code> de otro dispositivo:
+                <br>• <strong>Importar copia:</strong> reemplaza TODOS los datos (incluye usuarios si eres admin).
+                <br>• <strong>Importar solo datos:</strong> reemplaza los datos operativos, conserva usuarios.
+                <br>• <strong>🔀 Fusionar:</strong> <span style="color: #8b5cf6; font-weight: 600;">combina</span> los datos del backup con los actuales. Los registros nuevos se añaden, los existentes se comparan por uuid (gana el más reciente).
             </p>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <button onclick="importDatabaseSmartAction()" class="btn primary" style="padding: 10px 16px; font-size: 14px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                     📥 Importar copia (detección automática)
                 </button>
                 <button onclick="importDatabaseDataOnlyFromFileAction()" class="btn secondary" style="padding: 10px 16px; font-size: 14px; width: auto; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                    📊 Importar solo datos
+                    📊 Importar solo datos (reemplaza)
+                </button>
+                <button onclick="importDatabaseFusionAction()" class="btn primary" style="padding: 10px 16px; font-size: 14px; width: auto; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    🔀 Fusionar bases de datos
                 </button>
             </div>
+            <p style="font-size: 12px; color: var(--text-light); margin-top: 8px;">
+                💡 <strong>Recomendado:</strong> usa "🔀 Fusionar" para integrar cambios de otro dispositivo sin perder datos locales.
+            </p>
         </div>
         
-        <!-- 🧩 SALVA DIFERENCIAL (RECETAS Y PRODUCTOS) -->
         <div class="card" style="border-left: 4px solid #8b5cf6; border: 2px solid #8b5cf6;">
             <h3 style="margin: 0 0 8px 0; color: #8b5cf6;">🧩 Salva diferencial (Recetas y Productos)</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
@@ -1311,7 +1249,6 @@ function renderSettingsView() {
             </p>
         </div>
         
-        <!-- Último usuario -->
         <div class="card">
             <h3 style="margin: 0 0 8px 0;">👤 Recordar usuario</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
@@ -1322,7 +1259,6 @@ function renderSettingsView() {
             </button>
         </div>
         
-        <!-- Limpiar datos eliminados -->
         <div class="card" style="border-left: 4px solid #ef4444;">
             <h3 style="margin: 0 0 8px 0;">🧹 Limpiar datos eliminados</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
@@ -1334,7 +1270,6 @@ function renderSettingsView() {
             </button>
         </div>
         
-        <!-- Eliminación por error (SOLO ADMIN) -->
         ${isAdmin ? `
         <div class="card" style="border-left: 4px solid #dc2626; border: 2px solid #dc2626; background: var(--bg);">
             <h3 style="margin: 0 0 8px 0; color: #dc2626;">🚨 Eliminación por error</h3>
@@ -1348,7 +1283,6 @@ function renderSettingsView() {
             </button>
         </div>
         
-        <!-- Reiniciar base de datos (SOLO ADMIN) -->
         <div class="card" style="border-left: 4px solid #dc2626; border: 2px solid #dc2626; background: var(--bg);">
             <h3 style="margin: 0 0 8px 0; color: #dc2626;">🚨 Reiniciar Base de Datos</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
@@ -1364,7 +1298,6 @@ function renderSettingsView() {
         </div>
         ` : ''}
         
-        <!-- Información -->
         <div class="card">
             <h3 style="margin: 0 0 8px 0;">ℹ️ Información</h3>
             <p style="font-size: 14px; color: var(--text-light);">
@@ -1408,10 +1341,8 @@ async function showUsersModal() {
     
     const usuarios = window.DBModule.query(`
         SELECT id, username, name, email, phone, photo, is_admin, created_at
-        FROM users 
-        WHERE negocio_id = ? AND deleted_at IS NULL
-        ORDER BY is_admin DESC, created_at ASC
-    `, [negocioId]);
+        FROM users WHERE negocio_id = ? AND deleted_at IS NULL
+        ORDER BY is_admin DESC, created_at ASC`, [negocioId]);
     
     const modal = document.createElement('div');
     modal.id = 'users-modal';
@@ -1425,18 +1356,18 @@ async function showUsersModal() {
     
     const usuariosHtml = usuarios.map(u => {
         const isCurrentUser = u.id === user.id;
-        const isAdmin = u.is_admin === 1;
+        const isAdminUser = u.is_admin === 1;
         const avatar = u.photo && u.photo.startsWith('data:image')
             ? `<img src="${u.photo}" style="width: 100%; height: 100%; object-fit: cover;">`
-            : `<span style="font-size: 20px;">${isAdmin ? '👑' : '👤'}</span>`;
+            : `<span style="font-size: 20px;">${isAdminUser ? '👑' : '👤'}</span>`;
         
         const fechaRegistro = u.created_at 
             ? new Date(u.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
             : '—';
         
         return `
-            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); border-radius: 10px; margin-bottom: 6px; border-left: 4px solid ${isAdmin ? '#f59e0b' : '#3b82f6'}; flex-wrap: wrap;">
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--bg-card); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; border: 2px solid ${isAdmin ? '#f59e0b' : '#3b82f6'};">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); border-radius: 10px; margin-bottom: 6px; border-left: 4px solid ${isAdminUser ? '#f59e0b' : '#3b82f6'}; flex-wrap: wrap;">
+                <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--bg-card); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; border: 2px solid ${isAdminUser ? '#f59e0b' : '#3b82f6'};">
                     ${avatar}
                 </div>
                 <div style="flex: 1; min-width: 150px;">
@@ -1444,12 +1375,10 @@ async function showUsersModal() {
                         <span style="font-weight: 600; font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                             ${u.name || u.username}
                         </span>
-                        ${isAdmin ? '<span style="font-size: 10px; background: #f59e0b20; color: #f59e0b; padding: 1px 6px; border-radius: 8px; font-weight: 600;">👑 ADMIN</span>' : ''}
+                        ${isAdminUser ? '<span style="font-size: 10px; background: #f59e0b20; color: #f59e0b; padding: 1px 6px; border-radius: 8px; font-weight: 600;">👑 ADMIN</span>' : ''}
                         ${isCurrentUser ? '<span style="font-size: 10px; background: #10b98120; color: #10b981; padding: 1px 6px; border-radius: 8px; font-weight: 600;">TÚ</span>' : ''}
                     </div>
-                    <div style="font-size: 12px; color: var(--text-light); margin-top: 2px;">
-                        @${u.username}
-                    </div>
+                    <div style="font-size: 12px; color: var(--text-light); margin-top: 2px;">@${u.username}</div>
                     <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">
                         📅 ${fechaRegistro}
                         ${u.email ? ` · 📧 ${u.email}` : ''}
@@ -1458,30 +1387,16 @@ async function showUsersModal() {
                 </div>
                 <div style="display: flex; gap: 4px; flex-wrap: wrap; flex-shrink: 0;">
                     <button onclick="event.stopPropagation(); showEditUserModal(${u.id})" 
-                            class="btn secondary" 
-                            style="padding: 6px 10px; font-size: 12px; width: auto;"
-                            title="Editar datos">
-                        ✏️
-                    </button>
+                            class="btn secondary" style="padding: 6px 10px; font-size: 12px; width: auto;" title="Editar datos">✏️</button>
                     <button onclick="event.stopPropagation(); showChangePasswordModal(${u.id}, '${u.username.replace(/'/g, "\\'")}')" 
-                            class="btn secondary" 
-                            style="padding: 6px 10px; font-size: 12px; width: auto;"
-                            title="Cambiar contraseña">
-                        🔑
-                    </button>
+                            class="btn secondary" style="padding: 6px 10px; font-size: 12px; width: auto;" title="Cambiar contraseña">🔑</button>
                     ${!isCurrentUser ? `
-                        <button onclick="event.stopPropagation(); handleToggleAdmin(${u.id}, ${isAdmin ? 'false' : 'true'}, '${u.username.replace(/'/g, "\\'")}')" 
-                                class="btn secondary" 
-                                style="padding: 6px 10px; font-size: 12px; width: auto; color: ${isAdmin ? '#94a3b8' : '#f59e0b'}; border-color: ${isAdmin ? '#94a3b8' : '#f59e0b'};"
-                                title="${isAdmin ? 'Quitar admin' : 'Promover a admin'}">
-                            ${isAdmin ? '👤' : '👑'}
-                        </button>
+                        <button onclick="event.stopPropagation(); handleToggleAdmin(${u.id}, ${isAdminUser ? 'false' : 'true'}, '${u.username.replace(/'/g, "\\'")}')" 
+                                class="btn secondary" style="padding: 6px 10px; font-size: 12px; width: auto; color: ${isAdminUser ? '#94a3b8' : '#f59e0b'}; border-color: ${isAdminUser ? '#94a3b8' : '#f59e0b'};" 
+                                title="${isAdminUser ? 'Quitar admin' : 'Promover a admin'}">${isAdminUser ? '👤' : '👑'}</button>
                         <button onclick="event.stopPropagation(); deleteUser(${u.id}, '${u.username.replace(/'/g, "\\'")}')" 
-                                class="btn secondary" 
-                                style="padding: 6px 10px; font-size: 12px; width: auto; color: #ef4444; border-color: #ef4444;"
-                                title="Eliminar usuario">
-                            🗑️
-                        </button>
+                                class="btn secondary" style="padding: 6px 10px; font-size: 12px; width: auto; color: #ef4444; border-color: #ef4444;" 
+                                title="Eliminar usuario">🗑️</button>
                     ` : `<span style="font-size: 11px; color: var(--text-light); padding: 6px 4px;">—</span>`}
                 </div>
             </div>
@@ -1532,13 +1447,11 @@ async function showUsersModal() {
                         </span>
                     </div>
                     <button onclick="copiarCodigoInvitacion('${negocio.codigo_invitacion}')" 
-                            class="btn primary" 
-                            style="padding: 10px 16px; font-size: 13px; width: auto; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            class="btn primary" style="padding: 10px 16px; font-size: 13px; width: auto; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                         📋 Copiar
                     </button>
                     <button onclick="regenerarCodigoAction()" 
-                            class="btn primary" 
-                            style="padding: 10px 16px; font-size: 13px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;"
+                            class="btn primary" style="padding: 10px 16px; font-size: 13px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;" 
                             title="Regenerar código (invalida el anterior)">
                         🔄 Regenerar
                     </button>
@@ -1566,9 +1479,7 @@ async function showUsersModal() {
             </div>
             
             <div style="display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border-color); justify-content: flex-end;">
-                <button onclick="closeUsersModal()" class="btn secondary" style="padding: 10px 20px; font-size: 14px; width: auto;">
-                    Cerrar
-                </button>
+                <button onclick="closeUsersModal()" class="btn secondary" style="padding: 10px 20px; font-size: 14px; width: auto;">Cerrar</button>
             </div>
         </div>
     `;
@@ -1579,9 +1490,7 @@ async function showUsersModal() {
         const m = document.getElementById('users-modal');
         if (m) {
             m.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => {
-                if (m.parentNode) m.remove();
-            }, 200);
+            setTimeout(() => { if (m.parentNode) m.remove(); }, 200);
             setTimeout(() => {
                 const still = document.getElementById('users-modal');
                 if (still && still.parentNode) still.remove();
@@ -1592,14 +1501,6 @@ async function showUsersModal() {
     modal.addEventListener('click', function(e) {
         if (e.target === this) closeUsersModal();
     });
-    
-    const escHandler = function(e) {
-        if (e.key === 'Escape') {
-            closeUsersModal();
-            document.removeEventListener('keydown', escHandler);
-        }
-    };
-    document.addEventListener('keydown', escHandler);
 }
 
 // ============================================================
@@ -1646,42 +1547,28 @@ async function showCreateUserModal() {
             <form id="create-user-form" style="display: flex; flex-direction: column; gap: 12px;">
                 <div class="form-group">
                     <label>👤 Nombre de usuario (para login)</label>
-                    <input type="text" id="create-user-username" 
-                           placeholder="Ej: juan_perez" 
-                           required
+                    <input type="text" id="create-user-username" placeholder="Ej: juan_perez" required
                            style="text-transform: lowercase;"
                            oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9_]/g, '')">
                     <small style="font-size: 11px; color: var(--text-light);">Solo letras minúsculas, números y guión bajo</small>
                 </div>
-                
                 <div class="form-group">
                     <label>🔒 Contraseña temporal</label>
-                    <input type="text" id="create-user-password" 
-                           placeholder="Mínimo 4 caracteres" 
-                           required
-                           minlength="4">
+                    <input type="text" id="create-user-password" placeholder="Mínimo 4 caracteres" required minlength="4">
                     <small style="font-size: 11px; color: var(--text-light);">El usuario podrá cambiarla después</small>
                 </div>
-                
                 <div class="form-group">
                     <label>📛 Nombre completo</label>
-                    <input type="text" id="create-user-name" 
-                           placeholder="Ej: Juan Pérez García" 
-                           required>
+                    <input type="text" id="create-user-name" placeholder="Ej: Juan Pérez García" required>
                 </div>
-                
                 <div class="form-group">
                     <label>📧 Email (opcional)</label>
-                    <input type="email" id="create-user-email" 
-                           placeholder="Ej: juan@email.com">
+                    <input type="email" id="create-user-email" placeholder="Ej: juan@email.com">
                 </div>
-                
                 <div class="form-group">
                     <label>📞 Teléfono (opcional)</label>
-                    <input type="tel" id="create-user-phone" 
-                           placeholder="Ej: +53 5555 5555">
+                    <input type="tel" id="create-user-phone" placeholder="Ej: +53 5555 5555">
                 </div>
-                
                 <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border-color);">
                     <span style="font-size: 20px;">👑</span>
                     <div style="flex: 1;">
@@ -1690,14 +1577,11 @@ async function showCreateUserModal() {
                     </div>
                     <input type="checkbox" id="create-user-isadmin" style="width: 20px; height: 20px; cursor: pointer; accent-color: #f59e0b;">
                 </div>
-                
                 <div style="display: flex; gap: 8px; margin-top: 8px;">
                     <button type="submit" class="btn primary" style="flex: 1; background: #10b981; color: #fff; border: none; border-radius: 8px; padding: 12px; cursor: pointer; font-weight: 600; font-size: 14px;">
                         ✅ Crear usuario
                     </button>
-                    <button type="button" onclick="closeCreateUserModal()" class="btn secondary" style="flex: 1;">
-                        ❌ Cancelar
-                    </button>
+                    <button type="button" onclick="closeCreateUserModal()" class="btn secondary" style="flex: 1;">❌ Cancelar</button>
                 </div>
             </form>
         </div>
@@ -1705,9 +1589,7 @@ async function showCreateUserModal() {
     
     document.body.appendChild(modal);
     
-    setTimeout(() => {
-        document.getElementById('create-user-username')?.focus();
-    }, 100);
+    setTimeout(() => { document.getElementById('create-user-username')?.focus(); }, 100);
     
     const form = document.getElementById('create-user-form');
     form.addEventListener('submit', async (e) => {
@@ -1724,17 +1606,13 @@ async function showCreateUserModal() {
             window.showToast('⚠️ Usuario, contraseña y nombre son obligatorios', 'error');
             return;
         }
-        
         if (password.length < 4) {
             window.showToast('⚠️ La contraseña debe tener al menos 4 caracteres', 'error');
             return;
         }
         
         try {
-            const result = await window.AuthModule.createUserAsAdmin({
-                username, password, name, email, phone, isAdmin
-            });
-            
+            const result = await window.AuthModule.createUserAsAdmin({ username, password, name, email, phone, isAdmin });
             if (result.success) {
                 window.showToast(`✅ Usuario "${username}" creado correctamente`, 'success', 4000);
                 closeCreateUserModal();
@@ -1743,7 +1621,6 @@ async function showCreateUserModal() {
                 window.showToast('❌ ' + result.error, 'error', 5000);
             }
         } catch (error) {
-            console.error('Error creando usuario:', error);
             window.showToast('❌ Error: ' + error.message, 'error', 5000);
         }
     });
@@ -1756,9 +1633,7 @@ async function showCreateUserModal() {
         const m = document.getElementById('create-user-modal');
         if (m) {
             m.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => {
-                if (m.parentNode) m.remove();
-            }, 200);
+            setTimeout(() => { if (m.parentNode) m.remove(); }, 200);
             setTimeout(() => {
                 const still = document.getElementById('create-user-modal');
                 if (still && still.parentNode) still.remove();
@@ -1819,37 +1694,24 @@ async function showEditUserModal(userId) {
             <form id="edit-user-form" style="display: flex; flex-direction: column; gap: 12px;">
                 <div class="form-group">
                     <label>📛 Nombre completo</label>
-                    <input type="text" id="edit-user-name" 
-                           value="${u.name || ''}" 
-                           placeholder="Ej: Juan Pérez García" 
-                           required>
+                    <input type="text" id="edit-user-name" value="${u.name || ''}" placeholder="Ej: Juan Pérez García" required>
                 </div>
-                
                 <div class="form-group">
                     <label>📧 Email (opcional)</label>
-                    <input type="email" id="edit-user-email" 
-                           value="${u.email || ''}" 
-                           placeholder="Ej: juan@email.com">
+                    <input type="email" id="edit-user-email" value="${u.email || ''}" placeholder="Ej: juan@email.com">
                 </div>
-                
                 <div class="form-group">
                     <label>📞 Teléfono (opcional)</label>
-                    <input type="tel" id="edit-user-phone" 
-                           value="${u.phone || ''}" 
-                           placeholder="Ej: +53 5555 5555">
+                    <input type="tel" id="edit-user-phone" value="${u.phone || ''}" placeholder="Ej: +53 5555 5555">
                 </div>
-                
                 <div style="background: var(--bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--text-light);">
                     ℹ️ El <strong>nombre de usuario (@${u.username})</strong> no se puede cambiar. Es el identificador de login.
                 </div>
-                
                 <div style="display: flex; gap: 8px; margin-top: 8px;">
                     <button type="submit" class="btn primary" style="flex: 1; background: #3b82f6; color: #fff; border: none; border-radius: 8px; padding: 12px; cursor: pointer; font-weight: 600; font-size: 14px;">
                         💾 Guardar cambios
                     </button>
-                    <button type="button" onclick="closeEditUserModal()" class="btn secondary" style="flex: 1;">
-                        ❌ Cancelar
-                    </button>
+                    <button type="button" onclick="closeEditUserModal()" class="btn secondary" style="flex: 1;">❌ Cancelar</button>
                 </div>
             </form>
         </div>
@@ -1872,7 +1734,6 @@ async function showEditUserModal(userId) {
         
         try {
             const result = await window.AuthModule.updateUserDataByAdmin(userId, { name, email, phone });
-            
             if (result.success) {
                 window.showToast(`✅ Usuario actualizado correctamente`, 'success', 3000);
                 closeEditUserModal();
@@ -1881,7 +1742,6 @@ async function showEditUserModal(userId) {
                 window.showToast('❌ ' + result.error, 'error', 5000);
             }
         } catch (error) {
-            console.error('Error editando usuario:', error);
             window.showToast('❌ Error: ' + error.message, 'error', 5000);
         }
     });
@@ -1894,9 +1754,7 @@ async function showEditUserModal(userId) {
         const m = document.getElementById('edit-user-modal');
         if (m) {
             m.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => {
-                if (m.parentNode) m.remove();
-            }, 200);
+            setTimeout(() => { if (m.parentNode) m.remove(); }, 200);
             setTimeout(() => {
                 const still = document.getElementById('edit-user-modal');
                 if (still && still.parentNode) still.remove();
@@ -1954,29 +1812,18 @@ async function showChangePasswordModal(userId, username) {
             <form id="change-password-form" style="display: flex; flex-direction: column; gap: 12px;">
                 <div class="form-group">
                     <label>🔒 Nueva contraseña</label>
-                    <input type="text" id="change-pass-new" 
-                           placeholder="Mínimo 4 caracteres" 
-                           required
-                           minlength="4">
+                    <input type="text" id="change-pass-new" placeholder="Mínimo 4 caracteres" required minlength="4">
                 </div>
-                
                 <div class="form-group">
                     <label>🔒 Confirmar contraseña</label>
-                    <input type="text" id="change-pass-confirm" 
-                           placeholder="Repite la contraseña" 
-                           required
-                           minlength="4">
+                    <input type="text" id="change-pass-confirm" placeholder="Repite la contraseña" required minlength="4">
                 </div>
-                
                 <div id="change-pass-error" style="display: none; background: #ef444420; color: #ef4444; padding: 8px 12px; border-radius: 6px; font-size: 13px;"></div>
-                
                 <div style="display: flex; gap: 8px; margin-top: 8px;">
                     <button type="submit" class="btn primary" style="flex: 1; background: #f59e0b; color: #fff; border: none; border-radius: 8px; padding: 12px; cursor: pointer; font-weight: 600; font-size: 14px;">
                         🔑 Cambiar contraseña
                     </button>
-                    <button type="button" onclick="closeChangePasswordModal()" class="btn secondary" style="flex: 1;">
-                        ❌ Cancelar
-                    </button>
+                    <button type="button" onclick="closeChangePasswordModal()" class="btn secondary" style="flex: 1;">❌ Cancelar</button>
                 </div>
             </form>
         </div>
@@ -1984,9 +1831,7 @@ async function showChangePasswordModal(userId, username) {
     
     document.body.appendChild(modal);
     
-    setTimeout(() => {
-        document.getElementById('change-pass-new')?.focus();
-    }, 100);
+    setTimeout(() => { document.getElementById('change-pass-new')?.focus(); }, 100);
     
     const form = document.getElementById('change-password-form');
     form.addEventListener('submit', async (e) => {
@@ -2004,7 +1849,6 @@ async function showChangePasswordModal(userId, username) {
             errorEl.style.display = 'block';
             return;
         }
-        
         if (newPass !== confirmPass) {
             errorEl.textContent = '⚠️ Las contraseñas no coinciden';
             errorEl.style.display = 'block';
@@ -2013,11 +1857,9 @@ async function showChangePasswordModal(userId, username) {
         
         try {
             const result = await window.AuthModule.updateUserPassword(userId, newPass);
-            
             if (result.success) {
                 window.showToast(`✅ Contraseña actualizada para @${username}`, 'success', 4000);
                 closeChangePasswordModal();
-                
                 if (document.getElementById('users-modal')) {
                     // Modal de usuarios sigue abierto
                 } else {
@@ -2028,7 +1870,6 @@ async function showChangePasswordModal(userId, username) {
                 errorEl.style.display = 'block';
             }
         } catch (error) {
-            console.error('Error cambiando contraseña:', error);
             errorEl.textContent = '❌ Error: ' + error.message;
             errorEl.style.display = 'block';
         }
@@ -2042,9 +1883,7 @@ async function showChangePasswordModal(userId, username) {
         const m = document.getElementById('change-password-modal');
         if (m) {
             m.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => {
-                if (m.parentNode) m.remove();
-            }, 200);
+            setTimeout(() => { if (m.parentNode) m.remove(); }, 200);
             setTimeout(() => {
                 const still = document.getElementById('change-password-modal');
                 if (still && still.parentNode) still.remove();
@@ -2072,8 +1911,7 @@ async function handleToggleAdmin(userId, promoteToAdmin, username) {
                 : '⚠️ Perderá acceso a la gestión de usuarios y a copias completas.'
         }\n\n¿Continuar?`,
         confirmText: promoteToAdmin ? '👑 Sí, promover' : '👤 Sí, quitar admin',
-        cancelText: '❌ Cancelar',
-        icon: icon,
+        cancelText: '❌ Cancelar', icon: icon,
         confirmColor: promoteToAdmin ? '#f59e0b' : '#94a3b8'
     });
     
@@ -2081,21 +1919,16 @@ async function handleToggleAdmin(userId, promoteToAdmin, username) {
     
     try {
         const result = await window.AuthModule.toggleUserAdmin(userId, promoteToAdmin);
-        
         if (result.success) {
-            window.showToast(
-                promoteToAdmin 
-                    ? `✅ @${username} es ahora ADMIN` 
-                    : `✅ @${username} ya no es admin`,
-                'success', 4000
-            );
+            window.showToast(promoteToAdmin 
+                ? `✅ @${username} es ahora ADMIN` 
+                : `✅ @${username} ya no es admin`, 'success', 4000);
             setTimeout(() => showUsersModal(), 500);
         } else {
             window.showToast('❌ ' + result.error, 'error', 5000);
             setTimeout(() => showUsersModal(), 500);
         }
     } catch (error) {
-        console.error('Error cambiando rol:', error);
         window.showToast('❌ Error: ' + error.message, 'error', 5000);
         setTimeout(() => showUsersModal(), 500);
     }
@@ -2107,7 +1940,6 @@ async function handleToggleAdmin(userId, promoteToAdmin, username) {
 
 async function deleteUser(userId, username) {
     const currentUser = window.AuthModule.getCurrentUser();
-    
     if (userId === currentUser.id) {
         window.showToast('⚠️ No puedes eliminar tu propio usuario', 'warning');
         return;
@@ -2119,10 +1951,8 @@ async function deleteUser(userId, username) {
     const confirm = await window.ModalModule.showConfirm({
         title: '🗑️ Eliminar usuario',
         message: `¿Eliminar al usuario "@${username}"?\n\n⚠️ El usuario perderá acceso a Panario inmediatamente.\n\n✅ Los datos que creó (ventas, pedidos, etc.) se mantienen.\n\n¿Continuar?`,
-        confirmText: '🗑️ Sí, eliminar',
-        cancelText: '❌ Cancelar',
-        icon: '🗑️',
-        confirmColor: '#ef4444'
+        confirmText: '🗑️ Sí, eliminar', cancelText: '❌ Cancelar',
+        icon: '🗑️', confirmColor: '#ef4444'
     });
     
     if (!confirm) {
@@ -2132,7 +1962,6 @@ async function deleteUser(userId, username) {
     
     try {
         const result = await window.AuthModule.deleteUserByAdmin(userId);
-        
         if (result.success) {
             window.showToast(`✅ Usuario "@${username}" eliminado`, 'success', 3000);
             setTimeout(() => showUsersModal(), 800);
@@ -2141,7 +1970,6 @@ async function deleteUser(userId, username) {
             setTimeout(() => showUsersModal(), 500);
         }
     } catch (error) {
-        console.error('Error eliminando usuario:', error);
         window.showToast('❌ Error: ' + error.message, 'error', 5000);
         setTimeout(() => showUsersModal(), 500);
     }
@@ -2158,10 +1986,8 @@ async function regenerarCodigoAction() {
     const confirm = await window.ModalModule.showConfirm({
         title: '🔄 Regenerar código',
         message: `¿Regenerar el código de invitación?\n\n⚠️ El código actual dejará de funcionar inmediatamente.\nLos usuarios ya registrados NO se ven afectados.\n\n¿Continuar?`,
-        confirmText: '🔄 Sí, regenerar',
-        cancelText: '❌ Cancelar',
-        icon: '🔄',
-        confirmColor: '#f59e0b'
+        confirmText: '🔄 Sí, regenerar', cancelText: '❌ Cancelar',
+        icon: '🔄', confirmColor: '#f59e0b'
     });
     
     if (!confirm) {
@@ -2182,30 +2008,23 @@ async function regenerarCodigoAction() {
 }
 
 // ============================================================
-// SALVA DIFERENCIAL (RECETAS Y PRODUCTOS)
+// SALVA DIFERENCIAL
 // ============================================================
 
 async function exportSalvaRecetasProductos() {
-    console.log('🧩 [FASE 1] Exportando salva de recetas y productos...');
-    
     if (typeof window.DBModule.exportRecetasProductosSalva !== 'function') {
-        console.error('❌ window.DBModule.exportRecetasProductosSalva NO está definida');
         window.showToast('❌ Error: función de exportación no disponible. Recarga la página.', 'error', 6000);
         return;
     }
     
     let progress = null;
-    
     try {
         progress = window.ModalModule.showProgressModal({
-            title: 'Exportando salva',
-            message: 'Preparando recetas y productos...',
-            icon: '🧩'
+            title: 'Exportando salva', message: 'Preparando recetas y productos...', icon: '🧩'
         });
         
         progress.update('Recopilando datos...', 30);
         await new Promise(r => setTimeout(r, 300));
-        
         progress.update('Empaquetando JSON...', 70);
         await new Promise(r => setTimeout(r, 300));
         
@@ -2221,32 +2040,22 @@ async function exportSalvaRecetasProductos() {
             window.showToast('❌ Error al exportar salva: ' + errorMsg, 'error', 5000);
         }
     } catch (error) {
-        console.error('❌ Error exportando salva:', error);
-        if (progress) {
-            try { progress.error(error.message || 'Error desconocido'); } catch (e) {}
-        }
+        if (progress) { try { progress.error(error.message); } catch (e) {} }
         window.showToast('❌ Error: ' + (error.message || 'Error desconocido'), 'error', 5000);
     } finally {
         setTimeout(() => {
             const stillThere = document.getElementById('progress-modal');
-            if (stillThere) {
-                try { window.ModalModule.closeProgressModal(); } catch (e) {}
-            }
+            if (stillThere) { try { window.ModalModule.closeProgressModal(); } catch (e) {} }
         }, 4000);
     }
 }
 
 async function importSalvaRecetasProductos() {
-    console.log('🧩 [FASE 1] Importando salva de recetas y productos...');
-    
     if (typeof window.DBModule.importRecetasProductosSalva !== 'function') {
-        console.error('❌ window.DBModule.importRecetasProductosSalva NO está definida');
         window.showToast('❌ Error: función de importación no disponible. Recarga la página.', 'error', 6000);
         return;
     }
-    
     if (typeof window.DBModule.readSalvaFile !== 'function') {
-        console.error('❌ window.DBModule.readSalvaFile NO está definida');
         window.showToast('❌ Error: función de lectura no disponible. Recarga la página.', 'error', 6000);
         return;
     }
@@ -2259,10 +2068,7 @@ async function importSalvaRecetasProductos() {
         
         input.onchange = async function(e) {
             const file = e.target.files[0];
-            if (!file) {
-                window.showToast('⚠️ No se seleccionó archivo', 'warning');
-                return;
-            }
+            if (!file) { window.showToast('⚠️ No se seleccionó archivo', 'warning'); return; }
             
             try {
                 const salvaData = await window.DBModule.readSalvaFile(file);
@@ -2271,15 +2077,13 @@ async function importSalvaRecetasProductos() {
                     await window.ModalModule.showAlert({
                         title: '❌ Archivo inválido',
                         message: 'El archivo no es una salva válida de recetas y productos.',
-                        icon: '❌',
-                        type: 'error'
+                        icon: '❌', type: 'error'
                     });
                     return;
                 }
                 
                 const meta = salvaData._meta;
                 const counts = meta.counts || {};
-                
                 const resumen = `
 📅 Fecha: ${new Date(meta.exportDate).toLocaleString('es-ES')}
 📖 Recetas: ${counts.recipes || 0}
@@ -2292,9 +2096,7 @@ async function importSalvaRecetasProductos() {
                     title: '📥 Importar salva',
                     message: `${resumen}\n\nElige el modo:\n• Escribe "fusionar" para añadir/actualizar\n• Escribe "reemplazar" para reemplazar todo`,
                     placeholder: 'fusionar o reemplazar',
-                    defaultValue: 'fusionar',
-                    icon: '📥',
-                    inputType: 'text'
+                    defaultValue: 'fusionar', icon: '📥', inputType: 'text'
                 });
                 
                 if (modo === null || modo === undefined) {
@@ -2303,54 +2105,42 @@ async function importSalvaRecetasProductos() {
                 }
                 
                 const modoLimpio = String(modo).trim().toLowerCase();
-                
                 if (modoLimpio !== 'fusionar' && modoLimpio !== 'reemplazar') {
                     await window.ModalModule.showAlert({
                         title: '⚠️ Modo inválido',
                         message: 'Debes escribir "fusionar" o "reemplazar".',
-                        icon: '⚠️',
-                        type: 'warning'
+                        icon: '⚠️', type: 'warning'
                     });
                     return;
                 }
                 
                 const confirmMsg = modoLimpio === 'reemplazar'
-                    ? `⚠️ ¿REEMPLAZAR todas las recetas y productos actuales?\n\nSe eliminarán las recetas y productos actuales y se importarán los del archivo.\n\n✅ NO se afectan ventas, pedidos, insumos ni clientes.`
-                    : `¿FUSIONAR las recetas y productos del archivo con los actuales?\n\nSe añadirán los nuevos y se actualizarán los que coincidan por nombre.\n\n✅ NO se afectan ventas, pedidos, insumos ni clientes.`;
+                    ? `⚠️ ¿REEMPLAZAR todas las recetas y productos actuales?`
+                    : `¿FUSIONAR las recetas y productos del archivo con los actuales?`;
                 
                 const confirm = await window.ModalModule.showConfirm({
                     title: modoLimpio === 'reemplazar' ? '⚠️ Reemplazar datos' : '📥 Fusionar datos',
                     message: confirmMsg,
                     confirmText: modoLimpio === 'reemplazar' ? '⚠️ SÍ, REEMPLAZAR' : '✅ SÍ, FUSIONAR',
-                    cancelText: '❌ Cancelar',
-                    icon: modoLimpio === 'reemplazar' ? '⚠️' : '📥',
+                    cancelText: '❌ Cancelar', icon: modoLimpio === 'reemplazar' ? '⚠️' : '📥',
                     confirmColor: modoLimpio === 'reemplazar' ? '#ef4444' : '#10b981'
                 });
                 
-                if (!confirm) {
-                    window.showToast('❌ Importación cancelada', 'info', 2000);
-                    return;
-                }
+                if (!confirm) { window.showToast('❌ Importación cancelada', 'info', 2000); return; }
                 
                 let progress = null;
-                
                 try {
                     progress = window.ModalModule.showProgressModal({
-                        title: 'Importando salva',
-                        message: 'Iniciando importación...',
-                        icon: '⏳'
+                        title: 'Importando salva', message: 'Iniciando importación...', icon: '⏳'
                     });
                     
                     await new Promise(r => setTimeout(r, 200));
                     progress.update('Validando archivo...', 10);
                     await new Promise(r => setTimeout(r, 200));
-                    
                     progress.update('Importando recetas...', 30);
                     await new Promise(r => setTimeout(r, 200));
-                    
                     progress.update('Importando ingredientes...', 50);
                     await new Promise(r => setTimeout(r, 200));
-                    
                     progress.update('Importando productos...', 70);
                     await new Promise(r => setTimeout(r, 200));
                     
@@ -2379,13 +2169,10 @@ async function importSalvaRecetasProductos() {
                     } else {
                         const errorMsg = (result && result.error) ? result.error : 'Error al importar';
                         progress.error(errorMsg);
-                        window.showToast('❌ Error al importar salva: ' + errorMsg, 'error', 5000);
+                        window.showToast('❌ Error: ' + errorMsg, 'error', 5000);
                     }
                 } catch (innerError) {
-                    console.error('❌ Error procesando importación:', innerError);
-                    if (progress) {
-                        try { progress.error(innerError.message || 'Error desconocido'); } catch (e) {}
-                    }
+                    if (progress) { try { progress.error(innerError.message); } catch (e) {} }
                     try {
                         if (window.ModalModule && window.ModalModule.closeProgressModal) {
                             window.ModalModule.closeProgressModal();
@@ -2394,20 +2181,15 @@ async function importSalvaRecetasProductos() {
                     await window.ModalModule.showAlert({
                         title: '❌ Error al importar',
                         message: innerError.message || 'Error desconocido',
-                        icon: '❌',
-                        type: 'error'
+                        icon: '❌', type: 'error'
                     });
                 } finally {
                     setTimeout(() => {
                         const stillThere = document.getElementById('progress-modal');
-                        if (stillThere) {
-                            try { window.ModalModule.closeProgressModal(); } catch (e) {}
-                        }
+                        if (stillThere) { try { window.ModalModule.closeProgressModal(); } catch (e) {} }
                     }, 5000);
                 }
-                
             } catch (error) {
-                console.error('❌ Error procesando archivo:', error);
                 try {
                     if (window.ModalModule && window.ModalModule.closeProgressModal) {
                         window.ModalModule.closeProgressModal();
@@ -2416,8 +2198,7 @@ async function importSalvaRecetasProductos() {
                 await window.ModalModule.showAlert({
                     title: '❌ Error al importar',
                     message: error.message || 'Error desconocido',
-                    icon: '❌',
-                    type: 'error'
+                    icon: '❌', type: 'error'
                 });
             }
         };
@@ -2425,35 +2206,25 @@ async function importSalvaRecetasProductos() {
         document.body.appendChild(input);
         input.click();
         document.body.removeChild(input);
-        
     } catch (error) {
-        console.error('❌ Error:', error);
         window.showToast('❌ Error: ' + error.message, 'error');
     }
 }
 
 // ============================================================
-// ACCIONES DE BACKUP DIFERENCIADAS
+// ACCIONES DE BACKUP
 // ============================================================
 
 async function exportDatabaseCompleteAction() {
-    console.log('📦 Exportando copia COMPLETA...');
-    
     let progress = null;
-    
     try {
         progress = window.ModalModule.showProgressModal({
-            title: 'Exportando copia completa',
-            message: 'Preparando copia de seguridad completa...',
-            icon: '📦'
+            title: 'Exportando copia completa', message: 'Preparando copia de seguridad completa...', icon: '📦'
         });
-        
         progress.update('Recopilando datos...', 30);
         await new Promise(r => setTimeout(r, 300));
-        
         progress.update('Incluyendo usuarios y negocios...', 60);
         await new Promise(r => setTimeout(r, 300));
-        
         progress.update('Generando archivo .db...', 90);
         await new Promise(r => setTimeout(r, 300));
         
@@ -2463,42 +2234,29 @@ async function exportDatabaseCompleteAction() {
             progress.success('Copia completa exportada correctamente');
             window.showToast('✅ Copia completa exportada', 'success', 3000);
         } else {
-            const errorMsg = (result && result.error) ? result.error : 'No se pudo exportar la copia completa';
+            const errorMsg = (result && result.error) ? result.error : 'No se pudo exportar';
             progress.error(errorMsg);
         }
     } catch (error) {
-        console.error('Error exportando:', error);
-        if (progress) {
-            try { progress.error(error.message || 'Error desconocido'); } catch (e) {}
-        }
+        if (progress) { try { progress.error(error.message); } catch (e) {} }
     } finally {
         setTimeout(() => {
             const stillThere = document.getElementById('progress-modal');
-            if (stillThere) {
-                try { window.ModalModule.closeProgressModal(); } catch (e) {}
-            }
+            if (stillThere) { try { window.ModalModule.closeProgressModal(); } catch (e) {} }
         }, 5000);
     }
 }
 
 async function exportDatabaseDataOnlyAction() {
-    console.log('📊 Exportando copia SOLO DATOS...');
-    
     let progress = null;
-    
     try {
         progress = window.ModalModule.showProgressModal({
-            title: 'Exportando copia de datos',
-            message: 'Preparando copia de datos operativos...',
-            icon: '📊'
+            title: 'Exportando copia de datos', message: 'Preparando copia de datos operativos...', icon: '📊'
         });
-        
         progress.update('Recopilando datos operativos...', 30);
         await new Promise(r => setTimeout(r, 300));
-        
         progress.update('Excluyendo usuarios y negocios...', 60);
         await new Promise(r => setTimeout(r, 300));
-        
         progress.update('Generando archivo .db...', 90);
         await new Promise(r => setTimeout(r, 300));
         
@@ -2508,27 +2266,20 @@ async function exportDatabaseDataOnlyAction() {
             progress.success('Copia de datos exportada correctamente');
             window.showToast('✅ Copia de datos exportada', 'success', 3000);
         } else {
-            const errorMsg = (result && result.error) ? result.error : 'No se pudo exportar la copia de datos';
+            const errorMsg = (result && result.error) ? result.error : 'No se pudo exportar';
             progress.error(errorMsg);
         }
     } catch (error) {
-        console.error('Error exportando:', error);
-        if (progress) {
-            try { progress.error(error.message || 'Error desconocido'); } catch (e) {}
-        }
+        if (progress) { try { progress.error(error.message); } catch (e) {} }
     } finally {
         setTimeout(() => {
             const stillThere = document.getElementById('progress-modal');
-            if (stillThere) {
-                try { window.ModalModule.closeProgressModal(); } catch (e) {}
-            }
+            if (stillThere) { try { window.ModalModule.closeProgressModal(); } catch (e) {} }
         }, 5000);
     }
 }
 
 async function importDatabaseSmartAction() {
-    console.log('📥 [FASE 1] Importando copia con detección automática...');
-    
     try {
         const input = document.createElement('input');
         input.type = 'file';
@@ -2537,10 +2288,7 @@ async function importDatabaseSmartAction() {
         
         input.onchange = async function(e) {
             const file = e.target.files[0];
-            if (!file) {
-                window.showToast('⚠️ No se seleccionó archivo', 'warning');
-                return;
-            }
+            if (!file) { window.showToast('⚠️ No se seleccionó archivo', 'warning'); return; }
             
             let backupType = 'unknown';
             let backupMeta = null;
@@ -2565,7 +2313,6 @@ async function importDatabaseSmartAction() {
                 }
                 tempDb.close();
             } catch (error) {
-                console.error('Error detectando tipo de backup:', error);
                 window.showToast('❌ Error al leer el archivo', 'error');
                 return;
             }
@@ -2597,7 +2344,7 @@ async function importDatabaseSmartAction() {
                     infoMsg += `⚠️ Esto reemplazará TODA la base de datos, incluyendo usuarios y negocios.\n\n¿Continuar?`;
                     confirmText = '⚠️ Sí, importar completa';
                 } else {
-                    infoMsg += `❌ Esta es una copia COMPLETA. Solo el administrador puede importarla.\n\n¿Quieres importarla como SOLO DATOS? (se conservarán tus usuarios)`;
+                    infoMsg += `❌ Esta es una copia COMPLETA. Solo el administrador puede importarla.`;
                     confirmText = '📊 Importar como datos';
                     action = 'data_only';
                 }
@@ -2611,7 +2358,7 @@ async function importDatabaseSmartAction() {
                     infoMsg += `⚠️ Copia sin marca. Se tratará como COMPLETA.\n\n¿Continuar?`;
                     confirmText = '⚠️ Sí, importar como completa';
                 } else {
-                    infoMsg += `❌ Copia sin marca. Solo el administrador puede importarla.\n\n¿Quieres intentar importarla como SOLO DATOS?`;
+                    infoMsg += `❌ Copia sin marca. Solo el administrador puede importarla.`;
                     confirmText = '📊 Intentar como datos';
                     action = 'data_only';
                 }
@@ -2619,17 +2366,12 @@ async function importDatabaseSmartAction() {
             
             const confirm = await window.ModalModule.showConfirm({
                 title: '📥 Importar copia de seguridad',
-                message: infoMsg,
-                confirmText: confirmText,
-                cancelText: '❌ Cancelar',
+                message: infoMsg, confirmText, cancelText: '❌ Cancelar',
                 icon: backupType === 'complete' ? '📦' : '📊',
                 confirmColor: action === 'complete' ? '#ef4444' : '#10b981'
             });
             
-            if (!confirm) {
-                window.showToast('❌ Importación cancelada', 'info', 2000);
-                return;
-            }
+            if (!confirm) { window.showToast('❌ Importación cancelada', 'info', 2000); return; }
             
             try {
                 let result;
@@ -2643,30 +2385,23 @@ async function importDatabaseSmartAction() {
                     if (action === 'complete') {
                         await window.ModalModule.showAlert({
                             title: '✅ Copia completa importada',
-                            message: `Se restauraron TODOS los datos (incluyendo usuarios y negocios).\n\n🔄 La página se recargará para aplicar los cambios.`,
-                            icon: '✅',
-                            type: 'success'
+                            message: `Se restauraron TODOS los datos.\n\n🔄 La página se recargará.`,
+                            icon: '✅', type: 'success'
                         });
-                        
                         window.showToast('✅ Copia completa importada. Recargando...', 'success', 3000);
                         setTimeout(() => {
                             const url = window.location.href.split('?')[0];
                             window.location.href = url + '?refresh=' + Date.now();
                             setTimeout(() => window.location.reload(true), 100);
                         }, 500);
-                        
                     } else {
                         const registros = result.registrosRestaurados || 0;
                         const tablas = result.tablasRestauradas || 0;
-                        
                         await window.ModalModule.showAlert({
                             title: '✅ Datos importados',
-                            message: `Se restauraron ${tablas} tablas con ${registros} registros.\n\n✅ Tus usuarios y el código de invitación se conservaron.\n\n🔄 La página se recargará para aplicar los cambios.`,
-                            icon: '✅',
-                            type: 'success'
+                            message: `Se restauraron ${tablas} tablas con ${registros} registros.\n\n✅ Usuarios conservados.\n🔄 La página se recargará.`,
+                            icon: '✅', type: 'success'
                         });
-                        
-                        window.showToast(`✅ Datos importados: ${tablas} tablas, ${registros} registros`, 'success', 4000);
                         setTimeout(() => {
                             const url = window.location.href.split('?')[0];
                             window.location.href = url + '?refresh=' + Date.now();
@@ -2678,7 +2413,6 @@ async function importDatabaseSmartAction() {
                     window.showToast('❌ Error: ' + errorMsg, 'error', 5000);
                 }
             } catch (error) {
-                console.error('Error en importación:', error);
                 window.showToast('❌ ' + (error.message || 'Error desconocido'), 'error', 5000);
             }
         };
@@ -2686,45 +2420,141 @@ async function importDatabaseSmartAction() {
         document.body.appendChild(input);
         input.click();
         document.body.removeChild(input);
-        
     } catch (error) {
-        console.error('Error:', error);
         window.showToast('❌ Error: ' + error.message, 'error');
     }
 }
 
 async function importDatabaseDataOnlyFromFileAction() {
-    console.log('📊 [FASE 1] Importando SOLO DATOS...');
-    
     try {
         const result = await window.DBModule.importDatabaseDataOnlyFromFile();
         
         if (result && result.success) {
             const registros = result.registrosRestaurados || 0;
             const tablas = result.tablasRestauradas || 0;
-            
             await window.ModalModule.showAlert({
                 title: '✅ Importación exitosa',
-                message: `Se restauraron ${tablas} tablas con ${registros} registros.\n\n✅ Tus usuarios y el código de invitación se conservaron.\n\n🔄 La página se recargará para aplicar los cambios.`,
-                icon: '✅',
-                type: 'success'
+                message: `Se restauraron ${tablas} tablas con ${registros} registros.\n\n✅ Usuarios conservados.\n🔄 La página se recargará.`,
+                icon: '✅', type: 'success'
             });
-            
             window.showToast(`✅ Datos importados: ${tablas} tablas, ${registros} registros`, 'success', 5000);
-            
             setTimeout(() => {
-                console.log('🔄 [FASE 1] Recargando página con refresh...');
                 const url = window.location.href.split('?')[0];
                 window.location.href = url + '?refresh=' + Date.now();
                 setTimeout(() => window.location.reload(true), 100);
             }, 500);
-            
         } else if (result && result.error && result.error !== 'Cancelado') {
             window.showToast('❌ ' + result.error, 'error', 5000);
         }
     } catch (error) {
-        console.error('Error:', error);
         window.showToast('❌ ' + (error.message || 'Error desconocido'), 'error');
+    }
+}
+
+// ============================================================
+// 🆕 FASE 1.3.4: FUSIONAR BASES DE DATOS
+// ============================================================
+
+/**
+ * Acción: fusionar la base de datos de un archivo .db con la actual.
+ * Usa importDatabaseDataOnlyFromFile() de db.js (que ya implementa la fusión).
+ */
+async function importDatabaseFusionAction() {
+    console.log('🔀 [importDatabaseFusionAction] Iniciando fusión...');
+    
+    // Verificar que la función existe en DBModule
+    if (typeof window.DBModule.importDatabaseDataOnlyFromFile !== 'function') {
+        window.showToast('❌ Error: función de fusión no disponible. Recarga la página.', 'error', 6000);
+        console.error('❌ window.DBModule.importDatabaseDataOnlyFromFile no es una función');
+        return;
+    }
+    
+    try {
+        // La propia función de db.js muestra el confirm con el mensaje adecuado
+        const result = await window.DBModule.importDatabaseDataOnlyFromFile();
+        
+        if (!result) {
+            window.showToast('❌ Resultado vacío de la fusión', 'error', 4000);
+            return;
+        }
+        
+        // Si el usuario canceló, no hacemos nada más
+        if (result.success === false && result.error === 'Cancelado') {
+            console.log('🔀 [Fusion] Cancelado por el usuario');
+            return;
+        }
+        
+        // Si hubo error
+        if (!result.success) {
+            window.showToast('❌ ' + (result.error || 'Error desconocido'), 'error', 6000);
+            return;
+        }
+        
+        // ✅ Fusión exitosa → mostrar resumen detallado
+        console.log('🔀 [Fusion] Resultado:', result);
+        
+        const inserted = result.inserted || 0;
+        const updated = result.updated || 0;
+        const skipped = result.skipped || 0;
+        const porTabla = result.porTabla || {};
+        
+        // Construir lista de tablas con cambios
+        let tablaDetalle = '';
+        const tablasConCambios = Object.entries(porTabla)
+            .filter(([_, s]) => (s.inserted + s.updated) > 0)
+            .sort((a, b) => (b[1].inserted + b[1].updated) - (a[1].inserted + a[1].updated));
+        
+        if (tablasConCambios.length > 0) {
+            tablaDetalle = '\n\n📊 Detalle por tabla:\n' + tablasConCambios.map(([tabla, s]) => {
+                let linea = `  • ${tabla}:`;
+                if (s.inserted > 0) linea += ` +${s.inserted} nuevos`;
+                if (s.updated > 0) linea += ` ~${s.updated} actualizados`;
+                if (s.skipped > 0) linea += ` =${s.skipped} sin cambios`;
+                return linea;
+            }).join('\n');
+        }
+        
+        // Resumen final
+        let mensaje = `✅ Fusión completada correctamente.\n\n`;
+        mensaje += `📥 Registros NUEVOS añadidos: ${inserted}\n`;
+        mensaje += `🔄 Registros ACTUALIZADOS: ${updated}\n`;
+        mensaje += `⏭️ Registros SIN cambios: ${skipped}\n`;
+        mensaje += `📊 Total procesados: ${inserted + updated + skipped}`;
+        
+        if (tablaDetalle) {
+            mensaje += tablaDetalle;
+        }
+        
+        if (result.errores && result.errores.length > 0) {
+            mensaje += `\n\n⚠️ Hubo ${result.errores.length} error(es) durante la fusión.`;
+            console.warn('⚠️ Errores de fusión:', result.errores);
+        }
+        
+        mensaje += `\n\n💡 Tus datos locales se han enriquecido con los del backup.`;
+        mensaje += `\n📤 Si quieres compartir el resultado, exporta una nueva copia desde "Exportar copia de seguridad".`;
+        
+        await window.ModalModule.showAlert({
+            title: '🔀 Fusión completada',
+            message: mensaje,
+            icon: '🔀',
+            type: 'success',
+            buttonText: '✅ Entendido'
+        });
+        
+        window.showToast(`✅ Fusión completada: +${inserted} nuevos, ~${updated} actualizados`, 'success', 5000);
+        
+        // Refrescar la vista actual (por si acaso)
+        setTimeout(() => {
+            if (typeof window.refreshCurrentView === 'function') {
+                window.refreshCurrentView();
+            } else if (typeof window.renderSettingsView === 'function') {
+                window.renderSettingsView();
+            }
+        }, 1500);
+        
+    } catch (error) {
+        console.error('❌ [Fusion] Error:', error);
+        window.showToast('❌ Error en fusión: ' + (error.message || 'Desconocido'), 'error', 6000);
     }
 }
 
@@ -2740,10 +2570,8 @@ async function clearLastUserAction() {
     const confirm = await window.ModalModule.showConfirm({
         title: 'Olvidar usuario',
         message: '¿Seguro que quieres olvidar el último usuario guardado?',
-        confirmText: 'Sí, olvidar',
-        cancelText: 'Cancelar',
-        icon: '🗑️',
-        confirmColor: '#ef4444'
+        confirmText: 'Sí, olvidar', cancelText: 'Cancelar',
+        icon: '🗑️', confirmColor: '#ef4444'
     });
     
     if (confirm) {
@@ -2765,24 +2593,20 @@ async function cleanDeletedData() {
     const confirm = await window.ModalModule.showConfirm({
         title: '🧹 Limpiar datos eliminados',
         message: '¿Eliminar permanentemente todos los registros marcados como eliminados?\n\n⚠️ No se puede deshacer.',
-        confirmText: 'Sí, limpiar',
-        cancelText: 'Cancelar',
-        icon: '⚠️',
-        confirmColor: '#ef4444'
+        confirmText: 'Sí, limpiar', cancelText: 'Cancelar',
+        icon: '⚠️', confirmColor: '#ef4444'
     });
     
     if (!confirm) return;
     
     let progress = null;
-    
     try {
         progress = window.ModalModule.showProgressModal({
-            title: 'Limpiando datos',
-            message: 'Eliminando registros...',
-            icon: '🧹'
+            title: 'Limpiando datos', message: 'Eliminando registros...', icon: '🧹'
         });
         
-        const tables = ['sales', 'transactions', 'orders', 'order_items', 'payments', 'recipes', 'recipe_ingredients', 'clients', 'products'];
+        const tables = ['sales', 'transactions', 'orders', 'order_items', 'payments', 
+            'recipes', 'recipe_ingredients', 'clients', 'products'];
         let deletedCount = 0;
         const totalTables = tables.length;
         
@@ -2791,25 +2615,20 @@ async function cleanDeletedData() {
             const percent = Math.round(((i + 1) / totalTables) * 90);
             progress.update(`Limpiando ${table}...`, percent);
             
-            const checkResult = window.DBModule.query(
-                `SELECT name FROM sqlite_master WHERE type='table' AND name='${table}'`
-            );
+            const checkResult = window.DBModule.query(`SELECT name FROM sqlite_master WHERE type='table' AND name='${table}'`);
             if (checkResult.length === 0) continue;
             
             const columns = window.DBModule.query(`PRAGMA table_info(${table})`);
             const hasDeletedAt = columns.some(col => col.name === 'deleted_at');
             if (!hasDeletedAt) continue;
             
-            const countResult = window.DBModule.query(
-                `SELECT COUNT(*) as count FROM ${table} WHERE deleted_at IS NOT NULL`
-            );
+            const countResult = window.DBModule.query(`SELECT COUNT(*) as count FROM ${table} WHERE deleted_at IS NOT NULL`);
             const count = countResult[0]?.count || 0;
             
             if (count > 0) {
                 window.DBModule.execute(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL`);
                 deletedCount += count;
             }
-            
             await new Promise(r => setTimeout(r, 100));
         }
         
@@ -2819,20 +2638,14 @@ async function cleanDeletedData() {
         
         progress.success(`${deletedCount} registros eliminados permanentemente`);
         window.showToast(`✅ ${deletedCount} registros eliminados`, 'success', 3000);
-        
         setTimeout(() => renderSettingsView(), 2500);
         
     } catch (error) {
-        console.error('Error:', error);
-        if (progress) {
-            try { progress.error(error.message || 'Error al limpiar'); } catch (e) {}
-        }
+        if (progress) { try { progress.error(error.message); } catch (e) {} }
     } finally {
         setTimeout(() => {
             const stillThere = document.getElementById('progress-modal');
-            if (stillThere) {
-                try { window.ModalModule.closeProgressModal(); } catch (e) {}
-            }
+            if (stillThere) { try { window.ModalModule.closeProgressModal(); } catch (e) {} }
         }, 5000);
     }
 }
@@ -2849,9 +2662,7 @@ async function resetDatabaseWithPassword() {
     const password = await window.ModalModule.showPrompt({
         title: '🔒 Verificación',
         message: 'Escribe la contraseña de seguridad:',
-        placeholder: 'Contraseña',
-        icon: '🔒',
-        inputType: 'password'
+        placeholder: 'Contraseña', icon: '🔒', inputType: 'password'
     });
     
     if (password === null || password === undefined) {
@@ -2859,14 +2670,11 @@ async function resetDatabaseWithPassword() {
         return;
     }
     
-    const cleanPassword = String(password).trim();
-    
-    if (cleanPassword !== 'panario') {
+    if (String(password).trim() !== 'panario') {
         await window.ModalModule.showAlert({
             title: '❌ Contraseña incorrecta',
             message: 'La contraseña es: "panario"',
-            icon: '❌',
-            type: 'error'
+            icon: '❌', type: 'error'
         });
         return;
     }
@@ -2874,37 +2682,29 @@ async function resetDatabaseWithPassword() {
     const confirm = await window.ModalModule.showConfirm({
         title: '⚠️ ¡ADVERTENCIA!',
         message: 'Se eliminarán TODOS los datos.\n✅ Se conservan usuarios.\n\n¿Seguro?',
-        confirmText: '⚠️ SÍ, REINICIAR',
-        cancelText: '❌ Cancelar',
-        icon: '🚨',
-        confirmColor: '#dc2626'
+        confirmText: '⚠️ SÍ, REINICIAR', cancelText: '❌ Cancelar',
+        icon: '🚨', confirmColor: '#dc2626'
     });
     
     if (!confirm) return;
     
     let progress = null;
-    
     try {
         progress = window.ModalModule.showProgressModal({
-            title: 'Reiniciando base de datos',
-            message: 'Eliminando todos los datos...',
-            icon: '🚨'
+            title: 'Reiniciando base de datos', message: 'Eliminando todos los datos...', icon: '🚨'
         });
         
         const db = window.DBModule.getDB();
         const users = window.DBModule.query('SELECT * FROM users WHERE deleted_at IS NULL');
-        
-        const tables = ['inventory_movements', 'inventory', 'order_items', 'payments', 'orders', 'recipe_ingredients', 'recipes', 'sales', 'transactions', 'clients', 'products', 'notifications', 'units', 'corriente_config'];
+        const tables = ['inventory_movements', 'inventory', 'order_items', 'payments', 'orders',
+            'recipe_ingredients', 'recipes', 'sales', 'transactions', 'clients', 'products',
+            'notifications', 'units', 'corriente_config'];
         
         for (let i = 0; i < tables.length; i++) {
             const table = tables[i];
             const percent = Math.round(((i + 1) / tables.length) * 80);
             progress.update(`Eliminando ${table}...`, percent);
-            
-            try {
-                db.run(`DELETE FROM ${table}`);
-            } catch (e) {}
-            
+            try { db.run(`DELETE FROM ${table}`); } catch (e) {}
             await new Promise(r => setTimeout(r, 80));
         }
         
@@ -2914,30 +2714,20 @@ async function resetDatabaseWithPassword() {
         
         progress.success(`Base de datos reiniciada. ${users.length} usuario(s) conservado(s)`);
         window.showToast('✅ Base de datos reiniciada', 'success', 2000);
-        
         setTimeout(() => window.location.reload(true), 3000);
         
     } catch (error) {
-        console.error('Error:', error);
-        if (progress) {
-            try { progress.error(error.message || 'Error al reiniciar'); } catch (e) {}
-        }
+        if (progress) { try { progress.error(error.message); } catch (e) {} }
     } finally {
         setTimeout(() => {
             const stillThere = document.getElementById('progress-modal');
-            if (stillThere) {
-                try { window.ModalModule.closeProgressModal(); } catch (e) {}
-            }
+            if (stillThere) { try { window.ModalModule.closeProgressModal(); } catch (e) {} }
         }, 5000);
     }
 }
 
 // ============================================================
 // ELIMINACIÓN POR ERROR
-// AÑADIDO (180926 v2):
-//   - Las ventas ahora muestran: #ID, cliente, fecha, estado
-//   - Colores de borde según estado (Deuda/Liberada/Pagada)
-//   - Iconos de pago con color
 // ============================================================
 
 async function showDeleteSelectorModal() {
@@ -2957,20 +2747,15 @@ async function showDeleteSelectorModal() {
     try {
         const orders = window.DBModule.query(`
             SELECT id, client_name, total, status, delivery_date, created_at
-            FROM orders 
-            WHERE negocio_id = ? AND deleted_at IS NULL
+            FROM orders WHERE negocio_id = ? AND deleted_at IS NULL
               AND status != 'delivered' AND status != 'cancelled'
-            ORDER BY created_at DESC
-        `, [negocioId]);
+            ORDER BY created_at DESC`, [negocioId]);
 
-        // 🆕 Consulta ampliada: ahora trae buyer, is_debt, paid, is_liberated, session
         const sales = window.DBModule.query(`
             SELECT id, product_name, total, payment_method, sale_date, created_at,
                    buyer, is_debt, paid, is_liberated, session
-            FROM sales 
-            WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
-            ORDER BY created_at DESC
-        `, [negocioId]);
+            FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
+            ORDER BY created_at DESC`, [negocioId]);
 
         const modal = document.createElement('div');
         modal.id = 'delete-selector-modal';
@@ -2982,25 +2767,10 @@ async function showDeleteSelectorModal() {
             animation: modalFadeIn 0.25s ease;
         `;
 
-        let selectedOrders = new Set();
-        let selectedSales = new Set();
+        const statusColors = { 'pending': '#f59e0b', 'confirmed': '#3b82f6', 'production': '#8b5cf6', 'ready': '#10b981' };
+        const statusLabels = { 'pending': '⏳ Pendiente', 'confirmed': '✅ Confirmado', 'production': '🔨 Producción', 'ready': '📦 Listo' };
+        const paymentIcons = { 'cash': '💵', 'transfer': '🏦', 'debt': '💳', 'other': '🔄' };
 
-        const statusColors = {
-            'pending': '#f59e0b', 'confirmed': '#3b82f6',
-            'production': '#8b5cf6', 'ready': '#10b981'
-        };
-
-        const statusLabels = {
-            'pending': '⏳ Pendiente', 'confirmed': '✅ Confirmado',
-            'production': '🔨 Producción', 'ready': '📦 Listo'
-        };
-
-        // 🆕 Iconos de pago
-        const paymentIcons = {
-            'cash': '💵', 'transfer': '🏦', 'debt': '💳', 'other': '🔄'
-        };
-
-        // 🆕 Formatear fecha corta para las ventas
         function formatearFechaVenta(dateStr) {
             if (!dateStr) return '—';
             try {
@@ -3009,9 +2779,7 @@ async function showDeleteSelectorModal() {
                 const dia = String(date.getDate()).padStart(2, '0');
                 const mes = String(date.getMonth() + 1).padStart(2, '0');
                 return `${dia}/${mes} ${dias[date.getDay()]}`;
-            } catch (e) {
-                return dateStr;
-            }
+            } catch (e) { return dateStr; }
         }
 
         modal.innerHTML = `
@@ -3042,12 +2810,9 @@ async function showDeleteSelectorModal() {
                 </div>
 
                 <div id="delete-orders-content" style="flex: 1; overflow-y: auto; max-height: 250px; padding-right: 4px;">
-                    ${orders.length === 0 ? `
-                        <div style="text-align: center; padding: 20px; color: var(--text-light);">
-                            <span style="font-size: 28px;">📭</span>
-                            <p>No hay pedidos pendientes</p>
-                        </div>
-                    ` : `
+                    ${orders.length === 0 ? `<div style="text-align: center; padding: 20px; color: var(--text-light);">
+                        <span style="font-size: 28px;">📭</span><p>No hay pedidos pendientes</p>
+                    </div>` : `
                         <div style="display: flex; flex-direction: column; gap: 3px;">
                             ${orders.map(order => `
                                 <div style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; background: var(--bg); border-radius: 4px; border-left: 3px solid ${statusColors[order.status] || '#94a3b8'}; font-size: 12px;">
@@ -3064,32 +2829,21 @@ async function showDeleteSelectorModal() {
                 </div>
 
                 <div id="delete-sales-content" style="flex: 1; overflow-y: auto; max-height: 300px; padding-right: 4px; display: none;">
-                    ${sales.length === 0 ? `
-                        <div style="text-align: center; padding: 20px; color: var(--text-light);">
-                            <span style="font-size: 28px;">📭</span>
-                            <p>No hay ventas para eliminar</p>
-                        </div>
-                    ` : `
+                    ${sales.length === 0 ? `<div style="text-align: center; padding: 20px; color: var(--text-light);">
+                        <span style="font-size: 28px;">📭</span><p>No hay ventas para eliminar</p>
+                    </div>` : `
                         <div style="display: flex; flex-direction: column; gap: 4px;">
                             ${sales.map(sale => {
                                 const isDebt = sale.is_debt === 1 && sale.paid === 0;
                                 const isLiberated = sale.is_liberated === 1;
                                 const borderColor = isDebt ? '#ef4444' : (isLiberated ? '#8b5cf6' : '#10b981');
                                 
-                                // 🆕 Estado de la venta
                                 let estadoBadge = '';
-                                if (isDebt) {
-                                    estadoBadge = '<span style="font-size: 10px; background: #ef444420; color: #ef4444; padding: 1px 6px; border-radius: 8px; font-weight: 600;">💳 Deuda</span>';
-                                } else if (isLiberated) {
-                                    estadoBadge = '<span style="font-size: 10px; background: #8b5cf620; color: #8b5cf6; padding: 1px 6px; border-radius: 8px; font-weight: 600;">🚀 Liberada</span>';
-                                } else {
-                                    estadoBadge = '<span style="font-size: 10px; background: #10b98120; color: #10b981; padding: 1px 6px; border-radius: 8px; font-weight: 600;">✅ Pagada</span>';
-                                }
+                                if (isDebt) estadoBadge = '<span style="font-size: 10px; background: #ef444420; color: #ef4444; padding: 1px 6px; border-radius: 8px; font-weight: 600;">💳 Deuda</span>';
+                                else if (isLiberated) estadoBadge = '<span style="font-size: 10px; background: #8b5cf620; color: #8b5cf6; padding: 1px 6px; border-radius: 8px; font-weight: 600;">🚀 Liberada</span>';
+                                else estadoBadge = '<span style="font-size: 10px; background: #10b98120; color: #10b981; padding: 1px 6px; border-radius: 8px; font-weight: 600;">✅ Pagada</span>';
                                 
-                                // 🆕 Nombre del cliente o fallback
-                                const cliente = sale.buyer && sale.buyer.trim() 
-                                    ? sale.buyer 
-                                    : (isLiberated ? 'Cliente ocasional' : 'Sin nombre');
+                                const cliente = sale.buyer && sale.buyer.trim() ? sale.buyer : (isLiberated ? 'Cliente ocasional' : 'Sin nombre');
                                 
                                 return `
                                     <div style="display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; background: var(--bg); border-radius: 4px; border-left: 3px solid ${borderColor}; font-size: 12px;">
@@ -3130,16 +2884,14 @@ async function showDeleteSelectorModal() {
 
         document.body.appendChild(modal);
 
-        window._deleteSelectedOrders = selectedOrders;
-        window._deleteSelectedSales = selectedSales;
+        window._deleteSelectedOrders = new Set();
+        window._deleteSelectedSales = new Set();
 
         window.closeDeleteSelectorModal = function() {
-            const modal = document.getElementById('delete-selector-modal');
-            if (modal) {
-                modal.style.animation = 'modalFadeOut 0.2s ease forwards';
-                setTimeout(() => {
-                    if (modal.parentNode) modal.remove();
-                }, 200);
+            const m = document.getElementById('delete-selector-modal');
+            if (m) {
+                m.style.animation = 'modalFadeOut 0.2s ease forwards';
+                setTimeout(() => { if (m.parentNode) m.remove(); }, 200);
                 setTimeout(() => {
                     const still = document.getElementById('delete-selector-modal');
                     if (still && still.parentNode) still.remove();
@@ -3177,11 +2929,8 @@ async function showDeleteSelectorModal() {
         document.querySelectorAll('.delete-order-checkbox').forEach(cb => {
             cb.addEventListener('change', function() {
                 const id = parseInt(this.dataset.id);
-                if (this.checked) {
-                    window._deleteSelectedOrders.add(id);
-                } else {
-                    window._deleteSelectedOrders.delete(id);
-                }
+                if (this.checked) window._deleteSelectedOrders.add(id);
+                else window._deleteSelectedOrders.delete(id);
                 updateDeleteSelectionCount();
             });
         });
@@ -3189,11 +2938,8 @@ async function showDeleteSelectorModal() {
         document.querySelectorAll('.delete-sale-checkbox').forEach(cb => {
             cb.addEventListener('change', function() {
                 const id = parseInt(this.dataset.id);
-                if (this.checked) {
-                    window._deleteSelectedSales.add(id);
-                } else {
-                    window._deleteSelectedSales.delete(id);
-                }
+                if (this.checked) window._deleteSelectedSales.add(id);
+                else window._deleteSelectedSales.delete(id);
                 updateDeleteSelectionCount();
             });
         });
@@ -3236,16 +2982,13 @@ async function showDeleteSelectorModal() {
             }
 
             closeDeleteSelectorModal();
-            
             await new Promise(r => setTimeout(r, 250));
 
             const confirm = await window.ModalModule.showConfirm({
                 title: '⚠️ ¿Eliminar permanentemente?',
                 message: `Eliminarás:\n\n📋 ${orderIds.length} pedido${orderIds.length !== 1 ? 's' : ''}\n💰 ${saleIds.length} venta${saleIds.length !== 1 ? 's' : ''}\n\n⚠️ NO se puede deshacer.`,
-                confirmText: `🗑️ ELIMINAR`,
-                cancelText: '❌ Cancelar',
-                icon: '🚨',
-                confirmColor: '#dc2626'
+                confirmText: `🗑️ ELIMINAR`, cancelText: '❌ Cancelar',
+                icon: '🚨', confirmColor: '#dc2626'
             });
 
             if (!confirm) {
@@ -3255,20 +2998,15 @@ async function showDeleteSelectorModal() {
 
             try {
                 window.showToast('⏳ Eliminando...', 'info', 2000);
-
                 const db = window.DBModule.getDB();
                 let deletedOrders = 0;
                 let deletedSales = 0;
 
                 for (const orderId of orderIds) {
-                    const orderCheck = window.DBModule.query(
-                        'SELECT id, status FROM orders WHERE id = ? AND deleted_at IS NULL',
-                        [orderId]
-                    );
+                    const orderCheck = window.DBModule.query('SELECT id, status FROM orders WHERE id = ? AND deleted_at IS NULL', [orderId]);
                     if (orderCheck.length === 0) continue;
                     const order = orderCheck[0];
                     if (order.status === 'delivered' || order.status === 'cancelled') continue;
-
                     db.run('DELETE FROM order_items WHERE order_id = ?', [orderId]);
                     db.run('DELETE FROM payments WHERE order_id = ?', [orderId]);
                     db.run('DELETE FROM orders WHERE id = ?', [orderId]);
@@ -3276,12 +3014,8 @@ async function showDeleteSelectorModal() {
                 }
 
                 for (const saleId of saleIds) {
-                    const saleCheck = window.DBModule.query(
-                        'SELECT id FROM sales WHERE id = ? AND deleted_at IS NULL',
-                        [saleId]
-                    );
+                    const saleCheck = window.DBModule.query('SELECT id FROM sales WHERE id = ? AND deleted_at IS NULL', [saleId]);
                     if (saleCheck.length === 0) continue;
-
                     db.run('DELETE FROM transactions WHERE sale_id = ?', [saleId]);
                     db.run('DELETE FROM sales WHERE id = ?', [saleId]);
                     deletedSales++;
@@ -3292,14 +3026,11 @@ async function showDeleteSelectorModal() {
                 await window.ModalModule.showAlert({
                     title: '✅ Registros eliminados',
                     message: `📋 ${deletedOrders} pedidos\n💰 ${deletedSales} ventas`,
-                    icon: '✅',
-                    type: 'success'
+                    icon: '✅', type: 'success'
                 });
 
                 renderSettingsView();
-
             } catch (error) {
-                console.error('Error:', error);
                 window.showToast('❌ Error: ' + error.message, 'error');
                 setTimeout(() => showDeleteSelectorModal(), 300);
             }
@@ -3312,7 +3043,6 @@ async function showDeleteSelectorModal() {
         });
 
     } catch (error) {
-        console.error('Error:', error);
         window.showToast('❌ Error: ' + error.message, 'error');
     }
 }
@@ -3337,6 +3067,8 @@ window.exportDatabaseCompleteAction = exportDatabaseCompleteAction;
 window.exportDatabaseDataOnlyAction = exportDatabaseDataOnlyAction;
 window.importDatabaseSmartAction = importDatabaseSmartAction;
 window.importDatabaseDataOnlyFromFileAction = importDatabaseDataOnlyFromFileAction;
+// 🆕 FASE 1.3.4
+window.importDatabaseFusionAction = importDatabaseFusionAction;
 window.exportSalvaRecetasProductos = exportSalvaRecetasProductos;
 window.importSalvaRecetasProductos = importSalvaRecetasProductos;
 window.showUsersModal = showUsersModal;
@@ -3347,4 +3079,4 @@ window.showEditUserModal = showEditUserModal;
 window.showChangePasswordModal = showChangePasswordModal;
 window.handleToggleAdmin = handleToggleAdmin;
 
-console.log('📦 UI Settings Module cargado correctamente v2.0.4 (Eliminación por error: ventas con cliente, fecha y estado)');
+console.log('📦 UI Settings Module cargado correctamente v2.0.5 (FASE 1.3.4: fusión de bases de datos)');

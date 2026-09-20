@@ -8,6 +8,41 @@
 //   - Mantiene la opción "📁 Subir imagen" para usar QR de otras apps
 //   - Vista previa en vivo del QR generado
 //   - Guarda el QR como data:image/png;base64 en la columna qr_code
+// CORREGIDO FASE 1.3.4 FIX (200926):
+//   - closeEditBankAccountModal ahora está DEFINIDA GLOBALMENTE
+//     al principio del archivo (antes estaba dentro de editBankAccount()
+//     y fallaba si se invocaba antes de abrir ese modal)
+//   - Eliminada la definición duplicada al final de editBankAccount()
+// ============================================================
+
+// ============================================================
+// 🆕 FIX 1.3.4: DEFINICIÓN GLOBAL TEMPRANA
+// ============================================================
+// Esta función estaba declarada dentro de editBankAccount() (scope local).
+// Eso causaba "Uncaught ReferenceError: closeEditBankAccountModal is not defined"
+// si se invocaba desde el HTML del modal antes de que editBankAccount() se
+// hubiera ejecutado al menos una vez.
+// 
+// SOLUCIÓN: definirla globalmente al principio del archivo, para que exista
+// siempre. La versión duplicada al final de editBankAccount() se ha eliminado.
+// ============================================================
+
+window.closeEditBankAccountModal = function() {
+    const m = document.getElementById('edit-bank-account-modal');
+    if (m) {
+        m.style.animation = 'modalFadeOut 0.2s ease forwards';
+        setTimeout(() => {
+            if (m.parentNode) m.remove();
+        }, 200);
+        setTimeout(() => {
+            const still = document.getElementById('edit-bank-account-modal');
+            if (still && still.parentNode) still.remove();
+        }, 500);
+    }
+};
+
+// ============================================================
+// CARGA DEL PERFIL
 // ============================================================
 
 function loadProfile(user) {
@@ -711,13 +746,9 @@ async function handlePhotoUpload(event, userId) {
 }
 
 // ============================================================
-// FASE D.3: GENERAR TEXTO DEL QR DESDE DATOS BANCARIOS
+// FASE D.3: GENERAR TEXTO DEL QR
 // ============================================================
 
-/**
- * Construye el texto que se codificará en el QR.
- * Formato legible universal que cualquier app de escaneo puede leer.
- */
 function construirTextoQR(banco, titular, cuenta, telefono) {
     let texto = '';
     if (banco) texto += `Banco: ${banco}\n`;
@@ -727,16 +758,12 @@ function construirTextoQR(banco, titular, cuenta, telefono) {
     return texto.trim();
 }
 
-/**
- * Genera un QR desde los datos actuales del formulario de creación.
- */
 function generarQRPreview() {
     const banco = document.getElementById('bank-account-bank')?.value?.trim() || '';
     const titular = document.getElementById('bank-account-owner')?.value?.trim() || '';
     const cuenta = document.getElementById('bank-account-number')?.value?.trim() || '';
     const telefono = document.getElementById('bank-account-phone')?.value?.trim() || '';
     
-    // Validaciones
     if (!banco) {
         window.showToast('⚠️ Ingresa el nombre del banco primero', 'warning', 3000);
         document.getElementById('bank-account-bank')?.focus();
@@ -748,19 +775,14 @@ function generarQRPreview() {
         return;
     }
     
-    // Verificar que la librería esté disponible
     if (typeof window.QRCode === 'undefined') {
         window.showToast('❌ Librería QR no disponible. Recarga la página.', 'error', 5000);
-        console.error('❌ window.QRCode no está definido. Revisa que lib/qrcode.js esté cargado.');
         return;
     }
     
-    // Construir texto del QR
     const textoQR = construirTextoQR(banco, titular, cuenta, telefono);
-    console.log('📷 Generando QR con texto:\n', textoQR);
     
     try {
-        // Generar QR
         const qr = new window.QRCode({
             text: textoQR,
             width: 256,
@@ -771,11 +793,8 @@ function generarQRPreview() {
         });
         
         const dataUrl = qr.toDataURL();
-        
-        // Guardar en variable global temporal
         window._qrDataTemp = dataUrl;
         
-        // Actualizar vista previa
         const previewContainer = document.getElementById('qr-preview');
         const previewImg = document.getElementById('qr-preview-img');
         
@@ -792,9 +811,6 @@ function generarQRPreview() {
     }
 }
 
-/**
- * Regenera el QR en el modal de EDICIÓN.
- */
 function generarEditQRPreview() {
     const banco = document.getElementById('edit-bank-account-bank')?.value?.trim() || '';
     const titular = document.getElementById('edit-bank-account-owner')?.value?.trim() || '';
@@ -814,12 +830,10 @@ function generarEditQRPreview() {
     
     if (typeof window.QRCode === 'undefined') {
         window.showToast('❌ Librería QR no disponible. Recarga la página.', 'error', 5000);
-        console.error('❌ window.QRCode no está definido. Revisa que lib/qrcode.js esté cargado.');
         return;
     }
     
     const textoQR = construirTextoQR(banco, titular, cuenta, telefono);
-    console.log('📷 Generando QR (edición) con texto:\n', textoQR);
     
     try {
         const qr = new window.QRCode({
@@ -832,11 +846,8 @@ function generarEditQRPreview() {
         });
         
         const dataUrl = qr.toDataURL();
-        
-        // Guardar en variable global temporal de edición
         window._editQrDataTemp = dataUrl;
         
-        // Actualizar vista previa
         const previewContainer = document.getElementById('edit-qr-preview');
         const previewImg = document.getElementById('edit-qr-preview-img');
         
@@ -861,7 +872,6 @@ async function showBankAccountsModal() {
     const existingModal = document.getElementById('bank-accounts-modal');
     if (existingModal) existingModal.remove();
     
-    // Reiniciar variable temporal de QR
     window._qrDataTemp = null;
     
     const accounts = await window.DBModule.getBankAccounts();
@@ -961,7 +971,6 @@ async function showBankAccountsModal() {
                            oninput="if(window._qrDataTemp) window._qrDataTemp = null;">
                 </div>
                 
-                <!-- FASE D.3: Bloque de QR con DOS OPCIONES -->
                 <div class="form-group">
                     <label>📷 Código QR</label>
                     
@@ -1123,7 +1132,6 @@ async function editBankAccount(accountId) {
         return;
     }
     
-    // Reiniciar variable temporal de QR de edición
     window._editQrDataTemp = null;
     
     const modal = document.createElement('div');
@@ -1171,7 +1179,6 @@ async function editBankAccount(accountId) {
                            oninput="if(window._editQrDataTemp) window._editQrDataTemp = null;">
                 </div>
                 
-                <!-- FASE D.3: Bloque de QR con DOS OPCIONES (edición) -->
                 <div class="form-group">
                     <label>📷 Código QR</label>
                     
@@ -1337,16 +1344,6 @@ async function editBankAccount(accountId) {
     modal.addEventListener('click', (e) => {
         if (e.target === modal) closeEditBankAccountModal();
     });
-    
-    window.closeEditBankAccountModal = function() {
-        const m = document.getElementById('edit-bank-account-modal');
-        if (m) {
-            m.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => {
-                if (m.parentNode) m.remove();
-            }, 200);
-        }
-    };
 }
 
 // ============================================================
@@ -1484,7 +1481,7 @@ async function setDefaultBankAccount(accountId) {
 }
 
 // ============================================================
-// CERRAR MODAL
+// CERRAR MODAL DE CUENTAS
 // ============================================================
 
 window.closeBankAccountsModal = function() {
@@ -1512,7 +1509,6 @@ window.viewBankAccountQR = viewBankAccountQR;
 window.deleteBankAccount = deleteBankAccount;
 window.setDefaultBankAccount = setDefaultBankAccount;
 window.closeBankAccountsModal = closeBankAccountsModal;
-window.closeEditBankAccountModal = closeEditBankAccountModal;
 window.showQuickStartGuide = showQuickStartGuide;
 window.startInteractiveTour = startInteractiveTour;
 window.showFAQModal = showFAQModal;
@@ -1524,9 +1520,8 @@ window.toggleNotificationSound = toggleNotificationSound;
 window.selectNotificationSound = selectNotificationSound;
 window.testSingleSound = testSingleSound;
 window.testAllNotificationSounds = testAllNotificationSounds;
-// FASE D.3
 window.generarQRPreview = generarQRPreview;
 window.generarEditQRPreview = generarEditQRPreview;
 window.construirTextoQR = construirTextoQR;
 
-console.log('📦 Profile Module cargado correctamente v2.0.2 (FASE D.3: QR dinámico)');
+console.log('📦 Profile Module cargado correctamente v2.0.3 (FASE 1.3.4 fix: closeEditBankAccountModal global)');

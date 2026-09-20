@@ -5,80 +5,92 @@
 // AÑADIDO: Detección de ?refresh=timestamp tras importación
 // AÑADIDO: FASE 12 - Tarjeta de premios en Dashboard + notificación
 // CORREGIDO FASE 1 (160926):
-//   - Detección de ?refresh= ahora FUERZA recarga real de BD (forceReloadFromStorage)
+//   - Detección de ?refresh= ahora FUERZA recarga real de BD
 //   - Listener para evento 'db-saved' que refresca la vista actual
 //   - refreshCurrentView() para re-renderizar tras importaciones
 // CORREGIDO FASE 4A (170926):
-//   - Fecha con día de la semana en "Corriente hoy" (Problema #1)
-//   - Helper cerrarTodosLosModales() de respaldo
+//   - Fecha con día de la semana en "Corriente hoy"
+//   - Helper cerrarTodosLosModalesRespaldo()
 // CORREGIDO (170926 v2):
-//   - Fix "Primer día de venta" con conversión de fecha UTC → local en JS
+//   - Fix "Primer día de venta" con conversión de fecha UTC → local
 // CORREGIDO (170926 v3): 
 //   - formatDate() reescrito para NO convertir strings YYYY-MM-DD a UTC
-//   - nueva formatearFechaYYYYMMDD() sin pasar por new Date()
-//   - Esto arregla el bug "31 ago" cuando en realidad es "1 sept"
 // AÑADIDO FASE C (180926 v3):
-//   - Variable global _chartMode con 3 modos:
-//     * 'last7'   → Últimos 7 días (termina en HOY)
-//     * 'dom-sab' → Semana completa Dom-Sáb
-//     * 'lun-dom' → Semana completa Lun-Dom
+//   - Variable global _chartMode con 3 modos
 //   - Selector desplegable en el header del gráfico
-//   - changeChartMode(mode) resetea offset y recarga
-//   - changeWeek(delta) respeta el modo actual
-//   - reloadChartWithWeekOffset() pasa chartMode
-//   - loadDashboardData() pasa chartMode
-//   - Botón ▶ se deshabilita cuando isCurrentRange === true
+//   - changeChartMode(mode), changeWeek(delta) respetan el modo
 //   - updateChartModeUI() sincroniza el selector y el label
 // AÑADIDO (180926 v4):
-//   - Nombre del negocio en el header del Dashboard
-//   - Título de la pestaña dinámico (<title>Negocio - Panario</title>)
-//   - getNombreNegocio() helper global
-//   - El header de la app usa el nombre del negocio (fallback: Panario)
+//   - Nombre del negocio en header, título, dashboard, reportes
+// CORREGIDO FASE 1.4 (190926 v5): 🚀 FIX DEBOUNCE DEL DASHBOARD
+//   - setupDbSavedListener() ahora usa debounce de 500ms
+//   - Esto evita que el dashboard se re-renderice 4-5 veces por acción
+//   - Nueva función debouncedRefreshCurrentView() con cancelación
+//   - Log para diagnosticar cuántos eventos db-saved llegan
 // ============================================================
 
 let currentUser = null;
 let dbReady = false;
 
 // ============================================================
+// 🆕 FASE 1.4: CONTROL DE DEBOUNCE PARA db-saved
+// ============================================================
+
+let _dbSavedDebounceTimer = null;
+const DB_SAVED_DEBOUNCE_MS = 500;
+let _dbSavedEventCount = 0;
+
+/**
+ * Refresca la vista actual con debounce.
+ * Si llegan múltiples eventos 'db-saved' en menos de 500ms,
+ * solo se ejecuta una vez al final.
+ */
+function debouncedRefreshCurrentView() {
+    _dbSavedEventCount++;
+    console.log(`🔄 [debounce] Evento db-saved #${_dbSavedEventCount} recibido (refrescando en ${DB_SAVED_DEBOUNCE_MS}ms)`);
+    
+    // Cancelar el timer anterior
+    if (_dbSavedDebounceTimer) {
+        clearTimeout(_dbSavedDebounceTimer);
+    }
+    
+    // Programar el refresco
+    _dbSavedDebounceTimer = setTimeout(() => {
+        const eventCount = _dbSavedEventCount;
+        _dbSavedEventCount = 0;
+        _dbSavedDebounceTimer = null;
+        
+        console.log(`🔄 [debounce] Refrescando vista (después de ${eventCount} evento${eventCount > 1 ? 's' : ''})`);
+        refreshCurrentView();
+    }, DB_SAVED_DEBOUNCE_MS);
+}
+
+// ============================================================
 // 🆕 HELPER: OBTENER NOMBRE DEL NEGOCIO ACTUAL
 // ============================================================
 
-/**
- * Devuelve el nombre del negocio actual del usuario logueado.
- * Fallback en cascada:
- *   1. user.negocio.nombre (cargado en login)
- *   2. user.business_name (legacy)
- *   3. "Panario" (fallback final)
- * 
- * @returns {string} Nombre del negocio
- */
 function getNombreNegocio() {
     try {
         const user = window.AuthModule?.getCurrentUser();
         if (!user) return 'Panario';
         
-        // 1. Intentar desde user.negocio.nombre (cargado en login)
         if (user.negocio && user.negocio.nombre) {
             return user.negocio.nombre;
         }
         
-        // 2. Intentar cargar el negocio desde la BD
         if (user.negocio_id && window.DBModule) {
             const negocio = window.DBModule.getNegocio(user.negocio_id);
             if (negocio && negocio.nombre) {
-                // Cachear en el usuario
                 user.negocio = negocio;
                 window.AuthModule.setCurrentUser(user);
                 return negocio.nombre;
             }
         }
         
-        // 3. Fallback: business_name legacy
         if (user.business_name) {
             return user.business_name;
         }
         
-        // 4. Fallback final
         return 'Panario';
     } catch (e) {
         console.warn('⚠️ Error obteniendo nombre del negocio:', e);
@@ -86,26 +98,18 @@ function getNombreNegocio() {
     }
 }
 
-/**
- * Devuelve la inicial del nombre del negocio (para favicon dinámico, etc.)
- */
 function getInicialNegocio() {
     const nombre = getNombreNegocio();
     return nombre.charAt(0).toUpperCase() || '🍞';
 }
 
-// Exportar globalmente
 window.getNombreNegocio = getNombreNegocio;
 window.getInicialNegocio = getInicialNegocio;
 
 // ============================================================
-// 🔧 HELPERS DE FECHA (SIN CONVERSIÓN UTC)
+// 🔧 HELPERS DE FECHA
 // ============================================================
 
-/**
- * Convierte una fecha UTC (string o Date) a fecha local del navegador
- * en formato YYYY-MM-DD.
- */
 function fechaLocalYYYYMMDD(fechaUTC) {
     if (!fechaUTC) return null;
     
@@ -224,7 +228,7 @@ window.formatearFechaConDiaSemana = formatearFechaConDiaSemana;
 window.formatearFechaYYYYMMDD = formatearFechaYYYYMMDD;
 
 // ============================================================
-// 🆕 HELPER: Cerrar todos los modales (respaldo si modal.js no cargó)
+// HELPER: Cerrar todos los modales (respaldo si modal.js no cargó)
 // ============================================================
 
 function cerrarTodosLosModalesRespaldo() {
@@ -269,7 +273,7 @@ function cerrarTodosLosModalesRespaldo() {
 
 async function initApp() {
     try {
-        console.log('🚀 Iniciando Panario v2.0.3...');
+        console.log('🚀 Iniciando Panario v2.0.7...');
         
         const urlParams = new URLSearchParams(window.location.search);
         const refreshParam = urlParams.get('refresh');
@@ -311,8 +315,6 @@ async function initApp() {
                         window.showToast('⚠️ No se pudo recargar la BD. Recarga manualmente.', 'warning', 6000);
                     }, 800);
                 }
-            } else {
-                console.error('❌ forceReloadFromStorage no disponible');
             }
         }
 
@@ -380,7 +382,7 @@ async function initApp() {
 }
 
 // ============================================================
-// LISTENER PARA 'db-saved'
+// 🆕 FASE 1.4: LISTENER PARA 'db-saved' CON DEBOUNCE
 // ============================================================
 
 function setupDbSavedListener() {
@@ -390,8 +392,11 @@ function setupDbSavedListener() {
         const currentSection = document.querySelector('.nav-item.active')?.dataset?.section;
         if (!currentSection || currentSection === 'profile') return;
         
-        refreshCurrentView();
+        // 🆕 FASE 1.4: Usar debounce para evitar múltiples refrescos
+        debouncedRefreshCurrentView();
     });
+    
+    console.log('🔄 [debounce] Listener db-saved registrado con debounce de', DB_SAVED_DEBOUNCE_MS, 'ms');
 }
 
 function refreshCurrentView() {
@@ -746,7 +751,6 @@ async function handleLogout() {
             localStorage.removeItem('panario-theme');
             currentUser = null;
             dbReady = false;
-            // Restaurar título genérico
             document.title = 'Panario - Panadería Artesanal';
             window.location.reload(true);
         } catch (e) {
@@ -809,7 +813,6 @@ function updateTopBarAvatar(photoData) {
 
 // ============================================================
 // MOSTRAR APP
-// 🆕 Actualiza el título de la pestaña con el nombre del negocio
 // ============================================================
 
 function showApp(user) {
@@ -848,23 +851,14 @@ function showApp(user) {
     }
     
     updateUserMenuInfo(user);
-    
-    // 🆕 Actualizar el título de la pestaña con el nombre del negocio
     updateDocumentTitle();
-    
-    // 🆕 Actualizar el header de la app con el nombre del negocio
     updateAppHeader();
     
-    // Emitir evento para que otros módulos sepan que el login se completó
     document.dispatchEvent(new CustomEvent('panario:logged-in'));
     
     navigate('dashboard');
 }
 
-/**
- * 🆕 Actualiza el <title> de la pestaña con el nombre del negocio.
- * Formato: "Panadería La Esquina - Panario"
- */
 function updateDocumentTitle() {
     try {
         const nombreNegocio = getNombreNegocio();
@@ -879,22 +873,14 @@ function updateDocumentTitle() {
     }
 }
 
-/**
- * 🆕 Actualiza el header de la app con el nombre del negocio.
- * El header actual tiene: <h1>🍞 Panario</h1>
- * Lo cambiamos a: <h1>🍞 Panadería La Esquina</h1>
- * con un tooltip "Panario - Sistema de gestión"
- */
 function updateAppHeader() {
     try {
         const header = document.querySelector('#appScreen header h1');
         if (!header) return;
         
         const nombreNegocio = getNombreNegocio();
-        const inicial = getInicialNegocio();
         
         if (nombreNegocio && nombreNegocio !== 'Panario') {
-            // Truncar si es muy largo (máx 20 caracteres)
             const nombreMostrar = nombreNegocio.length > 20 
                 ? nombreNegocio.substring(0, 18) + '…' 
                 : nombreNegocio;
@@ -906,8 +892,6 @@ function updateAppHeader() {
             header.innerHTML = `🍞 Panario`;
             header.setAttribute('title', 'Panario - Panadería Artesanal');
         }
-        
-        console.log('🏢 Header actualizado:', header.textContent);
     } catch (e) {
         console.warn('⚠️ Error actualizando header:', e);
     }
@@ -1148,8 +1132,6 @@ function renderTarjetaPedidosHoy(stats) {
 
 // ============================================================
 // RENDER DASHBOARD VIEW
-// 🆕 FASE C: Añadido selector de modo del gráfico
-// 🆕 v4: Nombre del negocio en el header
 // ============================================================
 
 function renderDashboardView() {
@@ -1185,7 +1167,6 @@ function renderDashboardView() {
         }
     }
     
-    // 🆕 Obtener el nombre del negocio
     const nombreNegocio = getNombreNegocio();
     
     console.log('📊 Renderizando dashboard con config:', dashConfig, '| chartMode:', window._chartMode, '| negocio:', nombreNegocio);
@@ -1278,7 +1259,7 @@ function renderDashboardView() {
             </div>
         </div>
         
-        <!-- 🆕 FASE C: Gráfico de ventas con selector de modo -->
+        <!-- Gráfico de ventas con selector de modo -->
         <div class="card" style="padding: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
                 <h3 style="margin: 0; font-size: 14px;">📈 Ventas diarias</h3>
@@ -1458,7 +1439,7 @@ function renderDashboardView() {
 }
 
 // ============================================================
-// RENDER QR DE CUENTA BANCARIA EN DASHBOARD
+// QR DE CUENTA BANCARIA EN DASHBOARD
 // ============================================================
 
 async function renderDashboardBankQR() {
@@ -1591,7 +1572,7 @@ async function downloadDashboardQR(bank, accountNumber) {
 }
 
 // ============================================================
-// 🆕 FASE C: NAVEGACIÓN POR SEMANAS CON MODO CONFIGURABLE
+// NAVEGACIÓN POR SEMANAS CON MODO CONFIGURABLE
 // ============================================================
 
 function changeChartMode(mode) {
@@ -2798,8 +2779,10 @@ window.getNombreNegocio = getNombreNegocio;
 window.getInicialNegocio = getInicialNegocio;
 window.updateDocumentTitle = updateDocumentTitle;
 window.updateAppHeader = updateAppHeader;
+// 🆕 FASE 1.4
+window.debouncedRefreshCurrentView = debouncedRefreshCurrentView;
 
-console.log('📦 App Controller cargado correctamente v2.0.4 (Negocio en header, título y reportes)');
+console.log('📦 App Controller v2.0.8 (FASE 1.4: debounce del dashboard)');
 
 // ============================================================
 // INICIALIZACIÓN AUTOMÁTICA
