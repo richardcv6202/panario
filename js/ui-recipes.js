@@ -4,6 +4,19 @@
 // AÑADIDO FASE B (170926 v2):
 //   - Restricción para no-admin: solo lectura + recalcular + usar como plantilla
 //   - Solo el admin puede crear, editar, duplicar, compartir o eliminar recetas
+// 🆕 FASE 4.2 (#21) (200926 v3): BLOQUEO COMPLETO PARA NO-ADMIN
+//   - renderRecipesView(): banner "🔒 Modo solo lectura" para no-admin
+//   - loadRecipes(): no-admin solo ve botón "👁️ Ver"
+//   - viewRecipe(): no-admin NO ve desglose de costos, solo ingredientes
+//   - Botones de acción filtrados por rol:
+//     * ✅ Ver, Usar como plantilla, Recalcular, Exportar PDF (sin costos)
+//     * ❌ Editar, Duplicar, Compartir, Eliminar (solo admin)
+//   - submitRecipeForm(): doble verificación de permisos
+//   - toggleShareRecipe(): bloquea si no es admin
+//   - deleteRecipe(): bloquea si no es admin
+//   - duplicateRecipe(): bloquea si no es admin
+//   - showRecipeForm(): bloquea si no es admin
+//   - exportRecipePDF(): omite costos para no-admin
 // ============================================================
 
 // ============================================================
@@ -16,6 +29,14 @@ function canModifyRecipes() {
     } catch (e) {
         return false;
     }
+}
+
+/**
+ * 🆕 FASE 4.2 (#21): Determina si el usuario actual puede ver los costos
+ * de las recetas. Solo admin.
+ */
+function canViewRecipeCosts() {
+    return canModifyRecipes();
 }
 
 // ============================================================
@@ -119,7 +140,11 @@ function renderRecipesView() {
                     <span style="font-size: 20px;">🔒</span>
                     <div>
                         <strong>Modo solo lectura</strong><br>
-                        <span style="font-size: 12px; color: var(--text-light);">Puedes consultar recetas, recalcularlas y usarlas como plantilla. Solo los administradores pueden crear, editar o eliminar recetas.</span>
+                        <span style="font-size: 12px; color: var(--text-light);">
+                            Puedes consultar recetas, recalcularlas y usarlas como plantilla.
+                            Los <strong>costos</strong> y las acciones de <strong>crear, editar, duplicar, compartir o eliminar</strong>
+                            están reservados a los administradores.
+                        </span>
                     </div>
                 </div>
             </div>
@@ -183,15 +208,26 @@ async function loadRecipes() {
             const isOwner = recipe.user_id === user.id;
             const isShared = recipe.shared === 1;
             const cost = window.RecipesModule.calculateRecipeCost(recipe) || { totalCost: 0, costPerUnit: 0, hasPrices: false };
-            const priceIndicator = cost.hasPrices ? '💰' : '⚠️';
-            const priceLabel = cost.hasPrices ? 'Con costo' : 'Sin costo';
+            
+            // 🆕 FASE 4.2 (#21): Solo admin ve costos
+            const verCostos = canViewRecipeCosts();
+            
+            const priceIndicator = verCostos ? (cost.hasPrices ? '💰' : '⚠️') : '🔒';
+            const priceLabel = verCostos 
+                ? (cost.hasPrices ? 'Con costo' : 'Sin costo')
+                : 'Costos ocultos';
             
             const fechaCreacion = recipe.created_at 
                 ? new Date(recipe.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
                 : '—';
             
-            // 🆕 FASE B: Solo admin puede editar/duplicar/compartir/eliminar
+            // 🆕 FASE 4.2 (#21): Solo admin puede editar/duplicar/compartir/eliminar
             const puedeEditar = isAdmin && isOwner;
+            
+            // 🆕 FASE 4.2 (#21): Info de costos según permisos
+            const costoInfo = verCostos
+                ? `<span>${priceIndicator} ${priceLabel}: $${(cost.totalCost || 0).toFixed(2)} ($${(cost.costPerUnit || 0).toFixed(2)}/unidad)</span>`
+                : `<span style="color: #94a3b8;">🔒 Costos reservados a administradores</span>`;
             
             return `
                 <div class="card" style="border-left: 4px solid ${isShared ? '#3b82f6' : '#f59e0b'};">
@@ -205,7 +241,7 @@ async function loadRecipes() {
                             ${recipe.description ? `<p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-light);">${recipe.description}</p>` : ''}
                             <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; font-size: 12px; color: var(--text-light);">
                                 <span>📦 Rendimiento: ${parseFloat(recipe.yield_units || 1).toFixed(1)} ${recipe.yield_unit_type || 'unidades'}</span>
-                                <span>${priceIndicator} ${priceLabel}: $${(cost.totalCost || 0).toFixed(2)} ($${(cost.costPerUnit || 0).toFixed(2)}/unidad)</span>
+                                ${costoInfo}
                                 ${recipe.ingredients ? `<span>🧾 ${recipe.ingredients.length} ingredientes</span>` : ''}
                                 <span>📅 ${fechaCreacion}</span>
                             </div>
@@ -250,6 +286,7 @@ async function loadRecipes() {
 // ============================================================
 
 async function duplicateRecipe(recipeId) {
+    // 🆕 FASE 4.2 (#21): Bloquear si no es admin
     if (!canModifyRecipes()) {
         window.showToast('🔒 Solo los administradores pueden duplicar recetas', 'warning', 4000);
         return;
@@ -322,7 +359,7 @@ async function duplicateRecipe(recipeId) {
 // ============================================================
 
 async function showRecipeForm(recipeId = null) {
-    // 🆕 FASE B: Bloquear si no es admin
+    // 🆕 FASE 4.2 (#21): Bloquear si no es admin
     if (!canModifyRecipes()) {
         window.showToast('🔒 Solo los administradores pueden crear o editar recetas', 'warning', 4000);
         return;
@@ -563,7 +600,7 @@ window.addIngredient = function(name = '', quantity = 1, unit = 'kg') {
 // ============================================================
 
 async function submitRecipeForm(recipeId) {
-    // 🆕 FASE B: Doble verificación
+    // 🆕 FASE 4.2 (#21): Doble verificación
     if (!canModifyRecipes()) {
         window.showToast('🔒 Solo los administradores pueden guardar recetas', 'warning', 4000);
         return;
@@ -643,6 +680,7 @@ async function submitRecipeForm(recipeId) {
 // VER RECETA EN DETALLE
 // FASE A.4: Sección de Auditoría
 // FASE B: Botones de edición solo para admin
+// 🆕 FASE 4.2 (#21): Ocultar costos para no-admin
 // ============================================================
 
 async function viewRecipe(id) {
@@ -663,8 +701,9 @@ async function viewRecipe(id) {
         const user = window.AuthModule.getCurrentUser();
         const isOwner = recipe.user_id === user?.id;
         const isAdmin = canModifyRecipes();
+        const verCostos = canViewRecipeCosts();
         
-        // 🆕 FASE B: Solo admin Y propietario puede editar
+        // 🆕 FASE 4.2 (#21): Solo admin Y propietario puede editar
         const puedeEditar = isAdmin && isOwner;
         
         // Fecha de creación
@@ -688,8 +727,9 @@ async function viewRecipe(id) {
             `;
         }
         
+        // 🆕 FASE 4.2 (#21): Bloque de costos condicional
         let costDetailsHtml = '';
-        if (cost.ingredientDetails && cost.ingredientDetails.length > 0) {
+        if (verCostos && cost.ingredientDetails && cost.ingredientDetails.length > 0) {
             costDetailsHtml = `
                 <hr>
                 <h3 style="margin: 12px 0 8px;">💰 Desglose de costos</h3>
@@ -711,6 +751,17 @@ async function viewRecipe(id) {
                     <div style="display: flex; justify-content: space-between; padding: 4px 0; font-weight: 700; font-size: 16px; color: var(--primary); border-top: 2px solid var(--primary);">
                         <span>💰 Costo por unidad (${cost.yieldUnits} ${recipe.yield_unit_type || 'unidades'})</span>
                         <span>$${cost.costPerUnit.toFixed(2)}</span>
+                    </div>
+                </div>
+            `;
+        } else if (!verCostos) {
+            // 🆕 FASE 4.2 (#21): Aviso para no-admin
+            costDetailsHtml = `
+                <hr>
+                <div style="background: #3b82f610; border-left: 3px solid #3b82f6; border-radius: 6px; padding: 10px 12px; margin: 12px 0;">
+                    <div style="font-size: 12px; color: #3b82f6; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 16px;">🔒</span>
+                        <span>Los <strong>costos de la receta</strong> están reservados a los administradores.</span>
                     </div>
                 </div>
             `;
@@ -777,7 +828,7 @@ async function viewRecipe(id) {
                 
                 <hr>
                 
-                <!-- 🆕 Botones de acción con permisos -->
+                <!-- 🆕 FASE 4.2 (#21): Botones de acción con permisos -->
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                     ${puedeEditar ? `
                         <button onclick="showRecipeForm(${recipe.id})" class="btn primary" style="padding: 6px 16px; font-size: 13px; width: auto;">
@@ -797,10 +848,12 @@ async function viewRecipe(id) {
                         🔄 Recalcular
                     </button>
                     
-                    <!-- Compartir (disponible para todos) -->
-                    <button onclick="showCompartirModal(${recipe.id})" class="btn secondary" style="padding: 6px 16px; font-size: 13px; width: auto; background: #10b981; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
-                        💬 Compartir
-                    </button>
+                    ${isAdmin ? `
+                        <!-- Compartir (solo admin) -->
+                        <button onclick="showCompartirModal(${recipe.id})" class="btn secondary" style="padding: 6px 16px; font-size: 13px; width: auto; background: #10b981; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+                            💬 Compartir
+                        </button>
+                    ` : ''}
                     
                     <button onclick="exportRecipePDF(${recipe.id})" class="btn secondary" style="padding: 6px 16px; font-size: 13px; width: auto; background: #8b5cf6; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
                         📄 Exportar PDF
@@ -839,7 +892,7 @@ async function showRecalcularModal(recipeId) {
         return;
     }
     
-    // 🆕 FASE B: Determinar si el usuario puede modificar la receta original
+    // 🆕 FASE 4.2 (#21): Determinar si el usuario puede modificar la receta original
     const user = window.AuthModule.getCurrentUser();
     const isOwner = recipe.user_id === user?.id;
     const isAdmin = canModifyRecipes();
@@ -944,6 +997,7 @@ async function previewRecalculo(recipeId) {
     }
     
     const factor = resultado.factor.toFixed(3);
+    const verCostos = canViewRecipeCosts();
     
     let insumosHtml = '';
     if (resultado.insumos.length > 0) {
@@ -959,17 +1013,30 @@ async function previewRecalculo(recipeId) {
         `).join('');
     }
     
-    preview.innerHTML = `
+    // 🆕 FASE 4.2 (#21): Costos condicionales
+    const costosHtml = verCostos ? `
         <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px;">
             <span><strong>Factor:</strong> ×${factor}</span>
             <span><strong>Nuevo costo:</strong> $${resultado.costo_total_nuevo.toFixed(2)}</span>
         </div>
-        <div style="font-size: 12px; font-weight: 600; margin-bottom: 4px;">Ajustes de insumos:</div>
-        ${insumosHtml}
+    ` : `
+        <div style="margin-bottom: 8px; font-size: 13px; text-align: center; color: #94a3b8;">
+            <strong>Factor:</strong> ×${factor}
+        </div>
+    `;
+    
+    const costoUnidadHtml = verCostos ? `
         <div style="display: flex; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 2px solid #3b82f6; font-size: 13px;">
             <span><strong>💵 Costo por unidad:</strong></span>
             <span><strong>$${resultado.costo_por_unidad_nuevo.toFixed(2)}</strong></span>
         </div>
+    ` : '';
+    
+    preview.innerHTML = `
+        ${costosHtml}
+        <div style="font-size: 12px; font-weight: 600; margin-bottom: 4px;">Ajustes de insumos:</div>
+        ${insumosHtml}
+        ${costoUnidadHtml}
     `;
 }
 
@@ -994,7 +1061,7 @@ async function aplicarRecalculo(recipeId, modo) {
     }
     
     if (modo === 'modificar') {
-        // 🆕 FASE B: Doble verificación
+        // 🆕 FASE 4.2 (#21): Doble verificación
         if (!canModifyRecipes()) {
             window.showToast('🔒 Solo los administradores pueden modificar recetas existentes', 'warning', 4000);
             return;
@@ -1107,10 +1174,16 @@ function closeRecalcularModal() {
 }
 
 // ============================================================
-// MODAL DE COMPARTIR
+// MODAL DE COMPARTIR (SOLO ADMIN)
 // ============================================================
 
 async function showCompartirModal(recipeId) {
+    // 🆕 FASE 4.2 (#21): Bloquear si no es admin
+    if (!canModifyRecipes()) {
+        window.showToast('🔒 Solo los administradores pueden compartir recetas', 'warning', 4000);
+        return;
+    }
+    
     const existingModal = document.getElementById('compartir-modal');
     if (existingModal) existingModal.remove();
     
@@ -1228,6 +1301,7 @@ function closeCompartirModal() {
 
 // ============================================================
 // EXPORTAR RECETA A PDF
+// 🆕 FASE 4.2 (#21): Omite costos para no-admin
 // ============================================================
 
 async function exportRecipePDF(recipeId) {
@@ -1245,9 +1319,59 @@ async function exportRecipePDF(recipeId) {
         }
         
         const cost = window.RecipesModule.calculateRecipeCost(recipe);
+        const verCostos = canViewRecipeCosts();
+        
         const fechaCreacion = recipe.created_at 
             ? new Date(recipe.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })
             : '—';
+        
+        // 🆕 FASE 4.2 (#21): Bloque de info condicional
+        const infoGridHtml = verCostos ? `
+            <div class="info-grid">
+                <div><span class="label">📦 Rendimiento:</span> ${recipe.yield_units || 1} ${recipe.yield_unit_type || 'unidades'}</div>
+                <div><span class="label">💰 Costo total:</span> $${(cost.totalCost || 0).toFixed(2)}</div>
+                <div><span class="label">💵 Costo por unidad:</span> $${(cost.costPerUnit || 0).toFixed(2)}</div>
+                <div><span class="label">👤 Creado por:</span> ${recipe.creator_username || 'Usuario'}</div>
+            </div>
+        ` : `
+            <div class="info-grid">
+                <div><span class="label">📦 Rendimiento:</span> ${recipe.yield_units || 1} ${recipe.yield_unit_type || 'unidades'}</div>
+                <div><span class="label">👤 Creado por:</span> ${recipe.creator_username || 'Usuario'}</div>
+            </div>
+        `;
+        
+        // Tabla de insumos condicional
+        const insumosTableHtml = (recipe.receta_insumos && recipe.receta_insumos.length > 0) ? `
+            <div class="section">
+                <h3>🧾 Insumos</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Insumo</th>
+                            <th style="text-align: center;">Cantidad</th>
+                            <th>Unidad</th>
+                            ${verCostos ? '<th style="text-align: right;">Costo Unit.</th><th style="text-align: right;">Subtotal</th>' : ''}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${recipe.receta_insumos.map(ri => `
+                            <tr>
+                                <td>${ri.insumo_nombre || 'Insumo'}</td>
+                                <td style="text-align: center;">${ri.cantidad}</td>
+                                <td>${ri.unidad}</td>
+                                ${verCostos ? `<td style="text-align: right;">$${(ri.costo_unitario || 0).toFixed(2)}</td><td style="text-align: right;">$${(ri.cantidad * (ri.costo_unitario || 0)).toFixed(2)}</td>` : ''}
+                            </tr>
+                        `).join('')}
+                        ${verCostos ? `
+                        <tr class="total-row">
+                            <td colspan="4" style="text-align: right;">TOTAL</td>
+                            <td style="text-align: right;">$${(cost.totalCost || 0).toFixed(2)}</td>
+                        </tr>
+                        ` : ''}
+                    </tbody>
+                </table>
+            </div>
+        ` : '<div class="section"><h3>🧾 Insumos</h3><p style="color: #94a3b8;">No hay insumos asociados</p></div>';
         
         const html = `
             <!DOCTYPE html>
@@ -1275,6 +1399,7 @@ async function exportRecipePDF(recipeId) {
                     .shared-badge { display: inline-block; background: #3b82f620; color: #3b82f6; padding: 2px 12px; border-radius: 12px; font-size: 12px; }
                     .instructions { background: #f8f9fa; padding: 12px; border-radius: 6px; margin-top: 10px; white-space: pre-wrap; }
                     .fecha { font-size: 12px; color: #666; text-align: center; margin-top: 4px; }
+                    .no-costos { background: #3b82f610; border-left: 3px solid #3b82f6; padding: 10px 14px; border-radius: 6px; margin: 15px 0; font-size: 12px; color: #3b82f6; }
                     @media print {
                         body { padding: 15px; }
                         .header h1 { font-size: 22px; }
@@ -1289,44 +1414,15 @@ async function exportRecipePDF(recipeId) {
                     <p>${recipe.description || 'Sin descripción'}</p>
                 </div>
 
-                <div class="info-grid">
-                    <div><span class="label">📦 Rendimiento:</span> ${recipe.yield_units || 1} ${recipe.yield_unit_type || 'unidades'}</div>
-                    <div><span class="label">💰 Costo total:</span> $${(cost.totalCost || 0).toFixed(2)}</div>
-                    <div><span class="label">💵 Costo por unidad:</span> $${(cost.costPerUnit || 0).toFixed(2)}</div>
-                    <div><span class="label">👤 Creado por:</span> ${recipe.creator_username || 'Usuario'}</div>
+                ${infoGridHtml}
+                
+                ${!verCostos ? `
+                <div class="no-costos">
+                    🔒 Los costos de esta receta están reservados a los administradores. Este reporte muestra solo la información de producción.
                 </div>
+                ` : ''}
 
-                <div class="section">
-                    <h3>🧾 Insumos</h3>
-                    ${recipe.receta_insumos && recipe.receta_insumos.length > 0 ? `
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Insumo</th>
-                                    <th style="text-align: center;">Cantidad</th>
-                                    <th>Unidad</th>
-                                    <th style="text-align: right;">Costo Unit.</th>
-                                    <th style="text-align: right;">Subtotal</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${recipe.receta_insumos.map(ri => `
-                                    <tr>
-                                        <td>${ri.insumo_nombre || 'Insumo'}</td>
-                                        <td style="text-align: center;">${ri.cantidad}</td>
-                                        <td>${ri.unidad}</td>
-                                        <td style="text-align: right;">$${(ri.costo_unitario || 0).toFixed(2)}</td>
-                                        <td style="text-align: right;">$${(ri.cantidad * (ri.costo_unitario || 0)).toFixed(2)}</td>
-                                    </tr>
-                                `).join('')}
-                                <tr class="total-row">
-                                    <td colspan="4" style="text-align: right;">TOTAL</td>
-                                    <td style="text-align: right;">$${(cost.totalCost || 0).toFixed(2)}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    ` : '<p style="color: #94a3b8;">No hay insumos asociados</p>'}
-                </div>
+                ${insumosTableHtml}
 
                 ${recipe.instructions ? `
                     <div class="section">
@@ -1366,6 +1462,7 @@ async function exportRecipePDF(recipeId) {
 // ============================================================
 
 async function deleteRecipe(id) {
+    // 🆕 FASE 4.2 (#21): Bloquear si no es admin
     if (!canModifyRecipes()) {
         window.showToast('🔒 Solo los administradores pueden eliminar recetas', 'warning', 4000);
         return;
@@ -1421,6 +1518,7 @@ async function deleteRecipe(id) {
 // ============================================================
 
 async function toggleShareRecipe(id) {
+    // 🆕 FASE 4.2 (#21): Bloquear si no es admin
     if (!canModifyRecipes()) {
         window.showToast('🔒 Solo los administradores pueden cambiar la visibilidad de las recetas', 'warning', 4000);
         return;
@@ -1499,5 +1597,7 @@ window.compartirPorEmail = compartirPorEmail;
 window.copiarReceta = copiarReceta;
 window.renderAuditoriaHTML = renderAuditoriaHTML;
 window.canModifyRecipes = canModifyRecipes;
+// 🆕 FASE 4.2 (#21)
+window.canViewRecipeCosts = canViewRecipeCosts;
 
-console.log('📦 UI Recipes Module cargado correctamente v2.0.2 (FASE A.4 + FASE B: solo lectura + recalcular para no-admin)');
+console.log('📦 UI Recipes Module cargado correctamente v2.1.1 (FASE 4.2 #21: bloqueo completo para no-admin)');

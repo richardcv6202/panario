@@ -27,6 +27,32 @@
 //   - Esto evita que el dashboard se re-renderice 4-5 veces por acción
 //   - Nueva función debouncedRefreshCurrentView() con cancelación
 //   - Log para diagnosticar cuántos eventos db-saved llegan
+// 🆕 FASE 3.2 (200926 v6):
+//   - NUEVA tarjeta: 🚀 Ventas liberadas (cantidad + importe)
+//   - NUEVA tarjeta: 🥇 Mejor día (fecha + importe)
+//   - NUEVA tarjeta: 📉 Peor día (fecha + importe)
+//   - NUEVA tarjeta: 👥 Ventas por empleado (top 3)
+//   - NUEVA función: formatearFechaInteligente() para "Corriente hoy"
+//     * Si el próximo bloque es HOY → "Hoy 3:00 PM"
+//     * Si es MAÑANA → "Mañana 19, 1:00 AM"
+//     * Si es +2 días → "Mié 21, 1:00 AM"
+//     * Si es +7 días o más → "25/09, 1:00 AM"
+//   - Homogeneizado alturas de tarjetas (min-height: 90px)
+//   - Integración con toggles nuevos del perfil:
+//     * show_released_sales
+//     * show_best_worst_day
+//     * show_sales_by_employee
+//     * show_debts (#26)
+//     * show_rewards (#25)
+//   - Compatibilidad total: si los toggles no existen en la config
+//     del usuario, se aplican defaults sensatos
+// 🆕 FASE 4.2 (#14) (200926 v7): PERSISTENCIA DEL MODO DEL GRÁFICO
+//   - renderDashboardView() lee chart_mode desde dashConfig (BD)
+//   - changeChartMode() guarda el modo en la BD del usuario
+//   - El selector se hidrata con el modo persistido
+// 🆕 FASE 5 (#2) (200926 v8): ENLACE "AYUDA DETALLADA"
+//   - Nueva función openDetailedHelp() → abre ayuda-panario.html
+//   - Expuesta globalmente como window.openDetailedHelp
 // ============================================================
 
 let currentUser = null;
@@ -222,10 +248,78 @@ function formatDate(dateStr) {
     }
 }
 
+/**
+ * 🆕 FASE 3.2: Formatea una fecha de forma inteligente y contextual.
+ * 
+ * Casos:
+ *   - HOY → "Hoy 3:00 PM"
+ *   - MAÑANA → "Mañana 19, 1:00 AM"
+ *   - +2 a +6 días → "Mié 21, 1:00 AM"
+ *   - +7 días o más → "25/09, 1:00 AM"
+ *   - AYER → "Ayer 3:00 PM"
+ *   - -2 a -6 días → "Lun 14, 3:00 PM"
+ *   - -7 días o menos → "12/09, 3:00 PM"
+ * 
+ * @param {Date|string} fecha - Fecha a formatear
+ * @param {string} horaStr - Hora en formato "HH:MM" o "h:mm AM/PM" (opcional)
+ * @returns {string} Texto formateado
+ */
+function formatearFechaInteligente(fecha, horaStr = null) {
+    try {
+        const date = fecha instanceof Date ? fecha : new Date(fecha);
+        if (isNaN(date.getTime())) return '—';
+        
+        // Normalizar fecha objetivo a medianoche
+        const fechaObj = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        
+        // Fecha de hoy a medianoche
+        const hoy = new Date();
+        const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+        
+        // Diferencia en días
+        const diffMs = fechaObj.getTime() - hoyMid.getTime();
+        const diffDias = Math.round(diffMs / (1000 * 60 * 60 * 24));
+        
+        // Día de la semana y del mes
+        const diasAbrev = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        const dia = date.getDate();
+        const mes = String(date.getMonth() + 1).padStart(2, '0');
+        
+        // Formatear la hora si existe
+        let sufijoHora = '';
+        if (horaStr) {
+            sufijoHora = `, ${horaStr}`;
+        }
+        
+        // ============================================================
+        // CASOS
+        // ============================================================
+        if (diffDias === 0) {
+            return `Hoy${sufijoHora}`;
+        } else if (diffDias === 1) {
+            return `Mañana ${dia}${sufijoHora}`;
+        } else if (diffDias === -1) {
+            return `Ayer${sufijoHora}`;
+        } else if (diffDias > 1 && diffDias <= 6) {
+            return `${diasAbrev[date.getDay()]} ${dia}${sufijoHora}`;
+        } else if (diffDias < -1 && diffDias >= -6) {
+            return `${diasAbrev[date.getDay()]} ${dia}${sufijoHora}`;
+        } else if (diffDias >= 7 || diffDias <= -7) {
+            return `${dia}/${mes}${sufijoHora}`;
+        }
+        
+        return `${diasAbrev[date.getDay()]} ${dia}${sufijoHora}`;
+    } catch (e) {
+        console.warn('⚠️ Error en formatearFechaInteligente:', e);
+        return '—';
+    }
+}
+
 window.fechaLocalYYYYMMDD = fechaLocalYYYYMMDD;
 window.hoyYYYYMMDD = hoyYYYYMMDD;
 window.formatearFechaConDiaSemana = formatearFechaConDiaSemana;
 window.formatearFechaYYYYMMDD = formatearFechaYYYYMMDD;
+window.formatearFechaInteligente = formatearFechaInteligente;
 
 // ============================================================
 // HELPER: Cerrar todos los modales (respaldo si modal.js no cargó)
@@ -243,7 +337,8 @@ function cerrarTodosLosModalesRespaldo() {
         'sales-report-modal', 'orders-report-modal', 'expenses-report-modal',
         'recalcular-modal', 'compartir-modal', 'edit-bank-account-modal',
         'bank-accounts-modal', 'qr-view-modal',
-        'tour-overlay', 'tour-highlight', 'tour-tooltip'
+        'tour-overlay', 'tour-highlight', 'tour-tooltip',
+        'waiting-manager-modal', 'global-cancel-modal'
     ];
     
     let cerrados = 0;
@@ -268,12 +363,38 @@ function cerrarTodosLosModalesRespaldo() {
 }
 
 // ============================================================
+// 🆕 FASE 5 (#2): ABRIR AYUDA DETALLADA
+// ============================================================
+
+/**
+ * Abre el archivo de ayuda externa en una nueva pestaña.
+ * Ruta relativa para funcionar tanto en localhost como en GitHub Pages.
+ */
+function openDetailedHelp() {
+    try {
+        const url = './ayuda-panario.html';
+        console.log('📖 Abriendo ayuda detallada:', url);
+        window.open(url, '_blank', 'noopener,noreferrer');
+        if (window.showToast) {
+            window.showToast('📖 Abriendo ayuda detallada en nueva pestaña...', 'info', 2500);
+        }
+    } catch (e) {
+        console.warn('⚠️ Error abriendo ayuda detallada:', e);
+        if (window.showToast) {
+            window.showToast('❌ No se pudo abrir la ayuda detallada', 'error', 4000);
+        }
+    }
+}
+
+window.openDetailedHelp = openDetailedHelp;
+
+// ============================================================
 // INICIALIZACIÓN
 // ============================================================
 
 async function initApp() {
     try {
-        console.log('🚀 Iniciando Panario v2.0.7...');
+        console.log('🚀 Iniciando Panario v2.1.1...');
         
         const urlParams = new URLSearchParams(window.location.search);
         const refreshParam = urlParams.get('refresh');
@@ -370,7 +491,7 @@ async function initApp() {
         
         setTimeout(adjustForSafeArea, 500);
 
-        console.log('✅ App inicializada correctamente');
+        console.log('✅ App inicializada correctamente (v2.1.1)');
 
     } catch (error) {
         console.error('❌ Error inicializando app:', error);
@@ -1049,6 +1170,16 @@ function renderTarjetaCorrienteHoy() {
             }
         }
         
+        // 🆕 FASE 3.2: Si no hay próximo bloque HOY, buscarlo en los próximos días
+        let proximoBloqueGlobal = proximoBloque;
+        if (!proximoBloque && !bloqueActual && window.CorrienteUtils.getProximoBloque) {
+            try {
+                proximoBloqueGlobal = window.CorrienteUtils.getProximoBloque(ahora);
+            } catch (e) {
+                console.warn('⚠️ Error buscando próximo bloque global:', e);
+            }
+        }
+        
         const bloquesHTML = resumen.bloques.map((b, i) => {
             const texto = b.cruzaMedianoche
                 ? `${b.inicioStr} → ${b.finStr} (${window.CorrienteUtils.getDiaSemana(b.fin, true).toLowerCase()})`
@@ -1065,15 +1196,27 @@ function renderTarjetaCorrienteHoy() {
             `;
         }).join('');
         
-        const estadoActualHTML = bloqueActual ? `
-            <div style="background: #10b98115; border: 1px solid #10b981; border-radius: 8px; padding: 6px 12px; margin-bottom: 8px; font-size: 12px; color: #10b981; text-align: center; font-weight: 600;">
-                ⚡ Corriente ACTIVA ahora
-            </div>
-        ` : proximoBloque ? `
-            <div style="background: #f59e0b15; border: 1px solid #f59e0b; border-radius: 8px; padding: 6px 12px; margin-bottom: 8px; font-size: 12px; color: #f59e0b; text-align: center;">
-                ⏰ Próximo bloque: ${proximoBloque.inicioStr}
-            </div>
-        ` : '';
+        // 🆕 FASE 3.2: Estado actual con fecha inteligente
+        let estadoActualHTML = '';
+        
+        if (bloqueActual) {
+            estadoActualHTML = `
+                <div style="background: #10b98115; border: 1px solid #10b981; border-radius: 8px; padding: 6px 12px; margin-bottom: 8px; font-size: 12px; color: #10b981; text-align: center; font-weight: 600;">
+                    ⚡ Corriente ACTIVA ahora
+                </div>
+            `;
+        } else if (proximoBloqueGlobal) {
+            // 🆕 FASE 3.2: Usar formatearFechaInteligente
+            const inicio = proximoBloqueGlobal.inicio;
+            const horaStr = window.CorrienteUtils.formatearHora12h(inicio);
+            const fechaInteligente = formatearFechaInteligente(inicio, horaStr);
+            
+            estadoActualHTML = `
+                <div style="background: #f59e0b15; border: 1px solid #f59e0b; border-radius: 8px; padding: 6px 12px; margin-bottom: 8px; font-size: 12px; color: #f59e0b; text-align: center;">
+                    ⏰ Próximo bloque: <strong>${fechaInteligente}</strong>
+                </div>
+            `;
+        }
         
         const fechaConDia = formatearFechaConDiaSemana(new Date());
         
@@ -1132,18 +1275,12 @@ function renderTarjetaPedidosHoy(stats) {
 
 // ============================================================
 // RENDER DASHBOARD VIEW
+// 🆕 FASE 3.2: Nuevas tarjetas + fecha inteligente + alturas
+// 🆕 FASE 4.2 (#14): Lectura de chart_mode desde la BD
 // ============================================================
 
 function renderDashboardView() {
     const main = document.getElementById('mainContent');
-    
-    if (window._weekOffset === undefined) {
-        window._weekOffset = 0;
-    }
-    
-    if (window._chartMode === undefined) {
-        window._chartMode = 'last7';
-    }
     
     const user = window.AuthModule.getCurrentUser();
     let dashConfig = {
@@ -1154,19 +1291,42 @@ function renderDashboardView() {
         show_payment_methods: true,
         show_quick_actions: true,
         show_bank_qr: false,
-        show_orders_today: true
+        show_orders_today: true,
+        // 🆕 FASE 3.2: Nuevos toggles con defaults
+        show_released_sales: true,
+        show_best_worst_day: true,
+        show_sales_by_employee: true,
+        show_debts: true,
+        show_rewards: true,
+        // 🆕 FASE 4.2 (#14): Modo del gráfico persistido
+        chart_mode: 'last7'
     };
     
     if (user) {
         if (user.dashboard_config) {
             dashConfig = { ...dashConfig, ...user.dashboard_config };
+            user.dashboard_config = dashConfig;
+            window.AuthModule.setCurrentUser(user);
         } else {
             dashConfig = window.DBModule.getUserDashboardConfig(user.id);
             user.dashboard_config = dashConfig;
             window.AuthModule.setCurrentUser(user);
         }
     }
+
+    // 🆕 FASE 4.2 (#14): Hidratar el modo del gráfico desde la BD
+    // Solo si NO hay uno en memoria más reciente (para no pisar el cambio)
+    if (!window._chartMode || window._chartModeSetByUser !== true) {
+        window._chartMode = dashConfig.chart_mode || 'last7';
+        console.log('📊 [FASE 4.2] Modo del gráfico hidratado desde BD:', window._chartMode);
+    } else {
+        console.log('📊 [FASE 4.2] Modo del gráfico ya en memoria:', window._chartMode);
+    }
     
+    if (window._weekOffset === undefined) {
+        window._weekOffset = 0;
+    }
+
     const nombreNegocio = getNombreNegocio();
     
     console.log('📊 Renderizando dashboard con config:', dashConfig, '| chartMode:', window._chartMode, '| negocio:', nombreNegocio);
@@ -1195,48 +1355,91 @@ function renderDashboardView() {
         
         ${dashConfig.show_orders_today ? `<div id="dashboard-orders-today-container"></div>` : ''}
         
-        <!-- Tarjetas de estadísticas principales -->
+        <!-- Tarjetas de estadísticas principales (🆕 FASE 3.2: alturas homogéneas) -->
         <div id="dashboard-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
-            <div class="card" style="padding: 14px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;">
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center;">
                 <div style="font-size: 11px; color: var(--text-light);">🛒 Ventas totales</div>
                 <div style="font-size: 22px; font-weight: 700; color: var(--primary);" id="stat-total-sales">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;">
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center;">
                 <div style="font-size: 11px; color: var(--text-light);">💰 Ingresos</div>
                 <div style="font-size: 22px; font-weight: 700; color: #10b981;" id="stat-revenue">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;">
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center;">
                 <div style="font-size: 11px; color: var(--text-light);">📤 Gastos</div>
                 <div style="font-size: 22px; font-weight: 700; color: #ef4444;" id="stat-expenses">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;">
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center;">
                 <div style="font-size: 11px; color: var(--text-light);">📈 Ganancia</div>
                 <div style="font-size: 22px; font-weight: 700; color: #3b82f6;" id="stat-profit">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;">
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center;">
                 <div style="font-size: 11px; color: var(--text-light);">📋 Pedidos pendientes</div>
                 <div style="font-size: 22px; font-weight: 700; color: #f59e0b;" id="stat-pending-orders">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;">
+            ${dashConfig.show_debts ? `
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center;">
                 <div style="font-size: 11px; color: var(--text-light);">💳 Deudas</div>
                 <div style="font-size: 22px; font-weight: 700; color: #ef4444;" id="stat-debts">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #f59e0b;">
+            ` : ''}
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #f59e0b;">
                 <div style="font-size: 11px; color: var(--text-light);">📈 Ventas hoy</div>
                 <div style="font-size: 22px; font-weight: 700; color: #f59e0b;" id="stat-today-sales">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #10b981;">
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #10b981;">
                 <div style="font-size: 11px; color: var(--text-light);">💵 Fondo en caja</div>
                 <div style="font-size: 22px; font-weight: 700; color: #10b981;" id="stat-cash-balance">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #3b82f6;">
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #3b82f6;">
                 <div style="font-size: 11px; color: var(--text-light);">🏦 Fondo en banco</div>
                 <div style="font-size: 22px; font-weight: 700; color: #3b82f6;" id="stat-bank-balance">-</div>
             </div>
         </div>
         
-        <!-- Tarjetas de estadísticas nuevas -->
+        <!-- 🆕 FASE 3.2: Tarjetas de ventas liberadas + mejor/peor día + ventas por empleado -->
+        ${(dashConfig.show_released_sales || dashConfig.show_best_worst_day) ? `
         <div id="dashboard-new-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
+            
+            ${dashConfig.show_released_sales ? `
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #8b5cf6;">
+                <div style="font-size: 22px; margin-bottom: 4px;">🚀</div>
+                <div style="font-size: 11px; color: var(--text-light);">Ventas liberadas</div>
+                <div style="font-size: 18px; font-weight: 700; color: #8b5cf6;" id="stat-released-sales">-</div>
+                <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;" id="stat-released-sales-count">-</div>
+            </div>
+            ` : ''}
+            
+            ${dashConfig.show_best_worst_day ? `
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #f59e0b;">
+                <div style="font-size: 22px; margin-bottom: 4px;">🥇</div>
+                <div style="font-size: 11px; color: var(--text-light);">Mejor día</div>
+                <div style="font-size: 16px; font-weight: 700; color: #f59e0b;" id="stat-best-day">-</div>
+                <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;" id="stat-best-day-date">-</div>
+            </div>
+            
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #ef4444;">
+                <div style="font-size: 22px; margin-bottom: 4px;">📉</div>
+                <div style="font-size: 11px; color: var(--text-light);">Peor día</div>
+                <div style="font-size: 16px; font-weight: 700; color: #ef4444;" id="stat-worst-day">-</div>
+                <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;" id="stat-worst-day-date">-</div>
+            </div>
+            ` : ''}
+            
+        </div>
+        ` : ''}
+        
+        ${dashConfig.show_sales_by_employee ? `
+        <div class="card" id="dashboard-employees-container" style="border-left: 4px solid #3b82f6; margin-bottom: 16px;">
+            <h3 style="margin: 0 0 12px 0; font-size: 14px;">👥 Ventas por empleado</h3>
+            <div id="sales-by-employee" style="font-size: 13px;">
+                <div style="text-align: center; padding: 20px 0; color: var(--text-light);">Cargando...</div>
+            </div>
+        </div>
+        ` : ''}
+        
+        <!-- Estadísticas avanzadas -->
+        <div id="dashboard-advanced-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
             <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #8b5cf6;">
                 <div style="font-size: 22px; margin-bottom: 4px;">📅</div>
                 <div style="font-size: 11px; color: var(--text-light);">Días con ventas</div>
@@ -1375,8 +1578,9 @@ function renderDashboardView() {
         </div>
         ` : ''}
         
-        <div id="dashboard-rewards-container"></div>
+        ${dashConfig.show_rewards ? `<div id="dashboard-rewards-container"></div>` : ''}
         
+        ${dashConfig.show_debts ? `
         <div class="card" style="border-left: 4px solid #ef4444;">
             <h3 style="margin: 0 0 8px 0; font-size: 14px;">💳 Importes por cobrar (Deudas)</h3>
             <div id="debt-details" style="font-size: 13px;">
@@ -1390,6 +1594,7 @@ function renderDashboardView() {
                 👁️ Ver todas las deudas
             </button>
         </div>
+        ` : ''}
         
         ${dashConfig.show_payment_methods ? `
         <div class="card">
@@ -1573,10 +1778,11 @@ async function downloadDashboardQR(bank, accountNumber) {
 
 // ============================================================
 // NAVEGACIÓN POR SEMANAS CON MODO CONFIGURABLE
+// 🆕 FASE 4.2 (#14): Persistencia del modo del gráfico
 // ============================================================
 
 function changeChartMode(mode) {
-    console.log('🔄 [FASE C] Cambiando modo del gráfico a:', mode);
+    console.log('🔄 [FASE 4.2] Cambiando modo del gráfico a:', mode);
     
     const validModes = ['last7', 'dom-sab', 'lun-dom'];
     if (!validModes.includes(mode)) {
@@ -1585,7 +1791,30 @@ function changeChartMode(mode) {
     }
     
     window._chartMode = mode;
+    window._chartModeSetByUser = true;  // 🆕 FASE 4.2: Marcar cambio por el usuario
     window._weekOffset = 0;
+    
+    // 🆕 FASE 4.2 (#14): Guardar el modo en la BD del usuario
+    try {
+        const user = window.AuthModule.getCurrentUser();
+        if (user) {
+            const config = user.dashboard_config || window.DBModule.getUserDashboardConfig(user.id);
+            config.chart_mode = mode;
+            
+            // Guardar de forma asíncrona
+            window.AuthModule.updateUserDashboardConfig(user.id, config).then(result => {
+                if (result && result.success) {
+                    console.log('✅ [FASE 4.2] Modo del gráfico guardado en BD:', mode);
+                } else {
+                    console.warn('⚠️ [FASE 4.2] No se pudo guardar el modo del gráfico:', result?.error);
+                }
+            }).catch(err => {
+                console.warn('⚠️ [FASE 4.2] Error guardando el modo del gráfico:', err);
+            });
+        }
+    } catch (e) {
+        console.warn('⚠️ [FASE 4.2] Error actualizando dashboard_config:', e);
+    }
     
     const selector = document.getElementById('chart-mode-selector');
     if (selector) selector.value = mode;
@@ -2041,6 +2270,7 @@ function renderPieChartCanvas(container, chartData) {
 
 // ============================================================
 // CARGAR DATOS DEL DASHBOARD
+// 🆕 FASE 3.2: Nuevas estadísticas
 // ============================================================
 
 async function loadDashboardData() {
@@ -2082,6 +2312,22 @@ async function loadDashboardData() {
             'stat-primer-dia': stats.primerDiaVenta ? formatearFechaYYYYMMDD(stats.primerDiaVenta) : '—',
             'stat-clientes-diferentes': stats.clientesDiferentes || 0
         };
+        
+        // 🆕 FASE 3.2: Nuevas estadísticas
+        if (stats.releasedSales) {
+            elements['stat-released-sales'] = '$' + (stats.releasedSales.total || 0).toFixed(2);
+            elements['stat-released-sales-count'] = (stats.releasedSales.count || 0) + ' ventas';
+        }
+        
+        if (stats.bestWorstDay && stats.bestWorstDay.best) {
+            elements['stat-best-day'] = '$' + (stats.bestWorstDay.best.total || 0).toFixed(2);
+            elements['stat-best-day-date'] = formatearFechaYYYYMMDD(stats.bestWorstDay.best.date);
+        }
+        
+        if (stats.bestWorstDay && stats.bestWorstDay.worst) {
+            elements['stat-worst-day'] = '$' + (stats.bestWorstDay.worst.total || 0).toFixed(2);
+            elements['stat-worst-day-date'] = formatearFechaYYYYMMDD(stats.bestWorstDay.worst.date);
+        }
 
         for (const [id, value] of Object.entries(elements)) {
             const el = document.getElementById(id);
@@ -2089,7 +2335,27 @@ async function loadDashboardData() {
         }
 
         const user = window.AuthModule.getCurrentUser();
-        const dashConfig = user?.dashboard_config || window.DBModule.getUserDashboardConfig(user?.id);
+        // 🔧 FIX: Aplicar defaults explícitos para los toggles nuevos
+        const dashConfig = {
+            show_corriente: true,
+            show_orders_today: true,
+            show_top_clients: true,
+            show_top_products: true,
+            show_funds_analysis: true,
+            show_payment_methods: true,
+            show_quick_actions: true,
+            show_bank_qr: false,
+            // 🆕 FASE 3.2/3.3: defaults para toggles nuevos
+            show_released_sales: true,
+            show_best_worst_day: true,
+            show_sales_by_employee: true,
+            show_debts: true,
+            show_rewards: true,
+            ...(user?.dashboard_config || {})
+        };
+
+        console.log('🔍 [loadDashboardData] dashConfig aplicado:', dashConfig);
+        console.log('🔍 [loadDashboardData] stats.salesByEmployee:', stats.salesByEmployee);
 
         if (dashConfig.show_orders_today) {
             const ordersTodayContainer = document.getElementById('dashboard-orders-today-container');
@@ -2098,12 +2364,23 @@ async function loadDashboardData() {
             }
         }
 
-        renderDebtDetails(stats.debtDetails || []);
-        const debtTotalEl = document.getElementById('stat-debts-total');
-        if (debtTotalEl) {
-            debtTotalEl.textContent = '$' + (stats.totalDebts || 0).toFixed(2);
+        // 🆕 FASE 3.2: Renderizar ventas por empleado
+        // 🔧 FIX: usar !== false para que undefined también muestre
+        if (dashConfig.show_sales_by_employee !== false) {
+            console.log('👥 [loadDashboardData] Renderizando ventas por empleado...');
+            renderSalesByEmployee(stats.salesByEmployee || []);
+        } else {
+            console.log('👥 [loadDashboardData] Ventas por empleado OCULTO por toggle');
         }
 
+        if (dashConfig.show_debts !== false) {
+            renderDebtDetails(stats.debtDetails || []);
+            const debtTotalEl = document.getElementById('stat-debts-total');
+            if (debtTotalEl) {
+                debtTotalEl.textContent = '$' + (stats.totalDebts || 0).toFixed(2);
+            }
+        }
+        
         updateChartModeUI();
         
         setTimeout(renderChart, 100);
@@ -2116,7 +2393,7 @@ async function loadDashboardData() {
             renderDashboardBankQR();
         }
         
-        if (window.RewardsModule && typeof window.RewardsModule.renderRewardsCard === 'function') {
+        if (dashConfig.show_rewards && window.RewardsModule && typeof window.RewardsModule.renderRewardsCard === 'function') {
             const rewardsContainer = document.getElementById('dashboard-rewards-container');
             if (rewardsContainer) {
                 const rewardsHtml = window.RewardsModule.renderRewardsCard();
@@ -2124,14 +2401,64 @@ async function loadDashboardData() {
             }
         }
 
-        console.log('✅ Dashboard actualizado correctamente');
+        console.log('✅ Dashboard actualizado correctamente (v2.1.1)');
         console.log('   📅 Primer día de venta:', stats.primerDiaVenta, '→', formatearFechaYYYYMMDD(stats.primerDiaVenta));
         console.log('   📊 Modo del gráfico:', stats.chartMode, '| isCurrentRange:', stats.isCurrentRange);
+        console.log('   🚀 Ventas liberadas:', stats.releasedSales?.count, '($' + (stats.releasedSales?.total || 0).toFixed(2) + ')');
+        console.log('   🥇 Mejor día:', stats.bestWorstDay?.best?.date, '($' + (stats.bestWorstDay?.best?.total || 0).toFixed(2) + ')');
+        console.log('   👥 Empleados con ventas:', stats.salesByEmployee?.length || 0);
 
     } catch (error) {
         console.error('❌ Error cargando dashboard:', error);
         window.showToast('❌ Error al cargar el dashboard: ' + error.message, 'error', 4000);
     }
+}
+
+// ============================================================
+// 🆕 FASE 3.2: RENDER VENTAS POR EMPLEADO
+// ============================================================
+
+function renderSalesByEmployee(salesByEmployee) {
+    const container = document.getElementById('sales-by-employee');
+    if (!container) return;
+    
+    if (!salesByEmployee || salesByEmployee.length === 0) {
+        container.innerHTML = `<div style="text-align: center; padding: 10px 0; color: var(--text-light);">Sin datos de empleados</div>`;
+        return;
+    }
+    
+    const colors = ['#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#ef4444'];
+    const medals = ['🥇', '🥈', '🥉'];
+    const totalVentas = salesByEmployee.reduce((sum, e) => sum + e.total, 0);
+    
+    container.innerHTML = salesByEmployee.map((emp, i) => {
+        const porcentaje = totalVentas > 0 ? (emp.total / totalVentas * 100) : 0;
+        const medal = i < 3 ? medals[i] : `#${i + 1}`;
+        
+        return `
+            <div style="padding: 8px 0; border-bottom: ${i < salesByEmployee.length - 1 ? '1px solid var(--border-color)' : 'none'};">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+                        <span style="font-size: 16px; flex-shrink: 0;">${medal}</span>
+                        <span style="font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            ${emp.name}
+                        </span>
+                    </div>
+                    <div style="text-align: right; flex-shrink: 0; margin-left: 8px;">
+                        <div style="font-size: 14px; font-weight: 700; color: ${colors[i % colors.length]};">
+                            $${emp.total.toFixed(2)}
+                        </div>
+                        <div style="font-size: 10px; color: var(--text-light);">
+                            ${emp.count} venta${emp.count !== 1 ? 's' : ''}
+                        </div>
+                    </div>
+                </div>
+                <div style="width: 100%; height: 4px; background: var(--border-color); border-radius: 2px; overflow: hidden;">
+                    <div style="width: ${porcentaje}%; height: 100%; background: ${colors[i % colors.length]}; border-radius: 2px; transition: width 0.5s ease;"></div>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 // ============================================================
@@ -2292,6 +2619,19 @@ Fecha: ${new Date().toLocaleString('es-ES')}
   Promedio diario: $${stats.promedioVentasDiarias.toFixed(2)}
   Primer día de venta: ${stats.primerDiaVenta || '—'}
   Clientes diferentes: ${stats.clientesDiferentes}
+
+🚀 VENTAS LIBERADAS
+  Cantidad: ${stats.releasedSales?.count || 0}
+  Importe: $${(stats.releasedSales?.total || 0).toFixed(2)}
+
+🥇 MEJOR Y PEOR DÍA
+  Mejor día: ${stats.bestWorstDay?.best?.date || '—'} - $${(stats.bestWorstDay?.best?.total || 0).toFixed(2)}
+  Peor día: ${stats.bestWorstDay?.worst?.date || '—'} - $${(stats.bestWorstDay?.worst?.total || 0).toFixed(2)}
+
+👥 VENTAS POR EMPLEADO
+${stats.salesByEmployee && stats.salesByEmployee.length > 0 
+  ? stats.salesByEmployee.map((e, i) => `  ${i+1}. ${e.name}: ${e.count} ventas - $${e.total.toFixed(2)}`).join('\n') 
+  : '  Sin datos'}
 
 💵 FONDOS
   Efectivo en caja: $${stats.cash.balance.toFixed(2)}
@@ -2781,8 +3121,13 @@ window.updateDocumentTitle = updateDocumentTitle;
 window.updateAppHeader = updateAppHeader;
 // 🆕 FASE 1.4
 window.debouncedRefreshCurrentView = debouncedRefreshCurrentView;
+// 🆕 FASE 3.2
+window.formatearFechaInteligente = formatearFechaInteligente;
+window.renderSalesByEmployee = renderSalesByEmployee;
+// 🆕 FASE 5 (#2)
+window.openDetailedHelp = openDetailedHelp;
 
-console.log('📦 App Controller v2.0.8 (FASE 1.4: debounce del dashboard)');
+console.log('📦 App Controller v2.1.1 (FASE 4.2 #14: persistencia gráfico + FASE 5 #2: ayuda detallada)');
 
 // ============================================================
 // INICIALIZACIÓN AUTOMÁTICA

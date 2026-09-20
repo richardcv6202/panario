@@ -35,6 +35,20 @@
 //   - submitLiberatedSale() también usa normalizarFechaVenta()
 //   - Evita que ventas pasadas/futuras se guarden como día anterior
 //     por conversión UTC en zonas horarias negativas (Cuba UTC-4/5)
+// 🆕 FASE 3.5 (200926 v5):
+//   - Homogeneizar alturas de las 4 tarjetas resumen (#17)
+//   - NUEVA tarjeta: 🚀 Ventas liberadas en el resumen superior
+//   - Todas las tarjetas del resumen tienen min-height: 90px
+//   - Rejilla responsiva consistente: 2 cols en móvil, 5 en desktop
+//   - Actualización de updateSummary() para traer también las liberadas
+//   - Iconos y colores consistentes con el Dashboard
+// 🆕 FASE 4.2 (#13) (200926 v6): INTERRUPTOR DE VENTAS LIBERADAS
+//   - NUEVO toggle "🚀 Mostrar/Ocultar liberadas" en el header
+//   - loadSalesAndExpenses() filtra is_liberated=1 si el toggle está OFF
+//   - Persistencia en localStorage (panario_show_liberated_sales)
+//   - Aviso visual cuando hay ventas ocultas
+//   - El resumen (updateSummary) NO cambia: siempre muestra el total
+//   - No afecta a la vista de deudas
 // ============================================================
 
 // ============================================================
@@ -52,12 +66,6 @@
 //   
 //   Mediodía UTC siempre cae en el mismo día local en cualquier zona
 //   horaria razonable (UTC-12 a UTC+12).
-//
-// EJEMPLO:
-//   "2026-09-17" (pasado) → "2026-09-17T12:00:00.000Z"
-//     → 17 sept 08:00 local (UTC-4) ✅
-//     → 17 sept 13:00 local (UTC+1) ✅
-//   "2026-09-19" (hoy) → "2026-09-19T15:30:45.123Z" (hora actual)
 // ============================================================
 
 function normalizarFechaVenta(fechaInput) {
@@ -199,7 +207,86 @@ function renderAuditoriaHTML(entity) {
 }
 
 // ============================================================
+// 🆕 FASE 4.2 (#13): GESTIÓN DEL TOGGLE DE VENTAS LIBERADAS
+// ============================================================
+
+const SHOW_LIBERATED_KEY = 'panario_show_liberated_sales';
+
+/**
+ * Lee la preferencia desde localStorage. Por defecto: true.
+ */
+function getShowLiberatedSales() {
+    try {
+        const stored = localStorage.getItem(SHOW_LIBERATED_KEY);
+        if (stored === null) return true;  // Default: mostrar
+        return stored === 'true';
+    } catch (e) {
+        return true;
+    }
+}
+
+/**
+ * Guarda la preferencia en localStorage.
+ */
+function setShowLiberatedSales(value) {
+    try {
+        localStorage.setItem(SHOW_LIBERATED_KEY, value ? 'true' : 'false');
+    } catch (e) {
+        console.warn('⚠️ Error guardando preferencia de liberadas:', e);
+    }
+}
+
+/**
+ * Handler del checkbox del toggle.
+ */
+function onShowLiberatedChange(checked) {
+    setShowLiberatedSales(checked);
+    updateShowLiberatedToggleVisual();
+    
+    // Recargar el listado
+    loadSalesAndExpenses();
+    
+    // Toast informativo
+    window.showToast(
+        checked ? '🚀 Mostrando ventas liberadas' : '🚀 Ventas liberadas ocultas',
+        'info',
+        2000
+    );
+}
+
+/**
+ * Actualiza el visual del toggle (slider, color, etiqueta).
+ */
+function updateShowLiberatedToggleVisual() {
+    const toggle = document.getElementById('toggle-liberadas-sales');
+    const checkbox = document.getElementById('filter-show-liberated');
+    const slider = document.getElementById('toggle-liberadas-sales-slider');
+    const circle = document.getElementById('toggle-liberadas-sales-circle');
+    const label = document.getElementById('toggle-liberadas-sales-label');
+    
+    if (!toggle || !checkbox || !slider || !circle || !label) return;
+    
+    if (checkbox.checked) {
+        slider.style.background = '#8b5cf6';
+        circle.style.left = '18px';
+        label.style.color = '#8b5cf6';
+        label.textContent = '🚀 Mostrando liberadas';
+        toggle.style.background = '#8b5cf615';
+        toggle.style.borderColor = '#8b5cf6';
+    } else {
+        slider.style.background = '#94a3b8';
+        circle.style.left = '2px';
+        label.style.color = '#94a3b8';
+        label.textContent = '🚀 Ocultando liberadas';
+        toggle.style.background = 'var(--bg)';
+        toggle.style.borderColor = '#94a3b8';
+    }
+}
+
+// ============================================================
 // RENDER SALES VIEW
+// 🆕 FASE 3.5: 5 tarjetas de resumen con alturas homogéneas
+// 🆕 FASE 4.2 (#13): Toggle de mostrar/ocultar liberadas
 // ============================================================
 
 function renderSalesView() {
@@ -210,6 +297,9 @@ function renderSalesView() {
     const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
     const fechaInicioMes = primerDiaMes.toISOString().split('T')[0];
     const fechaFinMes = ultimoDiaMes.toISOString().split('T')[0];
+    
+    // 🆕 FASE 4.2 (#13): Leer preferencia
+    const showLiberated = getShowLiberatedSales();
     
     main.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
@@ -242,24 +332,41 @@ function renderSalesView() {
             </div>
         </div>
         
-        <!-- Resumen rápido -->
-        <div id="sales-summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px;">
-            <div class="card" style="padding: 12px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;">
-                <div style="font-size: 12px; color: var(--text-light);">📈 Ventas hoy</div>
+        <!-- 🆕 FASE 3.5: Resumen con 5 tarjetas de alturas homogéneas -->
+        <div id="sales-summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; align-items: stretch;">
+            
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-left: 4px solid var(--primary);">
+                <div style="font-size: 20px; margin-bottom: 4px;">📈</div>
+                <div style="font-size: 11px; color: var(--text-light);">Ventas hoy</div>
                 <div style="font-size: 20px; font-weight: 700; color: var(--primary);" id="sales-today">$0.00</div>
             </div>
-            <div class="card" style="padding: 12px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;">
-                <div style="font-size: 12px; color: var(--text-light);">💰 Ingresos totales</div>
+            
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-left: 4px solid #10b981;">
+                <div style="font-size: 20px; margin-bottom: 4px;">💰</div>
+                <div style="font-size: 11px; color: var(--text-light);">Ingresos totales</div>
                 <div style="font-size: 20px; font-weight: 700; color: #10b981;" id="total-income">$0.00</div>
             </div>
-            <div class="card" style="padding: 12px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;">
-                <div style="font-size: 12px; color: var(--text-light);">📤 Gastos totales</div>
+            
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-left: 4px solid #ef4444;">
+                <div style="font-size: 20px; margin-bottom: 4px;">📤</div>
+                <div style="font-size: 11px; color: var(--text-light);">Gastos totales</div>
                 <div style="font-size: 20px; font-weight: 700; color: #ef4444;" id="total-expenses">$0.00</div>
             </div>
-            <div class="card" style="padding: 12px; text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;">
-                <div style="font-size: 12px; color: var(--text-light);">💳 Deudas</div>
+            
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-left: 4px solid #ef4444;">
+                <div style="font-size: 20px; margin-bottom: 4px;">💳</div>
+                <div style="font-size: 11px; color: var(--text-light);">Deudas</div>
                 <div style="font-size: 20px; font-weight: 700; color: #ef4444;" id="total-debts">$0.00</div>
             </div>
+            
+            <!-- 🆕 FASE 3.5: Nueva tarjeta de Ventas liberadas -->
+            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-left: 4px solid #8b5cf6;">
+                <div style="font-size: 20px; margin-bottom: 4px;">🚀</div>
+                <div style="font-size: 11px; color: var(--text-light);">Ventas liberadas</div>
+                <div style="font-size: 20px; font-weight: 700; color: #8b5cf6;" id="total-released">$0.00</div>
+                <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;" id="total-released-count">0 ventas</div>
+            </div>
+            
         </div>
         
         <!-- Filtros -->
@@ -283,17 +390,32 @@ function renderSalesView() {
                     </div>
                 </div>
                 
-                <label id="toggle-mes-sales" style="display: flex; align-items: center; gap: 10px; padding: 6px 14px; background: var(--primary-light); border-radius: 20px; border: 2px solid var(--primary); cursor: pointer; transition: all 0.2s; user-select: none;">
-                    <input type="checkbox" id="filter-current-month-sales" checked 
-                           onchange="onCurrentMonthChangeSales()"
-                           style="opacity: 0; width: 0; height: 0; position: absolute;">
-                    <span id="toggle-mes-sales-slider" style="position: relative; display: inline-block; width: 36px; height: 20px; background: var(--primary); border-radius: 20px; transition: 0.3s; flex-shrink: 0;">
-                        <span id="toggle-mes-sales-circle" style="position: absolute; height: 16px; width: 16px; left: 18px; bottom: 2px; background: white; border-radius: 50%; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
-                    </span>
-                    <span id="toggle-mes-sales-label" style="font-size: 12px; font-weight: 600; color: var(--primary); white-space: nowrap;">
-                        📅 Solo mes en curso
-                    </span>
-                </label>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                    <!-- 🆕 FASE 4.2 (#13): Toggle de ventas liberadas -->
+                    <label id="toggle-liberadas-sales" style="display: flex; align-items: center; gap: 10px; padding: 6px 14px; background: ${showLiberated ? '#8b5cf615' : 'var(--bg)'}; border-radius: 20px; border: 2px solid ${showLiberated ? '#8b5cf6' : '#94a3b8'}; cursor: pointer; transition: all 0.2s; user-select: none;">
+                        <input type="checkbox" id="filter-show-liberated" ${showLiberated ? 'checked' : ''}
+                               onchange="onShowLiberatedChange(this.checked)"
+                               style="opacity: 0; width: 0; height: 0; position: absolute;">
+                        <span id="toggle-liberadas-sales-slider" style="position: relative; display: inline-block; width: 36px; height: 20px; background: ${showLiberated ? '#8b5cf6' : '#94a3b8'}; border-radius: 20px; transition: 0.3s; flex-shrink: 0;">
+                            <span id="toggle-liberadas-sales-circle" style="position: absolute; height: 16px; width: 16px; left: ${showLiberated ? '18px' : '2px'}; bottom: 2px; background: white; border-radius: 50%; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
+                        </span>
+                        <span id="toggle-liberadas-sales-label" style="font-size: 12px; font-weight: 600; color: ${showLiberated ? '#8b5cf6' : '#94a3b8'}; white-space: nowrap;">
+                            ${showLiberated ? '🚀 Mostrando liberadas' : '🚀 Ocultando liberadas'}
+                        </span>
+                    </label>
+                    
+                    <label id="toggle-mes-sales" style="display: flex; align-items: center; gap: 10px; padding: 6px 14px; background: var(--primary-light); border-radius: 20px; border: 2px solid var(--primary); cursor: pointer; transition: all 0.2s; user-select: none;">
+                        <input type="checkbox" id="filter-current-month-sales" checked 
+                               onchange="onCurrentMonthChangeSales()"
+                               style="opacity: 0; width: 0; height: 0; position: absolute;">
+                        <span id="toggle-mes-sales-slider" style="position: relative; display: inline-block; width: 36px; height: 20px; background: var(--primary); border-radius: 20px; transition: 0.3s; flex-shrink: 0;">
+                            <span id="toggle-mes-sales-circle" style="position: absolute; height: 16px; width: 16px; left: 18px; bottom: 2px; background: white; border-radius: 50%; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
+                        </span>
+                        <span id="toggle-mes-sales-label" style="font-size: 12px; font-weight: 600; color: var(--primary); white-space: nowrap;">
+                            📅 Solo mes en curso
+                        </span>
+                    </label>
+                </div>
             </div>
             
             <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
@@ -355,6 +477,7 @@ function renderSalesView() {
     updateSummary();
     
     setTimeout(() => updateMesToggleVisualSales(), 50);
+    setTimeout(() => updateShowLiberatedToggleVisual(), 50);
     
     setTimeout(() => {
         const mainContent = document.getElementById('mainContent');
@@ -467,6 +590,12 @@ function setFilterType(type) {
         categoryContainer.style.display = (type === 'expenses' || type === 'all') ? 'flex' : 'none';
     }
     
+    // 🆕 FASE 4.2 (#13): Mostrar el toggle de liberadas solo en vistas de ventas/todo
+    const toggleLiberadas = document.getElementById('toggle-liberadas-sales');
+    if (toggleLiberadas) {
+        toggleLiberadas.style.display = (type === 'sales' || type === 'all') ? 'flex' : 'none';
+    }
+    
     loadSalesAndExpenses();
 }
 
@@ -482,6 +611,9 @@ function clearFilters() {
         checkbox.checked = false;
         updateMesToggleVisualSales();
     }
+    
+    // 🆕 FASE 4.2 (#13): NO tocamos el toggle de liberadas en "Limpiar filtros",
+    // porque es una preferencia persistente del usuario, no un filtro temporal.
     
     loadSalesAndExpenses();
 }
@@ -592,6 +724,7 @@ if (typeof window.getSeccionCorrienteHTML !== 'function') {
 
 // ============================================================
 // LOAD SALES AND EXPENSES
+// 🆕 FASE 4.2 (#13): Filtrar liberadas si el toggle está OFF
 // ============================================================
 
 async function loadSalesAndExpenses() {
@@ -603,6 +736,9 @@ async function loadSalesAndExpenses() {
     const payment = document.getElementById('filter-payment')?.value || '';
     const search = document.getElementById('filter-sales-search')?.value?.trim() || '';
     const filterType = window._currentFilterType || 'sales';
+    
+    // 🆕 FASE 4.2 (#13): Leer preferencia de mostrar/ocultar liberadas
+    const showLiberated = getShowLiberatedSales();
     
     const negocioId = window.DBModule.getNegocioIdActual();
     if (!negocioId) {
@@ -705,6 +841,13 @@ async function loadSalesAndExpenses() {
                 const searchTerm = '%' + search + '%';
                 params.push(searchTerm, searchTerm);
             }
+            
+            // 🆕 FASE 4.2 (#13): Si el toggle está OFF, excluir ventas liberadas
+            if (!showLiberated) {
+                query += ' AND is_liberated = 0';
+                console.log('🚀 [FASE 4.2] Ocultando ventas liberadas del listado');
+            }
+            
             query += ' ORDER BY sale_date DESC';
             
             sales = window.DBModule.query(query, params);
@@ -751,10 +894,21 @@ async function loadSalesAndExpenses() {
         if (totalItems === 0) {
             const typeLabel = filterType === 'sales' ? 'ventas' : 
                              filterType === 'expenses' ? 'gastos' : 'transacciones';
+            
+            // 🆕 FASE 4.2 (#13): Si estamos ocultando liberadas y no hay ventas normales,
+            // mostrar un mensaje específico
+            let mensajeExtra = '';
+            if (!showLiberated && (filterType === 'sales' || filterType === 'all')) {
+                mensajeExtra = `<p style="margin-top: 12px; font-size: 12px; color: #8b5cf6;">
+                    🚀 Hay ventas liberadas ocultas. Activa el interruptor "Mostrando liberadas" para verlas.
+                </p>`;
+            }
+            
             container.innerHTML = `
                 <div class="card" style="text-align: center; padding: 40px;">
                     <span style="font-size: 48px;">📭</span>
                     <p style="margin-top: 8px; color: var(--text-light);">No hay ${typeLabel} registradas</p>
+                    ${mensajeExtra}
                 </div>
             `;
             return;
@@ -762,6 +916,32 @@ async function loadSalesAndExpenses() {
         
         if (filterType === 'sales') {
             renderSalesGroupedByDay(container, sales);
+            
+            // 🆕 FASE 4.2 (#13): Aviso al pie cuando hay liberadas ocultas
+            if (!showLiberated) {
+                // Verificar si existen ventas liberadas en el rango, independientemente del filtro
+                let checkQuery = `SELECT COUNT(*) as count FROM sales 
+                    WHERE negocio_id = ? AND is_liberated = 1 
+                    AND deleted_at IS NULL AND voided = 0`;
+                let checkParams = [negocioId];
+                if (fromDate) { checkQuery += ' AND DATE(sale_date, "localtime") >= DATE(?)'; checkParams.push(fromDate); }
+                if (toDate) { checkQuery += ' AND DATE(sale_date, "localtime") <= DATE(?)'; checkParams.push(toDate); }
+                
+                try {
+                    const checkResult = window.DBModule.query(checkQuery, checkParams);
+                    const hiddenCount = checkResult[0]?.count || 0;
+                    
+                    if (hiddenCount > 0) {
+                        const aviso = document.createElement('div');
+                        aviso.style.cssText = 'margin-top: 12px; padding: 10px 14px; background: #8b5cf615; border-left: 4px solid #8b5cf6; border-radius: 8px; font-size: 13px; color: #8b5cf6; text-align: center;';
+                        aviso.innerHTML = `🚀 <strong>${hiddenCount} venta${hiddenCount > 1 ? 's' : ''} liberada${hiddenCount > 1 ? 's' : ''} oculta${hiddenCount > 1 ? 's' : ''}</strong> — Activa el interruptor para verlas`;
+                        container.appendChild(aviso);
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Error comprobando ventas liberadas ocultas:', e);
+                }
+            }
+            
             return;
         }
         
@@ -882,6 +1062,30 @@ async function loadSalesAndExpenses() {
         }
         
         container.innerHTML = html;
+        
+        // 🆕 FASE 4.2 (#13): Aviso de liberadas ocultas también en vista "Todo"
+        if (!showLiberated && filterType === 'all') {
+            let checkQuery = `SELECT COUNT(*) as count FROM sales 
+                WHERE negocio_id = ? AND is_liberated = 1 
+                AND deleted_at IS NULL AND voided = 0`;
+            let checkParams = [negocioId];
+            if (fromDate) { checkQuery += ' AND DATE(sale_date, "localtime") >= DATE(?)'; checkParams.push(fromDate); }
+            if (toDate) { checkQuery += ' AND DATE(sale_date, "localtime") <= DATE(?)'; checkParams.push(toDate); }
+            
+            try {
+                const checkResult = window.DBModule.query(checkQuery, checkParams);
+                const hiddenCount = checkResult[0]?.count || 0;
+                
+                if (hiddenCount > 0) {
+                    const aviso = document.createElement('div');
+                    aviso.style.cssText = 'margin-top: 12px; padding: 10px 14px; background: #8b5cf615; border-left: 4px solid #8b5cf6; border-radius: 8px; font-size: 13px; color: #8b5cf6; text-align: center;';
+                    aviso.innerHTML = `🚀 <strong>${hiddenCount} venta${hiddenCount > 1 ? 's' : ''} liberada${hiddenCount > 1 ? 's' : ''} oculta${hiddenCount > 1 ? 's' : ''}</strong> — Activa el interruptor para verlas`;
+                    container.appendChild(aviso);
+                }
+            } catch (e) {
+                console.warn('⚠️ Error comprobando ventas liberadas ocultas:', e);
+            }
+        }
         
     } catch (error) {
         console.error('Error cargando transacciones:', error);
@@ -1113,6 +1317,7 @@ function toggleDaySales(dayId) {
 
 // ============================================================
 // ACTUALIZAR RESUMEN
+// 🆕 FASE 3.5: Añadir ventas liberadas
 // ============================================================
 
 async function updateSummary() {
@@ -1122,6 +1327,7 @@ async function updateSummary() {
         
         const today = new Date().toISOString().split('T')[0];
         
+        // Ventas hoy
         const todaySales = window.DBModule.query(
             'SELECT SUM(total) as total FROM sales WHERE negocio_id = ? AND DATE(sale_date, "localtime") = DATE(?) AND deleted_at IS NULL AND voided = 0',
             [negocioId, today]
@@ -1130,6 +1336,7 @@ async function updateSummary() {
         const salesTodayEl = document.getElementById('sales-today');
         if (salesTodayEl) salesTodayEl.textContent = '$' + todayTotal.toFixed(2);
         
+        // Ingresos totales
         const incomeResult = window.DBModule.query(
             'SELECT SUM(amount) as total FROM transactions WHERE negocio_id = ? AND type = "income" AND deleted_at IS NULL AND voided = 0',
             [negocioId]
@@ -1138,6 +1345,7 @@ async function updateSummary() {
         const totalIncomeEl = document.getElementById('total-income');
         if (totalIncomeEl) totalIncomeEl.textContent = '$' + totalIncome.toFixed(2);
         
+        // Gastos totales
         const expenseResult = window.DBModule.query(
             'SELECT SUM(amount) as total FROM transactions WHERE negocio_id = ? AND type = "expense" AND deleted_at IS NULL AND voided = 0',
             [negocioId]
@@ -1146,6 +1354,7 @@ async function updateSummary() {
         const totalExpensesEl = document.getElementById('total-expenses');
         if (totalExpensesEl) totalExpensesEl.textContent = '$' + totalExpenses.toFixed(2);
         
+        // Deudas
         const debtsResult = window.DBModule.query(
             'SELECT SUM(total) as total FROM sales WHERE negocio_id = ? AND is_debt = 1 AND paid = 0 AND deleted_at IS NULL AND voided = 0',
             [negocioId]
@@ -1153,6 +1362,22 @@ async function updateSummary() {
         const totalDebts = debtsResult[0]?.total || 0;
         const totalDebtsEl = document.getElementById('total-debts');
         if (totalDebtsEl) totalDebtsEl.textContent = '$' + totalDebts.toFixed(2);
+        
+        // 🆕 FASE 3.5: Ventas liberadas (cantidad + importe)
+        const releasedResult = window.DBModule.query(
+            'SELECT COUNT(*) as count, SUM(total) as total FROM sales WHERE negocio_id = ? AND is_liberated = 1 AND deleted_at IS NULL AND voided = 0',
+            [negocioId]
+        );
+        const releasedCount = releasedResult[0]?.count || 0;
+        const releasedTotal = releasedResult[0]?.total || 0;
+        
+        const totalReleasedEl = document.getElementById('total-released');
+        if (totalReleasedEl) totalReleasedEl.textContent = '$' + releasedTotal.toFixed(2);
+        
+        const totalReleasedCountEl = document.getElementById('total-released-count');
+        if (totalReleasedCountEl) {
+            totalReleasedCountEl.textContent = releasedCount + ' venta' + (releasedCount !== 1 ? 's' : '');
+        }
         
     } catch (error) {
         console.error('Error actualizando resumen:', error);
@@ -1652,14 +1877,6 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
     const total = quantity * unitPrice;
     
     // 🆕 FIX 2: Normalizar la fecha para evitar desfase UTC
-    // 
-    // ANTES: sale_date = saleDate + 'T00:00:00' → "2026-09-17T00:00:00"
-    //   Si SQLite lo interpreta como UTC → 16 sept 20:00 local ❌
-    // 
-    // AHORA: normalizarFechaVenta() decide:
-    //   - Si es HOY → new Date().toISOString() (hora actual)
-    //   - Si es otra fecha → "YYYY-MM-DDT12:00:00.000Z" (mediodía UTC)
-    //     → siempre cae en el mismo día local ✅
     const saleDateNormalizada = normalizarFechaVenta(saleDate);
     
     console.log('📅 [submitSaleForm] Fecha original:', saleDate, '→ normalizada:', saleDateNormalizada);
@@ -2681,5 +2898,10 @@ window.renderAuditoriaHTML = renderAuditoriaHTML;
 window.waitForCustomModalRemoval = waitForCustomModalRemoval;
 // 🆕 FIX 2
 window.normalizarFechaVenta = normalizarFechaVenta;
+// 🆕 FASE 4.2 (#13)
+window.getShowLiberatedSales = getShowLiberatedSales;
+window.setShowLiberatedSales = setShowLiberatedSales;
+window.onShowLiberatedChange = onShowLiberatedChange;
+window.updateShowLiberatedToggleVisual = updateShowLiberatedToggleVisual;
 
-console.log('📦 UI Sales Module v2.0.9 (FASE 1.4 HOTFIX + FIX 2: normalización de fechas)');
+console.log('📦 UI Sales Module v2.1.1 (FASE 4.2 #13: interruptor ventas liberadas)');

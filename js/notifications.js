@@ -8,6 +8,13 @@
 //   - Fallback silencioso si el navegador bloquea
 //   - Sin crear nuevos AudioContexts por cada sonido
 //   - Eliminado emoji duplicado en el título de push
+// 🆕 FASE 5 (#27) (200926 v2): ANIMACIÓN "PROBAR TODOS" LOS SONIDOS
+//   - Overlay visual con icono grande, barra de progreso y contador
+//   - Botón "⏹️ Detener" para abortar la secuencia
+//   - Delay de 1.5s entre sonidos (configurable)
+//   - Restaura el sonido configurado al finalizar
+//   - Escape también cancela
+//   - No modifica el soundId guardado del usuario
 // ============================================================
 
 window.NotificationsModule = {};
@@ -40,13 +47,17 @@ const DEFAULT_SOUND_CONFIG = {
 
 // 🆕 FASE 1.4: Sonidos embutidos
 const SOUNDS = {
-    'silent': { name: '🔇 Silencio', freq: 0, duration: 0 },
-    'beep': { name: '🔔 Beep', freq: 800, duration: 0.15 },
-    'chime': { name: '🎵 Chime', freq: 1200, duration: 0.3 },
-    'pop': { name: '💧 Pop', freq: 600, duration: 0.1 },
-    'alert': { name: '⚠️ Alert', freq: 400, duration: 0.25 },
-    'success': { name: '✅ Success', freq: 1500, duration: 0.2 }
+    'silent': { name: '🔇 Silencio', freq: 0, duration: 0, emoji: '🔇' },
+    'beep': { name: '🔔 Beep', freq: 800, duration: 0.15, emoji: '🔔' },
+    'chime': { name: '🎵 Chime', freq: 1200, duration: 0.3, emoji: '🎵' },
+    'pop': { name: '💧 Pop', freq: 600, duration: 0.1, emoji: '💧' },
+    'alert': { name: '⚠️ Alert', freq: 400, duration: 0.25, emoji: '⚠️' },
+    'success': { name: '✅ Success', freq: 1500, duration: 0.2, emoji: '✅' }
 };
+
+// 🆕 FASE 5 (#27): Estado de la prueba de sonidos
+let _testAllSoundsAbort = false;
+let _testAllSoundsOverlay = null;
 
 // ============================================================
 // 🆕 FASE 1.4: AUDIO CONTEXT SINGLETON
@@ -198,6 +209,11 @@ function initNotificationSystem() {
                 80% { transform: rotate(-10deg); }
                 100% { transform: rotate(0deg); }
             }
+            @keyframes soundTestPulse {
+                0% { transform: scale(1); opacity: 0.9; }
+                50% { transform: scale(1.15); opacity: 1; }
+                100% { transform: scale(1); opacity: 0.9; }
+            }
         `;
         document.head.appendChild(style);
     }
@@ -236,7 +252,8 @@ function setSoundConfig(config) {
 function getAvailableSounds() {
     return Object.entries(SOUNDS).map(([id, data]) => ({
         id,
-        name: data.name
+        name: data.name,
+        emoji: data.emoji
     }));
 }
 
@@ -340,34 +357,205 @@ async function playNotificationSound(type) {
     await playSoundById(soundToPlay);
 }
 
+// ============================================================
+// 🆕 FASE 5 (#27): ANIMACIÓN "PROBAR TODOS" LOS SONIDOS
+// ============================================================
+
 /**
- * 🆕 FASE 1.4: Prueba todos los sonidos con delay.
- * Ahora con promesas para secuenciar correctamente.
+ * Crea y muestra el overlay de la prueba de sonidos.
+ */
+function _createTestAllSoundsOverlay() {
+    // Eliminar overlay anterior si existe
+    const prev = document.getElementById('test-sounds-overlay');
+    if (prev) prev.remove();
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'test-sounds-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.7);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999999999;
+        padding: 20px;
+        animation: modalFadeIn 0.25s ease;
+    `;
+    
+    overlay.innerHTML = `
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 32px 28px; max-width: 380px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.5); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color); text-align: center;">
+            
+            <div style="font-size: 12px; font-weight: 700; color: var(--text-light); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">
+                🔊 Probando sonidos
+            </div>
+            
+            <div id="test-sounds-counter" style="font-size: 13px; color: var(--primary); font-weight: 700; margin-bottom: 16px;">
+                1 / 5
+            </div>
+            
+            <div id="test-sounds-icon" style="font-size: 72px; margin-bottom: 12px; animation: soundTestPulse 1.2s ease-in-out infinite; display: inline-block;">
+                🔔
+            </div>
+            
+            <div id="test-sounds-name" style="font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 20px; min-height: 28px;">
+                Beep
+            </div>
+            
+            <div style="width: 100%; height: 6px; background: var(--border-color); border-radius: 3px; overflow: hidden; margin-bottom: 20px;">
+                <div id="test-sounds-progress" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), #f59e0b); border-radius: 3px; transition: width 0.4s ease;"></div>
+            </div>
+            
+            <button id="test-sounds-stop" onclick="abortTestAllSounds()" 
+                    class="btn secondary" 
+                    style="padding: 10px 24px; font-size: 14px; width: auto;">
+                ⏹️ Detener
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    _testAllSoundsOverlay = overlay;
+    
+    return overlay;
+}
+
+/**
+ * Actualiza el contenido del overlay.
+ */
+function _updateTestAllSoundsOverlay(index, total, soundId) {
+    const counter = document.getElementById('test-sounds-counter');
+    const icon = document.getElementById('test-sounds-icon');
+    const name = document.getElementById('test-sounds-name');
+    const progress = document.getElementById('test-sounds-progress');
+    
+    const sound = SOUNDS[soundId] || SOUNDS['beep'];
+    
+    if (counter) counter.textContent = `${index} / ${total}`;
+    if (icon) icon.textContent = sound.emoji || '🔔';
+    if (name) name.textContent = sound.name || soundId;
+    if (progress) progress.style.width = `${(index / total) * 100}%`;
+}
+
+/**
+ * Elimina el overlay de la prueba.
+ */
+function _removeTestAllSoundsOverlay() {
+    const overlay = document.getElementById('test-sounds-overlay');
+    if (overlay) {
+        overlay.style.animation = 'modalFadeOut 0.2s ease forwards';
+        setTimeout(() => {
+            if (overlay.parentNode) overlay.remove();
+        }, 200);
+    }
+    _testAllSoundsOverlay = null;
+}
+
+/**
+ * 🆕 FASE 5 (#27): Prueba todos los sonidos con animación y delay.
+ * 
+ * - Muestra un overlay con el sonido actual
+ * - 1.5s entre cada sonido
+ * - Botón "Detener" para abortar
+ * - Restaura el sonido configurado al final
+ * - NO modifica el soundId guardado del usuario
  */
 async function testAllSounds() {
+    // Si ya hay una prueba en curso, abortarla y empezar de nuevo
+    if (!_testAllSoundsAbort && _testAllSoundsOverlay) {
+        abortTestAllSounds();
+        await new Promise(r => setTimeout(r, 300));
+    }
+    
+    _testAllSoundsAbort = false;
+    
     const soundIds = Object.keys(SOUNDS).filter(id => id !== 'silent');
+    const total = soundIds.length;
+    
+    // Guardar el sonido configurado por el usuario para restaurarlo al final
+    const configOriginal = getSoundConfig();
+    const soundIdOriginal = configOriginal.soundId || 'beep';
     
     // Desbloquear el audio primero
     await unlockAudio();
     
-    window.showToast('🔊 Probando los ' + soundIds.length + ' sonidos...', 'info', 6000);
+    // Crear overlay
+    _createTestAllSoundsOverlay();
     
-    for (let i = 0; i < soundIds.length; i++) {
-        const soundId = soundIds[i];
-        const soundName = SOUNDS[soundId].name;
+    // Registrar handler de Escape
+    const escHandler = function(e) {
+        if (e.key === 'Escape') {
+            abortTestAllSounds();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+    
+    try {
+        for (let i = 0; i < total; i++) {
+            if (_testAllSoundsAbort) break;
+            
+            const soundId = soundIds[i];
+            
+            // Actualizar overlay
+            _updateTestAllSoundsOverlay(i + 1, total, soundId);
+            
+            // Reproducir el sonido
+            await playSoundById(soundId);
+            
+            // Esperar 1.5s entre sonidos (último solo espera 1s)
+            const waitTime = (i === total - 1) ? 1000 : 1500;
+            
+            // Espera cancelable
+            for (let elapsed = 0; elapsed < waitTime; elapsed += 100) {
+                if (_testAllSoundsAbort) break;
+                await new Promise(r => setTimeout(r, 100));
+            }
+        }
         
-        console.log(`🔊 Probando ${i + 1}/${soundIds.length}: ${soundName}`);
-        window.showToast(`🔊 ${i + 1}/${soundIds.length}: ${soundName}`, 'info', 1400);
+        // Si no se abortó, restaurar el sonido configurado
+        if (!_testAllSoundsAbort) {
+            _updateTestAllSoundsOverlay(total, total, soundIdOriginal);
+            
+            // Pequeña pausa y reproducir el sonido configurado
+            await new Promise(r => setTimeout(r, 300));
+            await playSoundById(soundIdOriginal);
+            
+            // Toast de finalización
+            await new Promise(r => setTimeout(r, 800));
+            _removeTestAllSoundsOverlay();
+            
+            window.showToast(
+                `✅ Prueba completada · Sonido activo: ${SOUNDS[soundIdOriginal]?.name || soundIdOriginal}`,
+                'success',
+                3000
+            );
+        } else {
+            // Se abortó: solo quitar overlay
+            _removeTestAllSoundsOverlay();
+        }
         
-        await playSoundById(soundId);
-        await new Promise(r => setTimeout(r, 1500));
+    } catch (e) {
+        console.error('❌ Error en testAllSounds:', e);
+        _removeTestAllSoundsOverlay();
+        window.showToast('❌ Error al probar los sonidos', 'error', 4000);
+    } finally {
+        _testAllSoundsAbort = false;
+        document.removeEventListener('keydown', escHandler);
     }
-    
-    // Restaurar el sonido configurado por el usuario
-    const config = getSoundConfig();
-    await playSoundById(config.soundId);
-    
-    window.showToast('✅ Sonidos probados. Vuelto a: ' + (SOUNDS[config.soundId]?.name || config.soundId), 'success', 3000);
+}
+
+/**
+ * Aborta la prueba de sonidos.
+ */
+function abortTestAllSounds() {
+    if (_testAllSoundsAbort) return;
+    _testAllSoundsAbort = true;
+    console.log('⏹️ Prueba de sonidos abortada por el usuario');
+    _removeTestAllSoundsOverlay();
+    window.showToast('⏹️ Prueba detenida', 'info', 2000);
 }
 
 // ============================================================
@@ -1060,6 +1248,7 @@ window.NotificationsModule = {
     getAvailableSounds,
     playSoundById,
     testAllSounds,
+    abortTestAllSounds,
     SOUNDS,
     // 🆕 FASE 1.4
     unlockAudio,
@@ -1070,4 +1259,8 @@ window.showToast = function(message, type = 'info', duration = 8000) {
     window.NotificationsModule.addNotification(message, type, duration);
 };
 
-console.log('📦 Notifications Module v2.0.7 (FASE 1.4: AudioContext singleton + unlock)');
+// 🆕 FASE 5 (#27): Exponer globalmente para uso desde el perfil
+window.testAllSounds = testAllSounds;
+window.abortTestAllSounds = abortTestAllSounds;
+
+console.log('📦 Notifications Module v2.1.1 (FASE 5 #27: animación "Probar todos" con overlay visual)');

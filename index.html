@@ -10,7 +10,7 @@
     <!-- Formato: "Panadería La Esquina - Panario"                     -->
     <!-- ============================================================ -->
     <title>Panario - Panadería Artesanal</title>
-    <meta name="app-version" content="2.1.0">
+    <meta name="app-version" content="2.1.1">
     <meta name="app-build" content="20260920">
     
     <!-- ============================================================ -->
@@ -136,11 +136,17 @@
         <!-- HEADER -->
         <header>
             <!-- 
-              🆕 El título del header se actualiza desde app.js con el nombre del negocio.
+              🆕 FASE 5 (#19): Logo clickeable → ir al Dashboard
               El atributo id="appHeaderTitle" permite que app.js lo modifique.
+              Al hacer clic, se navega al Dashboard (Panel de Control).
               Fallback: "🍞 Panario" si no hay negocio asignado.
             -->
-            <h1 id="appHeaderTitle" title="Panario - Panadería Artesanal">🍞 Panario</h1>
+            <h1 id="appHeaderTitle" 
+                title="Ir al Panel de Control" 
+                onclick="window.navigate('dashboard')"
+                onmouseover="this.style.opacity='0.8'" 
+                onmouseout="this.style.opacity='1'"
+                style="cursor: pointer; user-select: none; transition: opacity 0.2s;">🍞 Panario</h1>
             <div style="display: flex; align-items: center; gap: 8px; position: relative;">
                 
                 <!-- 🔔 CAMPANITA DE NOTIFICACIONES -->
@@ -280,7 +286,7 @@
     <!-- ============================================================ -->
     <script>
     // ============================================================
-    // SERVICE WORKER REGISTRATION - Panario v2.1.0
+    // SERVICE WORKER REGISTRATION - Panario v2.1.1
     // ============================================================
     // Registra el SW con ruta RELATIVA (./sw.js) para que funcione
     // tanto en localhost como en GitHub Pages (subcarpeta).
@@ -533,7 +539,7 @@
         }
     })();
     
-    console.log('📦 PWA Scripts cargados correctamente (index.html v2.1.0)');
+    console.log('📦 PWA Scripts cargados correctamente (index.html v2.1.1)');
     </script>
 
 </body>

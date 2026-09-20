@@ -1,7 +1,7 @@
 {
   "name": "Panario - Sistema de Gestión",
   "short_name": "Panario",
-  "description": "Plataforma integral de gestión y control operativo para panadería artesanal. Incluye lista de espera, fusión de bases de datos y multiusuario.",
+  "description": "Plataforma integral de gestión y control operativo para panadería artesanal. Incluye lista de espera, fusión de bases de datos, multiusuario, premios y análisis avanzados.",
   "version": "2.1.0",
   "start_url": "./index.html",
   "scope": "./",

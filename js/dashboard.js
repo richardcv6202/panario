@@ -19,6 +19,12 @@
 //   - getDashboardStats() acepta options.chartMode
 //   - Devuelve chartMode y isCurrentRange en el resultado
 //   - calcularRangoGrafico() reemplaza a calcularRangoSemana()
+// 🆕 FASE 3.1 (200926 v3):
+//   - NUEVO: releasedSales → { count, total } (ventas liberadas)
+//   - NUEVO: bestWorstDay → { best, worst } (mejor/peor día histórico)
+//   - NUEVO: salesByEmployee → [{ user_id, name, count, total }]
+//   - Todos los cálculos son opcionales y usan try/catch para no romper
+//   - Compatibilidad total con código existente (solo se añaden campos)
 // ============================================================
 
 window.DashboardModule = {};
@@ -654,6 +660,137 @@ async function getDashboardStats(options = {}) {
             console.warn('⚠️ Error obteniendo corriente hoy:', e);
         }
 
+        // ============================================================
+        // 🆕 FASE 3.1: VENTAS LIBERADAS (cantidad + importe)
+        // ============================================================
+        let releasedSales = { count: 0, total: 0 };
+        try {
+            const releasedResult = window.DBModule.query(`
+                SELECT COUNT(*) as count, SUM(total) as total
+                FROM sales
+                WHERE negocio_id = ? 
+                  AND is_liberated = 1
+                  AND deleted_at IS NULL 
+                  AND voided = 0
+            `, [negocioId]);
+            
+            releasedSales = {
+                count: releasedResult[0]?.count || 0,
+                total: releasedResult[0]?.total || 0
+            };
+            console.log(`🚀 [FASE 3.1] Ventas liberadas: ${releasedSales.count} ($${releasedSales.total.toFixed(2)})`);
+        } catch (e) {
+            console.warn('⚠️ Error obteniendo ventas liberadas:', e);
+        }
+
+        // ============================================================
+        // 🆕 FASE 3.1: MEJOR Y PEOR DÍA DE VENTAS (histórico)
+        // ============================================================
+        let bestWorstDay = { best: null, worst: null };
+        try {
+            // Obtener TODAS las ventas del negocio con su fecha
+            const todasLasVentas = window.DBModule.query(`
+                SELECT sale_date, total
+                FROM sales
+                WHERE negocio_id = ? 
+                  AND deleted_at IS NULL 
+                  AND voided = 0
+            `, [negocioId]);
+            
+            // Agrupar por fecha local
+            const totalesPorFecha = {};
+            for (const venta of todasLasVentas) {
+                const fechaLocal = fechaLocalYYYYMMDD(venta.sale_date);
+                if (!fechaLocal) continue;
+                if (!totalesPorFecha[fechaLocal]) totalesPorFecha[fechaLocal] = 0;
+                totalesPorFecha[fechaLocal] += venta.total || 0;
+            }
+            
+            // Convertir a array y ordenar
+            const fechasArray = Object.entries(totalesPorFecha)
+                .map(([date, total]) => ({ date, total }))
+                .filter(d => d.total > 0);
+            
+            if (fechasArray.length > 0) {
+                // Ordenar por total ascendente
+                fechasArray.sort((a, b) => a.total - b.total);
+                
+                // El primero es el peor, el último es el mejor
+                bestWorstDay.worst = fechasArray[0];
+                bestWorstDay.best = fechasArray[fechasArray.length - 1];
+                
+                console.log(`📅 [FASE 3.1] Mejor día: ${bestWorstDay.best.date} ($${bestWorstDay.best.total.toFixed(2)})`);
+                console.log(`📅 [FASE 3.1] Peor día: ${bestWorstDay.worst.date} ($${bestWorstDay.worst.total.toFixed(2)})`);
+            }
+        } catch (e) {
+            console.warn('⚠️ Error obteniendo mejor/peor día:', e);
+        }
+
+        // ============================================================
+        // 🆕 FASE 3.1: VENTAS POR EMPLEADO
+        // ============================================================
+        // Agrupa las ventas por el usuario que las registró (created_by)
+        // Retorna solo empleados con al menos 1 venta
+        // ============================================================
+        let salesByEmployee = [];
+        try {
+            const ventasPorUsuario = window.DBModule.query(`
+                SELECT 
+                    s.created_by,
+                    COUNT(*) as count,
+                    SUM(s.total) as total,
+                    u.name as user_name,
+                    u.username as user_username
+                FROM sales s
+                LEFT JOIN users u ON s.created_by = u.id
+                WHERE s.negocio_id = ? 
+                  AND s.deleted_at IS NULL 
+                  AND s.voided = 0
+                  AND s.created_by IS NOT NULL
+                GROUP BY s.created_by
+                ORDER BY total DESC
+            `, [negocioId]);
+            
+            salesByEmployee = ventasPorUsuario.map(row => ({
+                user_id: row.created_by,
+                name: row.user_name || row.user_username || 'Usuario desconocido',
+                username: row.user_username || '',
+                count: row.count || 0,
+                total: row.total || 0
+            }));
+            
+            // Si no hay created_by en ninguna venta (BD vieja), intentar con user_id
+            if (salesByEmployee.length === 0) {
+                const ventasPorUser = window.DBModule.query(`
+                    SELECT 
+                        s.user_id,
+                        COUNT(*) as count,
+                        SUM(s.total) as total,
+                        u.name as user_name,
+                        u.username as user_username
+                    FROM sales s
+                    LEFT JOIN users u ON s.user_id = u.id
+                    WHERE s.negocio_id = ? 
+                      AND s.deleted_at IS NULL 
+                      AND s.voided = 0
+                    GROUP BY s.user_id
+                    ORDER BY total DESC
+                `, [negocioId]);
+                
+                salesByEmployee = ventasPorUser.map(row => ({
+                    user_id: row.user_id,
+                    name: row.user_name || row.user_username || 'Usuario desconocido',
+                    username: row.user_username || '',
+                    count: row.count || 0,
+                    total: row.total || 0
+                }));
+            }
+            
+            console.log(`👥 [FASE 3.1] Empleados con ventas: ${salesByEmployee.length}`);
+        } catch (e) {
+            console.warn('⚠️ Error obteniendo ventas por empleado:', e);
+        }
+
         return {
             totalSales, totalRevenue, todaySalesCount, todayRevenue,
             pendingOrdersCount, ordersTodayCount, waitingListCount,
@@ -680,7 +817,11 @@ async function getDashboardStats(options = {}) {
             weekOffset: weekOffset,
             // 🆕 FASE C: Incluir info del modo y rango
             chartMode: chartMode,
-            isCurrentRange: isCurrentRange
+            isCurrentRange: isCurrentRange,
+            // 🆕 FASE 3.1: Nuevas estadísticas
+            releasedSales: releasedSales,
+            bestWorstDay: bestWorstDay,
+            salesByEmployee: salesByEmployee
         };
 
     } catch (error) {
@@ -699,4 +840,4 @@ window.DashboardModule = {
     calcularRangoGrafico
 };
 
-console.log('📦 Dashboard Module cargado correctamente v2.0.4 (FASE C: 3 modos de gráfico - last7 / dom-sab / lun-dom)');
+console.log('📦 Dashboard Module cargado correctamente v2.1.0 (FASE 3.1: liberadas + mejor/peor día + ventas por empleado)');

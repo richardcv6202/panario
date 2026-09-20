@@ -7,12 +7,11 @@
 //     - Añadida librería qrcode.js a los assets críticos
 //     - Añadido mensaje 'FORCE_UPDATE' para forzar actualización
 //   v2.1.0 (200926):
-//     - 🎯 Nueva versión mayor: incluye FASE 1 (UUID+fusión+fix fechas)
-//       y FASE 2 (lista de espera completa)
-//     - Precache COMPLETO con todos los módulos JS:
-//       dashboard.js, help.js, theme.js, rewards.js, corriente-utils.js
+//     - 🎯 Nueva versión mayor: incluye FASE 1 (UUID+fusión+fix fechas),
+//       FASE 2 (lista de espera completa) y FASE 3 (Dashboard enriquecido
+//       + toggles + medallas + alturas homogéneas).
 //     - CACHE_NAME nuevo fuerza descarga limpia en móviles con v2.0.3
-//     - Verificación de integridad al instalar
+//     - Precache COMPLETO con todos los módulos JS
 //     - Timeout de red ajustado a 5s
 // ============================================================
 
@@ -26,9 +25,6 @@ const NETWORK_TIMEOUT_MS = 5000;
 
 // ============================================================
 // RECURSOS CRÍTICOS PARA FUNCIONAMIENTO OFFLINE
-// ============================================================
-// IMPORTANTE: Cada vez que se añade un módulo JS nuevo, debe
-// añadirse aquí. Si falta, la app no arrancará offline.
 // ============================================================
 const CRITICAL_ASSETS = [
   // Página principal
@@ -138,7 +134,6 @@ self.addEventListener('install', function(event) {
       .then(function(cache) {
         console.log('📦 SW Panario: Cacheando', CRITICAL_ASSETS.length, 'recursos críticos...');
         
-        // Usar allSettled para que un fallo no rompa toda la instalación
         return Promise.allSettled(
           CRITICAL_ASSETS.map(function(asset) {
             return cache.add(asset).catch(function(err) {
@@ -149,7 +144,6 @@ self.addEventListener('install', function(event) {
       })
       .then(function() {
         console.log('✅ SW Panario: Instalación completada (v2.1.0)');
-        // Forzar activación inmediata (no esperar a cerrar pestañas)
         return self.skipWaiting();
       })
       .catch(function(error) {
@@ -167,8 +161,6 @@ self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys()
       .then(function(cacheNames) {
-        // Eliminar TODAS las cachés que no sean las actuales
-        // Esto incluye panario-v2.0.3, panario-static-v2.0.3, etc.
         return Promise.all(
           cacheNames
             .filter(function(cacheName) {
@@ -184,7 +176,6 @@ self.addEventListener('activate', function(event) {
       })
       .then(function() {
         console.log('✅ SW Panario: Activado y controlando clientes');
-        // Tomar control de todas las pestañas abiertas inmediatamente
         return self.clients.claim();
       })
   );
@@ -219,7 +210,6 @@ self.addEventListener('fetch', function(event) {
     event.respondWith(
       fetchWithTimeout(request, NETWORK_TIMEOUT_MS)
         .then(function(response) {
-          // Guardar copia en caché
           if (response && response.status === 200) {
             const responseClone = response.clone();
             caches.open(CACHE_DYNAMIC).then(function(cache) {
@@ -277,7 +267,7 @@ self.addEventListener('fetch', function(event) {
   }
   
   // ============================================================
-  // 2. RECURSOS ESTÁTICOS (CSS, JS, IMÁGENES, FUENTES): Cache First
+  // 2. RECURSOS ESTÁTICOS (CSS, JS, IMÁGENES): Cache First
   // ============================================================
   event.respondWith(
     caches.match(request)
@@ -293,17 +283,13 @@ self.addEventListener('fetch', function(event) {
                 });
               }
             })
-            .catch(function() {
-              // Silenciar error de red si ya tenemos caché
-            });
+            .catch(function() {});
           
           return cachedResponse;
         }
         
-        // No está en caché: buscar en red con timeout
         return fetchWithTimeout(request, NETWORK_TIMEOUT_MS)
           .then(function(networkResponse) {
-            // Guardar en caché para futuras peticiones
             if (networkResponse && networkResponse.status === 200) {
               const responseClone = networkResponse.clone();
               caches.open(CACHE_DYNAMIC).then(function(cache) {
@@ -313,11 +299,9 @@ self.addEventListener('fetch', function(event) {
             return networkResponse;
           })
           .catch(function() {
-            // Si falla y es una imagen, devolver un placeholder transparente
             if (request.destination === 'image') {
               return new Response('', { status: 404, statusText: 'Image not found' });
             }
-            // Si es otro recurso, intentar offline.html como último recurso
             return caches.match(OFFLINE_URL).then(function(offlineResponse) {
               if (offlineResponse) return offlineResponse;
               return new Response('', { status: 404, statusText: 'Not found' });
@@ -330,7 +314,6 @@ self.addEventListener('fetch', function(event) {
 // ============================================================
 // FUNCIONES AUXILIARES
 // ============================================================
-
 function isHtmlRequest(request) {
   const url = new URL(request.url);
   return (
@@ -347,13 +330,11 @@ function isHtmlRequest(request) {
 self.addEventListener('message', function(event) {
   if (!event.data) return;
   
-  // Forzar skipWaiting
   if (event.data.type === 'SKIP_WAITING') {
-    console.log('⏭️ SW Panario: skipWaiting solicitado por el cliente');
+    console.log('⏭️ SW Panario: skipWaiting solicitado');
     self.skipWaiting();
   }
   
-  // Limpiar todas las cachés
   if (event.data.type === 'CLEAR_CACHE') {
     console.log('🗑️ SW Panario: Limpiando todas las cachés...');
     caches.keys().then(function(cacheNames) {
@@ -367,7 +348,6 @@ self.addEventListener('message', function(event) {
     });
   }
   
-  // Forzar actualización completa
   if (event.data.type === 'FORCE_UPDATE') {
     console.log('🔄 SW Panario: Forzando actualización completa...');
     event.waitUntil(
@@ -425,13 +405,11 @@ self.addEventListener('notificationclick', function(event) {
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then(function(clientList) {
-        // Si ya hay una ventana abierta, enfocarla
         for (const client of clientList) {
           if (client.url.includes(self.location.origin) && 'focus' in client) {
             return client.focus();
           }
         }
-        // Si no, abrir una nueva
         if (clients.openWindow) {
           return clients.openWindow('./index.html');
         }

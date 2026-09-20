@@ -226,6 +226,7 @@
             <span>💰 Ventas</span>
             <span>📖 Recetas</span>
             <span>🛒 Insumos</span>
+            <span>🏆 Premios</span>
         </div>
         <p class="note">
             💡 Los datos se sincronizarán automáticamente cuando vuelvas a tener conexión.<br>
@@ -236,10 +237,6 @@
     <div class="version-tag">Panario v2.1.0</div>
 
     <script>
-        // ============================================================
-        // REINTENTAR CONEXIÓN
-        // ============================================================
-
         async function reintentarConexion() {
             const btn = document.getElementById('reintentar-btn');
             const statusBox = document.getElementById('status-box');
@@ -253,7 +250,6 @@
                 <span class="status-text">Verificando conexión...</span>
             `;
 
-            // Verificar conexión
             const online = navigator.onLine;
             const reachable = await checkServerReachable();
 
@@ -280,10 +276,6 @@
             }
         }
 
-        // ============================================================
-        // VERIFICAR SI EL SERVIDOR ES ALCANZABLE
-        // ============================================================
-
         function checkServerReachable() {
             return new Promise((resolve) => {
                 const timeout = setTimeout(() => resolve(false), 4000);
@@ -303,10 +295,6 @@
             });
         }
 
-        // ============================================================
-        // LIMPIAR CACHÉ Y RECARGAR
-        // ============================================================
-
         async function limpiarYRecargar() {
             const statusBox = document.getElementById('status-box');
             const statusContent = document.getElementById('status-content');
@@ -318,7 +306,6 @@
             `;
 
             try {
-                // 1. Desregistrar Service Workers
                 if ('serviceWorker' in navigator) {
                     const registrations = await navigator.serviceWorker.getRegistrations();
                     for (const registration of registrations) {
@@ -326,7 +313,6 @@
                     }
                 }
 
-                // 2. Borrar todas las cachés
                 if ('caches' in window) {
                     const cacheNames = await caches.keys();
                     for (const cacheName of cacheNames) {
@@ -340,7 +326,6 @@
                 `;
                 statusBox.className = 'status-box visible success';
 
-                // 3. Recargar con bypass de caché
                 setTimeout(() => {
                     const url = new URL(window.location.href);
                     url.searchParams.set('_reload', Date.now());
@@ -359,10 +344,6 @@
                 statusBox.className = 'status-box visible error';
             }
         }
-
-        // ============================================================
-        // AUTO-REINTENTO AL RECUPERAR CONEXIÓN
-        // ============================================================
 
         window.addEventListener('online', () => {
             console.log('🌐 Conexión restaurada — reintentando...');
@@ -384,14 +365,9 @@
             console.log('📡 Conexión perdida');
         });
 
-        // ============================================================
-        // INICIALIZACIÓN
-        // ============================================================
-
         document.addEventListener('DOMContentLoaded', () => {
             console.log('📡 Offline page cargada — Panario v2.1.0');
             
-            // Verificar conexión al cargar
             if (navigator.onLine) {
                 console.log('🌐 Navegador reporta conexión activa');
                 setTimeout(() => {

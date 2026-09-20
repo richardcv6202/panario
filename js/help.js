@@ -1,6 +1,13 @@
 // ============================================================
 // 📦 HELP MODULE - Panario (Sistema de Ayuda y Tutorial)
 // CORREGIDO: Nombre del desarrollador (Ricardo Castillo Valdés)
+// 🆕 FASE 5 (#2) (200926 v2):
+//   - NUEVO botón "📖 Ayuda detallada" en el Centro de Ayuda
+//   - Llama a window.openDetailedHelp() (definido en app.js)
+//   - También accesible desde el modal de FAQ
+//   - Fallback si openDetailedHelp no está definida
+// 🆕 FASE 5 (#3):
+//   - Ampliación de FAQs (~60 preguntas organizadas)
 // ============================================================
 
 window.HelpModule = {};
@@ -71,6 +78,37 @@ let tourTooltip = null;
 let tourHighlight = null;
 
 // ============================================================
+// 🆕 FASE 5 (#2): HELPER PARA ABRIR AYUDA DETALLADA
+// ============================================================
+
+/**
+ * Abre la ayuda detallada externa (ayuda-panario.html).
+ * Usa window.openDetailedHelp() si está definida (app.js),
+ * si no, hace un fallback abriendo la URL directamente.
+ */
+function abrirAyudaDetallada() {
+    try {
+        if (typeof window.openDetailedHelp === 'function') {
+            window.openDetailedHelp();
+        } else {
+            // Fallback si app.js no cargó la función
+            console.warn('⚠️ openDetailedHelp no está definida, usando fallback');
+            window.open('./ayuda-panario.html', '_blank', 'noopener,noreferrer');
+            if (window.showToast) {
+                window.showToast('📖 Abriendo ayuda detallada...', 'info', 2500);
+            }
+        }
+    } catch (e) {
+        console.warn('⚠️ Error abriendo ayuda detallada:', e);
+        if (window.showToast) {
+            window.showToast('❌ No se pudo abrir la ayuda detallada', 'error', 4000);
+        }
+    }
+}
+
+window.abrirAyudaDetallada = abrirAyudaDetallada;
+
+// ============================================================
 // MENÚ PRINCIPAL DE AYUDA
 // ============================================================
 
@@ -89,7 +127,7 @@ function showHelpMenu() {
     `;
 
     modal.innerHTML = `
-        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 400px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 420px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid var(--border-color);">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 28px;">❓</span>
@@ -136,13 +174,24 @@ function showHelpMenu() {
                     <span style="font-size: 16px;">▶</span>
                 </button>
 
+                <!-- 🆕 FASE 5 (#2): Ayuda Detallada -->
+                <button onclick="abrirAyudaDetallada()" 
+                        style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; border: none; border-radius: 10px; cursor: pointer; text-align: left; font-family: inherit; transition: transform 0.2s;">
+                    <span style="font-size: 24px;">📖</span>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 14px;">Ayuda Detallada</div>
+                        <div style="font-size: 11px; opacity: 0.9;">Manual completo (nueva pestaña)</div>
+                    </div>
+                    <span style="font-size: 16px;">↗</span>
+                </button>
+
                 <!-- Separador -->
                 <div style="border-top: 1px solid var(--border-color); margin: 4px 0;"></div>
 
                 <!-- Léeme -->
                 <button onclick="closeHelpMenu(); showReadmeModal();" 
-                        style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; border: none; border-radius: 10px; cursor: pointer; text-align: left; font-family: inherit; transition: transform 0.2s;">
-                    <span style="font-size: 24px;">📖</span>
+                        style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); color: #fff; border: none; border-radius: 10px; cursor: pointer; text-align: left; font-family: inherit; transition: transform 0.2s;">
+                    <span style="font-size: 24px;">📘</span>
                     <div style="flex: 1;">
                         <div style="font-weight: 600; font-size: 14px;">Léeme</div>
                         <div style="font-size: 11px; opacity: 0.9;">Información del proyecto</div>
@@ -150,12 +199,9 @@ function showHelpMenu() {
                     <span style="font-size: 16px;">▶</span>
                 </button>
 
-                <!-- Separador -->
-                <div style="border-top: 1px solid var(--border-color); margin: 4px 0;"></div>
-
                 <!-- Créditos -->
                 <button onclick="closeHelpMenu(); showCreditsModal();" 
-                        style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); color: #fff; border: none; border-radius: 10px; cursor: pointer; text-align: left; font-family: inherit; transition: transform 0.2s;">
+                        style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); color: #fff; border: none; border-radius: 10px; cursor: pointer; text-align: left; font-family: inherit; transition: transform 0.2s;">
                     <span style="font-size: 24px;">👨‍💻</span>
                     <div style="flex: 1;">
                         <div style="font-weight: 600; font-size: 14px;">Créditos</div>
@@ -220,7 +266,7 @@ function showReadmeModal() {
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #10b981;">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 28px;">📖</span>
+                    <span style="font-size: 28px;">📘</span>
                     <h2 style="margin: 0; font-size: 18px; color: #10b981;">Léeme</h2>
                 </div>
                 <button onclick="closeReadmeModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
@@ -255,7 +301,7 @@ function showReadmeModal() {
                 <div style="background: var(--bg); padding: 12px; border-radius: 8px; font-size: 13px;">
                     <div style="display: flex; justify-content: space-between; padding: 2px 0;">
                         <span style="color: var(--text-light);">Versión:</span>
-                        <strong>2.0.2</strong>
+                        <strong>2.1.1</strong>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 2px 0;">
                         <span style="color: var(--text-light);">Estado:</span>
@@ -293,8 +339,11 @@ function showReadmeModal() {
                 </ol>
             </div>
 
-            <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-color); text-align: center;">
-                <button onclick="closeReadmeModal()" class="btn primary" style="padding: 10px 24px; font-size: 14px; width: auto; background: #10b981; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+            <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; flex-wrap: wrap;">
+                <button onclick="closeReadmeModal(); abrirAyudaDetallada();" class="btn primary" style="flex: 1; padding: 10px 16px; font-size: 13px; background: #10b981; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    📖 Ver ayuda detallada
+                </button>
+                <button onclick="closeReadmeModal()" class="btn primary" style="flex: 1; padding: 10px 16px; font-size: 13px; background: #10b981; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                     Entendido
                 </button>
             </div>
@@ -327,7 +376,7 @@ function showReadmeModal() {
 }
 
 // ============================================================
-// MODAL CRÉDITOS (CORREGIDO - Ricardo Castillo Valdés)
+// MODAL CRÉDITOS
 // ============================================================
 
 function showCreditsModal() {
@@ -390,7 +439,7 @@ function showCreditsModal() {
 
             <div style="background: linear-gradient(135deg, #0ea5e915 0%, #0284c715 100%); border: 1px solid #0ea5e9; border-radius: 10px; padding: 14px; margin-bottom: 16px;">
                 <div style="font-size: 13px; font-weight: 600; color: #0ea5e9; margin-bottom: 4px;">
-                    🍞 Panario v2.0.2
+                    🍞 Panario v2.1.1
                 </div>
                 <div style="font-size: 12px; color: var(--text-light);">
                     "Tu panadería en orden"
@@ -800,7 +849,7 @@ function initHelpButton() {
 }
 
 // ============================================================
-// MOSTRAR FAQ (AMPLIADA - 30+ preguntas)
+// MOSTRAR FAQ (AMPLIADA - 60+ preguntas)
 // ============================================================
 
 function showFAQModal() {
@@ -824,6 +873,10 @@ function showFAQModal() {
         { q: '¿Por qué los pedidos pendientes no aparecen como deudas?', a: 'Porque un pedido es una solicitud, no una venta ejecutada. Solo se considera deuda cuando se ha completado la venta y el cliente no ha pagado.' },
         { q: '¿Cómo funcionan las flechas ◀▶ del gráfico?', a: 'Permiten navegar entre semanas. ◀ va a semanas anteriores, ▶ vuelve a la semana actual.' },
         { q: '¿Qué significan los colores del gráfico?', a: '🥇 Verde = día con mayor venta de la semana. 📉 Rojo = día con menor venta. ⭐ Amarillo = día actual.' },
+        { q: '¿Qué es el "modo del gráfico"?', a: 'Es la forma en que se agrupan los días. Puedes elegir "Últimos 7 días", "Semana Dom-Sáb" o "Semana Lun-Dom". Tu elección se guarda automáticamente.' },
+        { q: '¿Qué son las "Ventas liberadas"?', a: 'Son ventas sin cliente identificado (tipo "mostrador anónimo"). Se contabilizan en los totales pero se pueden ocultar del listado.' },
+        { q: '¿Qué es el "Mejor día" y el "Peor día"?', a: 'Son las fechas con mayor y menor facturación histórica de tu negocio. Sirven para identificar patrones de venta.' },
+        { q: '¿Qué son las "Ventas por empleado"?', a: 'Es un ranking de los usuarios de tu negocio según sus ventas registradas. Te permite evaluar el desempeño del equipo.' },
 
         // ============ INSUMOS ============
         { q: '¿Qué es un insumo?', a: 'Es todo lo que compras para producir: harina, levadura, yogur, mantequilla, etc.' },
@@ -831,14 +884,18 @@ function showFAQModal() {
         { q: '¿Los insumos se descuentan automáticamente?', a: 'Sí. Al vender un producto o confirmar un pedido, el stock de los insumos se descuenta según la receta asociada.' },
         { q: '¿Qué es el stock mínimo?', a: 'Es la cantidad mínima que debe tener un insumo. Cuando el stock baja de ese nivel, aparece una alerta roja.' },
         { q: '¿Puedo eliminar un insumo?', a: 'Sí, pero se aplica soft-delete. Puedes limpiarlo permanentemente desde Herramientas.' },
+        { q: '¿Los usuarios no-admin pueden editar insumos?', a: 'No. Solo los administradores pueden crear, editar o eliminar insumos. Los usuarios regulares tienen modo solo lectura.' },
 
         // ============ RECETAS ============
         { q: '¿Qué es una receta?', a: 'Es la fórmula de producción que indica qué insumos se necesitan y en qué cantidad. Ej: "Pan de Yogur" con harina, levadura y yogur.' },
         { q: '¿Cómo se calcula el costo de una receta?', a: 'La suma de (cantidad × costo_unitario) de todos los insumos asociados.' },
         { q: '¿Qué hace el botón "🔄 Recalcular"?', a: 'Permite ajustar una receta para un nuevo rendimiento usando regla de 3. Ej: receta para 33 panes → quiero 50 panes.' },
-        { q: '¿Cómo comparto una receta?', a: 'En la vista de detalle de la receta, clic en "💬 Compartir". Puedes enviarla por WhatsApp, Messenger, Email o copiarla al portapapeles.' },
-        { q: '¿Puedo duplicar una receta?', a: 'Sí. En la lista de recetas, clic en "📋 Duplicar". Se creará una copia con el nombre que elijas.' },
+        { q: '¿Cómo comparto una receta?', a: 'En la vista de detalle de la receta, clic en "💬 Compartir". Puedes enviarla por WhatsApp, Messenger, Email o copiarla al portapapeles. Solo admin.' },
+        { q: '¿Puedo duplicar una receta?', a: 'Sí. En la lista de recetas, clic en "📋 Duplicar". Se creará una copia con el nombre que elijas. Solo admin.' },
         { q: '¿Qué significa "receta compartida"?', a: 'Es una receta que otros usuarios del mismo negocio pueden ver y usar como plantilla.' },
+        { q: '¿Por qué no puedo editar las recetas?', a: 'Las recetas son fórmulas críticas del negocio. Solo los administradores pueden crearlas, editarlas, duplicarlas o eliminarlas. Los usuarios regulares pueden verlas, recalcularlas, usarlas como plantilla y exportarlas en PDF (sin costos).' },
+        { q: '¿Por qué no veo los costos de las recetas?', a: 'Los costos son información sensible del negocio. Solo los administradores los ven. Como usuario regular, ves los ingredientes y cantidades pero no los precios.' },
+        { q: '¿Puedo recalcular una receta siendo usuario no-admin?', a: 'Sí. Puedes recalcular, pero solo podrás guardar el resultado como una receta nueva (no modificar la original).' },
 
         // ============ PRODUCTOS ============
         { q: '¿Qué es un producto?', a: 'Es lo que vendes al cliente. Ej: "Jaba de Pan" con precio $550 y 10 panes por jaba.' },
@@ -862,6 +919,8 @@ function showFAQModal() {
         { q: '¿Qué es la paridad en reservas?', a: 'Permite filtrar días pares o impares. Ej: "Solo pares" crea pedidos los días 2, 4, 6, 8, 10...' },
         { q: '¿Cómo se cancelan pedidos automáticamente?', a: 'Los pedidos pendientes/confirmados con más de 48h sin procesar se cancelan automáticamente.' },
         { q: '¿Qué es "sesión de recogida"?', a: 'Indica si el cliente recogerá el pedido en la mañana (10:00), tarde (15:00) o noche (19:00).' },
+        { q: '¿Cómo gestiono la lista de espera?', a: 'Ve a 📋 Pedidos → botón "⏰ Lista de espera" o a ⚙️ Herramientas → "⏰ Gestionar lista de espera". Desde ahí puedes procesar, cancelar, eliminar o limpiar la lista.' },
+        { q: '¿Qué es la "cancelación global de pedidos"?', a: 'Es una herramienta de admin que cancela TODOS los pedidos en un rango de fechas. Útil para apagones prolongados, falta de insumos o cierres temporales.' },
 
         // ============ CORRIENTE ============
         { q: '¿Cómo funcionan los horarios de corriente?', a: 'Define el patrón (ej: 3h corriente / 12h apagón) y el sistema calcula automáticamente todos los bloques de cada día.' },
@@ -869,10 +928,31 @@ function showFAQModal() {
         { q: '¿Puedo descargar el reporte de corriente?', a: 'Sí. En Herramientas → ⚡ Gestionar Horarios → pestaña 📊 Reporte, elige semanal o mensual y se genera un PDF.' },
         { q: '¿Por qué el calendario muestra algunos días sin corriente?', a: 'Porque según el patrón configurado, ese día no tiene bloques de corriente. Aparecen en gris.' },
 
-        // ============ AYUDA ============
-        { q: '¿Cómo abro el Centro de Ayuda?', a: 'Haz clic en el botón ❓ de la barra superior. Se abrirá un menú con Guía Rápida, Tutorial, FAQ, Léeme y Créditos.' },
+        // ============ PREMIOS ============
+        { q: '¿Cómo funciona el sistema de premios?', a: 'Premia a tus mejores clientes. Se calcula automáticamente el cliente con mayor total gastado en el mes y en el año.' },
+        { q: '¿Dónde configuro los premios?', a: 'Ve a 💰 Ventas → botón 🏆 Premios. Ahí puedes activar/desactivar, editar los premios y elegir cuándo se calcula el premio anual.' },
+        { q: '¿Por qué hay tres opciones para calcular el premio anual?', a: 'Cada negocio es diferente. Puedes elegir entregar el premio en Navidad (24 dic), a fin de año (31 dic) o al inicio del siguiente año (comportamiento por defecto).' },
+        { q: '¿Qué pasa si tengo el sistema de premios desactivado?', a: 'El selector de cálculo anual se guarda igualmente, pero no se muestra la tarjeta de premios en el Dashboard ni se envían notificaciones.' },
+
+        // ============ NOTIFICACIONES Y AYUDA ============
+        { q: '¿Puedo cambiar el sonido de las notificaciones?', a: 'Sí. Ve a tu Perfil → 🔔 Sonido de notificaciones. Puedes elegir entre 5 sonidos embutidos o desactivarlo.' },
+        { q: '¿Por qué no se repiten las notificaciones?', a: 'Una vez que abres el modal de notificaciones, se marcan como vistas y no se vuelven a mostrar hasta que sean necesarias de nuevo.' },
+        { q: '¿Cómo abro el Centro de Ayuda?', a: 'Haz clic en el botón ❓ de la barra superior. Se abrirá un menú con Guía Rápida, Tutorial, FAQ, Ayuda Detallada, Léeme y Créditos.' },
+        { q: '¿Qué es la "Ayuda detallada"?', a: 'Es un manual completo en formato web (archivo ayuda-panario.html) que se abre en una nueva pestaña. Contiene búsqueda, temas claro/oscuro y todas las secciones.' },
         { q: '¿Puedo volver a ver el tutorial?', a: 'Sí. Ve a Ayuda → Tutorial Interactivo. Si ya lo completaste, la app te preguntará si quieres volver a verlo.' },
-        { q: '¿Cómo contacto al desarrollador?', a: 'En Ayuda → Créditos. WhatsApp: +53 55031725, Email: 3sayricardo@gmail.com.' }
+        { q: '¿Cómo contacto al desarrollador?', a: 'En Ayuda → Créditos. WhatsApp: +53 55031725, Email: 3sayricardo@gmail.com.' },
+
+        // ============ MULTIUSUARIO ============
+        { q: '¿Puedo tener varios usuarios en el mismo negocio?', a: 'Sí. Al registrarte puedes crear un negocio nuevo o unirte a uno existente con un código de invitación de 8 caracteres.' },
+        { q: '¿Cómo comparto el código de invitación?', a: 'En tu Perfil, junto al nombre del negocio, verás el código con un botón "📋 Copiar". Envíalo a quien quieras invitar.' },
+        { q: '¿Quién es el administrador del negocio?', a: 'El primer usuario que crea el negocio es el administrador. Los siguientes usuarios que se unan tendrán rol de usuario regular.' },
+        { q: '¿Cómo promuevo a un usuario a admin?', a: 'Ve a ⚙️ Herramientas → 👥 Gestionar Usuarios → botón 👑 junto al usuario.' },
+
+        // ============ HERRAMIENTAS ============
+        { q: '¿Qué hace "Reiniciar base de datos"?', a: 'Elimina TODOS los datos excepto usuarios y temas. Se conservan las cuentas de usuario para que puedas volver a entrar. Contraseña: "panario".' },
+        { q: '¿Qué diferencia hay entre "Limpiar datos eliminados" y "Eliminación por error"?', a: 'Ambas son destructivas. "Limpiar datos eliminados" borra todos los registros con soft-delete. "Eliminación por error" permite seleccionar pedidos o ventas específicos para eliminar permanentemente.' },
+        { q: '¿Cómo fusiono dos bases de datos?', a: 'Ve a ⚙️ Herramientas → 📥 Importar → 🔀 Fusionar bases de datos. Los registros nuevos se añaden, los existentes se comparan por UUID (gana el más reciente).' },
+        { q: '¿Qué son los días sin ventas?', a: 'Son días en los que no tuviste actividad (por ejemplo, por un apagón). Registrarlos te permite llevar un historial y excluirlos de las estadísticas.' }
     ];
 
     const existingModal = document.getElementById('faq-modal');
@@ -918,9 +998,12 @@ function showFAQModal() {
                 ${faqHtml}
             </div>
             
-            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 8px;">
+            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; flex-wrap: wrap;">
                 <button onclick="closeFAQModal()" class="btn secondary" style="padding: 8px 16px; font-size: 13px; width: auto; flex: 1;">
                     Cerrar
+                </button>
+                <button onclick="closeFAQModal(); abrirAyudaDetallada();" class="btn primary" style="padding: 8px 16px; font-size: 13px; width: auto; flex: 1; background: #10b981; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    📖 Ayuda detallada
                 </button>
                 <button onclick="closeFAQModal(); startTour();" class="btn primary" style="padding: 8px 16px; font-size: 13px; width: auto; flex: 1; background: #f59e0b; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
                     🎯 Tutorial
@@ -976,7 +1059,9 @@ window.HelpModule = {
     showQuickStartGuide: showQuickStartGuide,
     showFAQModal: showFAQModal,
     initHelpButton: initHelpButton,
-    toggleFAQ: toggleFAQ
+    toggleFAQ: toggleFAQ,
+    // 🆕 FASE 5 (#2)
+    abrirAyudaDetallada: abrirAyudaDetallada
 };
 
 // Hacerlas globales también para uso directo
@@ -987,5 +1072,7 @@ window.showFAQModal = showFAQModal;
 window.showQuickStartGuide = showQuickStartGuide;
 window.startTour = startTour;
 window.showContextualHelp = showContextualHelp;
+// 🆕 FASE 5 (#2)
+window.abrirAyudaDetallada = abrirAyudaDetallada;
 
-console.log('📦 Help Module cargado correctamente (con nombre corregido: Ricardo Castillo Valdés)');
+console.log('📦 Help Module cargado correctamente v2.1.1 (FASE 5 #2: botón Ayuda Detallada + #3: FAQs ampliadas)');

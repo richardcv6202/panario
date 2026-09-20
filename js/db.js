@@ -39,6 +39,11 @@
 //   - findDuplicateByData(): detecta duplicados sin uuid
 //   - remapForeignKey(): re-mapea referencias entre tablas
 //   - Soporta modo 'reemplazar' (comportamiento antiguo) y 'fusionar' (nuevo)
+// AÑADIDO FASE 4.2 (200926 v5):
+//   - Persistencia del modo del gráfico: columna dash_chart_mode
+//   - getUserDashboardConfig() y updateUserDashboardConfig() incluyen chart_mode
+//   - Nueva tabla dias_sin_ventas + funciones CRUD (#20)
+//   - ensureDiasSinVentasTable() para migración automática
 // ============================================================
 
 let db = null;
@@ -101,7 +106,8 @@ const TABLAS_FUSION_ORDER = [
     'transactions',
     'inventory',
     'inventory_movements',
-    'notifications'
+    'notifications',
+    'dias_sin_ventas'
 ];
 
 /**
@@ -293,6 +299,7 @@ async function initDB() {
         await ensureIsLiberatedColumn(db);
         await ensureDashboardColumns(db);
         await ensurePremiosConfigTable(db);
+        await ensureDiasSinVentasTable(db);
         await ensureNegociosTable(db);
         await ensureNegocioIdColumn(db);
         await migrateToMultiUser(db);
@@ -554,14 +561,66 @@ async function ensurePremiosConfigTable(db) {
                 activo INTEGER DEFAULT 1,
                 premio_mensual TEXT,
                 premio_anual TEXT,
+                premio_anual_calculo TEXT DEFAULT 'inicio_anio',
+                premio_anual_fecha TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 deleted_at DATETIME DEFAULT NULL,
                 FOREIGN KEY (negocio_id) REFERENCES negocios(id)
             )
         `);
+
+        // Añadir columnas nuevas si no existen
+        const columns = db.exec('PRAGMA table_info(premios_config)');
+        const columnNames = columns[0]?.values?.map(row => row[1]) || [];
+        
+        if (!columnNames.includes('premio_anual_calculo')) {
+            db.run(`ALTER TABLE premios_config ADD COLUMN premio_anual_calculo TEXT DEFAULT 'inicio_anio'`);
+        }
+        if (!columnNames.includes('premio_anual_fecha')) {
+            db.run(`ALTER TABLE premios_config ADD COLUMN premio_anual_fecha TEXT`);
+        }
+
         console.log('✅ Tabla premios_config verificada');
-    } catch (error) {}
+    } catch (error) {
+        console.warn('⚠️ Error verificando premios_config:', error.message);
+    }
+}
+
+/**
+ * 🆕 FASE 4.2 (#20): Tabla dias_sin_ventas
+ * Almacena los días sin ventas con su motivo.
+ */
+async function ensureDiasSinVentasTable(db) {
+    try {
+        db.run(`
+            CREATE TABLE IF NOT EXISTS dias_sin_ventas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                negocio_id INTEGER NOT NULL,
+                fecha TEXT NOT NULL,
+                motivo TEXT NOT NULL,
+                nota TEXT,
+                created_by INTEGER,
+                modified_by INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                deleted_at DATETIME DEFAULT NULL,
+                uuid TEXT,
+                FOREIGN KEY (negocio_id) REFERENCES negocios(id)
+            )
+        `);
+        
+        // Índices
+        try {
+            db.run('CREATE INDEX IF NOT EXISTS idx_dias_sin_ventas_negocio ON dias_sin_ventas(negocio_id)');
+            db.run('CREATE INDEX IF NOT EXISTS idx_dias_sin_ventas_fecha ON dias_sin_ventas(fecha)');
+            db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_dias_sin_ventas_unique ON dias_sin_ventas(negocio_id, fecha) WHERE deleted_at IS NULL');
+        } catch (e) {}
+        
+        console.log('✅ Tabla dias_sin_ventas verificada');
+    } catch (error) {
+        console.warn('⚠️ Error verificando dias_sin_ventas:', error.message);
+    }
 }
 
 async function ensureNegociosTable(db) {
@@ -629,7 +688,8 @@ async function ensureNegocioIdInAllTables(db) {
     const tables = [
         'insumos', 'recipes', 'productos', 'clients', 'orders',
         'sales', 'transactions', 'inventory', 'waiting_list',
-        'notifications', 'bank_accounts', 'corriente_config'
+        'notifications', 'bank_accounts', 'corriente_config',
+        'dias_sin_ventas'
     ];
     for (const table of tables) {
         try {
@@ -658,7 +718,8 @@ async function migrateNegocioIdToAllTables(db) {
         const tablesWithUserId = [
             'insumos', 'recipes', 'productos', 'clients', 'orders',
             'sales', 'transactions', 'inventory', 'waiting_list',
-            'notifications', 'bank_accounts', 'corriente_config'
+            'notifications', 'bank_accounts', 'corriente_config',
+            'dias_sin_ventas'
         ];
         
         for (const table of tablesWithUserId) {
@@ -688,7 +749,8 @@ async function createNegocioIdIndexes(db) {
     const tables = [
         'insumos', 'recipes', 'productos', 'clients', 'orders',
         'sales', 'transactions', 'inventory', 'waiting_list',
-        'notifications', 'bank_accounts', 'corriente_config'
+        'notifications', 'bank_accounts', 'corriente_config',
+        'dias_sin_ventas'
     ];
     for (const table of tables) {
         try { db.run(`CREATE INDEX IF NOT EXISTS idx_${table}_negocio_id ON ${table}(negocio_id)`); } catch (error) {}
@@ -797,7 +859,9 @@ async function ensureDashboardColumns(db) {
             { name: 'dash_show_quick_actions', type: 'INTEGER DEFAULT 1' },
             { name: 'dash_show_bank_qr', type: 'INTEGER DEFAULT 0' },
             { name: 'dash_show_help_button', type: 'INTEGER DEFAULT 1' },
-            { name: 'dash_show_orders_today', type: 'INTEGER DEFAULT 1' }
+            { name: 'dash_show_orders_today', type: 'INTEGER DEFAULT 1' },
+            // 🆕 FASE 4.2 (#14): Persistencia del modo del gráfico
+            { name: 'dash_chart_mode', type: "TEXT DEFAULT 'last7'" }
         ];
         for (const col of dashboardColumns) {
             if (!columnNames.includes(col.name)) db.run(`ALTER TABLE users ADD COLUMN ${col.name} ${col.type}`);
@@ -809,12 +873,21 @@ function getUserDashboardConfig(userId) {
     const defaultConfig = {
         show_corriente: true, show_top_clients: true, show_top_products: true,
         show_funds_analysis: true, show_payment_methods: true, show_quick_actions: true,
-        show_bank_qr: false, show_help_button: true, show_orders_today: true
+        show_bank_qr: false, show_help_button: true, show_orders_today: true,
+        // 🆕 FASE 3.2/3.3: defaults para toggles nuevos
+        show_released_sales: true,
+        show_best_worst_day: true,
+        show_sales_by_employee: true,
+        show_debts: true,
+        show_rewards: true,
+        // 🆕 FASE 4.2 (#14): modo del gráfico
+        chart_mode: 'last7'
     };
     try {
         const results = query(`SELECT dash_show_corriente, dash_show_top_clients, dash_show_top_products,
                     dash_show_funds_analysis, dash_show_payment_methods, dash_show_quick_actions,
-                    dash_show_bank_qr, dash_show_help_button, dash_show_orders_today
+                    dash_show_bank_qr, dash_show_help_button, dash_show_orders_today,
+                    dash_chart_mode
              FROM users WHERE id = ?`, [userId]);
         if (results.length === 0) return defaultConfig;
         const row = results[0];
@@ -827,7 +900,15 @@ function getUserDashboardConfig(userId) {
             show_quick_actions: row.dash_show_quick_actions !== 0,
             show_bank_qr: row.dash_show_bank_qr === 1,
             show_help_button: row.dash_show_help_button !== 0,
-            show_orders_today: row.dash_show_orders_today !== 0
+            show_orders_today: row.dash_show_orders_today !== 0,
+            // 🆕 FASE 3.2/3.3
+            show_released_sales: true,
+            show_best_worst_day: true,
+            show_sales_by_employee: true,
+            show_debts: true,
+            show_rewards: true,
+            // 🆕 FASE 4.2 (#14)
+            chart_mode: row.dash_chart_mode || 'last7'
         };
     } catch (e) { return defaultConfig; }
 }
@@ -837,13 +918,16 @@ function updateUserDashboardConfig(userId, config) {
         execute(`UPDATE users SET dash_show_corriente = ?, dash_show_top_clients = ?,
                 dash_show_top_products = ?, dash_show_funds_analysis = ?,
                 dash_show_payment_methods = ?, dash_show_quick_actions = ?,
-                dash_show_bank_qr = ?, dash_show_help_button = ?, dash_show_orders_today = ?
+                dash_show_bank_qr = ?, dash_show_help_button = ?, dash_show_orders_today = ?,
+                dash_chart_mode = ?
             WHERE id = ?`, [
             config.show_corriente ? 1 : 0, config.show_top_clients ? 1 : 0,
             config.show_top_products ? 1 : 0, config.show_funds_analysis ? 1 : 0,
             config.show_payment_methods ? 1 : 0, config.show_quick_actions ? 1 : 0,
             config.show_bank_qr ? 1 : 0, config.show_help_button ? 1 : 0,
-            config.show_orders_today ? 1 : 0, userId
+            config.show_orders_today ? 1 : 0,
+            config.chart_mode || 'last7',
+            userId
         ]);
         return { success: true };
     } catch (e) { return { success: false, error: e.message }; }
@@ -963,7 +1047,7 @@ async function createAllTables(db) {
             dash_show_top_products INTEGER DEFAULT 1, dash_show_funds_analysis INTEGER DEFAULT 1,
             dash_show_payment_methods INTEGER DEFAULT 1, dash_show_quick_actions INTEGER DEFAULT 1,
             dash_show_bank_qr INTEGER DEFAULT 0, dash_show_help_button INTEGER DEFAULT 1,
-            dash_show_orders_today INTEGER DEFAULT 1,
+            dash_show_orders_today INTEGER DEFAULT 1, dash_chart_mode TEXT DEFAULT 'last7',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP, deleted_at DATETIME DEFAULT NULL,
             FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
 
@@ -1114,8 +1198,18 @@ async function createAllTables(db) {
         db.run(`CREATE TABLE IF NOT EXISTS premios_config (
             id INTEGER PRIMARY KEY AUTOINCREMENT, negocio_id INTEGER NOT NULL UNIQUE,
             activo INTEGER DEFAULT 1, premio_mensual TEXT, premio_anual TEXT,
+            premio_anual_calculo TEXT DEFAULT 'inicio_anio', premio_anual_fecha TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             deleted_at DATETIME DEFAULT NULL, FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
+
+        // 🆕 FASE 4.2 (#20): Tabla dias_sin_ventas
+        db.run(`CREATE TABLE IF NOT EXISTS dias_sin_ventas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, negocio_id INTEGER NOT NULL,
+            fecha TEXT NOT NULL, motivo TEXT NOT NULL, nota TEXT,
+            created_by INTEGER, modified_by INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            deleted_at DATETIME DEFAULT NULL, uuid TEXT,
+            FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
 
         console.log('✅ Todas las tablas creadas/verificadas');
     } catch (error) {
@@ -1192,7 +1286,8 @@ async function ensureSoftDeleteColumns(db) {
             'users', 'units', 'recipes', 'recipe_ingredients', 'clients', 'products',
             'orders', 'order_items', 'payments', 'notifications', 'sales', 'transactions',
             'inventory', 'inventory_movements', 'insumos', 'receta_insumos',
-            'waiting_list', 'bank_accounts', 'corriente_config', 'negocios', 'premios_config'
+            'waiting_list', 'bank_accounts', 'corriente_config', 'negocios', 'premios_config',
+            'dias_sin_ventas'
         ];
         for (const table of tables) {
             try {
@@ -1305,7 +1400,7 @@ function writeBackupMeta(db, backupType) {
         db.run(`INSERT INTO ${BACKUP_META_TABLE} 
             (backup_type, backup_date, backup_version, backup_negocio_id, backup_negocio_nombre, backup_user, backup_user_role)
             VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-            backupType, new Date().toISOString(), '2.0.3', negocioId,
+            backupType, new Date().toISOString(), '2.1.1', negocioId,
             negocio?.nombre || 'Desconocido', user?.username || 'Desconocido',
             user?.is_admin === 1 ? 'admin' : 'user'
         ]);
@@ -1427,7 +1522,7 @@ function exportRecetasProductosSalva() {
 
         const salva = {
             _meta: {
-                app: 'Panario', version: '2.0.3', type: 'salva_recetas_productos',
+                app: 'Panario', version: '2.1.1', type: 'salva_recetas_productos',
                 exportDate: new Date().toISOString(), negocio_id: negocioId,
                 negocio_nombre: getNombreNegocioDB(),
                 counts: {
@@ -2050,9 +2145,14 @@ function getPremiosConfig() {
     const negocioId = getNegocioIdActual();
     try {
         const results = query('SELECT * FROM premios_config WHERE negocio_id = ? AND deleted_at IS NULL LIMIT 1', [negocioId]);
-        if (results.length === 0) return { activo: false, premio_mensual: '', premio_anual: '' };
-        return { ...results[0], activo: results[0].activo === 1 };
-    } catch (e) { return { activo: false, premio_mensual: '', premio_anual: '' }; }
+        if (results.length === 0) return { activo: false, premio_mensual: '', premio_anual: '', premio_anual_calculo: 'inicio_anio', premio_anual_fecha: null };
+        return {
+            ...results[0],
+            activo: results[0].activo === 1,
+            premio_anual_calculo: results[0].premio_anual_calculo || 'inicio_anio',
+            premio_anual_fecha: results[0].premio_anual_fecha || null
+        };
+    } catch (e) { return { activo: false, premio_mensual: '', premio_anual: '', premio_anual_calculo: 'inicio_anio', premio_anual_fecha: null }; }
 }
 
 function savePremiosConfig(config) {
@@ -2062,13 +2162,16 @@ function savePremiosConfig(config) {
         const existing = query('SELECT id FROM premios_config WHERE negocio_id = ? LIMIT 1', [negocioId]);
         if (existing.length > 0) {
             execute(`UPDATE premios_config SET activo = ?, premio_mensual = ?, premio_anual = ?, 
+                    premio_anual_calculo = ?, premio_anual_fecha = ?,
                     modified_by = ?, updated_at = CURRENT_TIMESTAMP WHERE negocio_id = ?`, [
                 config.activo ? 1 : 0, config.premio_mensual || '', config.premio_anual || '',
+                config.premio_anual_calculo || 'inicio_anio', config.premio_anual_fecha || null,
                 currentUserId, negocioId]);
         } else {
-            execute(`INSERT INTO premios_config (negocio_id, activo, premio_mensual, premio_anual, created_by, modified_by)
-                VALUES (?, ?, ?, ?, ?, ?)`, [negocioId, config.activo ? 1 : 0, config.premio_mensual || '',
-                config.premio_anual || '', currentUserId, currentUserId]);
+            execute(`INSERT INTO premios_config (negocio_id, activo, premio_mensual, premio_anual, premio_anual_calculo, premio_anual_fecha, created_by, modified_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [negocioId, config.activo ? 1 : 0, config.premio_mensual || '',
+                config.premio_anual || '', config.premio_anual_calculo || 'inicio_anio',
+                config.premio_anual_fecha || null, currentUserId, currentUserId]);
         }
         saveAndNotify();
         return { success: true };
@@ -2110,6 +2213,142 @@ function calcularMejorClienteDelAño() {
         if (results.length === 0) return null;
         return { buyer: results[0].buyer, compras: results[0].compras, total_gastado: results[0].total_gastado, periodo: `${year}` };
     } catch (e) { return null; }
+}
+
+/**
+ * 🆕 FASE 4.2 (#15): Calcula el mejor cliente del año según la configuración.
+ * 
+ * @param {string} calculo - 'navidad' | 'fin_anio' | 'inicio_anio'
+ * @param {number} year - Año a calcular (default: actual)
+ * @returns {object|null} { buyer, compras, total_gastado, periodo }
+ */
+function calcularMejorClienteDelAñoConConfig(calculo = 'inicio_anio', year = null) {
+    const negocioId = getNegocioIdActual();
+    try {
+        const now = new Date();
+        const anio = year || now.getFullYear();
+        
+        let fechaFin = `${anio}-12-31`;
+        
+        if (calculo === 'navidad') {
+            fechaFin = `${anio}-12-24`;
+        } else if (calculo === 'fin_anio') {
+            fechaFin = `${anio}-12-31`;
+        }
+        // 'inicio_anio' usa el rango completo (1 ene - 31 dic)
+        
+        const results = query(`SELECT buyer, COUNT(*) as compras, SUM(total) as total_gastado
+            FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
+              AND buyer IS NOT NULL AND buyer != '' AND buyer != 'Cliente sin nombre' AND buyer != 'Cliente ocasional'
+              AND DATE(sale_date) >= DATE(?) AND DATE(sale_date) <= DATE(?)
+            GROUP BY buyer ORDER BY total_gastado DESC LIMIT 1`, 
+            [negocioId, `${anio}-01-01`, fechaFin]);
+        
+        if (results.length === 0) return null;
+        return { 
+            buyer: results[0].buyer, 
+            compras: results[0].compras, 
+            total_gastado: results[0].total_gastado, 
+            periodo: `${anio}`,
+            calculo: calculo,
+            fechaFin: fechaFin
+        };
+    } catch (e) { 
+        console.error('Error calculando mejor cliente del año con config:', e);
+        return null; 
+    }
+}
+
+// ============================================================
+// DÍAS SIN VENTAS (FASE 4.2 #20)
+// ============================================================
+
+/**
+ * Obtiene todos los días sin ventas registrados.
+ * @param {object} filters - { from_date, to_date, motivo }
+ * @returns {Array}
+ */
+function getDiasSinVentas(filters = {}) {
+    const negocioId = getNegocioIdActual();
+    let sql = 'SELECT * FROM dias_sin_ventas WHERE negocio_id = ? AND deleted_at IS NULL';
+    let params = [negocioId];
+    
+    if (filters.from_date) {
+        sql += ' AND fecha >= ?';
+        params.push(filters.from_date);
+    }
+    if (filters.to_date) {
+        sql += ' AND fecha <= ?';
+        params.push(filters.to_date);
+    }
+    if (filters.motivo) {
+        sql += ' AND motivo = ?';
+        params.push(filters.motivo);
+    }
+    
+    sql += ' ORDER BY fecha DESC';
+    try { return query(sql, params); } catch (e) { return []; }
+}
+
+/**
+ * Obtiene un día sin ventas por su ID.
+ */
+function getDiaSinVenta(id) {
+    const negocioId = getNegocioIdActual();
+    const results = query('SELECT * FROM dias_sin_ventas WHERE id = ? AND negocio_id = ? AND deleted_at IS NULL', [id, negocioId]);
+    return results.length > 0 ? results[0] : null;
+}
+
+/**
+ * Obtiene un día sin ventas por fecha.
+ */
+function getDiaSinVentaByFecha(fecha) {
+    const negocioId = getNegocioIdActual();
+    const results = query('SELECT * FROM dias_sin_ventas WHERE negocio_id = ? AND fecha = ? AND deleted_at IS NULL', [negocioId, fecha]);
+    return results.length > 0 ? results[0] : null;
+}
+
+/**
+ * Guarda un día sin ventas (crea o actualiza).
+ */
+function saveDiaSinVenta(data) {
+    const user = window.AuthModule?.getCurrentUser();
+    if (!user) return { success: false, error: 'No hay usuario autenticado' };
+    const negocioId = getNegocioIdActual();
+    const currentUserId = getCurrentUserId();
+
+    try {
+        const existing = data.id 
+            ? getDiaSinVenta(data.id)
+            : getDiaSinVentaByFecha(data.fecha);
+        
+        if (existing) {
+            // Actualizar
+            execute(`UPDATE dias_sin_ventas SET motivo = ?, nota = ?, modified_by = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND negocio_id = ?`, [
+                data.motivo, data.nota || null, currentUserId, existing.id, negocioId]);
+            return { success: true, id: existing.id, updated: true };
+        } else {
+            // Crear
+            const result = execute(`INSERT INTO dias_sin_ventas 
+                (negocio_id, fecha, motivo, nota, created_by, modified_by, uuid)
+                VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+                negocioId, data.fecha, data.motivo, data.nota || null,
+                currentUserId, currentUserId, generateUuidForTable('dias_sin_ventas')]);
+            return { success: true, id: result.lastId };
+        }
+    } catch (e) { return { success: false, error: e.message }; }
+}
+
+/**
+ * Elimina (soft-delete) un día sin ventas.
+ */
+function deleteDiaSinVenta(id) {
+    const negocioId = getNegocioIdActual();
+    try {
+        execute('UPDATE dias_sin_ventas SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND negocio_id = ?', [id, negocioId]);
+        return { success: true };
+    } catch (e) { return { success: false, error: e.message }; }
 }
 
 // ============================================================
@@ -2705,7 +2944,7 @@ window.DBModule = {
     ensureUserTableColumns, ensureSoftDeleteColumns, ensureVoidColumns,
     ensureOrderIdColumn, ensureWaitingListColumns, ensureBankAccountsColumns,
     ensureCorrienteConfigTable, ensureIsLiberatedColumn, ensureDashboardColumns,
-    ensurePremiosConfigTable,
+    ensurePremiosConfigTable, ensureDiasSinVentasTable,
     ensureAuditColumns, getCurrentUserId, getUsuarioNombre,
     slugifyNombreNegocio, getNombreNegocioDB, getPrefijoBackup,
     ensureNegociosTable, ensureNegocioIdColumn, migrateToMultiUser,
@@ -2734,10 +2973,14 @@ window.DBModule = {
     getDailySummary,
     getPremiosConfig, savePremiosConfig,
     calcularMejorClienteDelMes, calcularMejorClienteDelAño,
+    calcularMejorClienteDelAñoConConfig,
+    // 🆕 FASE 4.2 (#20): Días sin ventas
+    getDiasSinVentas, getDiaSinVenta, getDiaSinVentaByFecha,
+    saveDiaSinVenta, deleteDiaSinVenta,
     exportDatabase, downloadDatabase, importDatabase, importDatabaseFromFile,
     importDatabaseDataOnly, importDatabaseDataOnlyFromFile,
     exportRecetasProductosSalva, importRecetasProductosSalva, readSalvaFile,
     BACKUP_TYPE_COMPLETE, BACKUP_TYPE_DATA_ONLY
 };
 
-console.log('📦 DB Module cargado correctamente v2.0.6 (FASE 1.3.1 + FASE 1.3.3: fusión inteligente por UUID)');
+console.log('📦 DB Module cargado correctamente v2.1.1 (FASE 4.2: persistencia gráfico + dias_sin_ventas + premio anual configurable)');

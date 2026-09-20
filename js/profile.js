@@ -13,6 +13,15 @@
 //     al principio del archivo (antes estaba dentro de editBankAccount()
 //     y fallaba si se invocaba antes de abrir ese modal)
 //   - Eliminada la definición duplicada al final de editBankAccount()
+// 🆕 FASE 3.3 (200926 v2):
+//   - NUEVOS toggles en la sección "Elementos visibles en el Dashboard":
+//     * 🚀 show_released_sales (Ventas liberadas)
+//     * 🥇 show_best_worst_day (Mejor / Peor día)
+//     * 👥 show_sales_by_employee (Ventas por empleado)
+//     * 💳 show_debts (Deudas) — #26
+//     * 🏆 show_rewards (Premios) — #25
+//   - Orden reorganizado para agrupar toggles relacionados
+//   - Descripciones más claras y concisas
 // ============================================================
 
 // ============================================================
@@ -243,6 +252,7 @@ function loadProfile(user) {
             
             <hr>
             
+            <!-- 🆕 FASE 3.3: Elementos visibles en el Dashboard (con toggles ampliados) -->
             <div style="background: var(--bg); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 16px;">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
                     <span style="font-size: 20px;">📊</span>
@@ -256,13 +266,18 @@ function loadProfile(user) {
                 
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                     ${renderDashboardToggle('show_corriente', '⚡ Horario de corriente hoy', 'Muestra los bloques de corriente del día actual', dashConfig.show_corriente)}
+                    ${renderDashboardToggle('show_orders_today', '📋 Pedidos de hoy', 'Muestra la tarjeta de pedidos del día y lista de espera', dashConfig.show_orders_today)}
+                    ${renderDashboardToggle('show_released_sales', '🚀 Ventas liberadas', 'Cantidad e importe de las ventas sin cliente identificado', dashConfig.show_released_sales !== false)}
+                    ${renderDashboardToggle('show_best_worst_day', '🥇 Mejor / Peor día', 'Fechas con mayor y menor facturación histórica', dashConfig.show_best_worst_day !== false)}
+                    ${renderDashboardToggle('show_sales_by_employee', '👥 Ventas por empleado', 'Ranking de rendimiento por usuario del negocio', dashConfig.show_sales_by_employee !== false)}
                     ${renderDashboardToggle('show_top_clients', '🏆 Mejores clientes', 'Ranking de los 3 clientes que más compran', dashConfig.show_top_clients)}
                     ${renderDashboardToggle('show_top_products', '🏷️ Productos más vendidos', 'Top 5 de productos con más ventas', dashConfig.show_top_products)}
                     ${renderDashboardToggle('show_funds_analysis', '💵 Análisis de efectivo y banco', 'Saldos y movimientos por método de pago', dashConfig.show_funds_analysis)}
                     ${renderDashboardToggle('show_payment_methods', '💳 Métodos de pago', 'Distribución de ventas por método de pago', dashConfig.show_payment_methods)}
-                    ${renderDashboardToggle('show_quick_actions', '🔗 Botones de acción rápida', 'Accesos directos a Pedidos, Ventas, Insumos, etc.', dashConfig.show_quick_actions)}
+                    ${renderDashboardToggle('show_debts', '💳 Deudas', 'Lista detallada de deudas pendientes de cobro', dashConfig.show_debts !== false)}
+                    ${renderDashboardToggle('show_rewards', '🏆 Premios', 'Mejor cliente del mes y del año', dashConfig.show_rewards !== false)}
                     ${renderDashboardToggle('show_bank_qr', '🏦 QR de cuenta bancaria', 'Muestra el QR de tu cuenta bancaria predeterminada', dashConfig.show_bank_qr)}
-                    ${renderDashboardToggle('show_orders_today', '📋 Pedidos de hoy', 'Muestra la tarjeta de pedidos del día y lista de espera', dashConfig.show_orders_today)}
+                    ${renderDashboardToggle('show_quick_actions', '🔗 Botones de acción rápida', 'Accesos directos a Pedidos, Ventas, Insumos, etc.', dashConfig.show_quick_actions)}
                 </div>
             </div>
             
@@ -1524,4 +1539,4 @@ window.generarQRPreview = generarQRPreview;
 window.generarEditQRPreview = generarEditQRPreview;
 window.construirTextoQR = construirTextoQR;
 
-console.log('📦 Profile Module cargado correctamente v2.0.3 (FASE 1.3.4 fix: closeEditBankAccountModal global)');
+console.log('📦 Profile Module cargado correctamente v2.1.0 (FASE 3.3: toggles ampliados)');
