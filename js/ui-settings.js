@@ -54,7 +54,37 @@
 //     * Doble confirmación
 //     * Llama a OrdersModule.cancelarPedidosGlobalmente()
 //     * Modal de resumen con cancelados/reiniciados/preservados
+// 🆕 FASE 6 (#11) (200926 v5):
+//   - El bloque "ℹ️ Información" ahora LEE la versión desde
+//     <meta name="app-version"> del index.html
+//   - Fallback a '2.1.5' si no se encuentra el meta
+//   - Así, en futuras actualizaciones solo hay que cambiar el
+//     index.html y este bloque se actualizará automáticamente
 // ============================================================
+
+// ============================================================
+// 🆕 FASE 6: HELPER PARA OBTENER LA VERSIÓN DE LA APP
+// ============================================================
+
+/**
+ * Devuelve la versión actual de la app leyéndola del <meta name="app-version">.
+ * Si no existe, devuelve un fallback.
+ * 
+ * @returns {string} La versión, ej: "2.1.5"
+ */
+function getAppVersion() {
+    try {
+        const meta = document.querySelector('meta[name="app-version"]');
+        if (meta && meta.content) {
+            return meta.content;
+        }
+    } catch (e) {
+        console.warn('⚠️ Error leyendo app-version:', e);
+    }
+    return '2.1.5'; // Fallback
+}
+
+window.getAppVersion = getAppVersion;
 
 // ============================================================
 // ⚡ MÓDULO DE HORARIOS DE CORRIENTE (PRODUCCIÓN)
@@ -1483,6 +1513,9 @@ function renderSettingsView() {
     const user = window.AuthModule.getCurrentUser();
     const isAdmin = user && user.is_admin === 1;
     
+    // 🆕 FASE 6: Leer la versión actual desde el meta del index.html
+    const appVersion = getAppVersion();
+    
     // Contar items en lista de espera (async)
     let waitingCount = 0;
     if (window.OrdersModule && window.OrdersModule.getWaitingListCount) {
@@ -1702,7 +1735,7 @@ function renderSettingsView() {
             <h3 style="margin: 0 0 8px 0;">ℹ️ Información</h3>
             <p style="font-size: 14px; color: var(--text-light);">
                 <strong>Panario</strong> - Tu panadería en orden<br>
-                Versión: <span id="app-version">2.1.0</span>
+                Versión: <span id="app-version-display">${appVersion}</span>
             </p>
             <p style="font-size: 12px; color: var(--text-light); margin-top: 8px;">
                 🍞 Desarrollado por Ricardo Castillo Valdés
@@ -1710,7 +1743,7 @@ function renderSettingsView() {
         </div>
     `;
     
-    console.log('✅ renderSettingsView() completado');
+    console.log(`✅ renderSettingsView() completado (versión mostrada: ${appVersion})`);
 }
 
 // ============================================================
@@ -3006,7 +3039,7 @@ async function cleanDeletedData() {
         });
         
         const tables = ['sales', 'transactions', 'orders', 'order_items', 'payments', 
-            'recipes', 'recipe_ingredients', 'clients', 'products'];
+            'recipes', 'recipe_ingredients', 'clients', 'products', 'dias_sin_ventas'];
         let deletedCount = 0;
         const totalTables = tables.length;
         
@@ -3098,7 +3131,7 @@ async function resetDatabaseWithPassword() {
         const users = window.DBModule.query('SELECT * FROM users WHERE deleted_at IS NULL');
         const tables = ['inventory_movements', 'inventory', 'order_items', 'payments', 'orders',
             'recipe_ingredients', 'recipes', 'sales', 'transactions', 'clients', 'products',
-            'notifications', 'units', 'corriente_config'];
+            'notifications', 'units', 'corriente_config', 'dias_sin_ventas'];
         
         for (let i = 0; i < tables.length; i++) {
             const table = tables[i];
@@ -3484,5 +3517,7 @@ window.reporteListaEsperaFromSettings = reporteListaEsperaFromSettings;
 window.showGlobalCancelModal = showGlobalCancelModal;
 window.closeGlobalCancelModal = closeGlobalCancelModal;
 window.executeGlobalCancel = executeGlobalCancel;
+// 🆕 FASE 6
+window.getAppVersion = getAppVersion;
 
-console.log('📦 UI Settings Module cargado correctamente v2.1.0 (FASE 2.3: lista de espera + cancelación global)');
+console.log('📦 UI Settings Module cargado correctamente v2.1.5 (FASE 6: versión dinámica desde meta)');
