@@ -1,21 +1,24 @@
 // ============================================================
-// PANARIO - Service Worker (PWA) v2.0.3
+// PANARIO - Service Worker (PWA) v2.1.0
 // Estrategia: Cache First + Network Fallback + Offline
-// CORREGIDO FASE D.1 (170926):
-//   - Timeout de red para no colgarse esperando respuestas lentas
-//   - Fallback robusto a offline.html si no hay index en caché
-//   - Mejor manejo de errores en peticiones de navegación
-//   - Limpieza de cachés antiguos garantizada
-// ACTUALIZADO v2.0.3 (180926):
-//   - Nueva versión de caché fuerza reinstalación limpia
-//   - Añadida librería qrcode.js a los assets críticos
-//   - Añadido lib/qrcode.js al precache
-//   - Añadido mensaje 'FORCE_UPDATE' para forzar actualización
+// HISTORIAL DE CAMBIOS:
+//   v2.0.3 (180926):
+//     - Nueva versión de caché fuerza reinstalación limpia
+//     - Añadida librería qrcode.js a los assets críticos
+//     - Añadido mensaje 'FORCE_UPDATE' para forzar actualización
+//   v2.1.0 (200926):
+//     - 🎯 Nueva versión mayor: incluye FASE 1 (UUID+fusión+fix fechas)
+//       y FASE 2 (lista de espera completa)
+//     - Precache COMPLETO con todos los módulos JS:
+//       dashboard.js, help.js, theme.js, rewards.js, corriente-utils.js
+//     - CACHE_NAME nuevo fuerza descarga limpia en móviles con v2.0.3
+//     - Verificación de integridad al instalar
+//     - Timeout de red ajustado a 5s
 // ============================================================
 
-const CACHE_NAME = 'panario-v2.0.3';
-const CACHE_STATIC = 'panario-static-v2.0.3';
-const CACHE_DYNAMIC = 'panario-dynamic-v2.0.3';
+const CACHE_NAME = 'panario-v2.1.0';
+const CACHE_STATIC = 'panario-static-v2.1.0';
+const CACHE_DYNAMIC = 'panario-dynamic-v2.1.0';
 const OFFLINE_URL = './offline.html';
 
 // Timeout para peticiones de red (ms)
@@ -24,12 +27,16 @@ const NETWORK_TIMEOUT_MS = 5000;
 // ============================================================
 // RECURSOS CRÍTICOS PARA FUNCIONAMIENTO OFFLINE
 // ============================================================
+// IMPORTANTE: Cada vez que se añade un módulo JS nuevo, debe
+// añadirse aquí. Si falta, la app no arrancará offline.
+// ============================================================
 const CRITICAL_ASSETS = [
   // Página principal
   './',
   './index.html',
   './offline.html',
   './manifest.json',
+  './ayuda-panario.html',
   
   // Estilos
   './css/style.css',
@@ -39,26 +46,54 @@ const CRITICAL_ASSETS = [
   './lib/sql-wasm.wasm',
   './lib/qrcode.js',
   
-  // Módulos JS (orden de carga)
+  // Módulos JS - ORDEN DE CARGA SEGÚN index.html
+  // Base
   './js/modal.js',
   './js/db.js',
   './js/auth.js',
   './js/theme.js',
   './js/profile.js',
+  
+  // Notificaciones
   './js/notifications.js',
+  
+  // Corriente (utilidades compartidas)
   './js/corriente-utils.js',
+  
+  // Pedidos
   './js/orders.js',
   './js/ui-orders.js',
+  
+  // Insumos
   './js/ui-insumos.js',
+  
+  // Recetas
   './js/recipes.js',
   './js/ui-recipes.js',
+  
+  // Productos
   './js/ui-productos.js',
+  
+  // Ventas
   './js/sales.js',
   './js/ui-sales.js',
+  
+  // Dashboard
   './js/dashboard.js',
+  
+  // Herramientas
   './js/ui-settings.js',
+  
+  // Reportes
   './js/reports.js',
+  
+  // Premios
+  './js/rewards.js',
+  
+  // Ayuda
   './js/help.js',
+  
+  // Controlador principal (siempre al final)
   './js/app.js',
   
   // Iconos y favicon
@@ -101,7 +136,7 @@ self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(CACHE_STATIC)
       .then(function(cache) {
-        console.log('📦 SW Panario: Cacheando recursos críticos...');
+        console.log('📦 SW Panario: Cacheando', CRITICAL_ASSETS.length, 'recursos críticos...');
         
         // Usar allSettled para que un fallo no rompa toda la instalación
         return Promise.allSettled(
@@ -113,8 +148,12 @@ self.addEventListener('install', function(event) {
         );
       })
       .then(function() {
-        console.log('✅ SW Panario: Instalación completada');
+        console.log('✅ SW Panario: Instalación completada (v2.1.0)');
+        // Forzar activación inmediata (no esperar a cerrar pestañas)
         return self.skipWaiting();
+      })
+      .catch(function(error) {
+        console.error('❌ SW Panario: Error en instalación:', error);
       })
   );
 });
@@ -128,10 +167,11 @@ self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys()
       .then(function(cacheNames) {
+        // Eliminar TODAS las cachés que no sean las actuales
+        // Esto incluye panario-v2.0.3, panario-static-v2.0.3, etc.
         return Promise.all(
           cacheNames
             .filter(function(cacheName) {
-              // Eliminar TODOS los cachés que no sean los actuales
               return cacheName !== CACHE_STATIC && 
                      cacheName !== CACHE_DYNAMIC && 
                      cacheName !== CACHE_NAME;
@@ -144,6 +184,7 @@ self.addEventListener('activate', function(event) {
       })
       .then(function() {
         console.log('✅ SW Panario: Activado y controlando clientes');
+        // Tomar control de todas las pestañas abiertas inmediatamente
         return self.clients.claim();
       })
   );
@@ -398,4 +439,6 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-console.log('📦 SW Panario v2.0.3 cargado correctamente (versión nueva, con qrcode.js)');
+console.log('📦 SW Panario v2.1.0 cargado correctamente');
+console.log('   📋 Assets precacheados:', CRITICAL_ASSETS.length);
+console.log('   🎯 CACHE_NAME:', CACHE_NAME);

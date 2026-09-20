@@ -44,6 +44,16 @@
 //     * Fusionar bases de datos (NUEVO - merge por uuid)
 //   - importDatabaseFusionAction(): wrapper para la fusión
 //   - Modal de resultado con resumen detallado por tabla
+// 🆕 FASE 2.3 (200926 v4):
+//   - NUEVA sección "⏰ Lista de espera" en Herramientas
+//     * Botón "⏰ Gestionar lista de espera" → abre modal de ui-orders.js
+//     * Botón "📄 Reporte PDF" → genera reporte de lista
+//     * Muestra contador actual de clientes en espera
+//   - NUEVA sección "🚨 Cancelación global de pedidos" (solo admin)
+//     * Modal con rango de fechas + causa + nota
+//     * Doble confirmación
+//     * Llama a OrdersModule.cancelarPedidosGlobalmente()
+//     * Modal de resumen con cancelados/reiniciados/preservados
 // ============================================================
 
 // ============================================================
@@ -1114,6 +1124,350 @@ function closeExpensesReportModal() {
 }
 
 // ============================================================
+// 🆕 FASE 2.3: LISTA DE ESPERA EN HERRAMIENTAS
+// ============================================================
+
+/**
+ * Abre el modal de gestión de lista de espera desde Herramientas.
+ * Reutiliza el modal definido en ui-orders.js.
+ */
+function showWaitingListFromSettings() {
+    if (typeof window.showWaitingListManagerModal === 'function') {
+        window.showWaitingListManagerModal();
+    } else {
+        window.showToast('⚠️ Módulo de lista de espera no disponible. Ve a Pedidos.', 'warning', 4000);
+    }
+}
+
+/**
+ * Genera el reporte PDF de la lista de espera desde Herramientas.
+ */
+async function reporteListaEsperaFromSettings() {
+    if (typeof window.reporteListaEspera === 'function') {
+        window.reporteListaEspera();
+    } else if (window.ReportsModule && typeof window.ReportsModule.generateWaitingListReport === 'function') {
+        try {
+            window.showToast('⏳ Generando reporte...', 'info', 2000);
+            const html = await window.ReportsModule.generateWaitingListReport();
+            if (html) {
+                window.ReportsModule.printReport(html);
+                window.showToast('✅ Reporte generado', 'success', 3000);
+            }
+        } catch (error) {
+            console.error('❌ Error generando reporte:', error);
+            window.showToast('❌ Error: ' + error.message, 'error', 5000);
+        }
+    } else {
+        window.showToast('⚠️ Módulo de reportes no disponible', 'warning', 4000);
+    }
+}
+
+// ============================================================
+// 🆕 FASE 2.3: CANCELACIÓN GLOBAL DE PEDIDOS (SOLO ADMIN)
+// ============================================================
+
+/**
+ * Abre el modal de cancelación global de pedidos.
+ * Solo accesible para admin.
+ * 
+ * Permite:
+ *  - Seleccionar rango de fechas (desde/hasta)
+ *  - Elegir causa principal (select)
+ *  - Añadir nota adicional (opcional)
+ *  - Doble confirmación
+ *  - Ejecuta OrdersModule.cancelarPedidosGlobalmente()
+ *  - Muestra resumen detallado
+ */
+function showGlobalCancelModal() {
+    // Verificar permisos
+    const user = window.AuthModule.getCurrentUser();
+    if (!user || user.is_admin !== 1) {
+        window.showToast('🔒 Solo el administrador puede cancelar pedidos globalmente', 'warning', 4000);
+        return;
+    }
+    
+    // Cerrar modales previos
+    if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
+        window.ModalModule.cerrarTodosLosModales();
+    }
+    
+    const existingModal = document.getElementById('global-cancel-modal');
+    if (existingModal) existingModal.remove();
+    
+    const hoy = new Date();
+    const en7dias = new Date(hoy);
+    en7dias.setDate(en7dias.getDate() + 7);
+    
+    const modal = document.createElement('div');
+    modal.id = 'global-cancel-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 999999999; padding: 15px;
+        animation: modalFadeIn 0.25s ease;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 520px; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); animation: modalSlideUp 0.3s ease; border: 2px solid #dc2626;">
+            
+            <!-- HEADER -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #dc2626;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 32px;">🚨</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 18px; color: #dc2626;">Cancelación Global</h2>
+                        <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">Cancela pedidos por rango de fechas</p>
+                    </div>
+                </div>
+                <button onclick="closeGlobalCancelModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+            </div>
+            
+            <!-- ADVERTENCIA -->
+            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 12px; color: #991b1b; line-height: 1.6;">
+                ⚠️ <strong>ATENCIÓN:</strong> Esta acción cancelará TODOS los pedidos 
+                <strong>Pendientes, Confirmados, En producción y Listos</strong> dentro del rango de fechas.
+                <br><br>
+                ✅ Se repondrá el stock de los pedidos que lo tenían descontado.
+                <br>
+                ✅ Los pedidos ya ENTREGADOS no se ven afectados.
+                <br>
+                ✅ Las ventas ya creadas NO se modifican.
+                <br>
+                ⚠️ Los clientes en lista de espera con fecha posterior al rango se conservan.
+            </div>
+            
+            <!-- FORMULARIO -->
+            <form id="global-cancel-form" style="display: flex; flex-direction: column; gap: 14px;">
+                
+                <!-- RANGO DE FECHAS -->
+                <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 13px; font-weight: 600; color: var(--text-label); margin-bottom: 8px;">
+                        📅 Rango de fechas
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <div class="form-group">
+                            <label style="font-size: 12px;">Desde</label>
+                            <input type="date" id="global-cancel-from" 
+                                   value="${hoy.toISOString().split('T')[0]}" 
+                                   class="input-field" required>
+                        </div>
+                        <div class="form-group">
+                            <label style="font-size: 12px;">Hasta</label>
+                            <input type="date" id="global-cancel-to" 
+                                   value="${en7dias.toISOString().split('T')[0]}" 
+                                   class="input-field" required>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- CAUSA -->
+                <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 13px; font-weight: 600; color: var(--text-label); margin-bottom: 8px;">
+                        📌 Causa principal
+                    </div>
+                    <select id="global-cancel-causa" class="input-select" required>
+                        <option value="Falta de insumos">🛒 Falta de insumos</option>
+                        <option value="Apagón prolongado">⚡ Apagón prolongado</option>
+                        <option value="Mantenimiento de equipos">🔧 Mantenimiento de equipos</option>
+                        <option value="Cierre temporal">🚪 Cierre temporal</option>
+                        <option value="Problema de salud">🏥 Problema de salud</option>
+                        <option value="Fuerza mayor">⚠️ Fuerza mayor</option>
+                        <option value="Otro">🔄 Otro</option>
+                    </select>
+                </div>
+                
+                <!-- NOTA -->
+                <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 13px; font-weight: 600; color: var(--text-label); margin-bottom: 8px;">
+                        📝 Nota adicional (opcional)
+                    </div>
+                    <textarea id="global-cancel-nota" 
+                              class="input-textarea" 
+                              rows="2" 
+                              placeholder="Ej: Se espera reanudar la próxima semana"></textarea>
+                </div>
+                
+                <!-- BOTONES -->
+                <div style="display: flex; gap: 8px; margin-top: 4px;">
+                    <button type="submit" 
+                            class="btn" 
+                            style="flex: 1; padding: 12px; font-size: 14px; background: #dc2626; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;">
+                        🚨 CANCELAR PEDIDOS
+                    </button>
+                    <button type="button" 
+                            onclick="closeGlobalCancelModal()" 
+                            class="btn secondary" 
+                            style="flex: 1; padding: 12px; font-size: 14px;">
+                        ❌ Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    window._globalCancelModal = modal;
+    
+    // Submit
+    const form = document.getElementById('global-cancel-form');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await executeGlobalCancel();
+    });
+    
+    // Cierre con click fuera
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeGlobalCancelModal();
+    });
+    
+    // Cierre con Escape
+    const escHandler = function(e) {
+        if (e.key === 'Escape') {
+            closeGlobalCancelModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+}
+
+/**
+ * Cierra el modal de cancelación global.
+ */
+function closeGlobalCancelModal() {
+    const modal = document.getElementById('global-cancel-modal');
+    if (modal) {
+        modal.style.animation = 'modalFadeOut 0.2s ease forwards';
+        setTimeout(() => { if (modal.parentNode) modal.remove(); }, 200);
+        setTimeout(() => {
+            const still = document.getElementById('global-cancel-modal');
+            if (still && still.parentNode) still.remove();
+        }, 500);
+    }
+    window._globalCancelModal = null;
+}
+
+/**
+ * Ejecuta la cancelación global tras validar y confirmar.
+ */
+async function executeGlobalCancel() {
+    const fechaDesde = document.getElementById('global-cancel-from')?.value;
+    const fechaHasta = document.getElementById('global-cancel-to')?.value;
+    const causa = document.getElementById('global-cancel-causa')?.value || '';
+    const nota = document.getElementById('global-cancel-nota')?.value?.trim() || '';
+    
+    // Validaciones
+    if (!fechaDesde || !fechaHasta) {
+        window.showToast('⚠️ Debes especificar fecha desde y hasta', 'error');
+        return;
+    }
+    
+    if (fechaDesde > fechaHasta) {
+        window.showToast('⚠️ La fecha "desde" debe ser anterior a "hasta"', 'error');
+        return;
+    }
+    
+    // Verificar que hay pedidos en ese rango
+    const negocioId = window.DBModule.getNegocioIdActual();
+    const pedidosEnRango = window.DBModule.query(`
+        SELECT COUNT(*) as n FROM orders
+        WHERE negocio_id = ? 
+          AND deleted_at IS NULL
+          AND status IN ('pending', 'confirmed', 'production', 'ready')
+          AND DATE(delivery_date) >= DATE(?)
+          AND DATE(delivery_date) <= DATE(?)
+    `, [negocioId, fechaDesde, fechaHasta]);
+    
+    const count = pedidosEnRango[0]?.n || 0;
+    
+    if (count === 0) {
+        window.showToast(`ℹ️ No hay pedidos cancelables en el rango ${fechaDesde} → ${fechaHasta}`, 'info', 5000);
+        return;
+    }
+    
+    // Confirmación 1
+    const confirm1 = await window.ModalModule.showConfirm({
+        title: '⚠️ Confirmar cancelación',
+        message: `Se cancelarán ${count} pedido(s) entre el ${fechaDesde} y el ${fechaHasta}.\n\n📌 Causa: ${causa}\n${nota ? `📝 Nota: ${nota}\n\n` : ''}¿Continuar?`,
+        confirmText: '⚠️ CONTINUAR',
+        cancelText: '❌ Cancelar',
+        icon: '⚠️',
+        confirmColor: '#f59e0b'
+    });
+    
+    if (!confirm1) return;
+    
+    // Confirmación 2 (última)
+    const confirm2 = await window.ModalModule.showConfirm({
+        title: '🚨 CONFIRMACIÓN FINAL',
+        message: `Esta es la ÚLTIMA advertencia.\n\nSe cancelarán ${count} pedido(s).\nLos pedidos cancelados NO se pueden recuperar (aunque sí los datos quedan en el historial).\n\n¿Confirmas?`,
+        confirmText: '🚨 SÍ, CANCELAR TODO',
+        cancelText: '❌ NO, volver',
+        icon: '🚨',
+        confirmColor: '#dc2626'
+    });
+    
+    if (!confirm2) {
+        window.showToast('❌ Cancelación abortada', 'info', 2000);
+        return;
+    }
+    
+    // Cerrar el modal de cancelación global
+    closeGlobalCancelModal();
+    
+    // Ejecutar
+    try {
+        window.showToast('⏳ Cancelando pedidos...', 'info', 3000);
+        
+        const result = await window.OrdersModule.cancelarPedidosGlobalmente(
+            fechaDesde,
+            fechaHasta,
+            causa,
+            nota
+        );
+        
+        if (!result.success) {
+            window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 6000);
+            return;
+        }
+        
+        // Modal de resultado
+        const erroresHtml = (result.errores && result.errores.length > 0)
+            ? `\n\n⚠️ Hubo ${result.errores.length} error(es):\n${result.errores.slice(0, 5).join('\n')}`
+            : '';
+        
+        const mensaje = `✅ Cancelación completada.\n\n` +
+            `🚫 Pedidos cancelados: ${result.cancelados}\n` +
+            `🔄 Items reiniciados de lista: ${result.reiniciados}\n` +
+            `⏰ Items preservados de lista: ${result.preservados}\n\n` +
+            `📌 Causa: ${result.notaFinal}${erroresHtml}`;
+        
+        await window.ModalModule.showAlert({
+            title: '✅ Cancelación global exitosa',
+            message: mensaje,
+            icon: '✅',
+            type: 'success',
+            buttonText: '✅ Entendido'
+        });
+        
+        window.showToast(`✅ ${result.cancelados} pedido(s) cancelado(s)`, 'success', 5000);
+        
+        // Refrescar vistas
+        if (typeof window.refreshCurrentView === 'function') {
+            setTimeout(window.refreshCurrentView, 500);
+        }
+        if (typeof window.loadDashboardData === 'function') {
+            setTimeout(window.loadDashboardData, 800);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error en cancelación global:', error);
+        window.showToast('❌ Error: ' + error.message, 'error', 6000);
+    }
+}
+
+// ============================================================
 // RENDER SETTINGS VIEW - FUNCIÓN PRINCIPAL
 // ============================================================
 
@@ -1128,6 +1482,19 @@ function renderSettingsView() {
     
     const user = window.AuthModule.getCurrentUser();
     const isAdmin = user && user.is_admin === 1;
+    
+    // Contar items en lista de espera (async)
+    let waitingCount = 0;
+    if (window.OrdersModule && window.OrdersModule.getWaitingListCount) {
+        window.OrdersModule.getWaitingListCount().then(count => {
+            waitingCount = count;
+            const badge = document.getElementById('settings-waiting-count');
+            if (badge) {
+                badge.textContent = count;
+                badge.style.display = count > 0 ? 'inline-block' : 'none';
+            }
+        }).catch(() => {});
+    }
     
     main.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -1162,6 +1529,39 @@ function renderSettingsView() {
             </p>
             <button onclick="showUsersModal()" class="btn primary" style="padding: 10px 16px; font-size: 14px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                 👥 Gestionar Usuarios
+            </button>
+        </div>
+        ` : ''}
+        
+        <!-- 🆕 FASE 2.3: LISTA DE ESPERA -->
+        <div class="card" style="border-left: 4px solid #f59e0b; border: 2px solid #f59e0b;">
+            <h3 style="margin: 0 0 8px 0; color: #f59e0b; display: flex; align-items: center; gap: 8px;">
+                ⏰ Lista de Espera 
+                <span id="settings-waiting-count" style="font-size: 12px; background: #f59e0b; color: #fff; padding: 2px 10px; border-radius: 12px; display: none; font-weight: 700;">0</span>
+            </h3>
+            <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
+                Gestiona los clientes en cola: procesar ventas, cancelar pedidos, limpiar la lista y generar reportes.
+            </p>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button onclick="showWaitingListFromSettings()" class="btn primary" style="padding: 8px 16px; font-size: 14px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    ⏰ Gestionar lista de espera
+                </button>
+                <button onclick="reporteListaEsperaFromSettings()" class="btn secondary" style="padding: 8px 16px; font-size: 14px; width: auto; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    📄 Reporte PDF
+                </button>
+            </div>
+        </div>
+        
+        ${isAdmin ? `
+        <!-- 🆕 FASE 2.3: CANCELACIÓN GLOBAL -->
+        <div class="card" style="border-left: 4px solid #dc2626; border: 2px solid #dc2626;">
+            <h3 style="margin: 0 0 8px 0; color: #dc2626;">🚨 Cancelación Global de Pedidos</h3>
+            <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
+                Cancela todos los pedidos en un rango de fechas. Útil para apagones prolongados, falta de insumos o cierres temporales.
+                <br><strong style="color: #dc2626;">Solo administradores.</strong>
+            </p>
+            <button onclick="showGlobalCancelModal()" class="btn" style="padding: 10px 16px; font-size: 14px; width: auto; background: #dc2626; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;">
+                🚨 Cancelar pedidos por rango
             </button>
         </div>
         ` : ''}
@@ -1302,7 +1702,7 @@ function renderSettingsView() {
             <h3 style="margin: 0 0 8px 0;">ℹ️ Información</h3>
             <p style="font-size: 14px; color: var(--text-light);">
                 <strong>Panario</strong> - Tu panadería en orden<br>
-                Versión: <span id="app-version">2.0.3</span>
+                Versión: <span id="app-version">2.1.0</span>
             </p>
             <p style="font-size: 12px; color: var(--text-light); margin-top: 8px;">
                 🍞 Desarrollado por Ricardo Castillo Valdés
@@ -3078,5 +3478,11 @@ window.showCreateUserModal = showCreateUserModal;
 window.showEditUserModal = showEditUserModal;
 window.showChangePasswordModal = showChangePasswordModal;
 window.handleToggleAdmin = handleToggleAdmin;
+// 🆕 FASE 2.3
+window.showWaitingListFromSettings = showWaitingListFromSettings;
+window.reporteListaEsperaFromSettings = reporteListaEsperaFromSettings;
+window.showGlobalCancelModal = showGlobalCancelModal;
+window.closeGlobalCancelModal = closeGlobalCancelModal;
+window.executeGlobalCancel = executeGlobalCancel;
 
-console.log('📦 UI Settings Module cargado correctamente v2.0.5 (FASE 1.3.4: fusión de bases de datos)');
+console.log('📦 UI Settings Module cargado correctamente v2.1.0 (FASE 2.3: lista de espera + cancelación global)');
