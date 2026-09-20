@@ -1,5 +1,5 @@
 // ============================================================
-// PANARIO - Service Worker (PWA) v2.1.5
+// PANARIO - Service Worker (PWA) v2.1.6
 // Estrategia: Cache First + Network Fallback + Offline
 // HISTORIAL DE CAMBIOS:
 //   v2.0.3 (180926):
@@ -22,11 +22,22 @@
 //       animación "Probar todos" los sonidos.
 //     - CACHE_NAME nuevo (panario-v2.1.5) fuerza reinstalación limpia
 //       y descarga de los nuevos archivos JS en todos los dispositivos.
+//   v2.1.6 (200926 v3):
+//     - 🎯 FASE AYUDA MODAL: la ayuda detallada ahora se abre DENTRO
+//       de la app en un modal con iframe, en lugar de una pestaña nueva.
+//     - `ayuda-panario.html` acepta parámetros ?theme, ?section, ?embedded
+//       para heredar el tema y abrirse en el módulo contextual.
+//     - `help.js` incluye `abrirAyudaEnModal()` con botón "abrir en pestaña
+//       nueva" como opción secundaria.
+//     - `app.js` delega `openDetailedHelp()` a `HelpModule.abrirAyudaDetallada()`.
+//     - `ui-settings.js` muestra la versión dinámica desde `<meta app-version>`.
+//     - CACHE_NAME nuevo (panario-v2.1.6) fuerza reinstalación limpia
+//       y descarga de los nuevos archivos JS en todos los dispositivos.
 // ============================================================
 
-const CACHE_NAME = 'panario-v2.1.5';
-const CACHE_STATIC = 'panario-static-v2.1.5';
-const CACHE_DYNAMIC = 'panario-dynamic-v2.1.5';
+const CACHE_NAME = 'panario-v2.1.6';
+const CACHE_STATIC = 'panario-static-v2.1.6';
+const CACHE_DYNAMIC = 'panario-dynamic-v2.1.6';
 const OFFLINE_URL = './offline.html';
 
 // Timeout para peticiones de red (ms)
@@ -152,7 +163,7 @@ self.addEventListener('install', function(event) {
         );
       })
       .then(function() {
-        console.log('✅ SW Panario: Instalación completada (v2.1.5)');
+        console.log('✅ SW Panario: Instalación completada (v2.1.6)');
         return self.skipWaiting();
       })
       .catch(function(error) {
@@ -426,6 +437,6 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-console.log('📦 SW Panario v2.1.5 cargado correctamente');
+console.log('📦 SW Panario v2.1.6 cargado correctamente');
 console.log('   📋 Assets precacheados:', CRITICAL_ASSETS.length);
 console.log('   🎯 CACHE_NAME:', CACHE_NAME);

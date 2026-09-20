@@ -53,6 +53,11 @@
 // 🆕 FASE 5 (#2) (200926 v8): ENLACE "AYUDA DETALLADA"
 //   - Nueva función openDetailedHelp() → abre ayuda-panario.html
 //   - Expuesta globalmente como window.openDetailedHelp
+// 🆕 FASE AYUDA MODAL (200926 v9): openDetailedHelp DELEGA EN help.js
+//   - openDetailedHelp() ahora llama a HelpModule.abrirAyudaDetallada()
+//     que abre la ayuda DENTRO de la app (modal con iframe)
+//   - Fallback a window.open() si HelpModule no está disponible
+//   - Último recurso: toast de error
 // ============================================================
 
 let currentUser = null;
@@ -338,7 +343,8 @@ function cerrarTodosLosModalesRespaldo() {
         'recalcular-modal', 'compartir-modal', 'edit-bank-account-modal',
         'bank-accounts-modal', 'qr-view-modal',
         'tour-overlay', 'tour-highlight', 'tour-tooltip',
-        'waiting-manager-modal', 'global-cancel-modal'
+        'waiting-manager-modal', 'global-cancel-modal',
+        'ayuda-modal'
     ];
     
     let cerrados = 0;
@@ -363,21 +369,44 @@ function cerrarTodosLosModalesRespaldo() {
 }
 
 // ============================================================
-// 🆕 FASE 5 (#2): ABRIR AYUDA DETALLADA
+// 🆕 FASE AYUDA MODAL: ABRIR AYUDA DETALLADA
 // ============================================================
 
 /**
- * Abre el archivo de ayuda externa en una nueva pestaña.
- * Ruta relativa para funcionar tanto en localhost como en GitHub Pages.
+ * Abre la ayuda detallada.
+ * 
+ * 🆕 FASE AYUDA MODAL: ahora delega en HelpModule.abrirAyudaDetallada(),
+ * que abre la ayuda DENTRO de un modal con iframe (no en pestaña nueva).
+ * 
+ * Fallbacks:
+ *   1. Si HelpModule.abrirAyudaDetallada existe → usarla
+ *   2. Si no → window.open('./ayuda-panario.html')
+ *   3. Si todo falla → toast de error
  */
 function openDetailedHelp() {
     try {
+        // Prioridad 1: HelpModule.abrirAyudaDetallada (modal con iframe)
+        if (window.HelpModule && typeof window.HelpModule.abrirAyudaDetallada === 'function') {
+            console.log('📖 openDetailedHelp() → delegando a HelpModule.abrirAyudaDetallada()');
+            window.HelpModule.abrirAyudaDetallada();
+            return;
+        }
+        
+        // Prioridad 2: window.abrirAyudaDetallada (global, por si acaso)
+        if (typeof window.abrirAyudaDetallada === 'function') {
+            console.log('📖 openDetailedHelp() → delegando a window.abrirAyudaDetallada()');
+            window.abrirAyudaDetallada();
+            return;
+        }
+        
+        // Prioridad 3: fallback directo (abrir pestaña nueva)
+        console.warn('⚠️ openDetailedHelp() → HelpModule no disponible, abriendo pestaña nueva');
         const url = './ayuda-panario.html';
-        console.log('📖 Abriendo ayuda detallada:', url);
         window.open(url, '_blank', 'noopener,noreferrer');
         if (window.showToast) {
             window.showToast('📖 Abriendo ayuda detallada en nueva pestaña...', 'info', 2500);
         }
+        
     } catch (e) {
         console.warn('⚠️ Error abriendo ayuda detallada:', e);
         if (window.showToast) {
@@ -394,7 +423,7 @@ window.openDetailedHelp = openDetailedHelp;
 
 async function initApp() {
     try {
-        console.log('🚀 Iniciando Panario v2.1.1...');
+        console.log('🚀 Iniciando Panario v2.1.6...');
         
         const urlParams = new URLSearchParams(window.location.search);
         const refreshParam = urlParams.get('refresh');
@@ -491,7 +520,7 @@ async function initApp() {
         
         setTimeout(adjustForSafeArea, 500);
 
-        console.log('✅ App inicializada correctamente (v2.1.1)');
+        console.log('✅ App inicializada correctamente (v2.1.6)');
 
     } catch (error) {
         console.error('❌ Error inicializando app:', error);
@@ -1315,7 +1344,6 @@ function renderDashboardView() {
     }
 
     // 🆕 FASE 4.2 (#14): Hidratar el modo del gráfico desde la BD
-    // Solo si NO hay uno en memoria más reciente (para no pisar el cambio)
     if (!window._chartMode || window._chartModeSetByUser !== true) {
         window._chartMode = dashConfig.chart_mode || 'last7';
         console.log('📊 [FASE 4.2] Modo del gráfico hidratado desde BD:', window._chartMode);
@@ -1791,7 +1819,7 @@ function changeChartMode(mode) {
     }
     
     window._chartMode = mode;
-    window._chartModeSetByUser = true;  // 🆕 FASE 4.2: Marcar cambio por el usuario
+    window._chartModeSetByUser = true;
     window._weekOffset = 0;
     
     // 🆕 FASE 4.2 (#14): Guardar el modo en la BD del usuario
@@ -1801,7 +1829,6 @@ function changeChartMode(mode) {
             const config = user.dashboard_config || window.DBModule.getUserDashboardConfig(user.id);
             config.chart_mode = mode;
             
-            // Guardar de forma asíncrona
             window.AuthModule.updateUserDashboardConfig(user.id, config).then(result => {
                 if (result && result.success) {
                     console.log('✅ [FASE 4.2] Modo del gráfico guardado en BD:', mode);
@@ -2270,7 +2297,6 @@ function renderPieChartCanvas(container, chartData) {
 
 // ============================================================
 // CARGAR DATOS DEL DASHBOARD
-// 🆕 FASE 3.2: Nuevas estadísticas
 // ============================================================
 
 async function loadDashboardData() {
@@ -2313,7 +2339,6 @@ async function loadDashboardData() {
             'stat-clientes-diferentes': stats.clientesDiferentes || 0
         };
         
-        // 🆕 FASE 3.2: Nuevas estadísticas
         if (stats.releasedSales) {
             elements['stat-released-sales'] = '$' + (stats.releasedSales.total || 0).toFixed(2);
             elements['stat-released-sales-count'] = (stats.releasedSales.count || 0) + ' ventas';
@@ -2335,7 +2360,6 @@ async function loadDashboardData() {
         }
 
         const user = window.AuthModule.getCurrentUser();
-        // 🔧 FIX: Aplicar defaults explícitos para los toggles nuevos
         const dashConfig = {
             show_corriente: true,
             show_orders_today: true,
@@ -2345,7 +2369,6 @@ async function loadDashboardData() {
             show_payment_methods: true,
             show_quick_actions: true,
             show_bank_qr: false,
-            // 🆕 FASE 3.2/3.3: defaults para toggles nuevos
             show_released_sales: true,
             show_best_worst_day: true,
             show_sales_by_employee: true,
@@ -2364,8 +2387,6 @@ async function loadDashboardData() {
             }
         }
 
-        // 🆕 FASE 3.2: Renderizar ventas por empleado
-        // 🔧 FIX: usar !== false para que undefined también muestre
         if (dashConfig.show_sales_by_employee !== false) {
             console.log('👥 [loadDashboardData] Renderizando ventas por empleado...');
             renderSalesByEmployee(stats.salesByEmployee || []);
@@ -2401,7 +2422,7 @@ async function loadDashboardData() {
             }
         }
 
-        console.log('✅ Dashboard actualizado correctamente (v2.1.1)');
+        console.log('✅ Dashboard actualizado correctamente (v2.1.6)');
         console.log('   📅 Primer día de venta:', stats.primerDiaVenta, '→', formatearFechaYYYYMMDD(stats.primerDiaVenta));
         console.log('   📊 Modo del gráfico:', stats.chartMode, '| isCurrentRange:', stats.isCurrentRange);
         console.log('   🚀 Ventas liberadas:', stats.releasedSales?.count, '($' + (stats.releasedSales?.total || 0).toFixed(2) + ')');
@@ -2415,7 +2436,7 @@ async function loadDashboardData() {
 }
 
 // ============================================================
-// 🆕 FASE 3.2: RENDER VENTAS POR EMPLEADO
+// RENDER VENTAS POR EMPLEADO
 // ============================================================
 
 function renderSalesByEmployee(salesByEmployee) {
@@ -3124,10 +3145,10 @@ window.debouncedRefreshCurrentView = debouncedRefreshCurrentView;
 // 🆕 FASE 3.2
 window.formatearFechaInteligente = formatearFechaInteligente;
 window.renderSalesByEmployee = renderSalesByEmployee;
-// 🆕 FASE 5 (#2)
+// 🆕 FASE 5 (#2) + FASE AYUDA MODAL
 window.openDetailedHelp = openDetailedHelp;
 
-console.log('📦 App Controller v2.1.1 (FASE 4.2 #14: persistencia gráfico + FASE 5 #2: ayuda detallada)');
+console.log('📦 App Controller v2.1.6 (FASE AYUDA MODAL: openDetailedHelp delega en HelpModule)');
 
 // ============================================================
 // INICIALIZACIÓN AUTOMÁTICA
