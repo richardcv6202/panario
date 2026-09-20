@@ -10,6 +10,10 @@
 //   - saveSale() normaliza saleData.sale_date antes de INSERT/UPDATE
 //   - registerTransaction() normaliza transactionData.transaction_date
 //   - Defensa en profundidad: aunque la UI ya normaliza, aquí se re-valida
+// 🆕 FASE 6 (#5) (200926 v3): NOMBRE DEL VENDEDOR EN getSale()
+//   - getSale() ahora hace LEFT JOIN con users
+//   - Devuelve 'vendedor_nombre' (name o username del usuario que registró)
+//   - getSales() incluye el mismo JOIN para futuros usos
 // ============================================================
 
 window.SalesModule = {};
@@ -70,16 +74,22 @@ function normalizarFechaVenta(fechaInput) {
 // ============================================================
 // VENTAS - OBTENER (POR NEGOCIO, NO POR USUARIO)
 // CORREGIDO: Usa negocio_id en lugar de user_id para compartir datos
+// 🆕 FASE 6 (#5): JOIN con users para traer el nombre del vendedor
 // ============================================================
 
 async function getSales(filters = {}) {
     const negocioId = window.DBModule.getNegocioIdActual();
     if (!negocioId) return [];
 
-    let sql = `SELECT s.*, p.nombre as producto_nombre, r.name as receta_nombre 
+    let sql = `SELECT s.*, 
+                      p.nombre as producto_nombre, 
+                      r.name as receta_nombre,
+                      u.name as vendedor_nombre,
+                      u.username as vendedor_username
                FROM sales s
                LEFT JOIN productos p ON s.producto_id = p.id
                LEFT JOIN recipes r ON s.receta_id = r.id
+               LEFT JOIN users u ON s.created_by = u.id
                WHERE s.negocio_id = ? AND s.deleted_at IS NULL`;
     let params = [negocioId];
 
@@ -126,6 +136,7 @@ async function getSales(filters = {}) {
 
 // ============================================================
 // VENTA INDIVIDUAL (POR NEGOCIO)
+// 🆕 FASE 6 (#5): LEFT JOIN con users para traer el vendedor
 // ============================================================
 
 async function getSale(id) {
@@ -133,10 +144,15 @@ async function getSale(id) {
     if (!negocioId) return null;
 
     const results = window.DBModule.query(
-        `SELECT s.*, p.nombre as producto_nombre, r.name as receta_nombre 
+        `SELECT s.*, 
+                p.nombre as producto_nombre, 
+                r.name as receta_nombre,
+                u.name as vendedor_nombre,
+                u.username as vendedor_username
          FROM sales s
          LEFT JOIN productos p ON s.producto_id = p.id
          LEFT JOIN recipes r ON s.receta_id = r.id
+         LEFT JOIN users u ON s.created_by = u.id
          WHERE s.id = ? AND s.negocio_id = ? AND s.deleted_at IS NULL`,
         [id, negocioId]
     );
@@ -226,7 +242,6 @@ async function saveSale(saleData) {
             ]);
             
             // 🔧 FIX CRÍTICO: Eliminar transacciones ANTERIORES por sale_id
-            // (NO por LIKE concept, que era la causa de los duplicados)
             const txResult = window.DBModule.execute(
                 'UPDATE transactions SET deleted_at = CURRENT_TIMESTAMP WHERE sale_id = ? AND user_id = ?',
                 [saleData.id, user.id]
@@ -236,11 +251,13 @@ async function saveSale(saleData) {
         } else {
             // 🆕 FASE 1.3.2: Generar uuid para la venta
             const saleUuid = window.DBModule.generateUuidForTable('sales');
+            const currentUserId = window.DBModule.getCurrentUserId();
             
             result = window.DBModule.execute(`
                 INSERT INTO sales (user_id, product_name, producto_id, receta_id, quantity, unit_price, 
-                    total, payment_method, buyer, is_debt, paid, sale_date, session, is_liberated, voided, uuid)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                    total, payment_method, buyer, is_debt, paid, sale_date, session, is_liberated, voided, 
+                    created_by, modified_by, uuid)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
             `, [
                 user.id,
                 saleData.product_name || null,
@@ -256,6 +273,8 @@ async function saveSale(saleData) {
                 saleDateNormalizada,  // 🆕 FIX 2
                 saleData.session || null,
                 isLiberated,
+                currentUserId,       // 🆕 FASE 6: created_by explícito
+                currentUserId,       // 🆕 FASE 6: modified_by explícito
                 saleUuid
             ]);
             
@@ -281,7 +300,6 @@ async function saveSale(saleData) {
         }
 
         // Verificar que NO exista ya una transacción para esta venta
-        // (defensa adicional contra duplicados)
         const txExistente = window.DBModule.query(`
             SELECT id FROM transactions 
             WHERE sale_id = ? AND user_id = ? 
@@ -409,10 +427,13 @@ async function voidSale(id, reason) {
             if (!stockResult.success) return { success: false, error: 'Error al reponer stock: ' + stockResult.error };
         }
 
+        const currentUserId = window.DBModule.getCurrentUserId();
+
         window.DBModule.execute(`
-            UPDATE sales SET voided = 1, void_reason = ?, voided_at = CURRENT_TIMESTAMP
+            UPDATE sales SET voided = 1, void_reason = ?, voided_at = CURRENT_TIMESTAMP,
+                             modified_by = ?
             WHERE id = ? AND user_id = ?
-        `, [reason, id, user.id]);
+        `, [reason, currentUserId, id, user.id]);
 
         // Anular TODAS las transacciones asociadas (por sale_id)
         window.DBModule.execute(`
@@ -444,10 +465,12 @@ async function unvoidSale(id) {
             if (!stockResult.success) return { success: false, error: 'Error al descontar stock: ' + stockResult.error };
         }
 
+        const currentUserId = window.DBModule.getCurrentUserId();
+
         window.DBModule.execute(`
-            UPDATE sales SET voided = 0, void_reason = NULL, voided_at = NULL
+            UPDATE sales SET voided = 0, void_reason = NULL, voided_at = NULL, modified_by = ?
             WHERE id = ? AND user_id = ?
-        `, [id, user.id]);
+        `, [currentUserId, id, user.id]);
 
         window.DBModule.execute(`
             UPDATE transactions SET voided = 0, void_reason = NULL, voided_at = NULL
@@ -525,7 +548,6 @@ async function updateExpense(id, expenseData) {
         if (!existing) return { success: false, error: 'Gasto no encontrado' };
         if (existing.voided === 1) return { success: false, error: 'No se puede editar un gasto anulado' };
 
-        // 🆕 FIX 2: Normalizar fecha de gasto
         const fechaNormalizada = normalizarFechaVenta(expenseData.transaction_date);
 
         window.DBModule.execute(`
@@ -609,8 +631,6 @@ async function deleteExpense(id) {
 
 // ============================================================
 // TRANSACCIONES
-// 🆕 FASE 1.3.2: registerTransaction() genera uuid
-// 🆕 FIX 2: registerTransaction() normaliza transaction_date
 // ============================================================
 
 async function getTransactions(filters = {}) {
@@ -760,4 +780,4 @@ window.SalesModule = {
     normalizarFechaVenta
 };
 
-console.log('📦 Sales Module v2.0.9 (FASE 1.3.2 + FIX 2: normalización de fechas)');
+console.log('📦 Sales Module v2.1.7 (FASE 6 #5: nombre del vendedor en detalle de venta)');
