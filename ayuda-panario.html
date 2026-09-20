@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panario v2.0.2 — Ayuda Completa</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Panario v2.1.6 — Ayuda Completa</title>
     <style>
         /* ============================================================
            RESET Y VARIABLES
@@ -115,7 +115,6 @@
             padding: 2px 10px;
             border-radius: 12px;
             font-weight: 600;
-            margin-left: auto;
         }
 
         .help-controls {
@@ -138,6 +137,7 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            text-decoration: none;
         }
 
         .help-btn:hover {
@@ -588,6 +588,64 @@
         }
 
         /* ============================================================
+           🆕 MODO EMBEDDED (dentro de un iframe)
+           ============================================================ */
+        body.embedded {
+            min-height: 100%;
+            overflow-x: hidden;
+        }
+
+        body.embedded header.help-header {
+            position: relative;
+            top: auto;
+            box-shadow: none;
+            padding: 8px 16px;
+            border-bottom: 1px solid var(--border);
+            --header-height: 50px;
+        }
+
+        body.embedded .help-logo {
+            font-size: 24px;
+        }
+
+        body.embedded .help-title {
+            font-size: 16px;
+        }
+
+        body.embedded .help-subtitle {
+            font-size: 11px;
+        }
+
+        body.embedded .help-layout {
+            padding: 12px;
+            gap: 12px;
+            max-width: 100%;
+        }
+
+        body.embedded aside.help-sidebar {
+            top: 12px;
+            max-height: calc(100vh - 100px);
+        }
+
+        body.embedded section.help-section {
+            padding: 20px 24px;
+            scroll-margin-top: 70px;
+        }
+
+        body.embedded .back-to-top {
+            bottom: 16px;
+            right: 16px;
+            width: 42px;
+            height: 42px;
+            font-size: 18px;
+        }
+
+        body.embedded footer.help-footer {
+            padding: 16px;
+            font-size: 11px;
+        }
+
+        /* ============================================================
            RESPONSIVE
            ============================================================ */
         @media (max-width: 900px) {
@@ -700,7 +758,7 @@
         <h1 class="help-title">Panario — Ayuda Completa</h1>
         <p class="help-subtitle">Guía de uso de todos los módulos</p>
     </div>
-    <span class="help-version">v2.0.2</span>
+    <span class="help-version">v2.1.6</span>
     <div class="help-controls">
         <button class="help-btn" onclick="toggleTheme()" title="Cambiar tema">
             <span id="theme-icon">🌙</span>
@@ -708,6 +766,10 @@
         <button class="help-btn" onclick="window.print()" title="Imprimir / Guardar PDF">
             🖨️
         </button>
+        <!-- 🆕 Abrir en pestaña nueva (solo visible en modo embedded) -->
+        <a id="btn-open-new-tab" class="help-btn primary" href="#" target="_blank" rel="noopener" style="display:none;" title="Abrir en pestaña nueva">
+            🔗 ↗
+        </a>
     </div>
 </header>
 
@@ -760,7 +822,7 @@
         <section class="help-section" id="intro">
             <h2>🏠 Introducción</h2>
             
-            <p><strong>Panario v2.0.2</strong> es una aplicación PWA (Progressive Web App) diseñada específicamente para la gestión integral de una <strong>panadería artesanal</strong>. Funciona completamente offline y guarda todos tus datos localmente en tu dispositivo.</p>
+            <p><strong>Panario v2.1.6</strong> es una aplicación PWA (Progressive Web App) diseñada específicamente para la gestión integral de una <strong>panadería artesanal</strong>. Funciona completamente offline y guarda todos tus datos localmente en tu dispositivo.</p>
 
             <div class="card-help primary">
                 <div class="card-help-title">✨ ¿Qué puedes hacer con Panario?</div>
@@ -770,9 +832,11 @@
                     <li>🏷️ Definir <strong>productos</strong> para la venta</li>
                     <li>💰 Registrar <strong>ventas</strong> con descuento automático de stock</li>
                     <li>📋 Gestionar <strong>pedidos y reservas</strong></li>
+                    <li>⏰ Administrar la <strong>lista de espera</strong></li>
                     <li>📊 Ver <strong>estadísticas</strong> y análisis del negocio</li>
                     <li>⚡ Planificar según <strong>horarios de corriente</strong></li>
                     <li>🏆 Premiar a tus <strong>mejores clientes</strong></li>
+                    <li>📅 Registrar <strong>días sin ventas</strong></li>
                     <li>👥 Trabajar en <strong>multiusuario</strong></li>
                 </ul>
             </div>
@@ -783,7 +847,7 @@
                     <th style="width: 40%;">Propiedad</th>
                     <th>Valor</th>
                 </tr>
-                <tr><td>Versión</td><td><strong>2.0.2</strong></td></tr>
+                <tr><td>Versión</td><td><strong>2.1.6</strong></td></tr>
                 <tr><td>Estado</td><td><span class="badge-help badge-success">✅ Producción</span></td></tr>
                 <tr><td>Arquitectura</td><td>Cliente local (SQLite WASM)</td></tr>
                 <tr><td>Tecnología</td><td>HTML5 + CSS3 + JavaScript (ES6+)</td></tr>
@@ -902,12 +966,17 @@
                 <tr><td>📊 Promedio diario</td><td>Ingresos totales / días con ventas</td></tr>
                 <tr><td>🎂 Primer día venta</td><td>Fecha de la primera venta registrada</td></tr>
                 <tr><td>👥 Clientes diferentes</td><td>Cantidad de clientes únicos</td></tr>
+                <tr><td>🚀 Ventas liberadas</td><td>Cantidad e importe de ventas sin cliente</td></tr>
+                <tr><td>🥇 Mejor día</td><td>Día con mayor facturación histórica</td></tr>
+                <tr><td>📉 Peor día</td><td>Día con menor facturación histórica</td></tr>
+                <tr><td>👥 Ventas por empleado</td><td>Ranking de ventas por usuario del negocio</td></tr>
             </table>
 
             <h3>📈 Gráfico de ventas diarias</h3>
-            <p>Muestra las ventas de los últimos 7 días con los siguientes controles:</p>
+            <p>Muestra las ventas con los siguientes controles:</p>
             <ul>
                 <li><strong>◀ ▶</strong> — Navegar entre semanas</li>
+                <li><strong>📅 Ver:</strong> Últimos 7 días / Semana Dom-Sáb / Semana Lun-Dom</li>
                 <li><strong>Tipo</strong> — Barras, Línea o Pastel</li>
                 <li><strong>🖼️</strong> — Exportar como imagen PNG</li>
                 <li><strong>📄</strong> — Exportar como PDF</li>
@@ -916,8 +985,8 @@
             <div class="card-help info">
                 <div class="card-help-title">🎨 Colores del gráfico</div>
                 <ul>
-                    <li>🥇 <strong>Verde:</strong> Día con mayor venta de la semana</li>
-                    <li>📉 <strong>Rojo:</strong> Día con menor venta de la semana</li>
+                    <li>🥇 <strong>Verde:</strong> Día con mayor venta del período</li>
+                    <li>📉 <strong>Rojo:</strong> Día con menor venta del período</li>
                     <li>⭐ <strong>Amarillo:</strong> Día actual</li>
                 </ul>
             </div>
@@ -926,13 +995,18 @@
             <p>Puedes elegir qué secciones ver desde tu <strong>Perfil → Elementos visibles en el Dashboard</strong>:</p>
             <ul>
                 <li>⚡ Horario de corriente hoy</li>
+                <li>📋 Pedidos de hoy</li>
+                <li>🚀 Ventas liberadas</li>
+                <li>🥇 Mejor / Peor día</li>
+                <li>👥 Ventas por empleado</li>
                 <li>🏆 Mejores clientes</li>
                 <li>🏷️ Productos más vendidos</li>
                 <li>💵 Análisis de efectivo y banco</li>
                 <li>💳 Métodos de pago</li>
-                <li>🔗 Botones de acción rápida</li>
-                <li>🏦 QR de cuenta bancaria</li>
+                <li>💳 Deudas</li>
                 <li>🏆 Premios</li>
+                <li>🏦 QR de cuenta bancaria</li>
+                <li>🔗 Botones de acción rápida</li>
             </ul>
         </section>
 
@@ -997,8 +1071,15 @@
                 <li>Se reindexa la lista automáticamente</li>
             </ul>
 
-            <h3>🔄 Auto-cancelación</h3>
-            <p>Los pedidos pendientes/confirmados con más de <strong>48 horas</strong> sin procesar se cancelan automáticamente.</p>
+            <h3>🚨 Cancelación global</h3>
+            <p>Como administrador, puedes cancelar pedidos por <strong>rango de fechas</strong>. Útil para:</p>
+            <ul>
+                <li>Apagones prolongados</li>
+                <li>Falta de insumos</li>
+                <li>Vacaciones no planificadas</li>
+                <li>Enfermedad</li>
+                <li>Cierres temporales</li>
+            </ul>
 
             <h3>🔗 Acciones sobre un pedido</h3>
             <ul>
@@ -1041,14 +1122,17 @@
             <h3>🔄 Descuento automático</h3>
             <p>Al vender un producto o confirmar un pedido, el stock se descuenta automáticamente según la receta asociada.</p>
 
-            <h3>📊 Reporte de insumos</h3>
-            <p>Genera un PDF con:</p>
-            <ul>
-                <li>Listado completo de insumos</li>
-                <li>Valor total del inventario</li>
-                <li>Alertas de stock bajo</li>
-                <li>Insumos sin stock</li>
-            </ul>
+            <h3>🔒 Permisos por rol</h3>
+            <table class="help-table">
+                <tr>
+                    <th>Acción</th>
+                    <th style="text-align: center;">Admin</th>
+                    <th style="text-align: center;">Usuario</th>
+                </tr>
+                <tr><td>Ver insumos</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+                <tr><td>Ver costos</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+                <tr><td>Crear / Editar / Eliminar</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
+            </table>
         </section>
 
         <!-- ============================================================
@@ -1081,7 +1165,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <li>Ve la vista previa con los valores ajustados</li>
                 <li>Elige:
                     <ul>
-                        <li><strong>✏️ Modificar esta receta:</strong> Sobrescribe</li>
+                        <li><strong>✏️ Modificar esta receta:</strong> Sobrescribe (solo admin)</li>
                         <li><strong>📋 Crear nueva receta:</strong> Crea una copia</li>
                     </ul>
                 </li>
@@ -1102,17 +1186,21 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 </ul>
             </div>
 
-            <h3>💬 Compartir recetas</h3>
-            <p>Puedes compartir recetas por:</p>
-            <ul>
-                <li>💬 <strong>WhatsApp</strong> — Envía texto formateado</li>
-                <li>📱 <strong>Messenger</strong> — Copia y abre Messenger</li>
-                <li>📧 <strong>Email</strong> — Abre cliente de correo</li>
-                <li>📋 <strong>Copiar</strong> — Al portapapeles</li>
-            </ul>
-
-            <h3>📄 Exportar receta a PDF</h3>
-            <p>Genera un PDF con el nombre, ingredientes, costos e instrucciones de la receta.</p>
+            <h3>🔒 Permisos por rol</h3>
+            <table class="help-table">
+                <tr>
+                    <th>Acción</th>
+                    <th style="text-align: center;">Admin</th>
+                    <th style="text-align: center;">Usuario</th>
+                </tr>
+                <tr><td>Ver recetas</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+                <tr><td>Ver costos</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
+                <tr><td>Crear / Editar / Eliminar</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
+                <tr><td>Recalcular (crear nueva)</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+                <tr><td>Usar como plantilla</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+                <tr><td>Compartir (WhatsApp, etc.)</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
+                <tr><td>Exportar PDF</td><td style="text-align: center;">✅ (con costos)</td><td style="text-align: center;">✅ (sin costos)</td></tr>
+            </table>
         </section>
 
         <!-- ============================================================
@@ -1151,6 +1239,17 @@ Costo por unidad = Costo total / rendimiento</code></pre>
 
             <h3>📈 Margen de ganancia</h3>
             <p>Se calcula automáticamente: <code>(precio - costo) / precio × 100</code></p>
+
+            <h3>🔒 Permisos por rol</h3>
+            <table class="help-table">
+                <tr>
+                    <th>Acción</th>
+                    <th style="text-align: center;">Admin</th>
+                    <th style="text-align: center;">Usuario</th>
+                </tr>
+                <tr><td>Ver productos</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+                <tr><td>Crear / Editar / Eliminar</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
+            </table>
         </section>
 
         <!-- ============================================================
@@ -1182,22 +1281,23 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <li>🔄 <strong>Otra:</strong> Otros métodos</li>
             </ul>
 
-            <h3>📤 Gastos</h3>
-            <p>Los gastos se registran con:</p>
+            <h3>📅 Días sin ventas</h3>
+            <p>Permite registrar los días en los que no tuviste actividad, con motivo y nota.</p>
+
+            <p><strong>Motivos disponibles:</strong></p>
             <ul>
-                <li><strong>📝 Concepto:</strong> Descripción del gasto</li>
-                <li><strong>💰 Monto:</strong> Cantidad gastada</li>
-                <li><strong>📂 Categoría:</strong> Insumos, materiales, transporte, inversión, otros</li>
-                <li><strong>💳 Origen del pago:</strong> Efectivo, transferencia, otra</li>
-                <li><strong>📅 Fecha:</strong> Cuándo se realizó</li>
+                <li>⚡ Apagón</li>
+                <li>🛒 Falta de insumos</li>
+                <li>🎉 Feriado</li>
+                <li>🏖️ Vacaciones</li>
+                <li>🏥 Enfermedad</li>
+                <li>🔧 Mantenimiento</li>
+                <li>🌧️ Mal clima</li>
+                <li>🔄 Otro</li>
             </ul>
 
-            <h3>📊 Reportes disponibles</h3>
-            <ul>
-                <li><strong>📊 Reporte de Ventas:</strong> Filtros por fecha, cliente, producto, método de pago</li>
-                <li><strong>📊 Reporte de Gastos:</strong> Filtros por fecha, categoría, origen del pago</li>
-                <li><strong>💳 Reporte de Deudas:</strong> Solo ventas no pagadas</li>
-            </ul>
+            <h3>🚀 Interruptor de ventas liberadas</h3>
+            <p>En el header de filtros hay un toggle para mostrar u ocultar las ventas liberadas del listado. El resumen (5 tarjetas) siempre incluye todas las ventas.</p>
 
             <h3>🔍 Filtros del listado</h3>
             <ul>
@@ -1206,11 +1306,6 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <li><strong>📊 Todo:</strong> Ambos mezclados</li>
                 <li><strong>💳 Deudas:</strong> Solo pendientes de cobro</li>
             </ul>
-
-            <div class="card-help warning">
-                <div class="card-help-title">⚠️ Importante: Pedidos vs Deudas</div>
-                <p>Los <strong>pedidos pendientes NO son deudas</strong>. Solo se consideran deudas las <strong>ventas</strong> con <code>is_debt = 1</code> y <code>paid = 0</code>.</p>
-            </div>
         </section>
 
         <!-- ============================================================
@@ -1263,14 +1358,15 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             <ul>
                 <li><strong>🎁 Activar sistema:</strong> Toggle para activar/desactivar</li>
                 <li><strong>🥇 Premio mensual:</strong> Ej: "Media jaba de pan"</li>
-                <li><strong>🏆 Premio anual:</strong> Ej: "Jaba completa de pan"</li>
+                <li><strong>🥈 Premio anual:</strong> Ej: "Jaba completa de pan"</li>
+                <li><strong>⚙️ Cálculo del premio anual:</strong> Navidad (24 dic) / Fin de año (31 dic) / Inicio de año</li>
             </ul>
 
             <h3>📊 Cálculo automático</h3>
             <p>El sistema calcula automáticamente:</p>
             <ul>
                 <li><strong>Mejor cliente del mes:</strong> Suma de compras en el mes actual</li>
-                <li><strong>Mejor cliente del año:</strong> Suma de compras en el año actual</li>
+                <li><strong>Mejor cliente del año:</strong> Suma de compras en el rango configurado</li>
                 <li><strong>Top 5 del mes:</strong> Ranking de los 5 mejores</li>
             </ul>
 
@@ -1286,19 +1382,10 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             <p>Se muestra una tarjeta con:</p>
             <ul>
                 <li>🥇 Mejor cliente del mes</li>
-                <li>🏆 Mejor cliente del año</li>
+                <li>🥈 Mejor cliente del año</li>
                 <li>🎁 Premio asociado a cada uno</li>
+                <li>🏅 Top 5 del mes con medallas</li>
             </ul>
-
-            <div class="card-help success">
-                <div class="card-help-title">💡 Consejos para usar premios</div>
-                <ul>
-                    <li>Define premios atractivos pero sostenibles</li>
-                    <li>Comunica el sistema a tus clientes</li>
-                    <li>Entrega el premio al inicio del mes siguiente</li>
-                    <li>Publica el ganador en redes sociales</li>
-                </ul>
-            </div>
         </section>
 
         <!-- ============================================================
@@ -1342,6 +1429,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <li><strong>⚠️ Alert:</strong> Tono grave</li>
                 <li><strong>✅ Success:</strong> Tono agudo y largo</li>
                 <li><strong>🔊 Probar:</strong> Escuchar cada sonido</li>
+                <li><strong>🔊 Probar todos:</strong> Escuchar todos con animación</li>
             </ul>
 
             <h3>📌 Marcador de estado</h3>
@@ -1380,16 +1468,21 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             <p>Configuración de sonido (ver sección <a href="#notifications">Notificaciones</a>).</p>
 
             <h3>📊 Elementos visibles en el Dashboard</h3>
-            <p>7 interruptores para personalizar el Dashboard:</p>
+            <p>13 interruptores para personalizar el Dashboard:</p>
             <ul>
                 <li>⚡ Horario de corriente hoy</li>
+                <li>📋 Pedidos de hoy</li>
+                <li>🚀 Ventas liberadas</li>
+                <li>🥇 Mejor / Peor día</li>
+                <li>👥 Ventas por empleado</li>
                 <li>🏆 Mejores clientes</li>
                 <li>🏷️ Productos más vendidos</li>
                 <li>💵 Análisis de efectivo y banco</li>
                 <li>💳 Métodos de pago</li>
-                <li>🔗 Botones de acción rápida</li>
-                <li>🏦 QR de cuenta bancaria</li>
+                <li>💳 Deudas</li>
                 <li>🏆 Premios</li>
+                <li>🏦 QR de cuenta bancaria</li>
+                <li>🔗 Botones de acción rápida</li>
             </ul>
 
             <h3>🏦 Datos bancarios</h3>
@@ -1399,14 +1492,14 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <li>👤 Nombre del propietario de la tarjeta</li>
                 <li>📋 Número de cuenta</li>
                 <li>📞 Teléfono de confirmación</li>
-                <li>📷 Código QR de la cuenta</li>
+                <li>📷 Código QR de la cuenta (generado o subido)</li>
             </ul>
 
             <h3>❓ Ayuda y tutoriales</h3>
             <ul>
                 <li><strong>🚀 Guía rápida:</strong> 5 pasos para empezar</li>
                 <li><strong>🎯 Tutorial interactivo:</strong> Recorrido guiado</li>
-                <li><strong>❓ Preguntas frecuentes:</strong> FAQ con 50+ preguntas</li>
+                <li><strong>❓ Preguntas frecuentes:</strong> FAQ con 80+ preguntas</li>
             </ul>
         </section>
 
@@ -1421,32 +1514,37 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             <h3>⚡ Horarios de corriente</h3>
             <p>Configuración de la planificación eléctrica (ver sección <a href="#corriente">Corriente</a>).</p>
 
+            <h3>⏰ Lista de espera</h3>
+            <p>Acceso directo a la gestión de lista de espera y su reporte PDF.</p>
+
+            <h3>🚨 Cancelación global</h3>
+            <p>Solo admin. Cancela todos los pedidos en un rango de fechas con causa y nota.</p>
+
             <h3>📊 Reporte de gastos</h3>
-            <p>Genera un reporte parametrizable de gastos por:</p>
-            <ul>
-                <li>📅 Rango de fechas</li>
-                <li>📂 Categoría</li>
-                <li>💳 Origen del pago</li>
-                <li>📝 Concepto</li>
-            </ul>
+            <p>Genera un reporte parametrizable de gastos por rango, categoría y origen del pago.</p>
 
             <h3>📤 Exportar base de datos</h3>
-            <p>Descarga una copia de seguridad completa en formato <code>.db</code>.</p>
-
-            <h3>🧩 Salva diferencial</h3>
-            <p>Exporta/importa <strong>solo recetas y productos</strong> en formato <code>.json</code>. No afecta a ventas, pedidos ni insumos.</p>
+            <p>Descarga una copia de seguridad completa o solo datos.</p>
 
             <h3>📥 Importar base de datos</h3>
-            <p>Restaura una copia de seguridad desde un archivo <code>.db</code>.</p>
+            <p>Restaura una copia con 3 modos:</p>
+            <ul>
+                <li><strong>📥 Importar copia:</strong> Reemplaza todo</li>
+                <li><strong>📊 Importar solo datos:</strong> Conserva usuarios</li>
+                <li><strong>🔀 Fusionar bases de datos:</strong> Combina por UUID</li>
+            </ul>
 
-            <h3>👤 Recordar usuario</h3>
-            <p>Olvida el último usuario guardado.</p>
+            <h3>🧩 Salva diferencial</h3>
+            <p>Exporta/importa solo recetas y productos en formato JSON.</p>
+
+            <h3>👥 Gestión de usuarios</h3>
+            <p>Solo admin. Crear, editar, promover, eliminar usuarios; regenerar código de invitación.</p>
 
             <h3>🧹 Limpiar datos eliminados</h3>
             <p>Elimina permanentemente los registros con soft-delete.</p>
 
             <h3>🚨 Eliminación por error</h3>
-            <p>Elimina permanentemente pedidos o ventas creados por error.</p>
+            <p>Elimina pedidos y ventas creados por error. <strong>NO</strong> se puede deshacer.</p>
 
             <h3>🚨 Reiniciar base de datos</h3>
             <p>Elimina TODOS los datos excepto usuarios y temas. <strong>Contraseña: "panario"</strong>.</p>
@@ -1495,6 +1593,21 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <div class="faq-answer">Sí. En Herramientas usa "🧩 Salva diferencial" para exportar/importar solo las recetas y productos, sin afectar al resto de la base de datos.</div>
             </details>
 
+            <details class="faq-item">
+                <summary>¿Qué navegadores soporta Panario?</summary>
+                <div class="faq-answer">Chrome, Firefox, Edge, Safari (versiones recientes). Se recomienda Chrome para mejor rendimiento.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo instalo Panario en mi móvil?</summary>
+                <div class="faq-answer">Abre Panario en el navegador y usa "Añadir a pantalla de inicio" o "Instalar aplicación".</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Quién desarrolló Panario?</summary>
+                <div class="faq-answer">Panario fue desarrollado por Ricardo Castillo Valdés. Puedes contactarlo por WhatsApp (+53 55031725) o email (3sayricardo@gmail.com).</div>
+            </details>
+
             <h3>📊 Dashboard</h3>
 
             <details class="faq-item">
@@ -1513,32 +1626,13 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             </details>
 
             <details class="faq-item">
-                <summary>¿Por qué los pedidos pendientes no aparecen como deudas?</summary>
-                <div class="faq-answer">Porque un pedido es una solicitud, no una venta ejecutada. Solo se considera deuda cuando se ha completado la venta y el cliente no ha pagado.</div>
-            </details>
-
-            <h3>🛒 Insumos</h3>
-
-            <details class="faq-item">
-                <summary>¿Qué es un insumo?</summary>
-                <div class="faq-answer">Es todo lo que compras para producir: harina, levadura, yogur, mantequilla, etc.</div>
+                <summary>¿Qué es el "modo del gráfico"?</summary>
+                <div class="faq-answer">Es la forma en que se agrupan los días. Puedes elegir "Últimos 7 días", "Semana Dom-Sáb" o "Semana Lun-Dom". Tu elección se guarda automáticamente.</div>
             </details>
 
             <details class="faq-item">
-                <summary>¿Los insumos se descuentan automáticamente?</summary>
-                <div class="faq-answer">Sí. Al vender un producto o confirmar un pedido, el stock de los insumos se descuenta según la receta asociada.</div>
-            </details>
-
-            <h3>📖 Recetas</h3>
-
-            <details class="faq-item">
-                <summary>¿Qué hace el botón "🔄 Recalcular"?</summary>
-                <div class="faq-answer">Permite ajustar una receta para un nuevo rendimiento usando regla de 3. Ej: receta para 33 panes → quiero 50 panes.</div>
-            </details>
-
-            <details class="faq-item">
-                <summary>¿Cómo comparto una receta?</summary>
-                <div class="faq-answer">En la vista de detalle de la receta, clic en "💬 Compartir". Puedes enviarla por WhatsApp, Messenger, Email o copiarla al portapapeles.</div>
+                <summary>¿Qué son las "Ventas liberadas"?</summary>
+                <div class="faq-answer">Son ventas sin cliente identificado (tipo "mostrador anónimo"). Se contabilizan en los totales pero se pueden ocultar del listado.</div>
             </details>
 
             <h3>💰 Ventas</h3>
@@ -1556,6 +1650,11 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             <details class="faq-item">
                 <summary>¿Puedo anular una venta?</summary>
                 <div class="faq-answer">Sí. En el detalle de la venta, clic en "🚫 Anular". Se repondrá el stock automáticamente.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Para qué sirve registrar un día sin ventas?</summary>
+                <div class="faq-answer">Sirve para llevar un historial y entender mejor las estadísticas. Sin esta información, un día sin ventas parecería simplemente "un mal día" cuando en realidad no abriste.</div>
             </details>
 
             <h3>📋 Pedidos</h3>
@@ -1595,8 +1694,8 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             </details>
 
             <details class="faq-item">
-                <summary>¿Dónde configuro los premios?</summary>
-                <div class="faq-answer">Ve a 💰 Ventas → botón 🏆 Premios. Ahí puedes activar/desactivar y editar los premios.</div>
+                <summary>¿Por qué hay tres opciones para calcular el premio anual?</summary>
+                <div class="faq-answer">Cada negocio es diferente. Puedes elegir entregar el premio en Navidad (24 dic), a fin de año (31 dic) o al inicio del siguiente año.</div>
             </details>
 
             <h3>🔔 Notificaciones</h3>
@@ -1607,20 +1706,8 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             </details>
 
             <details class="faq-item">
-                <summary>¿Por qué no se repiten las notificaciones?</summary>
-                <div class="faq-answer">Una vez que abres el modal de notificaciones, se marcan como vistas y no se vuelven a mostrar hasta que sean necesarias de nuevo o inicies sesión.</div>
-            </details>
-
-            <h3>⚙️ Herramientas</h3>
-
-            <details class="faq-item">
-                <summary>¿Qué hace "Reiniciar base de datos"?</summary>
-                <div class="faq-answer">Elimina TODOS los datos excepto usuarios y temas. Se conservan las cuentas de usuario para que puedas volver a entrar. Contraseña: "panario".</div>
-            </details>
-
-            <details class="faq-item">
-                <summary>¿Qué diferencia hay entre "Limpiar datos eliminados" y "Eliminación por error"?</summary>
-                <div class="faq-answer">"Limpiar datos eliminados" borra permanentemente los registros con soft-delete. "Eliminación por error" permite seleccionar pedidos o ventas específicos para eliminar permanentemente.</div>
+                <summary>¿Qué hace exactamente "Probar todos"?</summary>
+                <div class="faq-answer">Reproduce en orden todos los sonidos disponibles, con una pausa de 1.5 segundos entre cada uno. Al final reproduce una vez el sonido que tienes configurado actualmente.</div>
             </details>
 
             <h3>👤 Perfil y multiusuario</h3>
@@ -1632,12 +1719,24 @@ Costo por unidad = Costo total / rendimiento</code></pre>
 
             <details class="faq-item">
                 <summary>¿Cómo comparto el código de invitación?</summary>
-                <div class="faq-answer">En tu Perfil, junto al nombre del negocio, verás el código con un botón "📋 Copiar". Envíaselo a quien quieras invitar.</div>
+                <div class="faq-answer">En tu Perfil, junto al nombre del negocio, verás el código con un botón "📋 Copiar". Envíalo a quien quieras invitar.</div>
             </details>
 
             <details class="faq-item">
                 <summary>¿Quién es el administrador del negocio?</summary>
-                <div class="faq-answer">El primer usuario que crea el negocio es el administrador. Los siguientes usuarios que se unan tendrán rol de vendedor o panadero.</div>
+                <div class="faq-answer">El primer usuario que crea el negocio es el administrador. Los siguientes usuarios que se unan tendrán rol de usuario regular.</div>
+            </details>
+
+            <h3>⚙️ Herramientas</h3>
+
+            <details class="faq-item">
+                <summary>¿Qué hace "Reiniciar base de datos"?</summary>
+                <div class="faq-answer">Elimina TODOS los datos excepto usuarios y temas. Se conservan las cuentas de usuario para que puedas volver a entrar. Contraseña: "panario".</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo fusiono dos bases de datos?</summary>
+                <div class="faq-answer">Ve a ⚙️ Herramientas → 📥 Importar → 🔀 Fusionar bases de datos. Los registros nuevos se añaden, los existentes se comparan por UUID (gana el más reciente).</div>
             </details>
         </section>
 
@@ -1669,6 +1768,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <li>Activa el <strong>sistema de premios</strong> para fidelizar</li>
                 <li>Revisa el <strong>Dashboard</strong> cada mañana</li>
                 <li>Haz <strong>copias de seguridad</strong> semanales</li>
+                <li>Registra los <strong>días sin ventas</strong> para tener estadísticas precisas</li>
             </ul>
 
             <h3>📱 Instalación como app</h3>
@@ -1716,7 +1816,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 </div>
 
                 <div style="margin-top: 24px; color: var(--text-light); font-size: 12px; line-height: 1.7;">
-                    <p><strong>Panario v2.0.2</strong></p>
+                    <p><strong>Panario v2.1.6</strong></p>
                     <p>© 2026 Ricardo Castillo Valdés</p>
                     <p>Todos los derechos reservados</p>
                     <p style="margin-top: 12px;">Hecho con ❤️ para panaderos artesanales</p>
@@ -1739,7 +1839,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
      FOOTER
      ============================================================ -->
 <footer class="help-footer">
-    <p>🍞 <strong>Panario v2.0.2</strong> — Ayuda Completa</p>
+    <p>🍞 <strong>Panario v2.1.6</strong> — Ayuda Completa</p>
     <p style="margin-top: 4px;">Desarrollado por Ricardo Castillo Valdés — © 2026</p>
 </footer>
 
@@ -1747,6 +1847,29 @@ Costo por unidad = Costo total / rendimiento</code></pre>
      JAVASCRIPT
      ============================================================ -->
 <script>
+// ============================================================
+// 🆕 PARSEO DE PARÁMETROS URL
+// ============================================================
+
+/**
+ * Lee los parámetros de la URL:
+ *   ?theme=dark|light     → tema forzado
+ *   ?section=<id>         → hace scroll a esa sección
+ *   ?embedded=1           → modo embebido (dentro de iframe)
+ * 
+ * Si no hay parámetros, se comporta como la versión anterior.
+ */
+function parseUrlParams() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+        theme: params.get('theme'),
+        section: params.get('section'),
+        embedded: params.get('embedded') === '1'
+    };
+}
+
+const urlParams = parseUrlParams();
+
 // ============================================================
 // TEMA
 // ============================================================
@@ -1769,10 +1892,27 @@ function updateThemeIcon(theme) {
 }
 
 function initTheme() {
-    const saved = localStorage.getItem('ayuda-panario-theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const theme = saved || (prefersDark ? 'dark' : 'light');
+    // Prioridad 1: parámetro URL
+    if (urlParams.theme === 'dark' || urlParams.theme === 'light') {
+        document.documentElement.setAttribute('data-theme', urlParams.theme);
+        updateThemeIcon(urlParams.theme);
+        // Guardar para la próxima vez
+        localStorage.setItem('ayuda-panario-theme', urlParams.theme);
+        console.log('📖 Tema aplicado desde URL:', urlParams.theme);
+        return;
+    }
     
+    // Prioridad 2: localStorage
+    const saved = localStorage.getItem('ayuda-panario-theme');
+    if (saved) {
+        document.documentElement.setAttribute('data-theme', saved);
+        updateThemeIcon(saved);
+        return;
+    }
+    
+    // Prioridad 3: preferencia del sistema
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const theme = prefersDark ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', theme);
     updateThemeIcon(theme);
 }
@@ -1868,9 +2008,65 @@ function initSmoothScroll() {
                 const offset = 90;
                 const targetPosition = target.getBoundingClientRect().top + window.scrollY - offset;
                 window.scrollTo({ top: targetPosition, behavior: 'smooth' });
+                
+                // Actualizar el hash de la URL sin hacer scroll nativo
+                if (history.pushState) {
+                    history.pushState(null, null, targetId);
+                }
             }
         });
     });
+}
+
+// ============================================================
+// 🆕 SCROLL A SECCIÓN ESPECÍFICA
+// ============================================================
+
+function scrollToSection(sectionId) {
+    if (!sectionId) return;
+    
+    // Limpiar el "#" si viene con él
+    const cleanId = sectionId.replace('#', '');
+    const target = document.getElementById(cleanId);
+    
+    if (target) {
+        // Delay para asegurar que el layout esté listo
+        setTimeout(() => {
+            const offset = urlParams.embedded ? 60 : 90;
+            const targetPosition = target.getBoundingClientRect().top + window.scrollY - offset;
+            window.scrollTo({ top: targetPosition, behavior: 'auto' });
+            
+            // Marcar como activa
+            document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+            const activeLink = document.querySelector(`.sidebar-nav a[href="#${cleanId}"]`);
+            if (activeLink) activeLink.classList.add('active');
+            
+            console.log('📖 Scroll a sección:', cleanId);
+        }, 200);
+    } else {
+        console.warn('⚠️ Sección no encontrada:', cleanId);
+    }
+}
+
+// ============================================================
+// 🆕 MODO EMBEDDED
+// ============================================================
+
+function initEmbeddedMode() {
+    if (!urlParams.embedded) return;
+    
+    document.body.classList.add('embedded');
+    console.log('📖 Modo embedded activado');
+    
+    // Mostrar el botón "Abrir en pestaña nueva"
+    const btnNewTab = document.getElementById('btn-open-new-tab');
+    if (btnNewTab) {
+        // Construir URL sin el parámetro "embedded"
+        const url = new URL(window.location.href);
+        url.searchParams.delete('embedded');
+        btnNewTab.href = url.toString();
+        btnNewTab.style.display = 'inline-flex';
+    }
 }
 
 // ============================================================
@@ -1879,6 +2075,7 @@ function initSmoothScroll() {
 
 document.addEventListener('DOMContentLoaded', function() {
     initTheme();
+    initEmbeddedMode();
     initSmoothScroll();
     
     window.addEventListener('scroll', function() {
@@ -1889,7 +2086,13 @@ document.addEventListener('DOMContentLoaded', function() {
     handleScroll();
     updateActiveNav();
     
-    console.log('📖 Ayuda de Panario cargada correctamente');
+    // 🆕 Scroll a la sección solicitada por URL
+    if (urlParams.section) {
+        scrollToSection(urlParams.section);
+    }
+    
+    console.log('📖 Ayuda de Panario cargada correctamente (v2.1.6)');
+    console.log('   📋 Params:', urlParams);
 });
 </script>
 

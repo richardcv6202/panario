@@ -7,7 +7,16 @@
 //   - También accesible desde el modal de FAQ
 //   - Fallback si openDetailedHelp no está definida
 // 🆕 FASE 5 (#3):
-//   - Ampliación de FAQs (~60 preguntas organizadas)
+//   - Ampliación de FAQs (~80 preguntas organizadas)
+// 🆕 FASE AYUDA MODAL (200926 v3):
+//   - NUEVA: abrirAyudaEnModal(url) → abre la ayuda dentro de un
+//     modal a pantalla completa con iframe, en lugar de una pestaña
+//   - Detecta el tema actual y la sección activa para pasarlos por URL
+//   - Incluye botón "🔗 Abrir en pestaña nueva" dentro del modal
+//   - abrirAyudaDetallada() ahora delega en abrirAyudaEnModal()
+//   - openDetailedHelp() (compatibilidad con app.js) → abrirAyudaDetallada()
+//   - Se cierra con ✕, Escape, o clic fuera del modal
+//   - Responsive: 95% desktop, 100% móvil
 // ============================================================
 
 window.HelpModule = {};
@@ -78,26 +87,53 @@ let tourTooltip = null;
 let tourHighlight = null;
 
 // ============================================================
-// 🆕 FASE 5 (#2): HELPER PARA ABRIR AYUDA DETALLADA
+// 🆕 FASE AYUDA MODAL: ABRIR AYUDA DETALLADA EN MODAL
 // ============================================================
 
 /**
- * Abre la ayuda detallada externa (ayuda-panario.html).
- * Usa window.openDetailedHelp() si está definida (app.js),
- * si no, hace un fallback abriendo la URL directamente.
+ * Abre la ayuda detallada.
+ * 
+ * - Detecta el tema actual del usuario (`data-theme` en `<html>`).
+ * - Detecta el módulo activo (`.nav-item.active` con `data-section`).
+ * - Construye una URL con parámetros `?theme=<actual>&section=<modulo>&embedded=1`.
+ * - Delega en `abrirAyudaEnModal()` para mostrarla dentro de un modal.
  */
 function abrirAyudaDetallada() {
     try {
-        if (typeof window.openDetailedHelp === 'function') {
-            window.openDetailedHelp();
-        } else {
-            // Fallback si app.js no cargó la función
-            console.warn('⚠️ openDetailedHelp no está definida, usando fallback');
-            window.open('./ayuda-panario.html', '_blank', 'noopener,noreferrer');
-            if (window.showToast) {
-                window.showToast('📖 Abriendo ayuda detallada...', 'info', 2500);
-            }
+        // Detectar tema
+        const theme = document.documentElement.getAttribute('data-theme') || 'light';
+        
+        // Detectar sección activa
+        const activeNav = document.querySelector('.nav-item.active');
+        let section = 'intro';
+        if (activeNav && activeNav.dataset && activeNav.dataset.section) {
+            section = activeNav.dataset.section;
         }
+        
+        // Algunas secciones no tienen ancla directa en la ayuda; mapearlas
+        const sectionMap = {
+            'dashboard':   'dashboard',
+            'orders':      'orders',
+            'insumos':     'insumos',
+            'recipes':     'recipes',
+            'productos':   'productos',
+            'sales':       'sales',
+            'settings':    'settings',
+            'profile':     'profile',
+            'corriente':   'corriente',
+            'rewards':     'rewards',
+            'notifications':'notifications'
+        };
+        const helpSection = sectionMap[section] || 'intro';
+        
+        // Construir URL
+        const url = `./ayuda-panario.html?theme=${encodeURIComponent(theme)}&section=${encodeURIComponent(helpSection)}&embedded=1`;
+        
+        console.log('📖 Abriendo ayuda detallada en modal:', { theme, section: helpSection, url });
+        
+        // Abrir en modal
+        abrirAyudaEnModal(url, theme);
+        
     } catch (e) {
         console.warn('⚠️ Error abriendo ayuda detallada:', e);
         if (window.showToast) {
@@ -106,7 +142,302 @@ function abrirAyudaDetallada() {
     }
 }
 
+/**
+ * 🆕 Abre un modal a pantalla completa con un iframe que carga la ayuda.
+ * 
+ * @param {string} url - URL de la ayuda (con parámetros ya construidos)
+ * @param {string} theme - Tema actual ('light' | 'dark') para adaptar el modal
+ */
+function abrirAyudaEnModal(url, theme = 'light') {
+    // Cerrar si ya existe uno abierto
+    const existing = document.getElementById('ayuda-modal');
+    if (existing) existing.remove();
+    
+    // Detectar si es móvil
+    const isMobile = window.innerWidth < 768;
+    
+    // Dimensiones del modal
+    const modalWidth  = isMobile ? '100vw' : '95vw';
+    const modalHeight = isMobile ? '100vh' : '95vh';
+    const modalRadius = isMobile ? '0'    : '16px';
+    
+    // Crear overlay
+    const modal = document.createElement('div');
+    modal.id = 'ayuda-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.75);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999999999;
+        padding: ${isMobile ? '0' : '20px'};
+        animation: ayudaModalFadeIn 0.25s ease;
+    `;
+    
+    // Estilos dinámicos (animaciones) - solo una vez
+    if (!document.getElementById('ayuda-modal-styles')) {
+        const style = document.createElement('style');
+        style.id = 'ayuda-modal-styles';
+        style.textContent = `
+            @keyframes ayudaModalFadeIn {
+                from { opacity: 0; }
+                to   { opacity: 1; }
+            }
+            @keyframes ayudaModalSlideUp {
+                from { opacity: 0; transform: translateY(20px) scale(0.98); }
+                to   { opacity: 1; transform: translateY(0) scale(1); }
+            }
+            @keyframes ayudaModalFadeOut {
+                from { opacity: 1; }
+                to   { opacity: 0; }
+            }
+            @keyframes ayudaSpinner {
+                to { transform: rotate(360deg); }
+            }
+            #ayuda-modal iframe {
+                border: none;
+                display: block;
+                width: 100%;
+                height: 100%;
+                background: #fdf6e3;
+            }
+            [data-theme="dark"] #ayuda-modal iframe {
+                background: #0d0d0d;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    // HTML del modal
+    modal.innerHTML = `
+        <div id="ayuda-modal-container" style="
+            background: var(--bg-card, #fff);
+            border-radius: ${modalRadius};
+            width: ${modalWidth};
+            height: ${modalHeight};
+            max-width: 1600px;
+            max-height: 1200px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            animation: ayudaModalSlideUp 0.3s ease;
+            border: 1px solid var(--border-color, #e0d5c0);
+        ">
+            <!-- HEADER -->
+            <div style="
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 16px;
+                border-bottom: 1px solid var(--border-color, #e0d5c0);
+                background: var(--bg-card, #fff);
+                flex-shrink: 0;
+            ">
+                <span style="font-size: 22px;">📖</span>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 700; font-size: 15px; color: var(--text, #2d2d2d);">
+                        Ayuda detallada
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-light, #666);">
+                        ${url.split('?')[0]}
+                    </div>
+                </div>
+                
+                <!-- Botón abrir en pestaña nueva -->
+                <a href="${url.replace('&embedded=1', '')}" target="_blank" rel="noopener noreferrer"
+                   class="btn secondary"
+                   style="padding: 6px 12px; font-size: 12px; width: auto; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;"
+                   title="Abrir en pestaña nueva">
+                    🔗 ↗
+                </a>
+                
+                <!-- Botón imprimir -->
+                <button onclick="imprimirAyudaIframe()"
+                        class="btn secondary"
+                        style="padding: 6px 12px; font-size: 12px; width: auto;"
+                        title="Imprimir / Guardar PDF">
+                    🖨️
+                </button>
+                
+                <!-- Botón cerrar -->
+                <button onclick="cerrarAyudaModal()"
+                        style="
+                            background: none;
+                            border: none;
+                            font-size: 24px;
+                            cursor: pointer;
+                            color: var(--text-light, #666);
+                            padding: 4px 8px;
+                            line-height: 1;
+                            border-radius: 6px;
+                            transition: background 0.2s;
+                        "
+                        onmouseover="this.style.background='var(--bg, #fdf6e3)'"
+                        onmouseout="this.style.background='transparent'"
+                        title="Cerrar (Escape)">
+                    ✕
+                </button>
+            </div>
+            
+            <!-- IFRAME CON LA AYUDA -->
+            <div style="flex: 1; position: relative; overflow: hidden;">
+                <!-- Loading spinner (se oculta cuando carga el iframe) -->
+                <div id="ayuda-modal-loading" style="
+                    position: absolute;
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-direction: column;
+                    gap: 12px;
+                    background: var(--bg, #fdf6e3);
+                    z-index: 1;
+                ">
+                    <div style="
+                        width: 40px;
+                        height: 40px;
+                        border: 4px solid var(--primary, #f5a623);
+                        border-top-color: transparent;
+                        border-radius: 50%;
+                        animation: ayudaSpinner 0.8s linear infinite;
+                    "></div>
+                    <div style="font-size: 13px; color: var(--text-light, #666);">
+                        Cargando ayuda...
+                    </div>
+                </div>
+                
+                <!-- Iframe -->
+                <iframe 
+                    id="ayuda-modal-iframe"
+                    src="${url}"
+                    title="Ayuda detallada de Panario"
+                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
+                    allow="clipboard-read; clipboard-write"
+                    style="
+                        width: 100%;
+                        height: 100%;
+                        border: none;
+                        display: block;
+                        position: relative;
+                        z-index: 2;
+                        opacity: 0;
+                        transition: opacity 0.3s ease;
+                    "
+                ></iframe>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Referencias
+    const iframe = document.getElementById('ayuda-modal-iframe');
+    const loading = document.getElementById('ayuda-modal-loading');
+    
+    // Cuando el iframe termine de cargar → ocultar loading
+    if (iframe) {
+        iframe.addEventListener('load', function() {
+            setTimeout(() => {
+                if (loading) loading.style.display = 'none';
+                iframe.style.opacity = '1';
+                console.log('📖 Ayuda cargada en modal');
+            }, 200);
+        });
+        
+        // Timeout de seguridad: si a los 5s no cargó, ocultar loading igual
+        setTimeout(() => {
+            if (loading && loading.style.display !== 'none') {
+                loading.style.display = 'none';
+                iframe.style.opacity = '1';
+                console.warn('⚠️ Timeout de carga del iframe — se muestra igualmente');
+            }
+        }, 5000);
+    }
+    
+    // Cerrar con click fuera del contenedor
+    modal.addEventListener('click', function(e) {
+        const container = document.getElementById('ayuda-modal-container');
+        if (e.target === modal || (container && !container.contains(e.target))) {
+            cerrarAyudaModal();
+        }
+    });
+    
+    // Cerrar con Escape
+    const escHandler = function(e) {
+        if (e.key === 'Escape') {
+            cerrarAyudaModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+    
+    // Bloquear scroll del body mientras el modal está abierto
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    
+    // Guardar estado para restaurarlo al cerrar
+    window._ayudaModalState = {
+        prevOverflow,
+        escHandler
+    };
+    
+    console.log('📖 Modal de ayuda abierto con URL:', url);
+}
+
+/**
+ * 🆕 Cierra el modal de ayuda.
+ */
+function cerrarAyudaModal() {
+    const modal = document.getElementById('ayuda-modal');
+    if (!modal) return;
+    
+    modal.style.animation = 'ayudaModalFadeOut 0.2s ease forwards';
+    
+    setTimeout(() => {
+        if (modal.parentNode) modal.remove();
+        
+        // Restaurar scroll del body
+        if (window._ayudaModalState) {
+            document.body.style.overflow = window._ayudaModalState.prevOverflow || '';
+            if (window._ayudaModalState.escHandler) {
+                document.removeEventListener('keydown', window._ayudaModalState.escHandler);
+            }
+            window._ayudaModalState = null;
+        }
+        
+        console.log('📖 Modal de ayuda cerrado');
+    }, 200);
+}
+
+/**
+ * 🆕 Imprime el contenido del iframe de la ayuda.
+ */
+function imprimirAyudaIframe() {
+    try {
+        const iframe = document.getElementById('ayuda-modal-iframe');
+        if (!iframe || !iframe.contentWindow) {
+            window.showToast('⚠️ La ayuda aún no está lista', 'warning', 3000);
+            return;
+        }
+        
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+    } catch (e) {
+        console.warn('⚠️ Error imprimiendo ayuda:', e);
+        window.showToast('❌ No se pudo imprimir la ayuda', 'error', 4000);
+    }
+}
+
+// Exponer globalmente
 window.abrirAyudaDetallada = abrirAyudaDetallada;
+window.abrirAyudaEnModal = abrirAyudaEnModal;
+window.cerrarAyudaModal = cerrarAyudaModal;
+window.imprimirAyudaIframe = imprimirAyudaIframe;
 
 // ============================================================
 // MENÚ PRINCIPAL DE AYUDA
@@ -174,15 +505,15 @@ function showHelpMenu() {
                     <span style="font-size: 16px;">▶</span>
                 </button>
 
-                <!-- 🆕 FASE 5 (#2): Ayuda Detallada -->
+                <!-- 🆕 FASE 5 (#2): Ayuda Detallada (AHORA ABRE EN MODAL) -->
                 <button onclick="abrirAyudaDetallada()" 
                         style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; border: none; border-radius: 10px; cursor: pointer; text-align: left; font-family: inherit; transition: transform 0.2s;">
                     <span style="font-size: 24px;">📖</span>
                     <div style="flex: 1;">
                         <div style="font-weight: 600; font-size: 14px;">Ayuda Detallada</div>
-                        <div style="font-size: 11px; opacity: 0.9;">Manual completo (nueva pestaña)</div>
+                        <div style="font-size: 11px; opacity: 0.9;">Manual completo (en esta ventana)</div>
                     </div>
-                    <span style="font-size: 16px;">↗</span>
+                    <span style="font-size: 16px;">▶</span>
                 </button>
 
                 <!-- Separador -->
@@ -291,9 +622,11 @@ function showReadmeModal() {
                     <li>🏷️ <strong>Productos:</strong> Artículos para la venta con precios</li>
                     <li>💰 <strong>Ventas:</strong> Registro con descuento automático de stock</li>
                     <li>📋 <strong>Pedidos:</strong> Reservas y pedidos personalizados</li>
+                    <li>⏰ <strong>Lista de espera:</strong> Gestión de clientes en cola</li>
                     <li>📊 <strong>Dashboard:</strong> Estadísticas y análisis del negocio</li>
                     <li>⚡ <strong>Corriente:</strong> Planificación según horarios eléctricos</li>
-                    <li>🔔 <strong>Notificaciones:</strong> Alertas persistentes</li>
+                    <li>🏆 <strong>Premios:</strong> Sistema de fidelización</li>
+                    <li>📅 <strong>Días sin ventas:</strong> Registro de inactividad</li>
                     <li>👥 <strong>Multiusuario:</strong> Varios usuarios por negocio</li>
                 </ul>
 
@@ -301,7 +634,7 @@ function showReadmeModal() {
                 <div style="background: var(--bg); padding: 12px; border-radius: 8px; font-size: 13px;">
                     <div style="display: flex; justify-content: space-between; padding: 2px 0;">
                         <span style="color: var(--text-light);">Versión:</span>
-                        <strong>2.1.1</strong>
+                        <strong>2.1.6</strong>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 2px 0;">
                         <span style="color: var(--text-light);">Estado:</span>
@@ -439,7 +772,7 @@ function showCreditsModal() {
 
             <div style="background: linear-gradient(135deg, #0ea5e915 0%, #0284c715 100%); border: 1px solid #0ea5e9; border-radius: 10px; padding: 14px; margin-bottom: 16px;">
                 <div style="font-size: 13px; font-weight: 600; color: #0ea5e9; margin-bottom: 4px;">
-                    🍞 Panario v2.1.1
+                    🍞 Panario v2.1.6
                 </div>
                 <div style="font-size: 12px; color: var(--text-light);">
                     "Tu panadería en orden"
@@ -849,7 +1182,7 @@ function initHelpButton() {
 }
 
 // ============================================================
-// MOSTRAR FAQ (AMPLIADA - 60+ preguntas)
+// MOSTRAR FAQ
 // ============================================================
 
 function showFAQModal() {
@@ -910,6 +1243,8 @@ function showFAQModal() {
         { q: '¿Cómo cobro una deuda?', a: 'En Ventas, ve al filtro "💳 Deudas", encuentra al cliente y haz clic en "💰 Cobrar".' },
         { q: '¿Puedo anular una venta?', a: 'Sí. En el detalle de la venta, clic en "🚫 Anular". Se repondrá el stock automáticamente.' },
         { q: '¿Cómo edito el nombre del cliente?', a: 'Al editar una venta, el campo "👤 Comprador" es editable. Si la venta está vinculada a un pedido, se desvinculará.' },
+        { q: '¿Para qué sirve registrar un día sin ventas?', a: 'Sirve para llevar un historial y entender mejor las estadísticas. Sin esta información, un día sin ventas parecería simplemente "un mal día" cuando en realidad no abriste.' },
+        { q: '¿Qué motivos puedo usar para un día sin ventas?', a: 'Hay 8 predefinidos: ⚡ Apagón, 🛒 Falta de insumos, 🎉 Feriado, 🏖️ Vacaciones, 🏥 Enfermedad, 🔧 Mantenimiento, 🌧️ Mal clima, y 🔄 Otro.' },
 
         // ============ PEDIDOS ============
         { q: '¿Cuál es la diferencia entre pedido y venta?', a: 'Un pedido es una solicitud de un cliente. Una venta es una transacción completada. Los pedidos no son deudas hasta que se entregan.' },
@@ -938,7 +1273,7 @@ function showFAQModal() {
         { q: '¿Puedo cambiar el sonido de las notificaciones?', a: 'Sí. Ve a tu Perfil → 🔔 Sonido de notificaciones. Puedes elegir entre 5 sonidos embutidos o desactivarlo.' },
         { q: '¿Por qué no se repiten las notificaciones?', a: 'Una vez que abres el modal de notificaciones, se marcan como vistas y no se vuelven a mostrar hasta que sean necesarias de nuevo.' },
         { q: '¿Cómo abro el Centro de Ayuda?', a: 'Haz clic en el botón ❓ de la barra superior. Se abrirá un menú con Guía Rápida, Tutorial, FAQ, Ayuda Detallada, Léeme y Créditos.' },
-        { q: '¿Qué es la "Ayuda detallada"?', a: 'Es un manual completo en formato web (archivo ayuda-panario.html) que se abre en una nueva pestaña. Contiene búsqueda, temas claro/oscuro y todas las secciones.' },
+        { q: '¿Qué es la "Ayuda detallada"?', a: 'Es un manual completo que se abre DENTRO de la app (en esta misma ventana), respetando tu tema actual y abriéndose en la sección del módulo donde estés.' },
         { q: '¿Puedo volver a ver el tutorial?', a: 'Sí. Ve a Ayuda → Tutorial Interactivo. Si ya lo completaste, la app te preguntará si quieres volver a verlo.' },
         { q: '¿Cómo contacto al desarrollador?', a: 'En Ayuda → Créditos. WhatsApp: +53 55031725, Email: 3sayricardo@gmail.com.' },
 
@@ -951,8 +1286,7 @@ function showFAQModal() {
         // ============ HERRAMIENTAS ============
         { q: '¿Qué hace "Reiniciar base de datos"?', a: 'Elimina TODOS los datos excepto usuarios y temas. Se conservan las cuentas de usuario para que puedas volver a entrar. Contraseña: "panario".' },
         { q: '¿Qué diferencia hay entre "Limpiar datos eliminados" y "Eliminación por error"?', a: 'Ambas son destructivas. "Limpiar datos eliminados" borra todos los registros con soft-delete. "Eliminación por error" permite seleccionar pedidos o ventas específicos para eliminar permanentemente.' },
-        { q: '¿Cómo fusiono dos bases de datos?', a: 'Ve a ⚙️ Herramientas → 📥 Importar → 🔀 Fusionar bases de datos. Los registros nuevos se añaden, los existentes se comparan por UUID (gana el más reciente).' },
-        { q: '¿Qué son los días sin ventas?', a: 'Son días en los que no tuviste actividad (por ejemplo, por un apagón). Registrarlos te permite llevar un historial y excluirlos de las estadísticas.' }
+        { q: '¿Cómo fusiono dos bases de datos?', a: 'Ve a ⚙️ Herramientas → 📥 Importar → 🔀 Fusionar bases de datos. Los registros nuevos se añaden, los existentes se comparan por UUID (gana el más reciente).' }
     ];
 
     const existingModal = document.getElementById('faq-modal');
@@ -1061,7 +1395,11 @@ window.HelpModule = {
     initHelpButton: initHelpButton,
     toggleFAQ: toggleFAQ,
     // 🆕 FASE 5 (#2)
-    abrirAyudaDetallada: abrirAyudaDetallada
+    abrirAyudaDetallada: abrirAyudaDetallada,
+    // 🆕 FASE AYUDA MODAL
+    abrirAyudaEnModal: abrirAyudaEnModal,
+    cerrarAyudaModal: cerrarAyudaModal,
+    imprimirAyudaIframe: imprimirAyudaIframe
 };
 
 // Hacerlas globales también para uso directo
@@ -1072,7 +1410,9 @@ window.showFAQModal = showFAQModal;
 window.showQuickStartGuide = showQuickStartGuide;
 window.startTour = startTour;
 window.showContextualHelp = showContextualHelp;
-// 🆕 FASE 5 (#2)
 window.abrirAyudaDetallada = abrirAyudaDetallada;
+window.abrirAyudaEnModal = abrirAyudaEnModal;
+window.cerrarAyudaModal = cerrarAyudaModal;
+window.imprimirAyudaIframe = imprimirAyudaIframe;
 
-console.log('📦 Help Module cargado correctamente v2.1.1 (FASE 5 #2: botón Ayuda Detallada + #3: FAQs ampliadas)');
+console.log('📦 Help Module cargado correctamente v2.1.6 (FASE AYUDA MODAL: ayuda detallada en iframe)');
