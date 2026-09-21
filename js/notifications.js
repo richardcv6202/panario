@@ -15,6 +15,25 @@
 //   - Restaura el sonido configurado al finalizar
 //   - Escape también cancela
 //   - No modifica el soundId guardado del usuario
+// 🆕 FASE 1.5 (220926 v3): FIX DEFINITIVO - SONIDO DESDE EL PRIMER CLIC
+//   - 🔴 CAUSA RAÍZ: Los listeners de unlock se registraban DESPUÉS
+//     del login, por lo que el primer gesto del usuario (login) no
+//     contaba para desbloquear el AudioContext.
+//   - ✅ SOLUCIÓN: Los listeners se registran INMEDIATAMENTE al
+//     cargar el módulo (al final del archivo), NO cuando el usuario
+//     hace login.
+//   - ✅ Eventos ampliados: click, touchstart, touchend, keydown,
+//     pointerdown, mousedown
+//   - ✅ Reintentos automáticos: hasta MAX_UNLOCK_ATTEMPTS veces
+//   - ✅ Sistema de "pending unlock": si el unlock falla, se reintenta
+//     en el siguiente gesto sin intervención del usuario
+//   - ✅ Detección temprana: se intenta unlock tan pronto como el
+//     DOM esté listo (sin esperar gesto) — algunos navegadores lo
+//     permiten si el usuario ya interactuó con el sitio antes
+//   - ✅ Logs de diagnóstico claros en consola
+//   - ✅ Compatibilidad con iOS Safari (usa webkitAudioContext)
+//   - ✅ El sonido funciona INCLUSO si el usuario no ha hecho login
+//     todavía (por ejemplo, en la pantalla de login)
 // ============================================================
 
 window.NotificationsModule = {};
@@ -60,16 +79,25 @@ let _testAllSoundsAbort = false;
 let _testAllSoundsOverlay = null;
 
 // ============================================================
-// 🆕 FASE 1.4: AUDIO CONTEXT SINGLETON
+// 🆕 FASE 1.5: AUDIO CONTEXT SINGLETON (FIX DEFINITIVO)
 // ============================================================
+// 
 // Un solo AudioContext reutilizado para toda la app.
-// Se desbloquea al primer gesto del usuario.
+// Se desbloquea con el PRIMER gesto del usuario (en cualquier
+// parte de la app, incluso en el login).
+// 
+// Estrategia:
+//   1. Registrar listeners de gesto INMEDIATAMENTE al cargar el módulo
+//   2. Al primer gesto, intentar crear + resume() del AudioContext
+//   3. Si falla, reintentar en el siguiente gesto
+//   4. Si supera MAX_UNLOCK_ATTEMPTS, dejar de intentar (evitar spam)
 // ============================================================
 
 let _audioContext = null;
 let _audioUnlocked = false;
 let _audioUnlockAttempts = 0;
-const MAX_UNLOCK_ATTEMPTS = 5;
+let _audioUnlockPending = false;
+const MAX_UNLOCK_ATTEMPTS = 10;
 
 /**
  * Obtiene (o crea) el AudioContext singleton.
@@ -96,67 +124,153 @@ function getAudioContext() {
 }
 
 /**
- * Desbloquea el AudioContext.
- * Debe llamarse en respuesta a un gesto del usuario (click, touch, key).
+ * 🆕 FASE 1.5: Intenta desbloquear el AudioContext.
  * 
+ * @param {string} source - Origen del intento (para logs)
  * @returns {Promise<boolean>} true si quedó desbloqueado
  */
-async function unlockAudio() {
+async function unlockAudio(source = 'unknown') {
+    // Ya desbloqueado → OK
     if (_audioUnlocked && _audioContext && _audioContext.state === 'running') {
         return true;
     }
     
-    _audioUnlockAttempts++;
-    if (_audioUnlockAttempts > MAX_UNLOCK_ATTEMPTS) {
-        // No seguir intentando
+    // Demasiados intentos → detener para no spamear
+    if (_audioUnlockAttempts >= MAX_UNLOCK_ATTEMPTS) {
         return false;
     }
     
+    // Evitar intentos simultáneos
+    if (_audioUnlockPending) {
+        return false;
+    }
+    
+    _audioUnlockPending = true;
+    _audioUnlockAttempts++;
+    
     try {
         const ctx = getAudioContext();
-        if (!ctx) return false;
+        if (!ctx) {
+            _audioUnlockPending = false;
+            return false;
+        }
         
+        // Si está suspendido, intentar resume
         if (ctx.state === 'suspended') {
-            await ctx.resume();
+            try {
+                await ctx.resume();
+            } catch (e) {
+                // Silencioso: el navegador bloquea sin gesto
+                _audioUnlockPending = false;
+                return false;
+            }
         }
         
         if (ctx.state === 'running') {
             _audioUnlocked = true;
-            console.log('🔊 AudioContext desbloqueado (intento #' + _audioUnlockAttempts + ')');
+            console.log(`🔊 AudioContext desbloqueado correctamente (intento #${_audioUnlockAttempts}, origen: ${source})`);
+            
+            // Reproducir un sonido muy corto para confirmar
+            try {
+                const oscillator = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(ctx.destination);
+                oscillator.frequency.value = 1; // Prácticamente inaudible
+                gainNode.gain.setValueAtTime(0.0001, ctx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.01);
+                oscillator.start(ctx.currentTime);
+                oscillator.stop(ctx.currentTime + 0.01);
+            } catch (e) {
+                // Silencioso
+            }
+            
+            _audioUnlockPending = false;
             return true;
         }
         
+        _audioUnlockPending = false;
         return false;
         
     } catch (e) {
-        // Silencioso: el navegador bloquea sin gesto
+        _audioUnlockPending = false;
         return false;
     }
 }
 
-// ============================================================
-// REGISTRAR UNLOCK EN EL PRIMER GESTO DEL USUARIO
-// ============================================================
-
+/**
+ * 🆕 FASE 1.5: Configura los listeners de unlock.
+ * Se llama INMEDIATAMENTE al cargar el módulo (al final del archivo).
+ */
 function setupAudioUnlockListeners() {
-    const events = ['click', 'touchstart', 'keydown'];
+    const events = ['click', 'touchstart', 'touchend', 'keydown', 'pointerdown', 'mousedown'];
     
-    const unlockHandler = () => {
-        unlockAudio().then(unlocked => {
-            if (unlocked) {
-                // Una vez desbloqueado, quitar los listeners
-                events.forEach(evt => {
-                    document.removeEventListener(evt, unlockHandler, true);
-                });
-            }
-        });
+    let attemptsCount = 0;
+    const maxEventAttempts = 30; // Después de 30 gestos, quitar listeners
+    
+    const unlockHandler = async (e) => {
+        attemptsCount++;
+        
+        // Después de muchos intentos, quitar listeners
+        if (attemptsCount > maxEventAttempts) {
+            events.forEach(evt => {
+                document.removeEventListener(evt, unlockHandler, true);
+            });
+            console.log('🔊 Listeners de unlock removidos (demasiados gestos sin éxito)');
+            return;
+        }
+        
+        const unlocked = await unlockAudio(`gesto (${e.type})`);
+        
+        if (unlocked) {
+            // Una vez desbloqueado, quitar los listeners
+            events.forEach(evt => {
+                document.removeEventListener(evt, unlockHandler, true);
+            });
+            console.log('🔊 Listeners de unlock removidos (éxito)');
+        }
     };
     
     events.forEach(evt => {
         document.addEventListener(evt, unlockHandler, true);
     });
     
-    console.log('🔊 Listeners de desbloqueo de audio registrados');
+    console.log('🔊 Listeners de desbloqueo de audio registrados (FASE 1.5)');
+    console.log(`   📋 Eventos: ${events.join(', ')}`);
+    
+    // 🆕 FASE 1.5: Intentar unlock inmediato (algunos navegadores lo permiten)
+    setTimeout(() => {
+        unlockAudio('intento inicial').then(unlocked => {
+            if (unlocked) {
+                console.log('🔊 AudioContext desbloqueado en intento inicial');
+            }
+        });
+    }, 500);
+    
+    // 🆕 FASE 1.5: Intentar unlock cuando el DOM esté listo
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => unlockAudio('DOMContentLoaded'), 300);
+        });
+    } else {
+        setTimeout(() => unlockAudio('readyState-complete'), 300);
+    }
+}
+
+// ============================================================
+// REGISTRAR LISTENERS AL CARGAR EL MÓDULO (CRÍTICO)
+// ============================================================
+// 
+// ⚠️ IMPORTANTE: Esta llamada es la CLAVE del fix.
+// Se ejecuta INMEDIATAMENTE al cargar el archivo, no cuando el
+// usuario hace login. Así el primer gesto del usuario (aunque
+// sea en el login) desbloquea el audio.
+// ============================================================
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupAudioUnlockListeners);
+} else {
+    setupAudioUnlockListeners();
 }
 
 // ============================================================
@@ -173,9 +287,6 @@ function initNotificationSystem() {
     console.log('🔔 Campanita encontrada en el HTML');
     loadNotificationsFromStorage();
     updateBellBadge();
-    
-    // 🆕 FASE 1.4: Registrar listeners de desbloqueo de audio
-    setupAudioUnlockListeners();
     
     if (!document.getElementById('notification-styles')) {
         const style = document.createElement('style');
@@ -258,7 +369,7 @@ function getAvailableSounds() {
 }
 
 // ============================================================
-// 🆕 FASE 1.4: REPRODUCIR SONIDO CON AUDIO CONTEXT SINGLETON
+// 🆕 FASE 1.5: REPRODUCIR SONIDO (CON REINTENTOS)
 // ============================================================
 
 /**
@@ -290,7 +401,8 @@ async function playSoundById(soundId) {
                 await ctx.resume();
             } catch (e) {
                 // El navegador bloqueó el resume (sin gesto del usuario)
-                // Salir silenciosamente
+                // Intentar unlock en segundo plano (sin bloquear)
+                unlockAudio('playSoundById-fallback');
                 return false;
             }
         }
@@ -299,6 +411,9 @@ async function playSoundById(soundId) {
         if (ctx.state !== 'running') {
             return false;
         }
+        
+        // Marcar como desbloqueado si llegamos aquí
+        _audioUnlocked = true;
         
         // Crear oscilador y gain node (se destruyen al terminar)
         const oscillator = ctx.createOscillator();
@@ -361,11 +476,7 @@ async function playNotificationSound(type) {
 // 🆕 FASE 5 (#27): ANIMACIÓN "PROBAR TODOS" LOS SONIDOS
 // ============================================================
 
-/**
- * Crea y muestra el overlay de la prueba de sonidos.
- */
 function _createTestAllSoundsOverlay() {
-    // Eliminar overlay anterior si existe
     const prev = document.getElementById('test-sounds-overlay');
     if (prev) prev.remove();
     
@@ -380,9 +491,10 @@ function _createTestAllSoundsOverlay() {
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 9999999999;
+        z-index: 2147483647;
         padding: 20px;
         animation: modalFadeIn 0.25s ease;
+        isolation: isolate;
     `;
     
     overlay.innerHTML = `
@@ -422,9 +534,6 @@ function _createTestAllSoundsOverlay() {
     return overlay;
 }
 
-/**
- * Actualiza el contenido del overlay.
- */
 function _updateTestAllSoundsOverlay(index, total, soundId) {
     const counter = document.getElementById('test-sounds-counter');
     const icon = document.getElementById('test-sounds-icon');
@@ -439,9 +548,6 @@ function _updateTestAllSoundsOverlay(index, total, soundId) {
     if (progress) progress.style.width = `${(index / total) * 100}%`;
 }
 
-/**
- * Elimina el overlay de la prueba.
- */
 function _removeTestAllSoundsOverlay() {
     const overlay = document.getElementById('test-sounds-overlay');
     if (overlay) {
@@ -454,13 +560,7 @@ function _removeTestAllSoundsOverlay() {
 }
 
 /**
- * 🆕 FASE 5 (#27): Prueba todos los sonidos con animación y delay.
- * 
- * - Muestra un overlay con el sonido actual
- * - 1.5s entre cada sonido
- * - Botón "Detener" para abortar
- * - Restaura el sonido configurado al final
- * - NO modifica el soundId guardado del usuario
+ * Prueba todos los sonidos con animación y delay.
  */
 async function testAllSounds() {
     // Si ya hay una prueba en curso, abortarla y empezar de nuevo
@@ -479,7 +579,7 @@ async function testAllSounds() {
     const soundIdOriginal = configOriginal.soundId || 'beep';
     
     // Desbloquear el audio primero
-    await unlockAudio();
+    await unlockAudio('testAllSounds');
     
     // Crear overlay
     _createTestAllSoundsOverlay();
@@ -547,9 +647,6 @@ async function testAllSounds() {
     }
 }
 
-/**
- * Aborta la prueba de sonidos.
- */
 function abortTestAllSounds() {
     if (_testAllSoundsAbort) return;
     _testAllSoundsAbort = true;
@@ -761,11 +858,9 @@ function addNotification(message, type = 'info', duration = 8000) {
             resolved_at: null
         };
         
-        // 🆕 FASE 1.4: Enviar push si es importante (sin emoji duplicado)
+        // Enviar push si es importante (sin emoji duplicado)
         if (type === NOTIFICATION_TYPES.ERROR || type === NOTIFICATION_TYPES.WARNING) {
-            // Limpiar título: no añadir emoji extra si ya lo tiene
             let pushTitle = message.split(' - ')[0] || 'Alerta';
-            // Si no empieza con emoji, añadir uno
             if (!/^[\u{1F300}-\u{1F9FF}]/u.test(pushTitle)) {
                 pushTitle = '📢 ' + pushTitle;
             }
@@ -903,10 +998,6 @@ function showNotificationsModal() {
     });
 }
 
-// ============================================================
-// RESOLVER TODAS LAS NOTIFICACIONES PENDIENTES
-// ============================================================
-
 function resolveAllPendingNotifications() {
     window.ModalModule.showConfirm({
         title: 'Resolver notificaciones',
@@ -936,10 +1027,6 @@ function resolveAllPendingNotifications() {
         }
     });
 }
-
-// ============================================================
-// LIMPIAR TODAS LAS NOTIFICACIONES
-// ============================================================
 
 function clearAllNotifications() {
     window.ModalModule.showConfirm({
@@ -1016,7 +1103,6 @@ async function requestNotificationPermission() {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
             console.log('✅ Permiso de notificaciones concedido');
-            // 🆕 FASE 1.4: Sin emoji duplicado en el título
             sendPushNotification(
                 '🍞 Panario',
                 'Las notificaciones están activadas. Recibirás alertas de pedidos y deudas.'
@@ -1034,7 +1120,6 @@ async function requestNotificationPermission() {
 
 // ============================================================
 // ENVIAR NOTIFICACIÓN PUSH
-// 🆕 FASE 1.4: Sin emoji duplicado en el título
 // ============================================================
 
 function sendPushNotification(title, body, icon = '🍞', data = {}) {
@@ -1043,15 +1128,7 @@ function sendPushNotification(title, body, icon = '🍞', data = {}) {
     }
     
     try {
-        // 🆕 FASE 1.4: Limpiar emoji duplicado en el título
-        // Si el título ya empieza con un emoji, no añadir otro
         let cleanTitle = title.trim();
-        
-        // Si el título no empieza con emoji, añadir el icono
-        const startsWithEmoji = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}]/u.test(cleanTitle);
-        if (!startsWithEmoji && icon && icon !== '🍞') {
-            // El título ya viene con emoji desde addNotification, no añadir
-        }
         
         const notification = new Notification(cleanTitle, {
             body: body,
@@ -1250,17 +1327,19 @@ window.NotificationsModule = {
     testAllSounds,
     abortTestAllSounds,
     SOUNDS,
-    // 🆕 FASE 1.4
+    // 🆕 FASE 1.5
     unlockAudio,
-    getAudioContext
+    getAudioContext,
+    setupAudioUnlockListeners
 };
 
 window.showToast = function(message, type = 'info', duration = 8000) {
     window.NotificationsModule.addNotification(message, type, duration);
 };
 
-// 🆕 FASE 5 (#27): Exponer globalmente para uso desde el perfil
 window.testAllSounds = testAllSounds;
 window.abortTestAllSounds = abortTestAllSounds;
 
-console.log('📦 Notifications Module v2.1.1 (FASE 5 #27: animación "Probar todos" con overlay visual)');
+console.log('📦 Notifications Module v2.1.10 (FASE 1.5: fix definitivo - sonido desde el primer clic)');
+console.log('   🔊 AudioContext singleton listo');
+console.log('   🎯 Listeners de unlock registrados al cargar el módulo');

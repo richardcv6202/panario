@@ -18,80 +18,59 @@
 // AÑADIDO FASE A.4 (170926 v3):
 //   - viewOrder() muestra sección de Auditoría
 // AÑADIDO FASE 1.2 (190926 v3):
-//   - updateOrderStatusAndReload() REFACTORIZADA:
-//     * Pide confirmación ANTES de cerrar modales
-//     * Cierra el modal de vista tras confirmar
-//     * Llama a updateOrderStatus()
-//     * Si hay stockWarning, muestra modal informativo
-//     * Solo refresca si fue exitoso
+//   - updateOrderStatusAndReload() REFACTORIZADA
 //   - Nueva función mostrarAlertaStockWarning()
-//   - Eliminado uso frágil de waitForModalRemoval en el flujo de entrega
-//   - Logs detallados en cada paso
 // CORREGIDO FASE 2.1 FIX (200926):
-//   - updateOrderTotal() ahora está DEFINIDA GLOBALMENTE al principio
-//     del archivo (antes estaba dentro de showOrderForm() y fallaba
-//     al invocarse desde otros puntos como removeOrderItem o clearOrderItems)
-//   - Eliminada la definición local duplicada dentro de showOrderForm()
-//   - Eliminada la asignación duplicada window.updateOrderTotal al final
-//     de showOrderForm()
+//   - updateOrderTotal() DEFINIDA GLOBALMENTE al principio
 // 🆕 FIX 2 (190926 v4):
-//   - normalizarFechaVenta() helper (fallback defensivo por si orders.js no cargó)
-//   - submitOrderForm() normaliza deliveryDate antes de enviar
-//   - Defensa en profundidad: orders.js también normaliza
+//   - normalizarFechaVenta() helper (fallback defensivo)
 // 🆕 FASE 2.2 (200926 v5):
-//   - NUEVO: Botón "⏰ Lista de espera" en el header (accesible a todos)
-//   - NUEVA: showWaitingListManagerModal() — modal completo de gestión
-//     * Lista en vivo con posición, cliente, producto, cantidad, total
-//     * Procesar → venta (individual)
-//     * Cancelar → sin venta (individual)
-//     * Eliminar → quitar de la lista (individual)
-//     * Limpiar lista → cancela TODOS (con doble confirmación)
-//     * Reporte PDF → generateWaitingListReport()
-//   - NO modifica el flujo existente de pedidos ni reservas por período
+//   - NUEVO: Botón "⏰ Lista de espera" en el header
+//   - NUEVA: showWaitingListManagerModal()
+// 🆕 FASE 2.2 FIX (200926 v6):
+//   - Reestructurado el layout del modal de gestión de lista
+// 🆕 FASE 7 (Entrega 5 - 200926 v7):
+//   - NUEVO: Validación de cantidad de producción al crear pedidos
+//   - NUEVO: Horario de producción en tarjeta de fecha
+//   - NUEVO: getProduccionInfo() y renderProduccionInfoHTML()
+// 🆕 FASE 7.2 (210926 v8): CANTIDAD DE PRODUCCIÓN CON DECIMALES
+//   - getProduccionInfo() usa parseFloat() para cantidad
+//   - renderProduccionInfoHTML() usa formatearCantidadProduccion()
+//   - Validación al crear pedidos con decimales
+//   - Vista previa de reserva por período con decimales
+// 🆕 FASE 7.3 (210926 v9): MOSTRAR PRODUCCIÓN + BLOQUEO DEFINITIVO
+//   - renderProduccionInfoHTML() ahora se invoca SIEMPRE en loadOrders()
+//   - El bloqueo al crear pedidos usa getProduccionInfo() correctamente
+//   - Detección robusta: si DBModule/ui-settings no está cargado, no falla
+//   - El modal de "Pedidos completos" muestra info decimal
+//   - Vista previa de reserva por período muestra "Completo n/m"
+//   - Validación también en modo edición (si cambia la fecha)
+//   - Mejora del layout de la tarjeta de fecha con producción
+//   - Console.logs de diagnóstico para producción
 // ============================================================
 
 // ============================================================
-// 🆕 FIX 2: NORMALIZACIÓN DE FECHAS (fallback defensivo)
-// ============================================================
-// 
-// Esta función replica la de orders.js y sales.js. Se define aquí
-// como fallback por si ui-orders.js se carga antes que orders.js
-// o por si algún navegador tiene caché de una versión antigua.
-// 
-// En el flujo normal, OrdersModule.saveOrder() ya normaliza la fecha.
-// Aquí la normalizamos ANTES de pasarla, para que el log de la UI
-// también muestre la fecha correcta y por doble seguridad.
+// FIX 2: NORMALIZACIÓN DE FECHAS (fallback defensivo)
 // ============================================================
 
 if (typeof window.normalizarFechaVenta !== 'function') {
     window.normalizarFechaVenta = function(fechaInput) {
-        // Si no hay fecha, usar hora actual
         if (!fechaInput) {
             return new Date().toISOString();
         }
-        
-        // Si ya viene con hora (ISO completo), respetarla
         if (typeof fechaInput === 'string' && fechaInput.includes('T')) {
             return fechaInput;
         }
-        
-        // Si viene como YYYY-MM-DD (de <input type="date">)
         const fechaStr = String(fechaInput).trim();
-        
-        // Validar formato YYYY-MM-DD
         const match = fechaStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
         if (!match) {
             console.warn('⚠️ [normalizarFechaVenta] Formato no reconocido:', fechaInput);
             return new Date().toISOString();
         }
-        
-        // ¿Es hoy?
         const hoyStr = new Date().toISOString().split('T')[0];
         if (fechaStr === hoyStr) {
             return new Date().toISOString();
         }
-        
-        // Otra fecha → mediodía UTC
         return `${fechaStr}T12:00:00.000Z`;
     };
 }
@@ -103,18 +82,7 @@ if (typeof window.normalizarFechaVenta !== 'function') {
 const ORDERS_MODAL_Z_INDEX = 9999999998;
 
 // ============================================================
-// 🆕 FIX: DEFINICIÓN GLOBAL DE updateOrderTotal
-// ============================================================
-// Esta función estaba declarada dentro de showOrderForm() y expuesta
-// al final de esa función mediante `window.updateOrderTotal = updateOrderTotal;`.
-// El problema: si se invocaba ANTES de abrir el form (por ejemplo, desde
-// un evento residual, o desde removeOrderItem en un modal ya cerrado),
-// fallaba con "updateOrderTotal is not defined".
-// 
-// SOLUCIÓN: definirla globalmente al principio del archivo. Como usa
-// querySelector para encontrar los elementos (.order-item, .item-quantity,
-// .item-price, #order-total-display), funciona perfectamente cuando
-// el form está abierto y no rompe cuando está cerrado.
+// DEFINICIÓN GLOBAL DE updateOrderTotal
 // ============================================================
 
 window.updateOrderTotal = function() {
@@ -132,6 +100,77 @@ window.updateOrderTotal = function() {
         console.warn('⚠️ [updateOrderTotal] Error:', e.message);
     }
 };
+
+// ============================================================
+// 🆕 FASE 7.3: HELPER PARA OBTENER INFO DE PRODUCCIÓN
+// ============================================================
+//
+// Esta función es DEFENSIVA: si ui-settings.js no está cargado o
+// no tiene las funciones de producción, devuelve un objeto vacío
+// con tieneProduccion: false para no romper la UI.
+// ============================================================
+
+/**
+ * Obtiene la información de producción para una fecha.
+ * 
+ * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
+ * @returns {Object} { tieneProduccion, bloqueTexto, cantidadProduccion, 
+ *                     pedidos, ventas, disponibles, notas }
+ */
+function getProduccionInfo(fechaISO) {
+    try {
+        // Verificar que las funciones de ui-settings.js estén disponibles
+        if (typeof window.getProduccionConfig !== 'function' || 
+            typeof window.contarPedidosYVentasFecha !== 'function') {
+            return { tieneProduccion: false, pedidos: 0, ventas: 0, disponibles: 0, cantidadProduccion: 0 };
+        }
+        
+        const config = window.getProduccionConfig(fechaISO);
+        const conteo = window.contarPedidosYVentasFecha(fechaISO);
+        
+        if (!config) {
+            return { tieneProduccion: false, ...conteo };
+        }
+        
+        // Formatear el horario del bloque
+        const bloques = window.CorrienteUtils ? window.CorrienteUtils.getBloques(fechaISO) : [];
+        let bloqueTexto = '';
+        if (bloques && bloques.length >= config.bloque_index) {
+            const bloque = bloques[config.bloque_index - 1];
+            const fechaObj = new Date(fechaISO + 'T00:00:00');
+            const dia = String(fechaObj.getDate()).padStart(2, '0');
+            const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
+            bloqueTexto = `${dia}/${mes} de ${bloque.inicioStr} a ${bloque.finStr}`;
+        }
+        
+        return {
+            tieneProduccion: true,
+            bloqueTexto,
+            cantidadProduccion: parseFloat(config.cantidad_produccion) || 0,
+            notas: config.notas,
+            ...conteo
+        };
+    } catch (e) {
+        console.warn('⚠️ Error obteniendo info de producción:', e);
+        return { tieneProduccion: false, pedidos: 0, ventas: 0, disponibles: 0, cantidadProduccion: 0 };
+    }
+}
+
+window.getProduccionInfo = getProduccionInfo;
+
+// ============================================================
+// 🆕 FASE 7.3: FORMATEO DE CANTIDAD (fallback defensivo)
+// ============================================================
+
+if (typeof window.formatearCantidadProduccion !== 'function') {
+    window.formatearCantidadProduccion = function(cantidad) {
+        if (cantidad === null || cantidad === undefined) return '—';
+        const num = parseFloat(cantidad);
+        if (isNaN(num)) return '—';
+        if (num === Math.floor(num)) return String(Math.floor(num));
+        return num.toFixed(2).replace(/\.?0+$/, '');
+    };
+}
 
 // ============================================================
 // HELPER: Espera a que un modal se elimine del DOM
@@ -227,7 +266,7 @@ function renderAuditoriaHTML(entity) {
 }
 
 // ============================================================
-// 🆕 FASE 1.2: MODAL DE ADVERTENCIA POR FALLO DE STOCK
+// MODAL DE ADVERTENCIA POR FALLO DE STOCK
 // ============================================================
 
 async function mostrarAlertaStockWarning(orderId, stockWarning) {
@@ -253,28 +292,13 @@ async function mostrarAlertaStockWarning(orderId, stockWarning) {
 }
 
 // ============================================================
-// 🆕 FASE 2.2: MODAL DE GESTIÓN DE LISTA DE ESPERA
+// MODAL DE GESTIÓN DE LISTA DE ESPERA
 // ============================================================
 
-/**
- * Abre el modal de gestión completa de la lista de espera.
- * 
- * Funcionalidades:
- *  - Ver lista en vivo de clientes en espera
- *  - Procesar cliente → venta (individual)
- *  - Cancelar pedido → sin venta (individual)
- *  - Eliminar de la lista → quitar sin cancelar pedido (individual)
- *  - Limpiar toda la lista → cancela TODOS los pedidos (global)
- *  - Reporte PDF de la lista actual
- * 
- * Accesible a TODOS los usuarios (no solo admin).
- */
 async function showWaitingListManagerModal() {
-    // Cerrar cualquier otro modal abierto
     const existingModal = document.getElementById('waiting-manager-modal');
     if (existingModal) existingModal.remove();
     
-    // Verificar módulo disponible
     if (!window.OrdersModule) {
         window.showToast('❌ Módulo de pedidos no disponible', 'error');
         return;
@@ -293,15 +317,12 @@ async function showWaitingListManagerModal() {
     
     window._waitingManagerModal = modal;
     
-    // Render inicial (con loading)
     await renderWaitingManagerContent();
     
-    // Cierre con click fuera
     modal.addEventListener('click', (e) => {
         if (e.target === modal) closeWaitingManagerModal();
     });
     
-    // Cierre con Escape
     const escHandler = function(e) {
         if (e.key === 'Escape') {
             closeWaitingManagerModal();
@@ -311,24 +332,17 @@ async function showWaitingListManagerModal() {
     document.addEventListener('keydown', escHandler);
 }
 
-/**
- * Renderiza (o re-renderiza) el contenido del modal de gestión de lista.
- * Se llama al abrir y después de cada acción para refrescar la lista.
- */
 async function renderWaitingManagerContent() {
     const modal = document.getElementById('waiting-manager-modal');
     if (!modal) return;
     
     try {
-        // Obtener la lista actualizada
         const lista = await window.OrdersModule.getWaitingListWithDetails();
         
-        // Calcular totales
         const totalItems = lista.length;
         const totalCantidad = lista.reduce((sum, item) => sum + (item.quantity || 0), 0);
         const totalMonto = lista.reduce((sum, item) => sum + (item.order_total || 0), 0);
         
-        // Construir lista HTML
         let listaHtml = '';
         
         if (lista.length === 0) {
@@ -349,62 +363,59 @@ async function renderWaitingManagerContent() {
                 
                 return `
                     <div class="waiting-item" data-order-id="${item.order_id}" 
-                         style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: var(--bg); border-radius: 10px; border-left: 4px solid #f59e0b; margin-bottom: 8px;">
+                         style="display: flex; align-items: stretch; gap: 10px; padding: 12px; background: var(--bg); border-radius: 10px; border-left: 4px solid #f59e0b; margin-bottom: 8px;">
                         
-                        <!-- POSICIÓN -->
-                        <div style="background: #f59e0b; color: #fff; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0;">
-                            ${item.position}
+                        <div style="background: #f59e0b; color: #fff; width: 44px; min-width: 44px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <span style="font-size: 9px; opacity: 0.9;">POS</span>
+                            <span style="font-weight: 700; font-size: 18px;">${item.position}</span>
                         </div>
                         
-                        <!-- INFO -->
-                        <div style="flex: 1; min-width: 0;">
-                            <div style="font-weight: 600; font-size: 15px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                👤 ${item.client_name || 'Cliente sin nombre'}
+                        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;">
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                <span style="font-weight: 700; font-size: 15px; color: var(--text);">👤 ${item.client_name || 'Cliente sin nombre'}</span>
+                                ${item.client_phone ? `<span style="font-size: 12px; color: var(--text-light); background: var(--bg-card); padding: 2px 8px; border-radius: 6px;">📞 ${item.client_phone}</span>` : ''}
                             </div>
-                            ${item.client_phone ? `<div style="font-size: 12px; color: var(--text-light);">📞 ${item.client_phone}</div>` : ''}
-                            <div style="font-size: 12px; color: var(--text-light); margin-top: 4px;">
-                                📦 ${item.product_name || 'Producto'} <strong>× ${cantidad}</strong>
+                            
+                            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px;">
+                                <span style="color: var(--text);">📦 <strong>${item.product_name || 'Producto'}</strong></span>
+                                <span style="color: #3b82f6; background: #3b82f620; padding: 2px 8px; border-radius: 6px; font-weight: 600;">× ${cantidad}</span>
+                                <span style="color: var(--primary); font-weight: 700; font-size: 15px;">$${total.toFixed(2)}</span>
                             </div>
-                            <div style="font-size: 12px; color: var(--text-light);">
-                                📅 Entrega: ${fechaEntrega}
+                            
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--text-light);">
+                                <span>📅 Entrega: <strong>${fechaEntrega}</strong></span>
+                                ${item.notes ? `<span style="font-style: italic;">📝 ${item.notes}</span>` : ''}
                             </div>
-                            ${item.notes ? `<div style="font-size: 11px; color: var(--text-light); font-style: italic; margin-top: 2px;">📝 ${item.notes}</div>` : ''}
                         </div>
                         
-                        <!-- MONTO + ACCIONES -->
-                        <div style="text-align: right; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
-                            <div style="font-weight: 700; color: var(--primary); font-size: 15px;">$${total.toFixed(2)}</div>
-                            <div style="display: flex; gap: 4px; margin-top: 4px;">
-                                <button onclick="event.stopPropagation(); procesarClienteDeListaUI(${item.order_id})" 
-                                        class="btn secondary" 
-                                        style="padding: 3px 8px; font-size: 11px; width: auto; background: #10b981; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;"
-                                        title="Convertir en venta">
-                                    ✅ Procesar
-                                </button>
-                                <button onclick="event.stopPropagation(); cancelarClienteDeListaUI(${item.order_id}, '${(item.client_name || '').replace(/'/g, "\\'")}')" 
-                                        class="btn secondary" 
-                                        style="padding: 3px 8px; font-size: 11px; width: auto; color: #ef4444; border-color: #ef4444;"
-                                        title="Cancelar pedido (sin venta)">
-                                    ❌ Cancelar
-                                </button>
-                                <button onclick="event.stopPropagation(); eliminarClienteDeListaUI(${item.order_id}, '${(item.client_name || '').replace(/'/g, "\\'")}')" 
-                                        class="btn secondary" 
-                                        style="padding: 3px 8px; font-size: 11px; width: auto; color: #94a3b8; border-color: #94a3b8;"
-                                        title="Quitar de la lista (el pedido vuelve a pendiente)">
-                                    🗑️
-                                </button>
-                            </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px; justify-content: center; flex-shrink: 0; min-width: 90px;">
+                            <button onclick="event.stopPropagation(); procesarClienteDeListaUI(${item.order_id})" 
+                                    class="btn" 
+                                    style="padding: 6px 10px; font-size: 11px; width: 100%; background: #10b981; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;"
+                                    title="Convertir en venta">
+                                ✅ Procesar
+                            </button>
+                            <button onclick="event.stopPropagation(); cancelarClienteDeListaUI(${item.order_id}, '${(item.client_name || '').replace(/'/g, "\\'")}')" 
+                                    class="btn" 
+                                    style="padding: 6px 10px; font-size: 11px; width: 100%; background: #ef4444; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;"
+                                    title="Cancelar pedido (sin venta)">
+                                ❌ Cancelar
+                            </button>
+                            <button onclick="event.stopPropagation(); eliminarClienteDeListaUI(${item.order_id}, '${(item.client_name || '').replace(/'/g, "\\'")}')" 
+                                    class="btn secondary" 
+                                    style="padding: 4px 10px; font-size: 11px; width: 100%; color: #94a3b8; border-color: #94a3b8;"
+                                    title="Quitar de la lista (el pedido vuelve a pendiente)">
+                                🗑️ Quitar
+                            </button>
                         </div>
                     </div>
                 `;
             }).join('');
         }
         
-        // HTML completo del modal
         modal.innerHTML = `
-            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 20px; max-width: 720px; width: 100%; max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.5); border: 1px solid var(--border-color);">
+            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 20px; max-width: 800px; width: 100%; max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.5); border: 1px solid var(--border-color);">
                 
-                <!-- HEADER -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 2px solid #f59e0b; flex-wrap: wrap; gap: 8px;">
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <span style="font-size: 28px;">⏰</span>
@@ -417,7 +428,6 @@ async function renderWaitingManagerContent() {
                             style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
                 </div>
                 
-                <!-- RESUMEN -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin-bottom: 14px;">
                     <div style="background: #f59e0b15; border-left: 3px solid #f59e0b; padding: 8px 12px; border-radius: 8px; text-align: center;">
                         <div style="font-size: 20px; font-weight: 700; color: #f59e0b;">${totalItems}</div>
@@ -433,16 +443,15 @@ async function renderWaitingManagerContent() {
                     </div>
                 </div>
                 
-                <!-- ACCIONES GLOBALES -->
                 <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
                     <button onclick="reporteListaEspera()" 
-                            class="btn secondary" 
+                            class="btn" 
                             style="padding: 6px 14px; font-size: 12px; width: auto; background: #3b82f6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
                         📄 Reporte PDF
                     </button>
                     ${totalItems > 0 ? `
                         <button onclick="limpiarListaEsperaUI()" 
-                                class="btn secondary" 
+                                class="btn" 
                                 style="padding: 6px 14px; font-size: 12px; width: auto; background: #ef4444; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
                             🧹 Limpiar lista (${totalItems})
                         </button>
@@ -454,17 +463,14 @@ async function renderWaitingManagerContent() {
                     </button>
                 </div>
                 
-                <!-- INFO -->
                 <div style="background: #fef9e7; border: 1px solid #f59e0b; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: #92400e;">
-                    💡 <strong>Procesar</strong> → crea la venta · <strong>Cancelar</strong> → cancela el pedido · <strong>🗑️</strong> → solo quita de la lista
+                    💡 <strong>Procesar</strong> → crea la venta · <strong>Cancelar</strong> → cancela el pedido · <strong>Quitar</strong> → solo quita de la lista
                 </div>
                 
-                <!-- LISTA -->
                 <div id="waiting-manager-list" style="flex: 1; overflow-y: auto; max-height: 500px; padding-right: 4px;">
                     ${listaHtml}
                 </div>
                 
-                <!-- FOOTER -->
                 <div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--border-color);">
                     <button onclick="closeWaitingManagerModal()" 
                             class="btn secondary" 
@@ -490,9 +496,6 @@ async function renderWaitingManagerContent() {
     }
 }
 
-/**
- * Cierra el modal de gestión de lista de espera.
- */
 function closeWaitingManagerModal() {
     const modal = document.getElementById('waiting-manager-modal');
     if (modal) {
@@ -506,14 +509,10 @@ function closeWaitingManagerModal() {
     window._waitingManagerModal = null;
 }
 
-/**
- * Refresca el contenido del modal (sin cerrarlo).
- */
 async function refrescarListaEsperaUI() {
     const modal = document.getElementById('waiting-manager-modal');
     if (!modal) return;
     
-    // Mostrar indicador de carga
     const lista = document.getElementById('waiting-manager-list');
     if (lista) {
         lista.innerHTML = `
@@ -528,14 +527,9 @@ async function refrescarListaEsperaUI() {
     window.showToast('🔄 Lista actualizada', 'success', 1500);
 }
 
-/**
- * Procesa un cliente de la lista de espera (crea venta).
- * Pide confirmación antes de ejecutar.
- */
 async function procesarClienteDeListaUI(orderId) {
     if (!orderId) return;
     
-    // Confirmar
     const confirm = await window.ModalModule.showConfirm({
         title: '✅ Procesar cliente',
         message: `¿Procesar al cliente de la posición #${orderId}?\n\n✅ Se creará la VENTA automáticamente.\n✅ Se descontará del stock.\n✅ El cliente saldrá de la lista.`,
@@ -556,15 +550,12 @@ async function procesarClienteDeListaUI(orderId) {
             const msg = `✅ Venta creada: ${result.ventas} item(s) por $${(result.total || 0).toFixed(2)}`;
             window.showToast(msg, 'success', 4000);
             
-            // Refrescar el modal y la lista de pedidos si está abierta
             await refrescarListaEsperaUI();
             
-            // Refrescar lista de pedidos en background
             if (typeof loadOrders === 'function') {
                 try { await loadOrders(); } catch (e) {}
             }
             
-            // Refrescar dashboard si está visible
             if (typeof window.loadDashboardData === 'function') {
                 setTimeout(window.loadDashboardData, 500);
             }
@@ -577,16 +568,11 @@ async function procesarClienteDeListaUI(orderId) {
     }
 }
 
-/**
- * Cancela un pedido de la lista SIN crear venta.
- * Pide confirmación antes de ejecutar.
- */
 async function cancelarClienteDeListaUI(orderId, clientName) {
     if (!orderId) return;
     
     const nombre = clientName || 'Cliente';
     
-    // Confirmar
     const confirm = await window.ModalModule.showConfirm({
         title: '❌ Cancelar pedido',
         message: `¿Cancelar el pedido de "${nombre}"?\n\n⚠️ NO se creará venta.\n⚠️ Se repondrá el stock si estaba descontado.\n⚠️ El cliente saldrá de la lista.`,
@@ -598,7 +584,6 @@ async function cancelarClienteDeListaUI(orderId, clientName) {
     
     if (!confirm) return;
     
-    // Pedir motivo (opcional)
     const motivo = await window.ModalModule.showPrompt({
         title: '📝 Motivo de cancelación',
         message: 'Ingresa el motivo (opcional):',
@@ -608,7 +593,6 @@ async function cancelarClienteDeListaUI(orderId, clientName) {
     });
     
     if (motivo === null || motivo === undefined) {
-        // Usuario canceló el prompt → abortar
         window.showToast('❌ Operación cancelada', 'info', 2000);
         return;
     }
@@ -639,16 +623,11 @@ async function cancelarClienteDeListaUI(orderId, clientName) {
     }
 }
 
-/**
- * Elimina un cliente de la lista SIN cancelar el pedido.
- * El pedido vuelve a estado 'pending'.
- */
 async function eliminarClienteDeListaUI(orderId, clientName) {
     if (!orderId) return;
     
     const nombre = clientName || 'Cliente';
     
-    // Confirmar
     const confirm = await window.ModalModule.showConfirm({
         title: '🗑️ Quitar de la lista',
         message: `¿Quitar a "${nombre}" de la lista de espera?\n\n📋 El pedido volverá a estado PENDIENTE.\n✅ NO se cancela el pedido.\n✅ NO se repone stock.`,
@@ -686,12 +665,7 @@ async function eliminarClienteDeListaUI(orderId, clientName) {
     }
 }
 
-/**
- * Limpia TODA la lista de espera (cancela todos los pedidos).
- * Requiere DOBLE confirmación por ser una operación destructiva.
- */
 async function limpiarListaEsperaUI() {
-    // Primera confirmación
     const confirm1 = await window.ModalModule.showConfirm({
         title: '⚠️ Limpiar lista de espera',
         message: `¿Estás seguro de que quieres LIMPIAR TODA la lista de espera?\n\n⚠️ Se cancelarán TODOS los pedidos en espera.\n⚠️ NO se crearán ventas.\n⚠️ Se repondrá el stock.\n\n⚠️ Esta acción no se puede deshacer.`,
@@ -703,7 +677,6 @@ async function limpiarListaEsperaUI() {
     
     if (!confirm1) return;
     
-    // Segunda confirmación (más explícita)
     const confirm2 = await window.ModalModule.showConfirm({
         title: '🚨 CONFIRMACIÓN FINAL',
         message: `Esta es la ÚLTIMA advertencia.\n\nEscribe mentalmente: "SÍ, QUIERO LIMPIAR LA LISTA"\n\n¿Confirmas?`,
@@ -744,9 +717,6 @@ async function limpiarListaEsperaUI() {
     }
 }
 
-/**
- * Genera el reporte PDF de la lista de espera actual.
- */
 async function reporteListaEspera() {
     try {
         if (!window.ReportsModule || typeof window.ReportsModule.generateWaitingListReport !== 'function') {
@@ -769,6 +739,73 @@ async function reporteListaEspera() {
         window.showToast('❌ Error: ' + error.message, 'error', 5000);
     }
 }
+
+// ============================================================
+// 🆕 FASE 7.3: RENDER INFO DE PRODUCCIÓN EN TARJETA DE FECHA
+// ============================================================
+
+/**
+ * Genera el HTML de la info de producción para mostrar en la tarjeta de fecha.
+ * 
+ * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
+ * @returns {string} HTML con la info de producción o cadena vacía
+ */
+function renderProduccionInfoHTML(fechaISO) {
+    try {
+        const info = getProduccionInfo(fechaISO);
+        
+        if (!info.tieneProduccion) return '';
+        
+        const disponibles = info.disponibles;
+        const cantidadProd = info.cantidadProduccion;
+        const pedidos = info.pedidos;
+        const ventas = info.ventas;
+        
+        // Usar formatearCantidadProduccion (con fallback)
+        const fmt = window.formatearCantidadProduccion || (v => String(v));
+        
+        // Determinar color según disponibilidad
+        let colorDisponible = '#10b981'; // verde
+        let bgDisponible = '#10b98115';
+        if (disponibles === 0) {
+            colorDisponible = '#ef4444'; // rojo
+            bgDisponible = '#ef444415';
+        } else if (disponibles <= 3) {
+            colorDisponible = '#f59e0b'; // naranja
+            bgDisponible = '#f59e0b15';
+        }
+        
+        return `
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-color); font-size: 11px;">
+                <span style="background: #8b5cf615; color: #8b5cf6; padding: 3px 10px; border-radius: 6px; font-weight: 600;">
+                    🔨 Producción: ${info.bloqueTexto}
+                </span>
+                <span style="background: ${bgDisponible}; color: ${colorDisponible}; padding: 3px 10px; border-radius: 6px; font-weight: 600;">
+                    📋 Pedidos: ${pedidos}/${fmt(cantidadProd)}
+                </span>
+                ${ventas > 0 ? `
+                    <span style="background: #3b82f615; color: #3b82f6; padding: 3px 10px; border-radius: 6px;">
+                        💰 Ventas directas: ${ventas}
+                    </span>
+                ` : ''}
+                ${disponibles === 0 ? `
+                    <span style="background: #ef444420; color: #ef4444; padding: 3px 10px; border-radius: 6px; font-weight: 700;">
+                        ⛔ COMPLETO
+                    </span>
+                ` : `
+                    <span style="background: #10b98115; color: #10b981; padding: 3px 10px; border-radius: 6px;">
+                        ✅ ${fmt(disponibles)} disponibles
+                    </span>
+                `}
+            </div>
+        `;
+    } catch (e) {
+        console.warn('⚠️ Error renderizando info de producción:', e);
+        return '';
+    }
+}
+
+window.renderProduccionInfoHTML = renderProduccionInfoHTML;
 
 // ============================================================
 // RENDER ORDERS VIEW
@@ -1098,7 +1135,15 @@ function getBadgeSesion(sesion) {
 }
 
 // ============================================================
-// LOAD ORDERS
+// 🆕 FASE 7.3: LOAD ORDERS - CON INFO DE PRODUCCIÓN
+// ============================================================
+//
+// IMPORTANTE: Se llama a renderProduccionInfoHTML(dateKey) para cada
+// fecha del listado. Esto muestra:
+//   - 🔨 Producción: dd/mm de hh:mm a hh:mm
+//   - 📋 Pedidos: n/m
+//   - 💰 Ventas directas: v
+//   - ✅ x disponibles  o  ⛔ COMPLETO
 // ============================================================
 
 async function loadOrders() {
@@ -1177,8 +1222,11 @@ async function loadOrders() {
             const fechaLarga = formatearFechaLarga(dateKey);
             const badgeCorriente = getBadgeCorriente(dateKey);
             
+            // 🆕 FASE 7.3: Info de producción (renderiza SIEMPRE si hay config)
+            const produccionInfoHtml = renderProduccionInfoHTML(dateKey);
+            
             html += `
-                <div class="card" style="padding: 8px 12px; margin-bottom: 8px; cursor: pointer; border-left: 4px solid ${isToday ? '#f59e0b' : 'var(--border-color)'};" 
+                <div class="card" style="padding: 10px 12px; margin-bottom: 8px; cursor: pointer; border-left: 4px solid ${isToday ? '#f59e0b' : 'var(--border-color)'};" 
                      onclick="toggleDayOrders('day-${dateKey}')">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                         <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
@@ -1198,6 +1246,7 @@ async function loadOrders() {
                             $${totalDay.toFixed(2)}
                         </div>
                     </div>
+                    ${produccionInfoHtml}
                 </div>
                 <div id="day-${dateKey}" style="display: ${isExpanded ? 'block' : 'none'}; margin-bottom: 12px; padding-left: 8px;">
                     ${dayOrders.map(order => {
@@ -1441,7 +1490,7 @@ function closeOrdersReportModal() {
 
 // ============================================================
 // FORMULARIO DE PEDIDO INDIVIDUAL
-// 🆕 FIX 2: submitOrderForm() normaliza deliveryDate
+// 🆕 FASE 7.3: Con validación de producción decimal
 // ============================================================
 
 async function showOrderForm(orderId = null) {
@@ -1537,6 +1586,7 @@ async function showOrderForm(orderId = null) {
                     </div>
                     
                     <div id="order-corriente-banner"></div>
+                    <div id="order-produccion-info"></div>
                     
                     <div class="form-group">
                         <label>🕐 Sesión de recogida <span style="font-size: 11px; color: var(--text-light); font-weight: normal;">(opcional)</span></label>
@@ -1667,7 +1717,6 @@ async function showOrderForm(orderId = null) {
             fields.style.display = checked ? 'grid' : 'none';
         };
         
-        // Re-calcular total inicial con los valores existentes
         window.updateOrderTotal();
         
         document.querySelectorAll('.item-quantity, .item-price').forEach(el => {
@@ -2107,6 +2156,8 @@ async function actualizarVistaPrevia() {
     
     let previewHtml = '';
     
+    const fmt = window.formatearCantidadProduccion || (v => String(v));
+    
     fechas.forEach(fecha => {
         const fechaObj = new Date(fecha + 'T00:00:00');
         const diaSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][fechaObj.getDay()];
@@ -2117,6 +2168,10 @@ async function actualizarVistaPrevia() {
         const tieneCorriente = window.CorrienteUtils 
             ? window.CorrienteUtils.getResumen(fecha).tieneCorriente 
             : true;
+        
+        // 🆕 FASE 7.3: Verificar producción decimal
+        const prodInfo = getProduccionInfo(fecha);
+        const produccionCompleta = prodInfo.tieneProduccion && prodInfo.disponibles <= 0;
         
         let borderColor = '#10b981';
         let bgColor = '#10b98110';
@@ -2129,6 +2184,12 @@ async function actualizarVistaPrevia() {
             icono = '🚫';
             textoExtra = `<span style="color: #ef4444; font-weight: 600;">Ya existe pedido #${duplicadoId}</span>`;
             omitidosCount++;
+        } else if (produccionCompleta) {
+            borderColor = '#dc2626';
+            bgColor = '#dc262610';
+            icono = '⛔';
+            textoExtra = `<span style="color: #dc2626; font-weight: 600;">Completo (${prodInfo.pedidos}/${fmt(prodInfo.cantidadProduccion)})</span>`;
+            omitidosCount++;
         } else {
             creadosCount++;
             
@@ -2140,6 +2201,11 @@ async function actualizarVistaPrevia() {
             } else if (window.CorrienteUtils) {
                 const resumen = window.CorrienteUtils.getResumen(fecha);
                 textoExtra = `<span style="color: #f59e0b;">⚡ ${resumen.numBloques} bloque${resumen.numBloques > 1 ? 's' : ''}</span>`;
+            }
+            
+            // Añadir info de producción decimal si existe
+            if (prodInfo.tieneProduccion) {
+                textoExtra += ` <span style="color: #8b5cf6;">🔨 ${prodInfo.pedidos}/${fmt(prodInfo.cantidadProduccion)}</span>`;
             }
         }
         
@@ -2477,13 +2543,71 @@ function highlightSesionSelection(sesion) {
 function onOrderDateChange() {
     const dateInput = document.getElementById('order-delivery-date');
     const bannerContainer = document.getElementById('order-corriente-banner');
-    if (!dateInput || !bannerContainer) return;
+    const prodInfoContainer = document.getElementById('order-produccion-info');
+    
+    if (!dateInput) return;
     
     const fechaISO = dateInput.value;
-    if (!fechaISO) { bannerContainer.innerHTML = ''; return; }
+    if (!fechaISO) { 
+        if (bannerContainer) bannerContainer.innerHTML = ''; 
+        if (prodInfoContainer) prodInfoContainer.innerHTML = '';
+        return; 
+    }
     
     localStorage.setItem('panario_last_delivery_date', fechaISO);
-    bannerContainer.innerHTML = getBannerCorrienteHTML(fechaISO);
+    
+    if (bannerContainer) {
+        bannerContainer.innerHTML = getBannerCorrienteHTML(fechaISO);
+    }
+    
+    // 🆕 FASE 7.3: Mostrar info de producción (con decimales)
+    if (prodInfoContainer) {
+        const info = getProduccionInfo(fechaISO);
+        
+        if (!info.tieneProduccion) {
+            prodInfoContainer.innerHTML = '';
+        } else {
+            const disponibles = info.disponibles;
+            const fmt = window.formatearCantidadProduccion || (v => String(v));
+            
+            let colorDisponible = '#10b981';
+            let bgDisponible = '#10b98115';
+            let borderColor = '#10b981';
+            
+            if (disponibles === 0) {
+                colorDisponible = '#ef4444';
+                bgDisponible = '#ef444415';
+                borderColor = '#ef4444';
+            } else if (disponibles <= 3) {
+                colorDisponible = '#f59e0b';
+                bgDisponible = '#f59e0b15';
+                borderColor = '#f59e0b';
+            }
+            
+            prodInfoContainer.innerHTML = `
+                <div style="background: ${bgDisponible}; border: 2px solid ${borderColor}; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                        <span style="font-size: 20px;">🔨</span>
+                        <span style="font-weight: 700; color: ${colorDisponible}; font-size: 13px;">Horario de producción: ${info.bloqueTexto}</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px;">
+                        <span style="background: var(--bg); padding: 3px 10px; border-radius: 8px;">
+                            📋 Pedidos: <strong>${info.pedidos}/${fmt(info.cantidadProduccion)}</strong>
+                        </span>
+                        ${info.ventas > 0 ? `
+                            <span style="background: var(--bg); padding: 3px 10px; border-radius: 8px;">
+                                💰 Ventas: <strong>${info.ventas}</strong>
+                            </span>
+                        ` : ''}
+                        <span style="background: ${colorDisponible}20; color: ${colorDisponible}; padding: 3px 10px; border-radius: 8px; font-weight: 700;">
+                            ${disponibles === 0 ? '⛔ COMPLETO' : `✅ ${fmt(disponibles)} disponibles`}
+                        </span>
+                    </div>
+                    ${info.notas ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 6px;">📝 ${info.notas}</div>` : ''}
+                </div>
+            `;
+        }
+    }
 }
 
 // ============================================================
@@ -2632,8 +2756,8 @@ function clearOrderItems() {
 }
 
 // ============================================================
-// ENVIAR FORMULARIO INDIVIDUAL
-// 🆕 FIX 2: normaliza deliveryDate antes de enviar
+// 🆕 FASE 7.3: ENVIAR FORMULARIO INDIVIDUAL
+// VALIDACIÓN DE PRODUCCIÓN DECIMAL AL CREAR/EDITAR
 // ============================================================
 
 async function submitOrderForm(isEdit) {
@@ -2666,6 +2790,29 @@ async function submitOrderForm(isEdit) {
     if (!clientName) { window.showToast('⚠️ El nombre del cliente es obligatorio', 'error'); return; }
     if (!deliveryDateRaw) { window.showToast('⚠️ La fecha de entrega es obligatoria', 'error'); return; }
     if (hasAdvancePayment && advanceAmount <= 0) { window.showToast('⚠️ Monto adelanto > 0', 'error'); return; }
+    
+    // 🆕 FASE 7.3: Validar producción disponible (solo para pedidos nuevos o cambios de fecha)
+    if (!isEdit) {
+        const prodInfo = getProduccionInfo(deliveryDateRaw);
+        const fmt = window.formatearCantidadProduccion || (v => String(v));
+        
+        if (prodInfo.tieneProduccion && prodInfo.disponibles <= 0) {
+            await window.ModalModule.showAlert({
+                title: '⛔ Pedidos completos',
+                message: `Los pedidos para el ${deliveryDateRaw} están completos.\n\n` +
+                         `📋 Pedidos reservados: ${prodInfo.pedidos}/${fmt(prodInfo.cantidadProduccion)}\n` +
+                         (prodInfo.ventas > 0 ? `💰 Ventas directas: ${prodInfo.ventas}\n` : '') +
+                         `\nNo hay cupos disponibles para este día.\n\n` +
+                         `💡 Puedes:\n` +
+                         `• Elegir otra fecha\n` +
+                         `• Pedirle al admin que aumente la producción`,
+                icon: '⛔',
+                type: 'warning',
+                buttonText: 'Entendido'
+            });
+            return;
+        }
+    }
     
     const itemElements = document.querySelectorAll('.order-item');
     const items = [];
@@ -2703,24 +2850,13 @@ async function submitOrderForm(isEdit) {
         }
     }
     
-    // 🆕 FIX 2: Normalizar deliveryDate antes de enviar
-    // 
-    // ANTES: delivery_date = deliveryDateRaw (ej: "2026-09-17")
-    //   → Si SQLite lo interpreta como UTC → 16 sept 20:00 local ❌
-    // 
-    // AHORA: normalizarFechaVenta() decide:
-    //   - Si es HOY → new Date().toISOString()
-    //   - Si es otra fecha → "YYYY-MM-DDT12:00:00.000Z"
-    // 
-    // NOTA: OrdersModule.saveOrder() también normaliza (defensa en profundidad)
     const deliveryDate = window.normalizarFechaVenta(deliveryDateRaw);
-    console.log('📅 [submitOrderForm] delivery_date normalizada:', deliveryDateRaw, '→', deliveryDate);
     
     const orderData = {
         client_name: clientName, 
         client_phone: clientPhone || null,
         client_id: clientId,
-        delivery_date: deliveryDate,  // 🆕 FIX 2
+        delivery_date: deliveryDate,
         status, 
         priority: priority || 'normal',
         notes: notes || null, 
@@ -2796,6 +2932,25 @@ async function viewOrder(id) {
         const corrienteSection = getSeccionCorrienteHTML(order.delivery_date.split('T')[0]);
         const auditoriaSection = renderAuditoriaHTML(order);
         
+        // 🆕 FASE 7.3: Info de producción con formato decimal
+        const prodInfo = getProduccionInfo(order.delivery_date.split('T')[0]);
+        const fmt = window.formatearCantidadProduccion || (v => String(v));
+        
+        let produccionSection = '';
+        if (prodInfo.tieneProduccion) {
+            produccionSection = `
+                <div style="background: linear-gradient(135deg, #8b5cf615 0%, #8b5cf608 100%); border: 1px solid #8b5cf6; border-radius: 8px; padding: 10px 12px; margin: 10px 0;">
+                    <div style="font-size: 13px; font-weight: 600; color: #8b5cf6; margin-bottom: 4px;">
+                        🔨 Horario de producción: ${prodInfo.bloqueTexto}
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-light);">
+                        📋 Pedidos: ${prodInfo.pedidos}/${fmt(prodInfo.cantidadProduccion)}
+                        ${prodInfo.notas ? ` · 📝 ${prodInfo.notas}` : ''}
+                    </div>
+                </div>
+            `;
+        }
+        
         let statusButtons = '';
         const currentStatus = order.status;
         
@@ -2864,6 +3019,7 @@ async function viewOrder(id) {
                 </div>
                 
                 ${corrienteSection}
+                ${produccionSection}
                 
                 <hr>
                 
@@ -3361,7 +3517,6 @@ window.waitForModalRemoval = waitForModalRemoval;
 window.renderAuditoriaHTML = renderAuditoriaHTML;
 window.mostrarAlertaStockWarning = mostrarAlertaStockWarning;
 
-// 🆕 FASE 2.2: Gestión de lista de espera
 window.showWaitingListManagerModal = showWaitingListManagerModal;
 window.closeWaitingManagerModal = closeWaitingManagerModal;
 window.renderWaitingManagerContent = renderWaitingManagerContent;
@@ -3372,4 +3527,8 @@ window.eliminarClienteDeListaUI = eliminarClienteDeListaUI;
 window.limpiarListaEsperaUI = limpiarListaEsperaUI;
 window.reporteListaEspera = reporteListaEspera;
 
-console.log('📦 UI Orders Module v2.1.0 (FASE 2.1 + fix updateOrderTotal global + FIX 2: normalización de fechas + FASE 2.2: gestión de lista de espera)');
+// 🆕 FASE 7.3
+window.getProduccionInfo = getProduccionInfo;
+window.renderProduccionInfoHTML = renderProduccionInfoHTML;
+
+console.log('📦 UI Orders Module v2.1.9 (FASE 7.3: info de producción decimal en tarjetas + bloqueo definitivo al crear pedidos)');

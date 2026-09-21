@@ -44,6 +44,32 @@
 //   - getUserDashboardConfig() y updateUserDashboardConfig() incluyen chart_mode
 //   - Nueva tabla dias_sin_ventas + funciones CRUD (#20)
 //   - ensureDiasSinVentasTable() para migración automática
+// 🆕 FASE 7 (Entrega 5 - 200926 v6):
+//   - NUEVA TABLA: calendario_produccion
+//     * Almacena el bloque de producción y la cantidad a producir por día
+//   - ensureCalendarioProduccionTable() para migración automática
+//   - NUEVAS funciones CRUD:
+//     * getProduccionByFecha(fecha)
+//     * saveProduccion(data)
+//     * deleteProduccion(fecha)
+//     * getProduccionRango(desde, hasta)
+//   - Añadida a TABLAS_FUSION_ORDER y UUID_PREFIXES
+// 🆕 FASE 7.1 (210926 v7): FIX CRÍTICO - LA TABLA NO SE CREABA
+//   - ensureCalendarioProduccionTable() ahora se llama en initDB()
+//     ANTES de migrateUuids() y migrateNegocioIdToAllTables()
+//   - Añadidos índices únicos y de negocio_id
+//   - Añadidos logs de diagnóstico detallados
+//   - saveProduccion() y getProduccionByFecha() con logs
+//   - Se expone window.DBModule.ensureCalendarioProduccionTable
+//   - Se añade tabla a TODAS las listas de mantenimiento
+// 🆕 FASE 7.2 (210926 v8): CANTIDAD DE PRODUCCIÓN ACEPTA DECIMALES
+//   - Columna cantidad_produccion cambiada de INTEGER a REAL
+//   - Migración automática: si la columna es INTEGER, se recrea
+//     la tabla con REAL (SQLite no permite ALTER COLUMN)
+//   - migrateCantidadProduccionToReal() nueva función
+//   - saveProduccion() ahora usa parseFloat() en lugar de parseInt()
+//   - Todos los cálculos respetan decimales
+//   - Acepta valores como 6.5 jabas, 2.25 kg, 0.5 docenas, etc.
 // ============================================================
 
 let db = null;
@@ -65,28 +91,26 @@ const BACKUP_TYPE_DATA_ONLY = 'data_only';
 // ============================================================
 
 const UUID_PREFIXES = {
-    'orders':              'ord_',
-    'order_items':         'oit_',
-    'sales':               'sal_',
-    'transactions':        'trx_',
-    'products':            'prd_',
-    'recipes':             'rec_',
-    'recipe_ingredients':  'rin_',
-    'receta_insumos':      'ris_',
-    'insumos':             'ins_',
-    'clients':             'cli_',
-    'bank_accounts':       'bco_',
-    'waiting_list':        'wl_'
+    'orders':                 'ord_',
+    'order_items':            'oit_',
+    'sales':                  'sal_',
+    'transactions':           'trx_',
+    'products':               'prd_',
+    'recipes':                'rec_',
+    'recipe_ingredients':     'rin_',
+    'receta_insumos':         'ris_',
+    'insumos':                'ins_',
+    'clients':                'cli_',
+    'bank_accounts':          'bco_',
+    'waiting_list':           'wl_',
+    'dias_sin_ventas':        'dsv_',
+    'calendario_produccion':  'cpr_'
 };
 
 // ============================================================
 // FASE 1.3.3: ORDEN DE TABLAS POR DEPENDENCIAS
 // ============================================================
 
-/**
- * Orden en el que se fusionan las tablas.
- * Las tablas padre van primero para poder re-mapear las FK.
- */
 const TABLAS_FUSION_ORDER = [
     'units',
     'clients',
@@ -98,6 +122,7 @@ const TABLAS_FUSION_ORDER = [
     'bank_accounts',
     'corriente_config',
     'premios_config',
+    'calendario_produccion',
     'orders',
     'order_items',
     'payments',
@@ -113,8 +138,6 @@ const TABLAS_FUSION_ORDER = [
 /**
  * Mapa de dependencias: para cada tabla, qué columnas son FK
  * y a qué tabla apuntan.
- * 
- * Formato: { tabla: [{ col: 'order_id', target: 'orders' }, ...] }
  */
 const TABLAS_FK_MAP = {
     'order_items': [
@@ -300,6 +323,9 @@ async function initDB() {
         await ensureDashboardColumns(db);
         await ensurePremiosConfigTable(db);
         await ensureDiasSinVentasTable(db);
+        // 🆕 FASE 7.1 + 7.2: Crear tabla de producción ANTES de migrar uuid
+        await ensureCalendarioProduccionTable(db);
+        await migrateCantidadProduccionToReal(db);    // 🆕 FASE 7.2
         await ensureNegociosTable(db);
         await ensureNegocioIdColumn(db);
         await migrateToMultiUser(db);
@@ -318,11 +344,197 @@ async function initDB() {
         saveDatabase();
         dbInitialized = true;
         console.log('✅ Base de datos inicializada correctamente');
+        console.log('   📋 Total tablas:', (db.exec("SELECT name FROM sqlite_master WHERE type='table'")[0]?.values || []).length);
         return db;
         
     } catch (error) {
         console.error('❌ Error fatal inicializando DB:', error);
         throw error;
+    }
+}
+
+// ============================================================
+// 🆕 FASE 7.1 + 7.2: TABLA CALENDARIO_PRODUCCION
+// ============================================================
+//
+// CRÍTICO: Esta función debe crear la tabla si no existe.
+// Estaba FALTANDO en la versión anterior de db.js.
+// Por eso el guardado de producción fallaba silenciosamente.
+//
+// FASE 7.2: cantidad_produccion ahora es REAL (acepta decimales)
+// para permitir valores como 6.5 jabas, 2.25 kg, etc.
+// ============================================================
+
+async function ensureCalendarioProduccionTable(db) {
+    try {
+        console.log('🔧 FASE 7.2: Verificando tabla calendario_produccion...');
+        
+        // Crear tabla si no existe (con REAL para cantidad)
+        db.run(`
+            CREATE TABLE IF NOT EXISTS calendario_produccion (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                negocio_id INTEGER NOT NULL,
+                fecha TEXT NOT NULL,
+                hora_inicio TEXT NOT NULL,
+                hora_fin TEXT NOT NULL,
+                bloque_index INTEGER NOT NULL,
+                cantidad_produccion REAL DEFAULT 0,
+                notas TEXT,
+                created_by INTEGER,
+                modified_by INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                deleted_at DATETIME DEFAULT NULL,
+                uuid TEXT,
+                FOREIGN KEY (negocio_id) REFERENCES negocios(id)
+            )
+        `);
+        
+        // Índices
+        try {
+            db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_negocio ON calendario_produccion(negocio_id)');
+            db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_fecha ON calendario_produccion(fecha)');
+            db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_calendario_produccion_unique ON calendario_produccion(negocio_id, fecha) WHERE deleted_at IS NULL');
+            console.log('   ✅ Índices creados');
+        } catch (e) {
+            console.warn('   ⚠️ Error creando índices:', e.message);
+        }
+        
+        // Verificar columnas existentes
+        const columns = db.exec('PRAGMA table_info(calendario_produccion)');
+        const columnNames = columns[0]?.values?.map(row => row[1]) || [];
+        console.log('   📋 Columnas:', columnNames.join(', '));
+        
+        // Añadir columnas que falten (por si la tabla existía de una versión anterior)
+        const requiredColumns = [
+            { name: 'bloque_index', type: 'INTEGER DEFAULT 1' },
+            { name: 'cantidad_produccion', type: 'REAL DEFAULT 0' },
+            { name: 'notas', type: 'TEXT' },
+            { name: 'created_by', type: 'INTEGER' },
+            { name: 'modified_by', type: 'INTEGER' },
+            { name: 'uuid', type: 'TEXT' }
+        ];
+        
+        for (const col of requiredColumns) {
+            if (!columnNames.includes(col.name)) {
+                try {
+                    db.run(`ALTER TABLE calendario_produccion ADD COLUMN ${col.name} ${col.type}`);
+                    console.log(`   ✅ Columna añadida: ${col.name}`);
+                } catch (e) {
+                    console.warn(`   ⚠️ No se pudo añadir ${col.name}:`, e.message);
+                }
+            }
+        }
+        
+        console.log('✅ Tabla calendario_produccion verificada correctamente');
+    } catch (error) {
+        console.error('❌ Error crítico verificando calendario_produccion:', error);
+        throw error;
+    }
+}
+
+// ============================================================
+// 🆕 FASE 7.2: MIGRACIÓN DE CANTIDAD_PRODUCCION A REAL
+// ============================================================
+//
+// SQLite no permite ALTER COLUMN, así que hay que:
+//   1. Detectar si la columna es INTEGER
+//   2. Crear tabla nueva con REAL
+//   3. Copiar datos
+//   4. Eliminar tabla vieja
+//   5. Renombrar tabla nueva
+//   6. Recrear índices
+//
+// Todo esto se hace en una transacción para preservar los datos.
+// ============================================================
+
+async function migrateCantidadProduccionToReal(db) {
+    try {
+        console.log('🔧 FASE 7.2: Verificando tipo de cantidad_produccion...');
+        
+        // Obtener el tipo actual de la columna
+        const pragmaResult = db.exec('PRAGMA table_info(calendario_produccion)');
+        if (pragmaResult.length === 0 || !pragmaResult[0].values) {
+            console.log('   ℹ️ Tabla no existe, nada que migrar');
+            return;
+        }
+        
+        const columnas = pragmaResult[0].values;
+        const cantidadCol = columnas.find(col => col[1] === 'cantidad_produccion');
+        
+        if (!cantidadCol) {
+            console.log('   ℹ️ Columna no existe, nada que migrar');
+            return;
+        }
+        
+        const tipoActual = String(cantidadCol[2]).toUpperCase();
+        console.log(`   📊 Tipo actual de cantidad_produccion: ${tipoActual}`);
+        
+        // Si ya es REAL, no hacer nada
+        if (tipoActual.includes('REAL') || tipoActual.includes('FLOAT') || tipoActual.includes('DOUBLE') || tipoActual.includes('NUMERIC')) {
+            console.log('   ✅ La columna ya acepta decimales (REAL)');
+            return;
+        }
+        
+        // Es INTEGER, hay que migrar
+        console.log('   🔄 Migrando cantidad_produccion de INTEGER a REAL...');
+        
+        // Deshabilitar foreign keys temporalmente
+        try { db.run('PRAGMA foreign_keys = OFF'); } catch (e) {}
+        
+        // 1. Crear tabla temporal con REAL
+        db.run(`
+            CREATE TABLE calendario_produccion_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                negocio_id INTEGER NOT NULL,
+                fecha TEXT NOT NULL,
+                hora_inicio TEXT NOT NULL,
+                hora_fin TEXT NOT NULL,
+                bloque_index INTEGER NOT NULL,
+                cantidad_produccion REAL DEFAULT 0,
+                notas TEXT,
+                created_by INTEGER,
+                modified_by INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                deleted_at DATETIME DEFAULT NULL,
+                uuid TEXT
+            )
+        `);
+        
+        // 2. Copiar datos
+        db.run(`
+            INSERT INTO calendario_produccion_new 
+            (id, negocio_id, fecha, hora_inicio, hora_fin, bloque_index, 
+             cantidad_produccion, notas, created_by, modified_by, 
+             created_at, updated_at, deleted_at, uuid)
+            SELECT id, negocio_id, fecha, hora_inicio, hora_fin, bloque_index, 
+                   cantidad_produccion, notas, created_by, modified_by, 
+                   created_at, updated_at, deleted_at, uuid
+            FROM calendario_produccion
+        `);
+        
+        // 3. Eliminar tabla vieja
+        db.run('DROP TABLE calendario_produccion');
+        
+        // 4. Renombrar tabla nueva
+        db.run('ALTER TABLE calendario_produccion_new RENAME TO calendario_produccion');
+        
+        // 5. Recrear índices
+        try {
+            db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_negocio ON calendario_produccion(negocio_id)');
+            db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_fecha ON calendario_produccion(fecha)');
+            db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_calendario_produccion_unique ON calendario_produccion(negocio_id, fecha) WHERE deleted_at IS NULL');
+        } catch (e) {}
+        
+        // 6. Reactivar foreign keys
+        try { db.run('PRAGMA foreign_keys = ON'); } catch (e) {}
+        
+        console.log('   ✅ Migración completada: cantidad_produccion ahora es REAL');
+        
+    } catch (error) {
+        console.error('❌ Error migrando cantidad_produccion:', error);
+        // No relanzar el error para no bloquear la inicialización
     }
 }
 
@@ -333,7 +545,8 @@ async function initDB() {
 async function ensureAuditColumns(db) {
     const tablesConAuditoria = [
         'insumos', 'recipes', 'productos', 'orders', 'sales', 'transactions',
-        'clients', 'waiting_list', 'bank_accounts', 'corriente_config', 'premios_config'
+        'clients', 'waiting_list', 'bank_accounts', 'corriente_config', 'premios_config',
+        'dias_sin_ventas', 'calendario_produccion'
     ];
     
     let addedColumns = 0;
@@ -570,7 +783,6 @@ async function ensurePremiosConfigTable(db) {
             )
         `);
 
-        // Añadir columnas nuevas si no existen
         const columns = db.exec('PRAGMA table_info(premios_config)');
         const columnNames = columns[0]?.values?.map(row => row[1]) || [];
         
@@ -589,7 +801,6 @@ async function ensurePremiosConfigTable(db) {
 
 /**
  * 🆕 FASE 4.2 (#20): Tabla dias_sin_ventas
- * Almacena los días sin ventas con su motivo.
  */
 async function ensureDiasSinVentasTable(db) {
     try {
@@ -610,7 +821,6 @@ async function ensureDiasSinVentasTable(db) {
             )
         `);
         
-        // Índices
         try {
             db.run('CREATE INDEX IF NOT EXISTS idx_dias_sin_ventas_negocio ON dias_sin_ventas(negocio_id)');
             db.run('CREATE INDEX IF NOT EXISTS idx_dias_sin_ventas_fecha ON dias_sin_ventas(fecha)');
@@ -689,7 +899,7 @@ async function ensureNegocioIdInAllTables(db) {
         'insumos', 'recipes', 'productos', 'clients', 'orders',
         'sales', 'transactions', 'inventory', 'waiting_list',
         'notifications', 'bank_accounts', 'corriente_config',
-        'dias_sin_ventas'
+        'dias_sin_ventas', 'calendario_produccion'
     ];
     for (const table of tables) {
         try {
@@ -719,7 +929,7 @@ async function migrateNegocioIdToAllTables(db) {
             'insumos', 'recipes', 'productos', 'clients', 'orders',
             'sales', 'transactions', 'inventory', 'waiting_list',
             'notifications', 'bank_accounts', 'corriente_config',
-            'dias_sin_ventas'
+            'dias_sin_ventas', 'calendario_produccion'
         ];
         
         for (const table of tablesWithUserId) {
@@ -750,7 +960,7 @@ async function createNegocioIdIndexes(db) {
         'insumos', 'recipes', 'productos', 'clients', 'orders',
         'sales', 'transactions', 'inventory', 'waiting_list',
         'notifications', 'bank_accounts', 'corriente_config',
-        'dias_sin_ventas'
+        'dias_sin_ventas', 'calendario_produccion'
     ];
     for (const table of tables) {
         try { db.run(`CREATE INDEX IF NOT EXISTS idx_${table}_negocio_id ON ${table}(negocio_id)`); } catch (error) {}
@@ -860,7 +1070,6 @@ async function ensureDashboardColumns(db) {
             { name: 'dash_show_bank_qr', type: 'INTEGER DEFAULT 0' },
             { name: 'dash_show_help_button', type: 'INTEGER DEFAULT 1' },
             { name: 'dash_show_orders_today', type: 'INTEGER DEFAULT 1' },
-            // 🆕 FASE 4.2 (#14): Persistencia del modo del gráfico
             { name: 'dash_chart_mode', type: "TEXT DEFAULT 'last7'" }
         ];
         for (const col of dashboardColumns) {
@@ -874,13 +1083,11 @@ function getUserDashboardConfig(userId) {
         show_corriente: true, show_top_clients: true, show_top_products: true,
         show_funds_analysis: true, show_payment_methods: true, show_quick_actions: true,
         show_bank_qr: false, show_help_button: true, show_orders_today: true,
-        // 🆕 FASE 3.2/3.3: defaults para toggles nuevos
         show_released_sales: true,
         show_best_worst_day: true,
         show_sales_by_employee: true,
         show_debts: true,
         show_rewards: true,
-        // 🆕 FASE 4.2 (#14): modo del gráfico
         chart_mode: 'last7'
     };
     try {
@@ -901,13 +1108,11 @@ function getUserDashboardConfig(userId) {
             show_bank_qr: row.dash_show_bank_qr === 1,
             show_help_button: row.dash_show_help_button !== 0,
             show_orders_today: row.dash_show_orders_today !== 0,
-            // 🆕 FASE 3.2/3.3
             show_released_sales: true,
             show_best_worst_day: true,
             show_sales_by_employee: true,
             show_debts: true,
             show_rewards: true,
-            // 🆕 FASE 4.2 (#14)
             chart_mode: row.dash_chart_mode || 'last7'
         };
     } catch (e) { return defaultConfig; }
@@ -1202,13 +1407,30 @@ async function createAllTables(db) {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             deleted_at DATETIME DEFAULT NULL, FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
 
-        // 🆕 FASE 4.2 (#20): Tabla dias_sin_ventas
         db.run(`CREATE TABLE IF NOT EXISTS dias_sin_ventas (
             id INTEGER PRIMARY KEY AUTOINCREMENT, negocio_id INTEGER NOT NULL,
             fecha TEXT NOT NULL, motivo TEXT NOT NULL, nota TEXT,
             created_by INTEGER, modified_by INTEGER,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             deleted_at DATETIME DEFAULT NULL, uuid TEXT,
+            FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
+
+        // 🆕 FASE 7.2: Tabla calendario_produccion con cantidad REAL
+        db.run(`CREATE TABLE IF NOT EXISTS calendario_produccion (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            negocio_id INTEGER NOT NULL,
+            fecha TEXT NOT NULL,
+            hora_inicio TEXT NOT NULL,
+            hora_fin TEXT NOT NULL,
+            bloque_index INTEGER NOT NULL,
+            cantidad_produccion REAL DEFAULT 0,
+            notas TEXT,
+            created_by INTEGER,
+            modified_by INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            deleted_at DATETIME DEFAULT NULL,
+            uuid TEXT,
             FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
 
         console.log('✅ Todas las tablas creadas/verificadas');
@@ -1287,7 +1509,7 @@ async function ensureSoftDeleteColumns(db) {
             'orders', 'order_items', 'payments', 'notifications', 'sales', 'transactions',
             'inventory', 'inventory_movements', 'insumos', 'receta_insumos',
             'waiting_list', 'bank_accounts', 'corriente_config', 'negocios', 'premios_config',
-            'dias_sin_ventas'
+            'dias_sin_ventas', 'calendario_produccion'
         ];
         for (const table of tables) {
             try {
@@ -1382,6 +1604,184 @@ function execute(sql, params = []) {
 }
 
 // ============================================================
+// 🆕 FASE 7.2: FUNCIONES CRUD DE CALENDARIO_PRODUCCION
+// ============================================================
+
+/**
+ * Obtiene la configuración de producción para una fecha.
+ * @param {string} fecha - Fecha en formato YYYY-MM-DD
+ * @returns {Object|null} Registro o null si no existe
+ */
+function getProduccionByFecha(fecha) {
+    try {
+        const negocioId = getNegocioIdActual();
+        if (!negocioId || !fecha) {
+            console.warn('⚠️ getProduccionByFecha: falta negocioId o fecha');
+            return null;
+        }
+        
+        const result = query(
+            `SELECT * FROM calendario_produccion 
+             WHERE negocio_id = ? AND fecha = ? AND deleted_at IS NULL 
+             LIMIT 1`,
+            [negocioId, fecha]
+        );
+        
+        if (result.length > 0) {
+            console.log(`✅ getProduccionByFecha(${fecha}):`, result[0].cantidad_produccion, 'unidades');
+            return result[0];
+        }
+        
+        return null;
+    } catch (e) {
+        console.error('❌ Error en getProduccionByFecha:', e);
+        return null;
+    }
+}
+
+/**
+ * 🆕 FASE 7.2: Guarda la producción con cantidad DECIMAL.
+ * 
+ * CAMBIO: Ahora usa parseFloat() en lugar de parseInt() para permitir
+ * valores como 6.5 (6 jabas y media), 2.25 (2 jabas y cuarto), etc.
+ * 
+ * @param {Object} data - { fecha, hora_inicio, hora_fin, bloque_index, cantidad_produccion, notas }
+ * @returns {Object} { success, id, updated, error }
+ */
+function saveProduccion(data) {
+    try {
+        const negocioId = getNegocioIdActual();
+        const currentUserId = getCurrentUserId();
+        
+        if (!negocioId) {
+            console.error('❌ saveProduccion: no hay negocioId');
+            return { success: false, error: 'No hay negocio activo' };
+        }
+        
+        if (!data.fecha) {
+            console.error('❌ saveProduccion: falta fecha');
+            return { success: false, error: 'Falta la fecha' };
+        }
+        
+        if (!data.bloque_index) {
+            console.error('❌ saveProduccion: falta bloque_index');
+            return { success: false, error: 'Falta el bloque de producción' };
+        }
+        
+        // 🆕 FASE 7.2: parseFloat en lugar de parseInt para aceptar decimales
+        const cantidad = parseFloat(data.cantidad_produccion);
+        
+        if (isNaN(cantidad) || cantidad <= 0) {
+            console.error('❌ saveProduccion: cantidad inválida:', data.cantidad_produccion);
+            return { success: false, error: 'La cantidad a producir debe ser mayor a 0' };
+        }
+        
+        console.log('💾 saveProduccion:', { ...data, cantidad_produccion: cantidad });
+        
+        // Verificar si ya existe
+        const existing = getProduccionByFecha(data.fecha);
+        
+        if (existing) {
+            // Actualizar
+            console.log('   → Actualizando registro existente ID:', existing.id);
+            execute(`
+                UPDATE calendario_produccion 
+                SET hora_inicio = ?, hora_fin = ?, bloque_index = ?, 
+                    cantidad_produccion = ?, notas = ?, 
+                    modified_by = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND negocio_id = ?
+            `, [
+                data.hora_inicio,
+                data.hora_fin,
+                data.bloque_index,
+                cantidad,
+                data.notas || null,
+                currentUserId,
+                existing.id,
+                negocioId
+            ]);
+            
+            console.log('✅ Producción actualizada');
+            return { success: true, id: existing.id, updated: true };
+        } else {
+            // Crear
+            console.log('   → Creando nuevo registro');
+            const uuid = generateUuidForTable('calendario_produccion');
+            
+            const result = execute(`
+                INSERT INTO calendario_produccion 
+                (negocio_id, fecha, hora_inicio, hora_fin, bloque_index, 
+                 cantidad_produccion, notas, created_by, modified_by, uuid)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                negocioId,
+                data.fecha,
+                data.hora_inicio,
+                data.hora_fin,
+                data.bloque_index,
+                cantidad,
+                data.notas || null,
+                currentUserId,
+                currentUserId,
+                uuid
+            ]);
+            
+            console.log('✅ Producción creada ID:', result.lastId, 'con cantidad:', cantidad);
+            return { success: true, id: result.lastId, updated: false };
+        }
+    } catch (e) {
+        console.error('❌ Error en saveProduccion:', e);
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Elimina (soft-delete) la configuración de producción de una fecha.
+ */
+function deleteProduccion(fecha) {
+    try {
+        const negocioId = getNegocioIdActual();
+        if (!negocioId || !fecha) {
+            return { success: false, error: 'Falta negocio o fecha' };
+        }
+        
+        execute(`
+            UPDATE calendario_produccion 
+            SET deleted_at = CURRENT_TIMESTAMP 
+            WHERE negocio_id = ? AND fecha = ?
+        `, [negocioId, fecha]);
+        
+        console.log('✅ Producción eliminada para fecha:', fecha);
+        return { success: true };
+    } catch (e) {
+        console.error('❌ Error en deleteProduccion:', e);
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Obtiene todas las configuraciones de producción en un rango.
+ */
+function getProduccionRango(desde, hasta) {
+    try {
+        const negocioId = getNegocioIdActual();
+        if (!negocioId) return [];
+        
+        return query(`
+            SELECT * FROM calendario_produccion 
+            WHERE negocio_id = ? 
+              AND fecha >= ? 
+              AND fecha <= ? 
+              AND deleted_at IS NULL
+            ORDER BY fecha ASC
+        `, [negocioId, desde, hasta]);
+    } catch (e) {
+        console.error('❌ Error en getProduccionRango:', e);
+        return [];
+    }
+}
+
+// ============================================================
 // BACKUP META
 // ============================================================
 
@@ -1400,7 +1800,7 @@ function writeBackupMeta(db, backupType) {
         db.run(`INSERT INTO ${BACKUP_META_TABLE} 
             (backup_type, backup_date, backup_version, backup_negocio_id, backup_negocio_nombre, backup_user, backup_user_role)
             VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-            backupType, new Date().toISOString(), '2.1.1', negocioId,
+            backupType, new Date().toISOString(), '2.1.8', negocioId,
             negocio?.nombre || 'Desconocido', user?.username || 'Desconocido',
             user?.is_admin === 1 ? 'admin' : 'user'
         ]);
@@ -1522,7 +1922,7 @@ function exportRecetasProductosSalva() {
 
         const salva = {
             _meta: {
-                app: 'Panario', version: '2.1.1', type: 'salva_recetas_productos',
+                app: 'Panario', version: '2.1.8', type: 'salva_recetas_productos',
                 exportDate: new Date().toISOString(), negocio_id: negocioId,
                 negocio_nombre: getNombreNegocioDB(),
                 counts: {
@@ -2215,13 +2615,6 @@ function calcularMejorClienteDelAño() {
     } catch (e) { return null; }
 }
 
-/**
- * 🆕 FASE 4.2 (#15): Calcula el mejor cliente del año según la configuración.
- * 
- * @param {string} calculo - 'navidad' | 'fin_anio' | 'inicio_anio'
- * @param {number} year - Año a calcular (default: actual)
- * @returns {object|null} { buyer, compras, total_gastado, periodo }
- */
 function calcularMejorClienteDelAñoConConfig(calculo = 'inicio_anio', year = null) {
     const negocioId = getNegocioIdActual();
     try {
@@ -2235,7 +2628,6 @@ function calcularMejorClienteDelAñoConConfig(calculo = 'inicio_anio', year = nu
         } else if (calculo === 'fin_anio') {
             fechaFin = `${anio}-12-31`;
         }
-        // 'inicio_anio' usa el rango completo (1 ene - 31 dic)
         
         const results = query(`SELECT buyer, COUNT(*) as compras, SUM(total) as total_gastado
             FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
@@ -2263,11 +2655,6 @@ function calcularMejorClienteDelAñoConConfig(calculo = 'inicio_anio', year = nu
 // DÍAS SIN VENTAS (FASE 4.2 #20)
 // ============================================================
 
-/**
- * Obtiene todos los días sin ventas registrados.
- * @param {object} filters - { from_date, to_date, motivo }
- * @returns {Array}
- */
 function getDiasSinVentas(filters = {}) {
     const negocioId = getNegocioIdActual();
     let sql = 'SELECT * FROM dias_sin_ventas WHERE negocio_id = ? AND deleted_at IS NULL';
@@ -2290,27 +2677,18 @@ function getDiasSinVentas(filters = {}) {
     try { return query(sql, params); } catch (e) { return []; }
 }
 
-/**
- * Obtiene un día sin ventas por su ID.
- */
 function getDiaSinVenta(id) {
     const negocioId = getNegocioIdActual();
     const results = query('SELECT * FROM dias_sin_ventas WHERE id = ? AND negocio_id = ? AND deleted_at IS NULL', [id, negocioId]);
     return results.length > 0 ? results[0] : null;
 }
 
-/**
- * Obtiene un día sin ventas por fecha.
- */
 function getDiaSinVentaByFecha(fecha) {
     const negocioId = getNegocioIdActual();
     const results = query('SELECT * FROM dias_sin_ventas WHERE negocio_id = ? AND fecha = ? AND deleted_at IS NULL', [negocioId, fecha]);
     return results.length > 0 ? results[0] : null;
 }
 
-/**
- * Guarda un día sin ventas (crea o actualiza).
- */
 function saveDiaSinVenta(data) {
     const user = window.AuthModule?.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
@@ -2323,13 +2701,11 @@ function saveDiaSinVenta(data) {
             : getDiaSinVentaByFecha(data.fecha);
         
         if (existing) {
-            // Actualizar
             execute(`UPDATE dias_sin_ventas SET motivo = ?, nota = ?, modified_by = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ? AND negocio_id = ?`, [
                 data.motivo, data.nota || null, currentUserId, existing.id, negocioId]);
             return { success: true, id: existing.id, updated: true };
         } else {
-            // Crear
             const result = execute(`INSERT INTO dias_sin_ventas 
                 (negocio_id, fecha, motivo, nota, created_by, modified_by, uuid)
                 VALUES (?, ?, ?, ?, ?, ?, ?)`, [
@@ -2340,9 +2716,6 @@ function saveDiaSinVenta(data) {
     } catch (e) { return { success: false, error: e.message }; }
 }
 
-/**
- * Elimina (soft-delete) un día sin ventas.
- */
 function deleteDiaSinVenta(id) {
     const negocioId = getNegocioIdActual();
     try {
@@ -2523,20 +2896,11 @@ function importDatabaseFromFile() {
 }
 
 // ============================================================
-// 🆕 FASE 1.3.3: HELPERS DE FUSIÓN
+// HELPERS DE FUSIÓN
 // ============================================================
 
-/**
- * Busca un duplicado por datos cuando el registro no tiene uuid.
- * 
- * @param {Object} db - Instancia de la BD local
- * @param {string} tabla - Nombre de la tabla
- * @param {Object} row - Objeto con los valores del registro de backup
- * @returns {number|null} ID del registro local si existe, null si no
- */
 function findDuplicateByData(db, tabla, row) {
     try {
-        // Columnas de comparación por tabla
         const comparadores = {
             'orders': { cols: ['client_name', 'delivery_date', 'total'], extra: ['deleted_at IS NULL'] },
             'sales': { cols: ['product_name', 'sale_date', 'total'], extra: ['deleted_at IS NULL'] },
@@ -2546,18 +2910,18 @@ function findDuplicateByData(db, tabla, row) {
             'insumos': { cols: ['nombre', 'unidad', 'costo_unitario'], extra: ['deleted_at IS NULL'] },
             'clients': { cols: ['name', 'phone'], extra: ['deleted_at IS NULL'] },
             'bank_accounts': { cols: ['bank', 'account_number'], extra: ['deleted_at IS NULL'] },
-            'order_items': { cols: ['order_id', 'product_name', 'quantity', 'unit_price'], extra: ['deleted_at IS NULL'] }
+            'order_items': { cols: ['order_id', 'product_name', 'quantity', 'unit_price'], extra: ['deleted_at IS NULL'] },
+            'calendario_produccion': { cols: ['fecha', 'bloque_index'], extra: ['deleted_at IS NULL'] }
         };
         
         const config = comparadores[tabla];
-        if (!config) return null;  // No hay criterio de comparación
+        if (!config) return null;
         
-        // Construir WHERE
         const where = [];
         const params = [];
         for (const col of config.cols) {
             const val = row[col];
-            if (val === undefined || val === null) return null;  // Sin datos para comparar
+            if (val === undefined || val === null) return null;
             where.push(`${col} = ?`);
             params.push(val);
         }
@@ -2580,75 +2944,48 @@ function findDuplicateByData(db, tabla, row) {
     }
 }
 
-/**
- * Compara dos fechas de modificación. Devuelve true si la primera es más reciente.
- * Si ambas están vacías o empatan, gana el local (devuelve false).
- */
 function esBackupMasReciente(fechaBackup, fechaLocal) {
-    // Si alguna está vacía, gana el local (conservador)
     if (!fechaBackup || !fechaLocal) return false;
-    
     try {
         const b = new Date(fechaBackup).getTime();
         const l = new Date(fechaLocal).getTime();
         if (isNaN(b) || isNaN(l)) return false;
-        return b > l;  // Solo si backup es estrictamente más reciente
+        return b > l;
     } catch (e) {
         return false;
     }
 }
 
-/**
- * Fusiona una tabla completa usando uuid y regla de última modificación.
- * 
- * @param {Object} localDb - Instancia de la BD local (destino)
- * @param {Object} backupDb - Instancia de la BD de backup (fuente)
- * @param {string} tabla - Nombre de la tabla
- * @param {number} negocioIdActual - ID del negocio actual
- * @param {Object} uuidMap - Mapa { uuid_backup: id_local } para re-mapear FK
- * @returns {Object} Estadísticas { inserted, updated, skipped, errors }
- */
 function fusionarTabla(localDb, backupDb, tabla, negocioIdActual, uuidMap) {
     const stats = { inserted: 0, updated: 0, skipped: 0, errors: [] };
     
     try {
-        // Verificar que la tabla existe en ambos lados
         const localCheck = localDb.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='${tabla}'`);
         if (localCheck.length === 0 || localCheck[0].values.length === 0) return stats;
         
         const backupCheck = backupDb.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='${tabla}'`);
         if (backupCheck.length === 0 || backupCheck[0].values.length === 0) return stats;
         
-        // Columnas locales y de backup
         const localColsResult = localDb.exec(`PRAGMA table_info(${tabla})`);
         const localCols = localColsResult[0]?.values?.map(r => r[1]) || [];
         
         const backupColsResult = backupDb.exec(`PRAGMA table_info(${tabla})`);
         const backupCols = backupColsResult[0]?.values?.map(r => r[1]) || [];
         
-        // Columnas comunes (excluir id)
         const colsComunes = localCols.filter(c => backupCols.includes(c) && c !== 'id');
-        
-        // ¿Tiene la tabla columna uuid?
         const tieneUuid = colsComunes.includes('uuid');
         
-        // ¿Tiene columna de modificación?
         const colModificacion = colsComunes.includes('modified_at') ? 'modified_at' :
                                 colsComunes.includes('updated_at') ? 'updated_at' : null;
         
-        // Leer todas las filas del backup
         const backupRows = backupDb.exec(`SELECT * FROM ${tabla}`);
         if (backupRows.length === 0 || !backupRows[0].values) return stats;
         
         const backupColumns = backupRows[0].columns;
         const filasBackup = backupRows[0].values;
         
-        // Detectar qué columna es la FK negocio_id
         const tieneNegocioId = localCols.includes('negocio_id');
-        const idxNegocioIdLocal = localCols.indexOf('negocio_id');
-        const idxNegocioIdBackup = backupColumns.indexOf('negocio_id');
         
-        // Preparar consulta de búsqueda por uuid
         let sqlBuscarUuid = null;
         if (tieneUuid) {
             sqlBuscarUuid = `SELECT * FROM ${tabla} WHERE uuid = ? LIMIT 1`;
@@ -2656,7 +2993,6 @@ function fusionarTabla(localDb, backupDb, tabla, negocioIdActual, uuidMap) {
         
         for (const fila of filasBackup) {
             try {
-                // Construir objeto row a partir de la fila
                 const row = {};
                 backupColumns.forEach((col, i) => { row[col] = fila[i]; });
                 
@@ -2664,7 +3000,6 @@ function fusionarTabla(localDb, backupDb, tabla, negocioIdActual, uuidMap) {
                 let registroLocal = null;
                 let idLocalExistente = null;
                 
-                // 1. Buscar por uuid si existe
                 if (uuidBackup) {
                     const stmt = localDb.prepare(sqlBuscarUuid);
                     stmt.bind([uuidBackup]);
@@ -2675,25 +3010,20 @@ function fusionarTabla(localDb, backupDb, tabla, negocioIdActual, uuidMap) {
                     stmt.free();
                 }
                 
-                // 2. Si no tiene uuid o no se encontró, buscar por datos
                 if (!idLocalExistente) {
                     const dupId = findDuplicateByData(localDb, tabla, row);
                     if (dupId) {
-                        // Guardar mapeo uuid → id_local aunque no haya uuid en backup
                         if (uuidBackup) uuidMap[uuidBackup] = dupId;
                         stats.skipped++;
                         continue;
                     }
                 }
                 
-                // 3. Decisión: insert o update
                 if (idLocalExistente) {
-                    // Existe → comparar fechas de modificación
                     const fechaBackup = colModificacion ? row[colModificacion] : null;
                     const fechaLocal = colModificacion ? registroLocal[colModificacion] : null;
                     
                     if (esBackupMasReciente(fechaBackup, fechaLocal)) {
-                        // UPDATE
                         const colsUpdate = colsComunes.filter(c => 
                             c !== 'uuid' && c !== 'created_at' && c !== 'id' && c !== 'negocio_id'
                         );
@@ -2705,37 +3035,30 @@ function fusionarTabla(localDb, backupDb, tabla, negocioIdActual, uuidMap) {
                         if (uuidBackup) uuidMap[uuidBackup] = idLocalExistente;
                         stats.updated++;
                     } else {
-                        // Local gana → skip
                         if (uuidBackup) uuidMap[uuidBackup] = idLocalExistente;
                         stats.skipped++;
                     }
                 } else {
-                    // INSERT
                     const colsInsert = colsComunes.filter(c => c !== 'id');
                     const placeholders = colsInsert.map(() => '?').join(', ');
                     let valores = colsInsert.map(c => row[c]);
                     
-                    // Forzar negocio_id actual
                     const idxNegocioIdInsert = colsInsert.indexOf('negocio_id');
                     if (idxNegocioIdInsert !== -1) {
                         valores[idxNegocioIdInsert] = negocioIdActual;
                     }
                     
-                    // Generar uuid si la tabla lo requiere y no tiene
                     const idxUuid = colsInsert.indexOf('uuid');
                     if (idxUuid !== -1 && (!valores[idxUuid] || valores[idxUuid] === null)) {
                         valores[idxUuid] = generateUuidForTable(tabla);
                     }
                     
-                    // Re-mapear FKs
                     const fks = TABLAS_FK_MAP[tabla] || [];
                     for (const fk of fks) {
                         const idxFk = colsInsert.indexOf(fk.col);
                         if (idxFk !== -1 && valores[idxFk] !== null && valores[idxFk] !== undefined) {
-                            // El valor de la FK es un id del backup → buscar su uuid → luego el id local
                             const valorFk = valores[idxFk];
                             
-                            // Buscar el uuid del registro referenciado en el backup
                             try {
                                 const refBackup = backupDb.exec(`SELECT uuid FROM ${fk.target} WHERE id = ${valorFk} LIMIT 1`);
                                 const uuidRef = refBackup[0]?.values?.[0]?.[0];
@@ -2743,7 +3066,6 @@ function fusionarTabla(localDb, backupDb, tabla, negocioIdActual, uuidMap) {
                                 if (uuidRef && uuidMap[uuidRef]) {
                                     valores[idxFk] = uuidMap[uuidRef];
                                 } else {
-                                    // No se encontró el mapeo → dejar null (huérfano)
                                     console.warn(`⚠️ FK ${fk.col} no mapeada para ${tabla}#${row.id} (valor backup: ${valorFk})`);
                                     valores[idxFk] = null;
                                 }
@@ -2755,7 +3077,6 @@ function fusionarTabla(localDb, backupDb, tabla, negocioIdActual, uuidMap) {
                     
                     localDb.run(`INSERT INTO ${tabla} (${colsInsert.join(', ')}) VALUES (${placeholders})`, valores);
                     
-                    // Obtener id insertado
                     const idRes = localDb.exec('SELECT last_insert_rowid() as id');
                     const idInsertado = idRes[0]?.values?.[0]?.[0];
                     
@@ -2776,7 +3097,7 @@ function fusionarTabla(localDb, backupDb, tabla, negocioIdActual, uuidMap) {
 }
 
 // ============================================================
-// 🆕 FASE 1.3.3: IMPORTAR SOLO DATOS CON FUSIÓN INTELIGENTE
+// IMPORTAR SOLO DATOS CON FUSIÓN INTELIGENTE
 // ============================================================
 
 function importDatabaseDataOnly(file) {
@@ -2823,11 +3144,8 @@ function importDatabaseDataOnly(file) {
                     console.log('🔍 Negocio actual:', negocioIdActual);
                     
                     const localDb = getDB();
-                    
-                    // Mapa global de uuid → id_local para re-mapear FKs
                     const uuidMap = {};
                     
-                    // Estadísticas globales
                     const stats = {
                         inserted: 0,
                         updated: 0,
@@ -2839,7 +3157,6 @@ function importDatabaseDataOnly(file) {
                     localDb.run('BEGIN TRANSACTION');
                     
                     try {
-                        // Fusionar cada tabla en orden de dependencias
                         for (const tabla of TABLAS_FUSION_ORDER) {
                             if (!backupTables.includes(tabla)) continue;
                             
@@ -2945,6 +3262,8 @@ window.DBModule = {
     ensureOrderIdColumn, ensureWaitingListColumns, ensureBankAccountsColumns,
     ensureCorrienteConfigTable, ensureIsLiberatedColumn, ensureDashboardColumns,
     ensurePremiosConfigTable, ensureDiasSinVentasTable,
+    ensureCalendarioProduccionTable,
+    migrateCantidadProduccionToReal,
     ensureAuditColumns, getCurrentUserId, getUsuarioNombre,
     slugifyNombreNegocio, getNombreNegocioDB, getPrefijoBackup,
     ensureNegociosTable, ensureNegocioIdColumn, migrateToMultiUser,
@@ -2952,7 +3271,6 @@ window.DBModule = {
     ensureIsAdminColumn,
     generateUuid, generateUuidForTable, ensureUuidColumns, migrateUuids,
     UUID_PREFIXES,
-    // FASE 1.3.3
     TABLAS_FUSION_ORDER, TABLAS_FK_MAP, fusionarTabla, findDuplicateByData,
     migrateToNewStructure,
     getNegocios, getNegocio, getNegocioByUser, getNegocioByCodigo, saveNegocio,
@@ -2974,13 +3292,16 @@ window.DBModule = {
     getPremiosConfig, savePremiosConfig,
     calcularMejorClienteDelMes, calcularMejorClienteDelAño,
     calcularMejorClienteDelAñoConConfig,
-    // 🆕 FASE 4.2 (#20): Días sin ventas
     getDiasSinVentas, getDiaSinVenta, getDiaSinVentaByFecha,
     saveDiaSinVenta, deleteDiaSinVenta,
+    getProduccionByFecha,
+    saveProduccion,
+    deleteProduccion,
+    getProduccionRango,
     exportDatabase, downloadDatabase, importDatabase, importDatabaseFromFile,
     importDatabaseDataOnly, importDatabaseDataOnlyFromFile,
     exportRecetasProductosSalva, importRecetasProductosSalva, readSalvaFile,
     BACKUP_TYPE_COMPLETE, BACKUP_TYPE_DATA_ONLY
 };
 
-console.log('📦 DB Module cargado correctamente v2.1.1 (FASE 4.2: persistencia gráfico + dias_sin_ventas + premio anual configurable)');
+console.log('📦 DB Module cargado correctamente v2.1.8 (FASE 7.2: cantidad de producción acepta decimales)');

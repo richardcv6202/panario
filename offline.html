@@ -2,380 +2,1052 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Panario - Sin conexión</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#f5a623">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <style>
+        /* ============================================================
+           RESET Y VARIABLES
+           ============================================================ */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
+
+        :root {
+            --bg: #fdf6e3;
+            --bg-card: #ffffff;
+            --text: #2d2d2d;
+            --text-light: #666666;
+            --text-muted: #94a3b8;
+            --primary: #f5a623;
+            --primary-dark: #d4891b;
+            --primary-light: #fef3d6;
+            --border: #e0d5c0;
+            --success: #10b981;
+            --success-bg: #10b98115;
+            --warning: #f59e0b;
+            --warning-bg: #f59e0b15;
+            --danger: #ef4444;
+            --danger-bg: #ef444415;
+            --info: #3b82f6;
+            --info-bg: #3b82f615;
+            --shadow: 0 8px 30px rgba(0,0,0,0.1);
+            --shadow-hover: 0 12px 40px rgba(0,0,0,0.15);
+            --radius: 16px;
+            --radius-sm: 10px;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100%;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         body {
-            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-            background: #fdf6e3;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            min-height: 100dvh;
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
             padding: 20px;
-            min-height: 100dvh;
+            line-height: 1.5;
+            overflow-x: hidden;
         }
+
+        /* ============================================================
+           CONTENEDOR PRINCIPAL
+           ============================================================ */
         .offline-container {
+            width: 100%;
+            max-width: 440px;
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            padding: 40px 32px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
             text-align: center;
-            max-width: 400px;
-            padding: 40px 30px;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.1);
-            border: 1px solid #e0d5c0;
+            animation: fadeInUp 0.5s ease;
         }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ============================================================
+           ICONO PRINCIPAL
+           ============================================================ */
         .offline-icon {
             font-size: 80px;
+            line-height: 1;
             margin-bottom: 16px;
-            display: block;
+            display: inline-block;
             animation: pulse 2s ease-in-out infinite;
+            user-select: none;
         }
+
         @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.85; }
         }
+
+        /* ============================================================
+           TEXTOS
+           ============================================================ */
         h1 {
-            color: #2d2d2d;
             font-size: 24px;
+            font-weight: 700;
+            color: var(--text);
             margin-bottom: 8px;
+            letter-spacing: -0.5px;
         }
-        p {
-            color: #666;
-            font-size: 16px;
+
+        .subtitle {
+            font-size: 15px;
+            color: var(--text-light);
+            margin-bottom: 24px;
             line-height: 1.6;
-            margin-bottom: 20px;
         }
-        .btn {
-            background: #f5a623;
-            color: white;
-            border: none;
-            padding: 14px 28px;
-            border-radius: 12px;
-            font-size: 16px;
+
+        .subtitle strong {
+            color: var(--primary);
             font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
+        }
+
+        /* ============================================================
+           BOTONES
+           ============================================================ */
+        .btn {
+            display: block;
             width: 100%;
-            max-width: 250px;
+            padding: 14px 20px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 15px;
+            font-weight: 600;
             font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
             margin-bottom: 10px;
+            line-height: 1.4;
+            user-select: none;
         }
-        .btn:hover {
-            background: #d4891b;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(245, 166, 35, 0.3);
-        }
+
         .btn:active {
             transform: scale(0.98);
         }
+
         .btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
             transform: none;
         }
-        .btn.secondary {
+
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(245, 166, 35, 0.3);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--primary-dark);
+            box-shadow: 0 6px 16px rgba(245, 166, 35, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
             background: transparent;
-            color: #f5a623;
-            border: 2px solid #f5a623;
-            margin-bottom: 0;
+            color: var(--primary);
+            border: 2px solid var(--primary);
         }
-        .btn.secondary:hover {
-            background: #f5a623;
-            color: white;
+
+        .btn-secondary:hover:not(:disabled) {
+            background: var(--primary);
+            color: #fff;
         }
-        .note {
-            margin-top: 20px;
-            font-size: 12px;
-            color: #94a3b8;
-            line-height: 1.5;
-        }
-        .features {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            margin-top: 16px;
-            flex-wrap: wrap;
-        }
-        .features span {
-            font-size: 12px;
-            color: #94a3b8;
-            background: #f8f9fa;
-            padding: 4px 12px;
-            border-radius: 12px;
-            border: 1px solid #e0d5c0;
-        }
-        .status-box {
-            margin-top: 16px;
-            padding: 12px 16px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            border: 1px solid #e0d5c0;
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-light);
+            border: 1px solid var(--border);
             font-size: 13px;
-            color: #666;
-            display: none;
-            text-align: left;
+            padding: 10px 16px;
+            margin-top: 8px;
         }
+
+        .btn-ghost:hover:not(:disabled) {
+            background: var(--bg);
+            color: var(--text);
+            border-color: var(--text-light);
+        }
+
+        /* ============================================================
+           CAJA DE ESTADO
+           ============================================================ */
+        .status-box {
+            display: none;
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            margin: 16px 0;
+            font-size: 13px;
+            text-align: left;
+            border: 1px solid transparent;
+            animation: fadeIn 0.3s ease;
+        }
+
         .status-box.visible {
             display: block;
         }
-        .status-box .status-line {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 4px 0;
-        }
-        .status-box .status-icon {
-            font-size: 16px;
-            width: 20px;
-            text-align: center;
-        }
-        .status-box .status-text {
-            flex: 1;
-        }
-        .status-box .status-text strong {
-            color: #2d2d2d;
-        }
+
         .status-box.success {
-            background: #10b98110;
-            border-color: #10b981;
-            color: #10b981;
+            background: var(--success-bg);
+            border-color: var(--success);
+            color: var(--success);
         }
+
         .status-box.warning {
-            background: #f59e0b10;
-            border-color: #f59e0b;
-            color: #f59e0b;
+            background: var(--warning-bg);
+            border-color: var(--warning);
+            color: var(--warning);
         }
+
         .status-box.error {
-            background: #ef444410;
-            border-color: #ef4444;
-            color: #ef4444;
+            background: var(--danger-bg);
+            border-color: var(--danger);
+            color: var(--danger);
         }
+
+        .status-box.info {
+            background: var(--info-bg);
+            border-color: var(--info);
+            color: var(--info);
+        }
+
+        .status-line {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .status-icon {
+            font-size: 18px;
+            flex-shrink: 0;
+            line-height: 1.2;
+        }
+
+        .status-text {
+            flex: 1;
+            line-height: 1.5;
+        }
+
+        .status-text strong {
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* ============================================================
+           SPINNER
+           ============================================================ */
         .spinner {
             display: inline-block;
             width: 16px;
             height: 16px;
-            border: 2px solid #f5a623;
+            border: 2px solid currentColor;
             border-top-color: transparent;
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
         }
+
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* ============================================================
+           FEATURES (chips)
+           ============================================================ */
+        .features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+            margin: 20px 0 0 0;
+        }
+
+        .feature-chip {
+            font-size: 11px;
+            color: var(--text-muted);
+            background: var(--bg);
+            padding: 4px 10px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        /* ============================================================
+           NOTA INFORMATIVA
+           ============================================================ */
+        .note {
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px dashed var(--border);
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .note p {
+            margin: 4px 0;
+        }
+
+        .note .highlight {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        /* ============================================================
+           CONEXIÓN INDICATOR
+           ============================================================ */
+        .connection-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-light);
+            margin-top: 12px;
+            padding: 6px 12px;
+            background: var(--bg);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .connection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--danger);
+            animation: blink 1.5s ease-in-out infinite;
+        }
+
+        .connection-dot.online {
+            background: var(--success);
+            animation: none;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* ============================================================
+           VERSIÓN
+           ============================================================ */
         .version-tag {
             position: fixed;
-            bottom: 10px;
-            right: 10px;
+            bottom: 12px;
+            right: 12px;
             font-size: 10px;
-            color: #cbd5e1;
-            background: rgba(255,255,255,0.8);
-            padding: 3px 8px;
-            border-radius: 8px;
-            border: 1px solid #e0d5c0;
+            color: var(--text-muted);
+            background: rgba(255,255,255,0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 4px 10px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            user-select: none;
         }
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
         @media (max-width: 480px) {
+            body {
+                padding: 16px;
+            }
             .offline-container {
-                padding: 30px 20px;
+                padding: 32px 24px;
             }
             .offline-icon {
-                font-size: 60px;
+                font-size: 64px;
             }
             h1 {
                 font-size: 20px;
             }
-            p {
+            .subtitle {
                 font-size: 14px;
             }
             .btn {
-                padding: 12px 20px;
+                padding: 13px 18px;
                 font-size: 14px;
+            }
+            .version-tag {
+                bottom: 8px;
+                right: 8px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .offline-container {
+                padding: 24px 18px;
+            }
+            .offline-icon {
+                font-size: 56px;
+            }
+            h1 {
+                font-size: 18px;
+            }
+        }
+
+        /* ============================================================
+           DARK MODE (por si el usuario tiene el sistema en oscuro)
+           ============================================================ */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0d0d0d;
+                --bg-card: #1a1a1a;
+                --text: #e8e0d5;
+                --text-light: #a0a0a0;
+                --text-muted: #707070;
+                --border: #3a3a3a;
+                --shadow: 0 8px 30px rgba(0,0,0,0.6);
+            }
+            .version-tag {
+                background: rgba(26,26,26,0.85);
+            }
+        }
+
+        /* ============================================================
+           PRINT
+           ============================================================ */
+        @media print {
+            .btn, .version-tag {
+                display: none;
             }
         }
     </style>
 </head>
 <body>
+
     <div class="offline-container">
-        <span class="offline-icon">📡</span>
-        <h1>Sin conexión</h1>
-        <p>Parece que no tienes conexión a internet. No te preocupes, Panario funciona offline.</p>
         
-        <button class="btn" id="reintentar-btn" onclick="reintentarConexion()">
-            🔄 Reintentar
+        <!-- ICONO -->
+        <div class="offline-icon" id="main-icon">📡</div>
+        
+        <!-- TÍTULO Y SUBTÍTULO -->
+        <h1 id="main-title">Sin conexión</h1>
+        <p class="subtitle" id="main-subtitle">
+            No tienes conexión a internet, pero <strong>Panario sigue funcionando</strong>.
+        </p>
+
+        <!-- INDICADOR DE CONEXIÓN -->
+        <div class="connection-indicator" id="connection-indicator">
+            <span class="connection-dot" id="connection-dot"></span>
+            <span id="connection-text">Verificando conexión...</span>
+        </div>
+
+        <!-- BOTONES -->
+        <button class="btn btn-primary" id="btn-retry" onclick="reintentarConexion()">
+            🔄 Reintentar conexión
         </button>
-        <button class="btn secondary" onclick="limpiarYRecargar()">
+
+        <button class="btn btn-secondary" id="btn-clear-cache" onclick="limpiarYRecargar()">
             🧹 Limpiar caché y recargar
         </button>
 
+        <button class="btn btn-ghost" onclick="irAlInicio()">
+            🏠 Ir al inicio
+        </button>
+
+        <!-- CAJA DE ESTADO -->
         <div class="status-box" id="status-box">
-            <div class="status-line" id="status-content">
-                <span class="status-icon">⏳</span>
-                <span class="status-text">Verificando conexión...</span>
+            <div class="status-line">
+                <span class="status-icon" id="status-icon">⏳</span>
+                <span class="status-text" id="status-text">Verificando conexión...</span>
             </div>
         </div>
-        
+
+        <!-- FEATURES DISPONIBLES OFFLINE -->
         <div class="features">
-            <span>📋 Pedidos</span>
-            <span>⏰ Lista de espera</span>
-            <span>💰 Ventas</span>
-            <span>📖 Recetas</span>
-            <span>🛒 Insumos</span>
-            <span>🏆 Premios</span>
-            <span>📅 Días sin ventas</span>
+            <span class="feature-chip">📋 Pedidos</span>
+            <span class="feature-chip">💰 Ventas</span>
+            <span class="feature-chip">📖 Recetas</span>
+            <span class="feature-chip">🛒 Insumos</span>
+            <span class="feature-chip">🏆 Premios</span>
+            <span class="feature-chip">📅 Producción</span>
+            <span class="feature-chip">⏰ Lista de espera</span>
         </div>
-        <p class="note">
-            💡 Los datos se sincronizarán automáticamente cuando vuelvas a tener conexión.<br>
-            📦 Todos tus datos están guardados localmente en tu dispositivo.
-        </p>
+
+        <!-- NOTA INFORMATIVA -->
+        <div class="note">
+            <p>💡 <span class="highlight">Todos tus datos están guardados</span> localmente en tu dispositivo.</p>
+            <p>📦 Cuando recuperes la conexión, se sincronizará automáticamente.</p>
+            <p>🔒 Nada se envía a servidores externos.</p>
+        </div>
     </div>
 
-    <div class="version-tag">Panario v2.1.5</div>
+    <!-- ETIQUETA DE VERSIÓN -->
+    <div class="version-tag" id="version-tag">Panario v2.1.11</div>
 
     <script>
-        async function reintentarConexion() {
-            const btn = document.getElementById('reintentar-btn');
-            const statusBox = document.getElementById('status-box');
-            const statusContent = document.getElementById('status-content');
+    // ============================================================
+    // OFFLINE PAGE - PANARIO v2.1.11
+    // ============================================================
+    // Página autosuficiente que se muestra cuando el Service Worker
+    // no puede servir la app desde caché ni desde red.
+    //
+    // Funciones:
+    //   - Detección automática de reconexión
+    //   - Reintento manual de conexión
+    //   - Limpieza de caché + recarga forzada
+    //   - Feedback visual de estado
+    //   - Auto-reintento cada 5 segundos mientras esté offline
+    // ============================================================
+
+    // ------------------------------------------------------------
+    // ESTADO
+    // ------------------------------------------------------------
+    let autoRetryTimer = null;
+    let isRetrying = false;
+    let connectionCheckInProgress = false;
+
+    const AUTO_RETRY_INTERVAL_MS = 5000; // Reintentar cada 5 seg
+    const AUTO_RETRY_MAX_ATTEMPTS = 12;  // Máximo 1 minuto de auto-reintentos
+
+    let autoRetryAttempts = 0;
+
+    // ------------------------------------------------------------
+    // HELPERS DE UI
+    // ------------------------------------------------------------
+
+    function setIcon(icon) {
+        const el = document.getElementById('main-icon');
+        if (el) el.textContent = icon;
+    }
+
+    function setTitle(title) {
+        const el = document.getElementById('main-title');
+        if (el) el.textContent = title;
+    }
+
+    function setSubtitle(html) {
+        const el = document.getElementById('main-subtitle');
+        if (el) el.innerHTML = html;
+    }
+
+    function showStatus(type, icon, text) {
+        const box = document.getElementById('status-box');
+        const iconEl = document.getElementById('status-icon');
+        const textEl = document.getElementById('status-text');
+        
+        if (!box || !iconEl || !textEl) return;
+        
+        box.className = 'status-box visible ' + (type || 'info');
+        iconEl.textContent = icon || 'ℹ️';
+        textEl.innerHTML = text || '';
+    }
+
+    function hideStatus() {
+        const box = document.getElementById('status-box');
+        if (box) box.className = 'status-box';
+    }
+
+    function setConnectionIndicator(isOnline, text) {
+        const dot = document.getElementById('connection-dot');
+        const textEl = document.getElementById('connection-text');
+        
+        if (dot) {
+            if (isOnline) {
+                dot.classList.add('online');
+            } else {
+                dot.classList.remove('online');
+            }
+        }
+        if (textEl) {
+            textEl.textContent = text || (isOnline ? 'Con conexión' : 'Sin conexión');
+        }
+    }
+
+    function setButtonsDisabled(disabled) {
+        const btnRetry = document.getElementById('btn-retry');
+        const btnClearCache = document.getElementById('btn-clear-cache');
+        
+        if (btnRetry) btnRetry.disabled = disabled;
+        if (btnClearCache) btnClearCache.disabled = disabled;
+    }
+
+    // ------------------------------------------------------------
+    // VERIFICAR CONEXIÓN REAL
+    // ------------------------------------------------------------
+    // navigator.onLine no es fiable al 100%. Hacemos un HEAD request
+    // al index.html para verificar que el servidor responde.
+    // ------------------------------------------------------------
+    function checkServerReachable(timeoutMs = 4000) {
+        return new Promise((resolve) => {
+            let resolved = false;
             
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> Verificando...';
-            statusBox.className = 'status-box visible';
-            statusContent.innerHTML = `
-                <span class="status-icon">⏳</span>
-                <span class="status-text">Verificando conexión...</span>
-            `;
+            const timeout = setTimeout(() => {
+                if (!resolved) {
+                    resolved = true;
+                    resolve(false);
+                }
+            }, timeoutMs);
+            
+            try {
+                fetch('./index.html?_check=' + Date.now(), {
+                    method: 'HEAD',
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                })
+                .then(() => {
+                    if (!resolved) {
+                        resolved = true;
+                        clearTimeout(timeout);
+                        resolve(true);
+                    }
+                })
+                .catch(() => {
+                    if (!resolved) {
+                        resolved = true;
+                        clearTimeout(timeout);
+                        resolve(false);
+                    }
+                });
+            } catch (e) {
+                if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timeout);
+                    resolve(false);
+                }
+            }
+        });
+    }
 
-            const online = navigator.onLine;
-            const reachable = await checkServerReachable();
-
+    // ------------------------------------------------------------
+    // REINTENTAR CONEXIÓN
+    // ------------------------------------------------------------
+    async function reintentarConexion() {
+        if (isRetrying) return;
+        isRetrying = true;
+        
+        // Detener el auto-retry mientras hacemos uno manual
+        detenerAutoRetry();
+        
+        const btnRetry = document.getElementById('btn-retry');
+        const btnClearCache = document.getElementById('btn-clear-cache');
+        
+        // Deshabilitar botones
+        setButtonsDisabled(true);
+        
+        // Mostrar estado "verificando"
+        if (btnRetry) {
+            btnRetry.innerHTML = '<span class="spinner"></span> Verificando conexión...';
+        }
+        
+        setIcon('🔄');
+        setTitle('Verificando...');
+        showStatus('info', '⏳', 'Comprobando conexión al servidor...');
+        setConnectionIndicator(false, 'Verificando...');
+        
+        try {
+            // Primero verificar navigator.onLine
+            const navOnline = navigator.onLine;
+            
+            // Luego verificar servidor
+            const reachable = await checkServerReachable(4000);
+            
             if (reachable) {
-                statusContent.innerHTML = `
-                    <span class="status-icon">✅</span>
-                    <span class="status-text"><strong>Conexión restaurada</strong> — Recargando...</span>
-                `;
-                statusBox.className = 'status-box visible success';
+                // Conexión restaurada
+                setIcon('✅');
+                setTitle('¡Conexión restaurada!');
+                setSubtitle('Recargando Panario...');
+                showStatus('success', '✅', '<strong>Conexión restaurada</strong><br>Recargando la aplicación...');
+                setConnectionIndicator(true, 'Conectado');
+                
+                if (btnRetry) {
+                    btnRetry.innerHTML = '✅ Recargando...';
+                }
+                
+                // Recargar tras breve pausa
                 setTimeout(() => {
                     window.location.reload(true);
                 }, 800);
-            } else {
-                statusContent.innerHTML = `
-                    <span class="status-icon">⚠️</span>
-                    <span class="status-text">
-                        <strong>Sin conexión al servidor</strong><br>
-                        <span style="font-size: 11px;">Verifica tu red e intenta de nuevo.</span>
-                    </span>
-                `;
-                statusBox.className = 'status-box visible warning';
-                btn.disabled = false;
-                btn.innerHTML = '🔄 Reintentar';
-            }
-        }
-
-        function checkServerReachable() {
-            return new Promise((resolve) => {
-                const timeout = setTimeout(() => resolve(false), 4000);
                 
-                fetch('./index.html?_check=' + Date.now(), { 
-                    method: 'HEAD',
-                    cache: 'no-store'
-                })
-                .then(() => {
-                    clearTimeout(timeout);
-                    resolve(true);
-                })
-                .catch(() => {
-                    clearTimeout(timeout);
-                    resolve(false);
-                });
-            });
-        }
-
-        async function limpiarYRecargar() {
-            const statusBox = document.getElementById('status-box');
-            const statusContent = document.getElementById('status-content');
+            } else {
+                // Aún sin conexión
+                setIcon('📡');
+                setTitle('Sin conexión');
+                setSubtitle('No tienes conexión a internet, pero <strong>Panario sigue funcionando</strong>.');
+                
+                if (navOnline) {
+                    // El navegador dice que hay conexión pero el servidor no responde
+                    showStatus('warning', '⚠️', 
+                        '<strong>Servidor no responde</strong><br>' +
+                        'Tu dispositivo tiene red, pero no se puede conectar al servidor. ' +
+                        'Verifica tu conexión a internet o intenta más tarde.'
+                    );
+                    setConnectionIndicator(false, 'Servidor no responde');
+                } else {
+                    // Sin conexión real
+                    showStatus('warning', '📡', 
+                        '<strong>Sin conexión a internet</strong><br>' +
+                        'Verifica tu red WiFi o datos móviles e intenta de nuevo.'
+                    );
+                    setConnectionIndicator(false, 'Sin conexión');
+                }
+                
+                if (btnRetry) {
+                    btnRetry.innerHTML = '🔄 Reintentar conexión';
+                }
+                
+                // Reiniciar auto-retry
+                iniciarAutoRetry();
+            }
             
-            statusBox.className = 'status-box visible';
-            statusContent.innerHTML = `
-                <span class="status-icon">⏳</span>
-                <span class="status-text">Limpiando caché...</span>
-            `;
+        } catch (error) {
+            console.error('Error al reintentar conexión:', error);
+            
+            showStatus('error', '❌', 
+                '<strong>Error al verificar</strong><br>' +
+                (error.message || 'Error desconocido')
+            );
+            
+            if (btnRetry) {
+                btnRetry.innerHTML = '🔄 Reintentar conexión';
+            }
+            
+        } finally {
+            isRetrying = false;
+            setButtonsDisabled(false);
+        }
+    }
 
-            try {
-                if ('serviceWorker' in navigator) {
+    // ------------------------------------------------------------
+    // LIMPIAR CACHÉ Y RECARGAR
+    // ------------------------------------------------------------
+    async function limpiarYRecargar() {
+        if (isRetrying) return;
+        isRetrying = true;
+        
+        detenerAutoRetry();
+        
+        const btnClearCache = document.getElementById('btn-clear-cache');
+        
+        setButtonsDisabled(true);
+        
+        if (btnClearCache) {
+            btnClearCache.innerHTML = '<span class="spinner"></span> Limpiando caché...';
+        }
+        
+        setIcon('🧹');
+        setTitle('Limpiando caché...');
+        showStatus('info', '⏳', 'Eliminando Service Workers y cachés antiguos...');
+        
+        try {
+            // 1. Desregistrar Service Workers
+            let unregisteredCount = 0;
+            if ('serviceWorker' in navigator) {
+                try {
                     const registrations = await navigator.serviceWorker.getRegistrations();
                     for (const registration of registrations) {
-                        await registration.unregister();
+                        try {
+                            await registration.unregister();
+                            unregisteredCount++;
+                        } catch (e) {
+                            console.warn('Error desregistrando SW:', e);
+                        }
                     }
+                } catch (e) {
+                    console.warn('Error obteniendo registros de SW:', e);
                 }
-
-                if ('caches' in window) {
+            }
+            
+            // 2. Eliminar todas las cachés
+            let deletedCaches = 0;
+            if ('caches' in window) {
+                try {
                     const cacheNames = await caches.keys();
                     for (const cacheName of cacheNames) {
-                        await caches.delete(cacheName);
+                        try {
+                            await caches.delete(cacheName);
+                            deletedCaches++;
+                        } catch (e) {
+                            console.warn('Error eliminando caché:', cacheName, e);
+                        }
                     }
+                } catch (e) {
+                    console.warn('Error obteniendo claves de caché:', e);
                 }
+            }
+            
+            // 3. Feedback
+            console.log(`🧹 Limpieza: ${unregisteredCount} SWs desregistrados, ${deletedCaches} cachés eliminadas`);
+            
+            showStatus('success', '✅', 
+                `<strong>Caché limpiada</strong><br>` +
+                `${unregisteredCount} Service Worker(s) y ${deletedCaches} caché(s) eliminados.<br>` +
+                `Recargando la aplicación...`
+            );
+            
+            if (btnClearCache) {
+                btnClearCache.innerHTML = '✅ Recargando...';
+            }
+            
+            // 4. Recargar con parámetro anti-caché
+            setTimeout(() => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('_reload', Date.now());
+                window.location.replace(url.toString());
+            }, 1200);
+            
+        } catch (error) {
+            console.error('Error al limpiar caché:', error);
+            
+            showStatus('error', '❌', 
+                '<strong>Error al limpiar caché</strong><br>' +
+                (error.message || 'Error desconocido') + '<br>' +
+                'Intenta recargar manualmente la página.'
+            );
+            
+            if (btnClearCache) {
+                btnClearCache.innerHTML = '🧹 Limpiar caché y recargar';
+            }
+            
+        } finally {
+            isRetrying = false;
+            setButtonsDisabled(false);
+        }
+    }
 
-                statusContent.innerHTML = `
-                    <span class="status-icon">✅</span>
-                    <span class="status-text"><strong>Caché limpiada</strong> — Recargando...</span>
-                `;
-                statusBox.className = 'status-box visible success';
+    // ------------------------------------------------------------
+    // IR AL INICIO
+    // ------------------------------------------------------------
+    function irAlInicio() {
+        // Intentar ir al index
+        window.location.href = './index.html';
+    }
 
-                setTimeout(() => {
-                    const url = new URL(window.location.href);
-                    url.searchParams.set('_reload', Date.now());
-                    window.location.replace(url.toString());
-                }, 1000);
+    // ------------------------------------------------------------
+    // AUTO-RETRY
+    // ------------------------------------------------------------
+    function iniciarAutoRetry() {
+        detenerAutoRetry();
+        
+        autoRetryAttempts = 0;
+        
+        autoRetryTimer = setInterval(async () => {
+            autoRetryAttempts++;
+            
+            // Detener si superamos el máximo
+            if (autoRetryAttempts > AUTO_RETRY_MAX_ATTEMPTS) {
+                detenerAutoRetry();
+                setConnectionIndicator(false, 'Sin conexión');
+                showStatus('warning', '⏸️', 
+                    '<strong>Auto-reintento pausado</strong><br>' +
+                    'Usa el botón <strong>"Reintentar conexión"</strong> cuando tengas red.'
+                );
+                return;
+            }
+            
+            // No reintentar si ya hay uno en curso
+            if (isRetrying || connectionCheckInProgress) return;
+            
+            // Verificar si navigator.onLine ya dice que estamos online
+            if (navigator.onLine) {
+                // Verificar servidor
+                connectionCheckInProgress = true;
+                const reachable = await checkServerReachable(3000);
+                connectionCheckInProgress = false;
+                
+                if (reachable) {
+                    detenerAutoRetry();
+                    
+                    setIcon('✅');
+                    setTitle('¡Conexión restaurada!');
+                    setSubtitle('Recargando Panario...');
+                    showStatus('success', '✅', '<strong>Reconectado automáticamente</strong><br>Recargando...');
+                    setConnectionIndicator(true, 'Conectado');
+                    
+                    setTimeout(() => {
+                        window.location.reload(true);
+                    }, 800);
+                }
+            }
+            
+            // Actualizar indicador
+            setConnectionIndicator(false, 
+                navigator.onLine 
+                    ? `Sin respuesta del servidor (${autoRetryAttempts}/${AUTO_RETRY_MAX_ATTEMPTS})`
+                    : `Sin conexión (${autoRetryAttempts}/${AUTO_RETRY_MAX_ATTEMPTS})`
+            );
+            
+        }, AUTO_RETRY_INTERVAL_MS);
+    }
 
-            } catch (error) {
-                console.error('Error limpiando caché:', error);
-                statusContent.innerHTML = `
-                    <span class="status-icon">❌</span>
-                    <span class="status-text">
-                        <strong>Error al limpiar caché</strong><br>
-                        <span style="font-size: 11px;">${error.message}</span>
-                    </span>
-                `;
-                statusBox.className = 'status-box visible error';
+    function detenerAutoRetry() {
+        if (autoRetryTimer) {
+            clearInterval(autoRetryTimer);
+            autoRetryTimer = null;
+        }
+    }
+
+    // ------------------------------------------------------------
+    // LISTENERS DE CONEXIÓN
+    // ------------------------------------------------------------
+    window.addEventListener('online', () => {
+        console.log('🌐 Evento online detectado');
+        setConnectionIndicator(true, 'Conectado');
+        
+        showStatus('success', '✅', 
+            '<strong>Conexión detectada</strong><br>' +
+            'Recargando la aplicación...'
+        );
+        
+        setIcon('✅');
+        setTitle('¡Conectado!');
+        
+        // Recargar tras breve pausa
+        setTimeout(() => {
+            window.location.reload(true);
+        }, 1000);
+    });
+
+    window.addEventListener('offline', () => {
+        console.log('📡 Evento offline detectado');
+        setConnectionIndicator(false, 'Sin conexión');
+        
+        showStatus('warning', '📡', 
+            '<strong>Sin conexión</strong><br>' +
+            'Panario seguirá funcionando offline. Se reintentará automáticamente.'
+        );
+        
+        // Reiniciar auto-retry
+        iniciarAutoRetry();
+    });
+
+    // ------------------------------------------------------------
+    // INICIALIZACIÓN
+    // ------------------------------------------------------------
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('📡 Offline page cargada — Panario v2.1.11');
+        console.log('   🌐 navigator.onLine:', navigator.onLine);
+        
+        // Actualizar indicador inicial
+        setConnectionIndicator(navigator.onLine, navigator.onLine ? 'Con conexión' : 'Sin conexión');
+        
+        // Si el navegador dice que hay conexión, verificar servidor
+        if (navigator.onLine) {
+            showStatus('info', '⏳', 
+                '<strong>Verificando conexión...</strong><br>' +
+                'El navegador reporta conexión. Comprobando si el servidor responde.'
+            );
+            
+            // Verificar tras breve pausa
+            setTimeout(async () => {
+                const reachable = await checkServerReachable(4000);
+                
+                if (reachable) {
+                    // Recargar automáticamente
+                    setIcon('✅');
+                    setTitle('¡Conexión detectada!');
+                    showStatus('success', '✅', '<strong>Servidor accesible</strong><br>Recargando...');
+                    
+                    setTimeout(() => {
+                        window.location.reload(true);
+                    }, 800);
+                } else {
+                    // El navegador dice online pero el servidor no responde
+                    setIcon('📡');
+                    setTitle('Sin conexión');
+                    showStatus('warning', '⚠️', 
+                        '<strong>Servidor no accesible</strong><br>' +
+                        'El navegador dice que hay conexión, pero no se puede alcanzar el servidor.<br>' +
+                        'Verifica tu red e intenta de nuevo.'
+                    );
+                    
+                    // Iniciar auto-retry
+                    iniciarAutoRetry();
+                }
+            }, 300);
+        } else {
+            // Sin conexión real
+            setIcon('📡');
+            setTitle('Sin conexión');
+            showStatus('warning', '📡', 
+                '<strong>Sin conexión a internet</strong><br>' +
+                'Panario seguirá funcionando offline. Se reintentará automáticamente cada 5 segundos.'
+            );
+            
+            // Iniciar auto-retry
+            iniciarAutoRetry();
+        }
+        
+        // Focus en el botón de reintentar (accesibilidad)
+        setTimeout(() => {
+            const btnRetry = document.getElementById('btn-retry');
+            if (btnRetry) btnRetry.focus();
+        }, 500);
+    });
+
+    // ------------------------------------------------------------
+    // ATAJOS DE TECLADO
+    // ------------------------------------------------------------
+    document.addEventListener('keydown', (e) => {
+        // R = Reintentar
+        if (e.key === 'r' || e.key === 'R') {
+            if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+                const tag = document.activeElement?.tagName;
+                if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+                    e.preventDefault();
+                    reintentarConexion();
+                }
             }
         }
+        
+        // Escape = Ir al inicio
+        if (e.key === 'Escape') {
+            irAlInicio();
+        }
+    });
 
-        window.addEventListener('online', () => {
-            console.log('🌐 Conexión restaurada — reintentando...');
-            const statusBox = document.getElementById('status-box');
-            const statusContent = document.getElementById('status-content');
-            
-            statusBox.className = 'status-box visible success';
-            statusContent.innerHTML = `
-                <span class="status-icon">✅</span>
-                <span class="status-text"><strong>Conexión detectada</strong> — Recargando...</span>
-            `;
-            
-            setTimeout(() => {
-                window.location.reload(true);
-            }, 1500);
-        });
-
-        window.addEventListener('offline', () => {
-            console.log('📡 Conexión perdida');
-        });
-
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('📡 Offline page cargada — Panario v2.1.5');
-            
-            if (navigator.onLine) {
-                console.log('🌐 Navegador reporta conexión activa');
-                setTimeout(() => {
-                    reintentarConexion();
-                }, 500);
+    // ------------------------------------------------------------
+    // VISIBILITY CHANGE (reanudar auto-retry al volver a la pestaña)
+    // ------------------------------------------------------------
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            // Si volvemos a la pestaña y seguimos offline, reiniciar auto-retry
+            if (!navigator.onLine && !autoRetryTimer) {
+                iniciarAutoRetry();
             }
-        });
+        }
+    });
+
+    // ------------------------------------------------------------
+    // CLEANUP
+    // ------------------------------------------------------------
+    window.addEventListener('beforeunload', () => {
+        detenerAutoRetry();
+    });
+
     </script>
 </body>
 </html>

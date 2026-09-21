@@ -53,11 +53,14 @@
 // 🆕 FASE 5 (#2) (200926 v8): ENLACE "AYUDA DETALLADA"
 //   - Nueva función openDetailedHelp() → abre ayuda-panario.html
 //   - Expuesta globalmente como window.openDetailedHelp
-// 🆕 FASE AYUDA MODAL (200926 v9): openDetailedHelp DELEGA EN help.js
-//   - openDetailedHelp() ahora llama a HelpModule.abrirAyudaDetallada()
-//     que abre la ayuda DENTRO de la app (modal con iframe)
-//   - Fallback a window.open() si HelpModule no está disponible
-//   - Último recurso: toast de error
+// 🆕 FASE 4 (Entrega 4 - 210926 v9): ALTURAS HOMOGÉNEAS DE TARJETAS
+//   - ✅ Punto #6 del informe resuelto
+//   - Todas las tarjetas de estadísticas avanzadas tienen min-height: 90px
+//   - Fecha de "Primer día venta" acortada a formato "15 sep 2026"
+//   - Flexbox con justify-content y align-items centrados
+//   - Texto responsive con font-size dinámico
+//   - Padding homogéneo en todas las tarjetas
+//   - Se añade helper getAppVersion() para leer versión del meta
 // ============================================================
 
 let currentUser = null;
@@ -73,19 +76,15 @@ let _dbSavedEventCount = 0;
 
 /**
  * Refresca la vista actual con debounce.
- * Si llegan múltiples eventos 'db-saved' en menos de 500ms,
- * solo se ejecuta una vez al final.
  */
 function debouncedRefreshCurrentView() {
     _dbSavedEventCount++;
     console.log(`🔄 [debounce] Evento db-saved #${_dbSavedEventCount} recibido (refrescando en ${DB_SAVED_DEBOUNCE_MS}ms)`);
     
-    // Cancelar el timer anterior
     if (_dbSavedDebounceTimer) {
         clearTimeout(_dbSavedDebounceTimer);
     }
     
-    // Programar el refresco
     _dbSavedDebounceTimer = setTimeout(() => {
         const eventCount = _dbSavedEventCount;
         _dbSavedEventCount = 0;
@@ -136,6 +135,24 @@ function getInicialNegocio() {
 
 window.getNombreNegocio = getNombreNegocio;
 window.getInicialNegocio = getInicialNegocio;
+
+// ============================================================
+// 🆕 FASE 4 (Entrega 4): HELPER PARA OBTENER LA VERSIÓN
+// ============================================================
+
+function getAppVersion() {
+    try {
+        const meta = document.querySelector('meta[name="app-version"]');
+        if (meta && meta.content) {
+            return meta.content;
+        }
+    } catch (e) {
+        console.warn('⚠️ Error leyendo app-version:', e);
+    }
+    return '2.1.6'; // Fallback
+}
+
+window.getAppVersion = getAppVersion;
 
 // ============================================================
 // 🔧 HELPERS DE FECHA
@@ -200,6 +217,10 @@ function formatearFechaConDiaSemana(date = new Date()) {
     return `${diasAbrev[date.getDay()]}, ${date.getDate()} de ${mesesAbrev[date.getMonth()]}.`;
 }
 
+/**
+ * Formatea una fecha YYYY-MM-DD a un formato corto: "15 sep 2026"
+ * 🆕 FASE 4: Versión corta para tarjetas con altura homogénea.
+ */
 function formatearFechaYYYYMMDD(fechaStr, opciones = {}) {
     if (!fechaStr) return '—';
     
@@ -254,51 +275,30 @@ function formatDate(dateStr) {
 }
 
 /**
- * 🆕 FASE 3.2: Formatea una fecha de forma inteligente y contextual.
- * 
- * Casos:
- *   - HOY → "Hoy 3:00 PM"
- *   - MAÑANA → "Mañana 19, 1:00 AM"
- *   - +2 a +6 días → "Mié 21, 1:00 AM"
- *   - +7 días o más → "25/09, 1:00 AM"
- *   - AYER → "Ayer 3:00 PM"
- *   - -2 a -6 días → "Lun 14, 3:00 PM"
- *   - -7 días o menos → "12/09, 3:00 PM"
- * 
- * @param {Date|string} fecha - Fecha a formatear
- * @param {string} horaStr - Hora en formato "HH:MM" o "h:mm AM/PM" (opcional)
- * @returns {string} Texto formateado
+ * Formatea una fecha de forma inteligente y contextual.
  */
 function formatearFechaInteligente(fecha, horaStr = null) {
     try {
         const date = fecha instanceof Date ? fecha : new Date(fecha);
         if (isNaN(date.getTime())) return '—';
         
-        // Normalizar fecha objetivo a medianoche
         const fechaObj = new Date(date.getFullYear(), date.getMonth(), date.getDate());
         
-        // Fecha de hoy a medianoche
         const hoy = new Date();
         const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
         
-        // Diferencia en días
         const diffMs = fechaObj.getTime() - hoyMid.getTime();
         const diffDias = Math.round(diffMs / (1000 * 60 * 60 * 24));
         
-        // Día de la semana y del mes
         const diasAbrev = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
         const dia = date.getDate();
         const mes = String(date.getMonth() + 1).padStart(2, '0');
         
-        // Formatear la hora si existe
         let sufijoHora = '';
         if (horaStr) {
             sufijoHora = `, ${horaStr}`;
         }
         
-        // ============================================================
-        // CASOS
-        // ============================================================
         if (diffDias === 0) {
             return `Hoy${sufijoHora}`;
         } else if (diffDias === 1) {
@@ -344,7 +344,8 @@ function cerrarTodosLosModalesRespaldo() {
         'bank-accounts-modal', 'qr-view-modal',
         'tour-overlay', 'tour-highlight', 'tour-tooltip',
         'waiting-manager-modal', 'global-cancel-modal',
-        'ayuda-modal'
+        'help-popover', 'ayuda-modal', 'dias-sin-ventas-modal',
+        'dia-sin-venta-form-modal', 'reprogramar-modal'
     ];
     
     let cerrados = 0;
@@ -369,44 +370,17 @@ function cerrarTodosLosModalesRespaldo() {
 }
 
 // ============================================================
-// 🆕 FASE AYUDA MODAL: ABRIR AYUDA DETALLADA
+// 🆕 FASE 5 (#2): ABRIR AYUDA DETALLADA
 // ============================================================
 
-/**
- * Abre la ayuda detallada.
- * 
- * 🆕 FASE AYUDA MODAL: ahora delega en HelpModule.abrirAyudaDetallada(),
- * que abre la ayuda DENTRO de un modal con iframe (no en pestaña nueva).
- * 
- * Fallbacks:
- *   1. Si HelpModule.abrirAyudaDetallada existe → usarla
- *   2. Si no → window.open('./ayuda-panario.html')
- *   3. Si todo falla → toast de error
- */
 function openDetailedHelp() {
     try {
-        // Prioridad 1: HelpModule.abrirAyudaDetallada (modal con iframe)
-        if (window.HelpModule && typeof window.HelpModule.abrirAyudaDetallada === 'function') {
-            console.log('📖 openDetailedHelp() → delegando a HelpModule.abrirAyudaDetallada()');
-            window.HelpModule.abrirAyudaDetallada();
-            return;
-        }
-        
-        // Prioridad 2: window.abrirAyudaDetallada (global, por si acaso)
-        if (typeof window.abrirAyudaDetallada === 'function') {
-            console.log('📖 openDetailedHelp() → delegando a window.abrirAyudaDetallada()');
-            window.abrirAyudaDetallada();
-            return;
-        }
-        
-        // Prioridad 3: fallback directo (abrir pestaña nueva)
-        console.warn('⚠️ openDetailedHelp() → HelpModule no disponible, abriendo pestaña nueva');
         const url = './ayuda-panario.html';
+        console.log('📖 Abriendo ayuda detallada:', url);
         window.open(url, '_blank', 'noopener,noreferrer');
         if (window.showToast) {
             window.showToast('📖 Abriendo ayuda detallada en nueva pestaña...', 'info', 2500);
         }
-        
     } catch (e) {
         console.warn('⚠️ Error abriendo ayuda detallada:', e);
         if (window.showToast) {
@@ -423,7 +397,8 @@ window.openDetailedHelp = openDetailedHelp;
 
 async function initApp() {
     try {
-        console.log('🚀 Iniciando Panario v2.1.6...');
+        const version = getAppVersion();
+        console.log(`🚀 Iniciando Panario v${version}...`);
         
         const urlParams = new URLSearchParams(window.location.search);
         const refreshParam = urlParams.get('refresh');
@@ -520,7 +495,7 @@ async function initApp() {
         
         setTimeout(adjustForSafeArea, 500);
 
-        console.log('✅ App inicializada correctamente (v2.1.6)');
+        console.log(`✅ App inicializada correctamente (v${version})`);
 
     } catch (error) {
         console.error('❌ Error inicializando app:', error);
@@ -542,7 +517,6 @@ function setupDbSavedListener() {
         const currentSection = document.querySelector('.nav-item.active')?.dataset?.section;
         if (!currentSection || currentSection === 'profile') return;
         
-        // 🆕 FASE 1.4: Usar debounce para evitar múltiples refrescos
         debouncedRefreshCurrentView();
     });
     
@@ -1057,6 +1031,11 @@ window.updateAppHeader = updateAppHeader;
 function navigate(section) {
     console.log('🧭 Navegando a:', section);
     
+    // Cerrar el popover de ayuda si está abierto
+    if (window.HelpModule && window.HelpModule.cerrarPopoverAyuda) {
+        try { window.HelpModule.cerrarPopoverAyuda(); } catch (e) {}
+    }
+    
     document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
     const btn = document.querySelector(`.nav-item[data-section="${section}"]`);
     if (btn) btn.classList.add('active');
@@ -1199,7 +1178,6 @@ function renderTarjetaCorrienteHoy() {
             }
         }
         
-        // 🆕 FASE 3.2: Si no hay próximo bloque HOY, buscarlo en los próximos días
         let proximoBloqueGlobal = proximoBloque;
         if (!proximoBloque && !bloqueActual && window.CorrienteUtils.getProximoBloque) {
             try {
@@ -1225,7 +1203,6 @@ function renderTarjetaCorrienteHoy() {
             `;
         }).join('');
         
-        // 🆕 FASE 3.2: Estado actual con fecha inteligente
         let estadoActualHTML = '';
         
         if (bloqueActual) {
@@ -1235,7 +1212,6 @@ function renderTarjetaCorrienteHoy() {
                 </div>
             `;
         } else if (proximoBloqueGlobal) {
-            // 🆕 FASE 3.2: Usar formatearFechaInteligente
             const inicio = proximoBloqueGlobal.inicio;
             const horaStr = window.CorrienteUtils.formatearHora12h(inicio);
             const fechaInteligente = formatearFechaInteligente(inicio, horaStr);
@@ -1304,8 +1280,7 @@ function renderTarjetaPedidosHoy(stats) {
 
 // ============================================================
 // RENDER DASHBOARD VIEW
-// 🆕 FASE 3.2: Nuevas tarjetas + fecha inteligente + alturas
-// 🆕 FASE 4.2 (#14): Lectura de chart_mode desde la BD
+// 🆕 FASE 4: ALTURAS HOMOGÉNEAS EN TODAS LAS TARJETAS
 // ============================================================
 
 function renderDashboardView() {
@@ -1321,13 +1296,11 @@ function renderDashboardView() {
         show_quick_actions: true,
         show_bank_qr: false,
         show_orders_today: true,
-        // 🆕 FASE 3.2: Nuevos toggles con defaults
         show_released_sales: true,
         show_best_worst_day: true,
         show_sales_by_employee: true,
         show_debts: true,
         show_rewards: true,
-        // 🆕 FASE 4.2 (#14): Modo del gráfico persistido
         chart_mode: 'last7'
     };
     
@@ -1343,12 +1316,8 @@ function renderDashboardView() {
         }
     }
 
-    // 🆕 FASE 4.2 (#14): Hidratar el modo del gráfico desde la BD
     if (!window._chartMode || window._chartModeSetByUser !== true) {
         window._chartMode = dashConfig.chart_mode || 'last7';
-        console.log('📊 [FASE 4.2] Modo del gráfico hidratado desde BD:', window._chartMode);
-    } else {
-        console.log('📊 [FASE 4.2] Modo del gráfico ya en memoria:', window._chartMode);
     }
     
     if (window._weekOffset === undefined) {
@@ -1356,10 +1325,19 @@ function renderDashboardView() {
     }
 
     const nombreNegocio = getNombreNegocio();
+    const version = getAppVersion();
     
-    console.log('📊 Renderizando dashboard con config:', dashConfig, '| chartMode:', window._chartMode, '| negocio:', nombreNegocio);
+    console.log('📊 Renderizando dashboard v' + version, '| config:', dashConfig, '| chartMode:', window._chartMode, '| negocio:', nombreNegocio);
     
     const tarjetaCorriente = dashConfig.show_corriente ? renderTarjetaCorrienteHoy() : '';
+    
+    // ============================================================
+    // 🆕 FASE 4: Estilos comunes para tarjetas homogéneas
+    // ============================================================
+    const CARD_STYLE_BASE = 'padding: 14px; text-align: center; min-height: 100px; display: flex; flex-direction: column; justify-content: center; align-items: center;';
+    const CARD_VALUE_STYLE = 'font-size: 22px; font-weight: 700; line-height: 1.1;';
+    const CARD_LABEL_STYLE = 'font-size: 11px; color: var(--text-light); margin-top: 4px;';
+    const CARD_ICON_STYLE = 'font-size: 22px; margin-bottom: 4px; line-height: 1;';
     
     main.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
@@ -1383,73 +1361,73 @@ function renderDashboardView() {
         
         ${dashConfig.show_orders_today ? `<div id="dashboard-orders-today-container"></div>` : ''}
         
-        <!-- Tarjetas de estadísticas principales (🆕 FASE 3.2: alturas homogéneas) -->
+        <!-- Tarjetas de estadísticas principales -->
         <div id="dashboard-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center;">
-                <div style="font-size: 11px; color: var(--text-light);">🛒 Ventas totales</div>
-                <div style="font-size: 22px; font-weight: 700; color: var(--primary);" id="stat-total-sales">-</div>
+            <div class="card" style="${CARD_STYLE_BASE}">
+                <div style="${CARD_LABEL_STYLE}">🛒 Ventas totales</div>
+                <div style="${CARD_VALUE_STYLE} color: var(--primary);" id="stat-total-sales">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center;">
-                <div style="font-size: 11px; color: var(--text-light);">💰 Ingresos</div>
-                <div style="font-size: 22px; font-weight: 700; color: #10b981;" id="stat-revenue">-</div>
+            <div class="card" style="${CARD_STYLE_BASE}">
+                <div style="${CARD_LABEL_STYLE}">💰 Ingresos</div>
+                <div style="${CARD_VALUE_STYLE} color: #10b981;" id="stat-revenue">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center;">
-                <div style="font-size: 11px; color: var(--text-light);">📤 Gastos</div>
-                <div style="font-size: 22px; font-weight: 700; color: #ef4444;" id="stat-expenses">-</div>
+            <div class="card" style="${CARD_STYLE_BASE}">
+                <div style="${CARD_LABEL_STYLE}">📤 Gastos</div>
+                <div style="${CARD_VALUE_STYLE} color: #ef4444;" id="stat-expenses">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center;">
-                <div style="font-size: 11px; color: var(--text-light);">📈 Ganancia</div>
-                <div style="font-size: 22px; font-weight: 700; color: #3b82f6;" id="stat-profit">-</div>
+            <div class="card" style="${CARD_STYLE_BASE}">
+                <div style="${CARD_LABEL_STYLE}">📈 Ganancia</div>
+                <div style="${CARD_VALUE_STYLE} color: #3b82f6;" id="stat-profit">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center;">
-                <div style="font-size: 11px; color: var(--text-light);">📋 Pedidos pendientes</div>
-                <div style="font-size: 22px; font-weight: 700; color: #f59e0b;" id="stat-pending-orders">-</div>
+            <div class="card" style="${CARD_STYLE_BASE}">
+                <div style="${CARD_LABEL_STYLE}">📋 Pedidos pendientes</div>
+                <div style="${CARD_VALUE_STYLE} color: #f59e0b;" id="stat-pending-orders">-</div>
             </div>
             ${dashConfig.show_debts ? `
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center;">
-                <div style="font-size: 11px; color: var(--text-light);">💳 Deudas</div>
-                <div style="font-size: 22px; font-weight: 700; color: #ef4444;" id="stat-debts">-</div>
+            <div class="card" style="${CARD_STYLE_BASE}">
+                <div style="${CARD_LABEL_STYLE}">💳 Deudas</div>
+                <div style="${CARD_VALUE_STYLE} color: #ef4444;" id="stat-debts">-</div>
             </div>
             ` : ''}
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #f59e0b;">
-                <div style="font-size: 11px; color: var(--text-light);">📈 Ventas hoy</div>
-                <div style="font-size: 22px; font-weight: 700; color: #f59e0b;" id="stat-today-sales">-</div>
+            <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #f59e0b;">
+                <div style="${CARD_LABEL_STYLE}">📈 Ventas hoy</div>
+                <div style="${CARD_VALUE_STYLE} color: #f59e0b; font-size: 18px;" id="stat-today-sales">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #10b981;">
-                <div style="font-size: 11px; color: var(--text-light);">💵 Fondo en caja</div>
-                <div style="font-size: 22px; font-weight: 700; color: #10b981;" id="stat-cash-balance">-</div>
+            <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #10b981;">
+                <div style="${CARD_LABEL_STYLE}">💵 Fondo en caja</div>
+                <div style="${CARD_VALUE_STYLE} color: #10b981;" id="stat-cash-balance">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #3b82f6;">
-                <div style="font-size: 11px; color: var(--text-light);">🏦 Fondo en banco</div>
-                <div style="font-size: 22px; font-weight: 700; color: #3b82f6;" id="stat-bank-balance">-</div>
+            <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #3b82f6;">
+                <div style="${CARD_LABEL_STYLE}">🏦 Fondo en banco</div>
+                <div style="${CARD_VALUE_STYLE} color: #3b82f6;" id="stat-bank-balance">-</div>
             </div>
         </div>
         
-        <!-- 🆕 FASE 3.2: Tarjetas de ventas liberadas + mejor/peor día + ventas por empleado -->
+        <!-- 🆕 Tarjetas de ventas liberadas + mejor/peor día -->
         ${(dashConfig.show_released_sales || dashConfig.show_best_worst_day) ? `
         <div id="dashboard-new-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
             
             ${dashConfig.show_released_sales ? `
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #8b5cf6;">
-                <div style="font-size: 22px; margin-bottom: 4px;">🚀</div>
-                <div style="font-size: 11px; color: var(--text-light);">Ventas liberadas</div>
-                <div style="font-size: 18px; font-weight: 700; color: #8b5cf6;" id="stat-released-sales">-</div>
+            <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #8b5cf6;">
+                <div style="${CARD_ICON_STYLE}">🚀</div>
+                <div style="${CARD_LABEL_STYLE}">Ventas liberadas</div>
+                <div style="${CARD_VALUE_STYLE} color: #8b5cf6; font-size: 18px;" id="stat-released-sales">-</div>
                 <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;" id="stat-released-sales-count">-</div>
             </div>
             ` : ''}
             
             ${dashConfig.show_best_worst_day ? `
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #f59e0b;">
-                <div style="font-size: 22px; margin-bottom: 4px;">🥇</div>
-                <div style="font-size: 11px; color: var(--text-light);">Mejor día</div>
-                <div style="font-size: 16px; font-weight: 700; color: #f59e0b;" id="stat-best-day">-</div>
+            <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #f59e0b;">
+                <div style="${CARD_ICON_STYLE}">🥇</div>
+                <div style="${CARD_LABEL_STYLE}">Mejor día</div>
+                <div style="${CARD_VALUE_STYLE} color: #f59e0b; font-size: 16px;" id="stat-best-day">-</div>
                 <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;" id="stat-best-day-date">-</div>
             </div>
             
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #ef4444;">
-                <div style="font-size: 22px; margin-bottom: 4px;">📉</div>
-                <div style="font-size: 11px; color: var(--text-light);">Peor día</div>
-                <div style="font-size: 16px; font-weight: 700; color: #ef4444;" id="stat-worst-day">-</div>
+            <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #ef4444;">
+                <div style="${CARD_ICON_STYLE}">📉</div>
+                <div style="${CARD_LABEL_STYLE}">Peor día</div>
+                <div style="${CARD_VALUE_STYLE} color: #ef4444; font-size: 16px;" id="stat-worst-day">-</div>
                 <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;" id="stat-worst-day-date">-</div>
             </div>
             ` : ''}
@@ -1466,27 +1444,31 @@ function renderDashboardView() {
         </div>
         ` : ''}
         
-        <!-- Estadísticas avanzadas -->
+        <!-- ============================================================
+             🆕 FASE 4: Estadísticas avanzadas con ALTURAS HOMOGÉNEAS
+             Punto #6 del informe: "Primer día venta" y "Clientes diferentes"
+             ahora tienen la misma altura que las demás tarjetas.
+             ============================================================ -->
         <div id="dashboard-advanced-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #8b5cf6;">
-                <div style="font-size: 22px; margin-bottom: 4px;">📅</div>
-                <div style="font-size: 11px; color: var(--text-light);">Días con ventas</div>
-                <div style="font-size: 22px; font-weight: 700; color: #8b5cf6;" id="stat-dias-ventas">-</div>
+            <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #8b5cf6;">
+                <div style="${CARD_ICON_STYLE}">📅</div>
+                <div style="${CARD_LABEL_STYLE}">Días con ventas</div>
+                <div style="${CARD_VALUE_STYLE} color: #8b5cf6;" id="stat-dias-ventas">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #06b6d4;">
-                <div style="font-size: 22px; margin-bottom: 4px;">📊</div>
-                <div style="font-size: 11px; color: var(--text-light);">Promedio diario</div>
-                <div style="font-size: 22px; font-weight: 700; color: #06b6d4;" id="stat-promedio-diario">-</div>
+            <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #06b6d4;">
+                <div style="${CARD_ICON_STYLE}">📊</div>
+                <div style="${CARD_LABEL_STYLE}">Promedio diario</div>
+                <div style="${CARD_VALUE_STYLE} color: #06b6d4; font-size: 18px;" id="stat-promedio-diario">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #f472b6;">
-                <div style="font-size: 22px; margin-bottom: 4px;">🎂</div>
-                <div style="font-size: 11px; color: var(--text-light);">Primer día venta</div>
-                <div style="font-size: 14px; font-weight: 700; color: #f472b6;" id="stat-primer-dia">-</div>
+            <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #f472b6;">
+                <div style="${CARD_ICON_STYLE}">🎂</div>
+                <div style="${CARD_LABEL_STYLE}">Primer día venta</div>
+                <div style="${CARD_VALUE_STYLE} color: #f472b6; font-size: 14px;" id="stat-primer-dia">-</div>
             </div>
-            <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; border-left: 4px solid #f59e0b;">
-                <div style="font-size: 22px; margin-bottom: 4px;">👥</div>
-                <div style="font-size: 11px; color: var(--text-light);">Clientes diferentes</div>
-                <div style="font-size: 22px; font-weight: 700; color: #f59e0b;" id="stat-clientes-diferentes">-</div>
+            <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #f59e0b;">
+                <div style="${CARD_ICON_STYLE}">👥</div>
+                <div style="${CARD_LABEL_STYLE}">Clientes diferentes</div>
+                <div style="${CARD_VALUE_STYLE} color: #f59e0b;" id="stat-clientes-diferentes">-</div>
             </div>
         </div>
         
@@ -1806,7 +1788,6 @@ async function downloadDashboardQR(bank, accountNumber) {
 
 // ============================================================
 // NAVEGACIÓN POR SEMANAS CON MODO CONFIGURABLE
-// 🆕 FASE 4.2 (#14): Persistencia del modo del gráfico
 // ============================================================
 
 function changeChartMode(mode) {
@@ -1822,7 +1803,6 @@ function changeChartMode(mode) {
     window._chartModeSetByUser = true;
     window._weekOffset = 0;
     
-    // 🆕 FASE 4.2 (#14): Guardar el modo en la BD del usuario
     try {
         const user = window.AuthModule.getCurrentUser();
         if (user) {
@@ -2297,11 +2277,12 @@ function renderPieChartCanvas(container, chartData) {
 
 // ============================================================
 // CARGAR DATOS DEL DASHBOARD
+// 🆕 FASE 4: Se usa formatearFechaYYYYMMDD para "Primer día venta"
 // ============================================================
 
 async function loadDashboardData() {
     try {
-        console.log('📊 Cargando datos del dashboard... (weekOffset:', window._weekOffset || 0, ', chartMode:', window._chartMode || 'last7', ')');
+        console.log('📊 Cargando datos del dashboard...');
         
         const stats = await window.DashboardModule.getDashboardStats({
             weekOffset: window._weekOffset || 0,
@@ -2335,6 +2316,7 @@ async function loadDashboardData() {
             'stat-bank-sales-vs-expenses': '$' + (stats.bank?.salesVsExpenses || 0).toFixed(2),
             'stat-dias-ventas': stats.diasConVentas || 0,
             'stat-promedio-diario': '$' + (stats.promedioVentasDiarias || 0).toFixed(2),
+            // 🆕 FASE 4: Formato corto de fecha para que la tarjeta sea homogénea
             'stat-primer-dia': stats.primerDiaVenta ? formatearFechaYYYYMMDD(stats.primerDiaVenta) : '—',
             'stat-clientes-diferentes': stats.clientesDiferentes || 0
         };
@@ -2377,9 +2359,6 @@ async function loadDashboardData() {
             ...(user?.dashboard_config || {})
         };
 
-        console.log('🔍 [loadDashboardData] dashConfig aplicado:', dashConfig);
-        console.log('🔍 [loadDashboardData] stats.salesByEmployee:', stats.salesByEmployee);
-
         if (dashConfig.show_orders_today) {
             const ordersTodayContainer = document.getElementById('dashboard-orders-today-container');
             if (ordersTodayContainer) {
@@ -2388,10 +2367,7 @@ async function loadDashboardData() {
         }
 
         if (dashConfig.show_sales_by_employee !== false) {
-            console.log('👥 [loadDashboardData] Renderizando ventas por empleado...');
             renderSalesByEmployee(stats.salesByEmployee || []);
-        } else {
-            console.log('👥 [loadDashboardData] Ventas por empleado OCULTO por toggle');
         }
 
         if (dashConfig.show_debts !== false) {
@@ -2422,12 +2398,9 @@ async function loadDashboardData() {
             }
         }
 
-        console.log('✅ Dashboard actualizado correctamente (v2.1.6)');
+        console.log('✅ Dashboard actualizado correctamente (v' + getAppVersion() + ')');
         console.log('   📅 Primer día de venta:', stats.primerDiaVenta, '→', formatearFechaYYYYMMDD(stats.primerDiaVenta));
         console.log('   📊 Modo del gráfico:', stats.chartMode, '| isCurrentRange:', stats.isCurrentRange);
-        console.log('   🚀 Ventas liberadas:', stats.releasedSales?.count, '($' + (stats.releasedSales?.total || 0).toFixed(2) + ')');
-        console.log('   🥇 Mejor día:', stats.bestWorstDay?.best?.date, '($' + (stats.bestWorstDay?.best?.total || 0).toFixed(2) + ')');
-        console.log('   👥 Empleados con ventas:', stats.salesByEmployee?.length || 0);
 
     } catch (error) {
         console.error('❌ Error cargando dashboard:', error);
@@ -2618,12 +2591,14 @@ function exportDashboardReport() {
         }
 
         const nombreNegocio = getNombreNegocio();
+        const version = getAppVersion();
 
         const report = `
 ========================================
     📊 PANARIO - REPORTE DE NEGOCIO
 ========================================
 Negocio: ${nombreNegocio}
+Versión: ${version}
 Fecha: ${new Date().toLocaleString('es-ES')}
 ----------------------------------------
 
@@ -2668,7 +2643,7 @@ ${stats.paymentMethods.map(p => `  ${p.payment_method}: $${p.total.toFixed(2)} (
 ${stats.topProducts.map((p, i) => `  ${i+1}. ${p.product_name}: ${p.sales_count} ventas - $${p.total_revenue.toFixed(2)}`).join('\n')}
 
 ----------------------------------------
-Reporte generado desde Panario 🍞
+Reporte generado desde Panario 🍞 v${version}
 ${nombreNegocio}
 `;
 
@@ -2981,6 +2956,7 @@ function exportChartAsPDF() {
 function generatePDFWithImage(imageSrc) {
     const today = new Date().toLocaleDateString('es-ES');
     const nombreNegocio = getNombreNegocio();
+    const version = getAppVersion();
     
     const html = `
         <!DOCTYPE html>
@@ -3011,7 +2987,7 @@ function generatePDFWithImage(imageSrc) {
                 <img src="${imageSrc}" alt="Gráfico de Ventas">
             </div>
             <div class="footer">
-                Reporte generado desde Panario 🍞 - ${new Date().toLocaleString('es-ES')}
+                Reporte generado desde Panario 🍞 v${version} - ${new Date().toLocaleString('es-ES')}
             </div>
         </body>
         </html>
@@ -3140,15 +3116,13 @@ window.getNombreNegocio = getNombreNegocio;
 window.getInicialNegocio = getInicialNegocio;
 window.updateDocumentTitle = updateDocumentTitle;
 window.updateAppHeader = updateAppHeader;
-// 🆕 FASE 1.4
 window.debouncedRefreshCurrentView = debouncedRefreshCurrentView;
-// 🆕 FASE 3.2
 window.formatearFechaInteligente = formatearFechaInteligente;
 window.renderSalesByEmployee = renderSalesByEmployee;
-// 🆕 FASE 5 (#2) + FASE AYUDA MODAL
 window.openDetailedHelp = openDetailedHelp;
+window.getAppVersion = getAppVersion;
 
-console.log('📦 App Controller v2.1.6 (FASE AYUDA MODAL: openDetailedHelp delega en HelpModule)');
+console.log('📦 App Controller v' + getAppVersion() + ' (FASE 4 Entrega 4: alturas homogéneas en tarjetas)');
 
 // ============================================================
 // INICIALIZACIÓN AUTOMÁTICA

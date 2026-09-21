@@ -46,20 +46,27 @@
 //   - Modal de resultado con resumen detallado por tabla
 // 🆕 FASE 2.3 (200926 v4):
 //   - NUEVA sección "⏰ Lista de espera" en Herramientas
-//     * Botón "⏰ Gestionar lista de espera" → abre modal de ui-orders.js
-//     * Botón "📄 Reporte PDF" → genera reporte de lista
-//     * Muestra contador actual de clientes en espera
 //   - NUEVA sección "🚨 Cancelación global de pedidos" (solo admin)
-//     * Modal con rango de fechas + causa + nota
-//     * Doble confirmación
-//     * Llama a OrdersModule.cancelarPedidosGlobalmente()
-//     * Modal de resumen con cancelados/reiniciados/preservados
 // 🆕 FASE 6 (#11) (200926 v5):
 //   - El bloque "ℹ️ Información" ahora LEE la versión desde
 //     <meta name="app-version"> del index.html
-//   - Fallback a '2.1.5' si no se encuentra el meta
-//   - Así, en futuras actualizaciones solo hay que cambiar el
-//     index.html y este bloque se actualizará automáticamente
+// 🆕 FASE 7 (Entrega 5 - 200926 v6):
+//   - NUEVA sección "🔄 Reprogramar pedidos por rango" (solo admin)
+// 🆕 FASE 7.1 (210926 v7): FIX CRÍTICO - PRODUCCIÓN
+//   - guardarProduccion() ahora usa window.DBModule.saveProduccion()
+//   - eliminarProduccion() ahora usa window.DBModule.deleteProduccion()
+//   - getProduccionConfig() usa window.DBModule.getProduccionByFecha()
+//   - Se muestran errores claramente si falla el guardado
+//   - Se valida que las funciones del DBModule existan
+//   - Logs de diagnóstico detallados
+//   - Recarga correcta del modal tras guardar
+// 🆕 FASE 7.2 (210926 v8): CANTIDAD DE PRODUCCIÓN CON DECIMALES
+//   - formatearCantidadProduccion() nueva función helper
+//   - Input de cantidad con step="0.1" (acepta decimales)
+//   - guardarProduccion() usa parseFloat() en lugar de parseInt()
+//   - Texto informativo "6.5 = 6 jabas y media"
+//   - Los cálculos de disponibles usan decimales
+//   - Toast y modal muestran cantidad formateada (6.5, 2.25, 0.5)
 // ============================================================
 
 // ============================================================
@@ -69,8 +76,6 @@
 /**
  * Devuelve la versión actual de la app leyéndola del <meta name="app-version">.
  * Si no existe, devuelve un fallback.
- * 
- * @returns {string} La versión, ej: "2.1.5"
  */
 function getAppVersion() {
     try {
@@ -81,13 +86,28 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.1.5'; // Fallback
+    return '2.1.8';
 }
 
 window.getAppVersion = getAppVersion;
 
 // ============================================================
-// ⚡ MÓDULO DE HORARIOS DE CORRIENTE (PRODUCCIÓN)
+// 🆕 FASE 7: MOTIVOS PREDEFINIDOS PARA REPROGRAMACIÓN
+// ============================================================
+
+const MOTIVOS_REPROGRAMACION = [
+    { value: 'Falta de insumos', label: '🛒 Falta de insumos' },
+    { value: 'Apagón prolongado', label: '⚡ Apagón prolongado' },
+    { value: 'Mantenimiento de equipos', label: '🔧 Mantenimiento de equipos' },
+    { value: 'Fuerza mayor', label: '⚠️ Fuerza mayor' },
+    { value: 'Problema de salud', label: '🏥 Problema de salud' },
+    { value: 'Clima adverso', label: '🌧️ Clima adverso' },
+    { value: 'Solicitud del cliente', label: '👤 Solicitud del cliente' },
+    { value: 'Otro', label: '🔄 Otro' }
+];
+
+// ============================================================
+// MÓDULO DE HORARIOS DE CORRIENTE
 // ============================================================
 
 function convertirA12Horas(hora24) {
@@ -110,6 +130,96 @@ function convertirA24Horas(hora12) {
     if (periodo === 'AM' && h === 12) h = 0;
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
+
+// ============================================================
+// 🆕 FASE 7.2: HELPERS DE PRODUCCIÓN
+// ============================================================
+
+/**
+ * Obtiene la configuración de producción para una fecha.
+ * Usa window.DBModule.getProduccionByFecha() que ya maneja errores.
+ */
+function getProduccionConfig(fechaISO) {
+    try {
+        if (!fechaISO) {
+            console.warn('⚠️ getProduccionConfig: falta fechaISO');
+            return null;
+        }
+        
+        if (!window.DBModule || typeof window.DBModule.getProduccionByFecha !== 'function') {
+            console.warn('⚠️ getProduccionConfig: DBModule.getProduccionByFecha no disponible');
+            return null;
+        }
+        
+        return window.DBModule.getProduccionByFecha(fechaISO);
+    } catch (e) {
+        console.warn('⚠️ Error leyendo config de producción:', e);
+        return null;
+    }
+}
+
+/**
+ * 🆕 FASE 7.2: Cuenta pedidos y ventas con soporte para decimales.
+ */
+function contarPedidosYVentasFecha(fechaISO) {
+    try {
+        const negocioId = window.DBModule.getNegocioIdActual();
+        if (!negocioId || !fechaISO) return { pedidos: 0, ventas: 0, disponibles: 0, cantidadProduccion: 0 };
+        
+        const pedidosResult = window.DBModule.query(
+            `SELECT COUNT(*) as count FROM orders 
+             WHERE negocio_id = ? 
+               AND DATE(delivery_date) = DATE(?)
+               AND deleted_at IS NULL
+               AND status NOT IN ('cancelled', 'delivered', 'waiting_bought')`,
+            [negocioId, fechaISO]
+        );
+        const pedidos = pedidosResult[0]?.count || 0;
+        
+        const ventasResult = window.DBModule.query(
+            `SELECT COUNT(*) as count FROM sales 
+             WHERE negocio_id = ? 
+               AND DATE(sale_date, "localtime") = DATE(?)
+               AND deleted_at IS NULL 
+               AND voided = 0
+               AND (order_id IS NULL OR order_id = 0)`,
+            [negocioId, fechaISO]
+        );
+        const ventas = ventasResult[0]?.count || 0;
+        
+        const config = getProduccionConfig(fechaISO);
+        // 🆕 FASE 7.2: parseFloat para aceptar decimales
+        const cantidadProduccion = parseFloat(config?.cantidad_produccion) || 0;
+        
+        // 🆕 FASE 7.2: Calcular disponibles como decimal
+        const disponibles = cantidadProduccion > 0 
+            ? Math.max(0, cantidadProduccion - pedidos - ventas)
+            : null; // null = sin límite
+        
+        return { pedidos, ventas, disponibles, cantidadProduccion };
+    } catch (e) {
+        console.warn('⚠️ Error contando pedidos/ventas:', e);
+        return { pedidos: 0, ventas: 0, disponibles: 0, cantidadProduccion: 0 };
+    }
+}
+
+/**
+ * 🆕 FASE 7.2: Formatea una cantidad de producción para mostrarla al usuario.
+ * Ej: 6.5 → "6.5", 6.0 → "6", 2.25 → "2.25", 0.5 → "0.5"
+ */
+function formatearCantidadProduccion(cantidad) {
+    if (cantidad === null || cantidad === undefined) return '—';
+    const num = parseFloat(cantidad);
+    if (isNaN(num)) return '—';
+    // Si es entero, mostrar sin decimales
+    if (num === Math.floor(num)) return String(Math.floor(num));
+    // Si tiene decimales, mostrar hasta 2 decimales sin ceros a la derecha
+    return num.toFixed(2).replace(/\.?0+$/, '');
+}
+
+window.getProduccionConfig = getProduccionConfig;
+window.contarPedidosYVentasFecha = contarPedidosYVentasFecha;
+window.formatearCantidadProduccion = formatearCantidadProduccion;
 
 // ============================================================
 // FUNCIONES DEL MÓDULO DE CORRIENTE
@@ -297,6 +407,7 @@ function showCorrienteModal() {
                     <span><span style="display: inline-block; width: 14px; height: 14px; background: #f59e0b; border-radius: 3px; vertical-align: middle;"></span> Corriente</span>
                     <span><span style="display: inline-block; width: 14px; height: 14px; background: #94a3b8; border-radius: 3px; vertical-align: middle;"></span> Sin corriente</span>
                     <span><span style="display: inline-block; width: 14px; height: 14px; background: #ef4444; border-radius: 3px; vertical-align: middle;"></span> Hoy</span>
+                    <span style="margin-left: auto; color: #8b5cf6;">🔨 = Día con producción programada</span>
                 </div>
             </div>
 
@@ -424,7 +535,7 @@ function irAHoyCorriente() {
 }
 
 // ============================================================
-// RENDER CALENDARIO
+// RENDER CALENDARIO (CON DECIMALES)
 // ============================================================
 
 function renderCorrienteCalendario() {
@@ -481,6 +592,9 @@ function renderCorrienteCalendario() {
         const tieneCorriente = bloques && bloques.length > 0;
         const numBloques = tieneCorriente ? bloques.length : 0;
         
+        const prodConfig = getProduccionConfig(dateStr);
+        const tieneProduccion = !!prodConfig;
+        
         let bgColor = '#94a3b8';
         let labelColor = 'var(--text)';
         let bloquesInfo = '';
@@ -494,12 +608,22 @@ function renderCorrienteCalendario() {
             bloquesInfo = bloques.map(h => `${h.inicioStr}-${h.finStr}`).join(' ');
         }
 
+        const produccionIcon = tieneProduccion 
+            ? `<span style="font-size: 9px; display: block; margin-top: 1px;">🔨</span>` 
+            : '';
+        
+        // 🆕 FASE 7.2: Formatear la cantidad para el tooltip
+        const cantidadTooltip = tieneProduccion 
+            ? formatearCantidadProduccion(prodConfig.cantidad_produccion) 
+            : '';
+
         html += `
-            <div style="text-align: center; padding: 6px 2px; background: ${bgColor}; border-radius: 4px; color: ${labelColor}; font-weight: ${isToday ? '700' : '400'}; cursor: ${tieneCorriente ? 'pointer' : 'default'}; font-size: 12px; position: relative; z-index: 1;" 
-                 onclick="${tieneCorriente ? `showHorarioDetalle('${dateStr}')` : ''}"
-                 title="${tieneCorriente ? `⚡ ${numBloques} bloque(s): ${bloquesInfo}` : 'Sin corriente'}">
+            <div style="text-align: center; padding: 6px 2px; background: ${bgColor}; border-radius: 4px; color: ${labelColor}; font-weight: ${isToday ? '700' : '400'}; cursor: ${tieneCorriente || tieneProduccion ? 'pointer' : 'default'}; font-size: 12px; position: relative; z-index: 1; border: ${tieneProduccion ? '2px solid #8b5cf6' : 'none'};" 
+                 onclick="${tieneCorriente || tieneProduccion ? `showHorarioDetalle('${dateStr}')` : ''}"
+                 title="${tieneCorriente ? `⚡ ${numBloques} bloque(s): ${bloquesInfo}` : 'Sin corriente'}${tieneProduccion ? ' · 🔨 Producción: ' + cantidadTooltip : ''}">
                 ${day}
                 ${tieneCorriente ? `<span style="font-size: 8px; display: block; opacity: 0.9;">⚡${numBloques}</span>` : ''}
+                ${produccionIcon}
             </div>
         `;
     }
@@ -513,7 +637,8 @@ function changeCorrienteMonth(delta) {
 }
 
 // ============================================================
-// SHOW HORARIO DETALLE
+// SHOW HORARIO DETALLE (CON PRODUCCIÓN DECIMAL)
+// 🆕 FASE 7.2: Input con step="0.1" y formateo decimal
 // ============================================================
 
 function showHorarioDetalle(dateStr) {
@@ -521,6 +646,8 @@ function showHorarioDetalle(dateStr) {
     if (existing) existing.remove();
 
     const bloques = window.CorrienteUtils.getBloques(dateStr);
+    const prodConfig = getProduccionConfig(dateStr);
+    const conteo = contarPedidosYVentasFecha(dateStr);
     
     const dateObj = new Date(dateStr + 'T00:00:00');
     const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -543,34 +670,123 @@ function showHorarioDetalle(dateStr) {
         animation: modalFadeIn 0.25s ease;
     `;
 
+    let produccionHtml = '';
+    
+    if (bloques && bloques.length > 0) {
+        const bloquesOptions = bloques.map((b, i) => {
+            const selected = prodConfig && prodConfig.bloque_index === i + 1;
+            return `<option value="${i + 1}" ${selected ? 'selected' : ''}>Bloque ${i + 1}: ${b.inicioStr} - ${b.finStr}</option>`;
+        }).join('');
+        
+        // 🆕 FASE 7.2: Formatear la cantidad guardada
+        const cantidadGuardada = prodConfig?.cantidad_produccion 
+            ? formatearCantidadProduccion(prodConfig.cantidad_produccion) 
+            : '';
+        
+        produccionHtml = `
+            <div style="background: linear-gradient(135deg, #8b5cf615 0%, #8b5cf608 100%); border: 2px solid #8b5cf6; border-radius: 10px; padding: 12px 14px; margin-top: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                    <span style="font-size: 22px;">🔨</span>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 700; font-size: 14px; color: #8b5cf6;">Horario de producción</div>
+                        <div style="font-size: 11px; color: var(--text-light);">Define en qué bloque se horneará y cuánto se producirá</div>
+                    </div>
+                    ${prodConfig ? `<button onclick="eliminarProduccion('${dateStr}')" class="btn secondary" style="padding: 2px 10px; font-size: 11px; width: auto; color: #ef4444; border-color: #ef4444;">🗑️</button>` : ''}
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                    <div>
+                        <label style="font-size: 11px; font-weight: 600; color: var(--text-label); display: block; margin-bottom: 2px;">🔨 Bloque de producción</label>
+                        <select id="produccion-bloque" style="width: 100%; padding: 6px 8px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 12px;">
+                            <option value="">— Sin especificar —</option>
+                            ${bloquesOptions}
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; font-weight: 600; color: var(--text-label); display: block; margin-bottom: 2px;">📦 Cantidad a producir</label>
+                        <!-- 🆕 FASE 7.2: step="0.1" permite decimales -->
+                        <input type="number" id="produccion-cantidad" 
+                               value="${cantidadGuardada}" 
+                               placeholder="Ej: 6.5"
+                               min="0.01" 
+                               step="0.1"
+                               style="width: 100%; padding: 6px 8px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 12px;">
+                        <small style="font-size: 10px; color: var(--text-light); display: block; margin-top: 2px;">
+                            💡 Acepta decimales: 6.5 = 6 jabas y media
+                        </small>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 10px;">
+                    <label style="font-size: 11px; font-weight: 600; color: var(--text-label); display: block; margin-bottom: 2px;">📝 Notas de producción (opcional)</label>
+                    <input type="text" id="produccion-notas" 
+                           value="${prodConfig?.notas || ''}" 
+                           placeholder="Ej: Solo pan de yogur"
+                           style="width: 100%; padding: 6px 8px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 12px;">
+                </div>
+                
+                ${conteo.cantidadProduccion > 0 ? `
+                <div style="background: var(--bg); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; font-size: 12px;">
+                    <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                        <span>📋 Pedidos reservados:</span><strong>${conteo.pedidos}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                        <span>💰 Ventas directas:</span><strong>${conteo.ventas}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 4px 0; border-top: 1px solid var(--border-color); margin-top: 4px; padding-top: 4px;">
+                        <span>✅ Disponibles:</span>
+                        <strong style="color: ${conteo.disponibles > 0 ? '#10b981' : '#ef4444'};">
+                            ${formatearCantidadProduccion(conteo.disponibles)} / ${formatearCantidadProduccion(conteo.cantidadProduccion)}
+                        </strong>
+                    </div>
+                </div>
+                ` : ''}
+                
+                <button onclick="guardarProduccion('${dateStr}')" class="btn primary" 
+                        style="width: 100%; padding: 8px; font-size: 13px; background: #8b5cf6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    💾 Guardar producción
+                </button>
+            </div>
+        `;
+    }
+
     if (!bloques || bloques.length === 0) {
         modal.innerHTML = `
-            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 28px 32px; max-width: 400px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color); text-align: center;">
-                <div style="font-size: 56px; margin-bottom: 12px;">🌙</div>
-                <h2 style="margin: 0 0 8px 0; font-size: 18px; color: var(--text);">Sin corriente</h2>
-                <p style="font-size: 14px; color: var(--text-light); margin-bottom: 20px; text-transform: capitalize;">📅 ${fechaDisplay}</p>
-                <p style="font-size: 13px; color: var(--text-light); margin-bottom: 20px;">No hay corriente programada para este día.</p>
-                <button onclick="closeHorarioDetalleModal()" class="btn secondary" style="padding: 10px 24px; font-size: 14px; width: auto;">Cerrar</button>
+            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 28px 32px; max-width: 440px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
+                <div style="text-align: center; margin-bottom: 16px;">
+                    <div style="font-size: 56px; margin-bottom: 12px;">🌙</div>
+                    <h2 style="margin: 0 0 8px 0; font-size: 18px; color: var(--text);">Sin corriente</h2>
+                    <p style="font-size: 14px; color: var(--text-light); text-transform: capitalize;">📅 ${fechaDisplay}</p>
+                </div>
+                <p style="font-size: 13px; color: var(--text-light); margin-bottom: 20px; text-align: center;">No hay corriente programada para este día.</p>
+                ${produccionHtml}
+                <div style="display: flex; gap: 8px; margin-top: 16px;">
+                    <button onclick="closeHorarioDetalleModal()" class="btn secondary" style="padding: 10px 24px; font-size: 14px; width: auto; flex: 1;">Cerrar</button>
+                </div>
             </div>
         `;
     } else {
         let totalHoras = 0;
         bloques.forEach(b => { totalHoras += b.duracionHoras; });
 
-        const bloquesHtml = bloques.map((h, i) => `
-            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--bg); border-radius: 8px; border-left: 4px solid #f59e0b; margin-bottom: 6px;">
-                <span style="font-size: 18px; font-weight: 700; color: #f59e0b; min-width: 24px;">${i + 1}</span>
-                <div style="flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                    <span style="background: #10b98120; color: #10b981; padding: 3px 10px; border-radius: 10px; font-size: 13px; font-weight: 600;">🟢 ${h.inicioStr}</span>
-                    <span style="color: var(--text-light); font-size: 12px;">→</span>
-                    <span style="background: #ef444420; color: #ef4444; padding: 3px 10px; border-radius: 10px; font-size: 13px; font-weight: 600;">🔴 ${h.finStr}</span>
-                    ${h.cruzaMedianoche ? '<span style="font-size: 10px; color: #f59e0b; background: #f59e0b20; padding: 1px 6px; border-radius: 8px;">cruza medianoche</span>' : ''}
+        const bloquesHtml = bloques.map((h, i) => {
+            const esProduccion = prodConfig && prodConfig.bloque_index === i + 1;
+            return `
+                <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: ${esProduccion ? '#8b5cf620' : 'var(--bg)'}; border-radius: 8px; border-left: 4px solid ${esProduccion ? '#8b5cf6' : '#f59e0b'}; margin-bottom: 6px;">
+                    <span style="font-size: 18px; font-weight: 700; color: ${esProduccion ? '#8b5cf6' : '#f59e0b'}; min-width: 24px;">${i + 1}</span>
+                    <div style="flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span style="background: #10b98120; color: #10b981; padding: 3px 10px; border-radius: 10px; font-size: 13px; font-weight: 600;">🟢 ${h.inicioStr}</span>
+                        <span style="color: var(--text-light); font-size: 12px;">→</span>
+                        <span style="background: #ef444420; color: #ef4444; padding: 3px 10px; border-radius: 10px; font-size: 13px; font-weight: 600;">🔴 ${h.finStr}</span>
+                        ${h.cruzaMedianoche ? '<span style="font-size: 10px; color: #f59e0b; background: #f59e0b20; padding: 1px 6px; border-radius: 8px;">cruza medianoche</span>' : ''}
+                        ${esProduccion ? '<span style="font-size: 10px; color: #8b5cf6; background: #8b5cf620; padding: 1px 8px; border-radius: 8px; font-weight: 600;">🔨 PRODUCCIÓN</span>' : ''}
+                    </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         modal.innerHTML = `
-            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px 28px; max-width: 420px; width: 100%; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
+            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px 28px; max-width: 460px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid var(--border-color);">
                     <span style="font-size: 32px;">⚡</span>
                     <div style="flex: 1;">
@@ -595,6 +811,8 @@ function showHorarioDetalle(dateStr) {
                     <div style="font-size: 12px; font-weight: 600; color: var(--text-label); margin-bottom: 6px;">📋 Bloques del día:</div>
                     ${bloquesHtml}
                 </div>
+
+                ${produccionHtml}
 
                 <div style="display: flex; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-color);">
                     <button onclick="closeHorarioDetalleModal()" class="btn secondary" style="padding: 10px 20px; font-size: 14px; width: auto; flex: 1;">Cerrar</button>
@@ -633,7 +851,112 @@ function showHorarioDetalle(dateStr) {
 }
 
 // ============================================================
-// CONSULTAR HORARIOS
+// 🆕 FASE 7.2: GUARDAR PRODUCCIÓN CON DECIMALES
+// ============================================================
+
+function guardarProduccion(fechaISO) {
+    console.log('💾 guardarProduccion() llamado para fecha:', fechaISO);
+    
+    // Verificar que DBModule.saveProduccion existe
+    if (!window.DBModule || typeof window.DBModule.saveProduccion !== 'function') {
+        console.error('❌ DBModule.saveProduccion no está disponible');
+        window.showToast('❌ Error crítico: función de guardado no disponible. Recarga la página.', 'error', 6000);
+        return;
+    }
+    
+    const bloqueIndex = parseInt(document.getElementById('produccion-bloque')?.value) || null;
+    // 🆕 FASE 7.2: parseFloat en lugar de parseInt
+    const cantidadRaw = document.getElementById('produccion-cantidad')?.value;
+    const cantidad = parseFloat(cantidadRaw);
+    const notas = document.getElementById('produccion-notas')?.value?.trim() || null;
+    
+    console.log('   → Datos del formulario:', { bloqueIndex, cantidadRaw, cantidad, notas });
+    
+    if (!bloqueIndex) {
+        window.showToast('⚠️ Selecciona un bloque de producción', 'warning');
+        return;
+    }
+    
+    if (isNaN(cantidad) || cantidad <= 0) {
+        window.showToast('⚠️ La cantidad a producir debe ser mayor a 0', 'warning');
+        return;
+    }
+    
+    const bloques = window.CorrienteUtils.getBloques(fechaISO);
+    if (!bloques || bloques.length < bloqueIndex) {
+        window.showToast('❌ Bloque no válido', 'error');
+        return;
+    }
+    
+    const bloque = bloques[bloqueIndex - 1];
+    console.log('   → Bloque seleccionado:', bloque.inicioStr24, '-', bloque.finStr24);
+    
+    const data = {
+        fecha: fechaISO,
+        hora_inicio: bloque.inicioStr24,
+        hora_fin: bloque.finStr24,
+        bloque_index: bloqueIndex,
+        cantidad_produccion: cantidad,
+        notas: notas
+    };
+    
+    console.log('   → Llamando a DBModule.saveProduccion...');
+    
+    const result = window.DBModule.saveProduccion(data);
+    
+    console.log('   → Resultado:', result);
+    
+    if (result.success) {
+        // 🆕 FASE 7.2: Mostrar la cantidad formateada
+        const cantidadFormateada = formatearCantidadProduccion(cantidad);
+        window.showToast(`✅ Producción guardada: ${cantidadFormateada} unidades en bloque ${bloqueIndex}`, 'success', 4000);
+        
+        // Refrescar el modal y el calendario
+        closeHorarioDetalleModal();
+        setTimeout(() => {
+            renderCorrienteCalendario();
+            showHorarioDetalle(fechaISO);
+        }, 300);
+    } else {
+        const errorMsg = result.error || 'Error desconocido';
+        console.error('❌ Error guardando producción:', errorMsg);
+        window.showToast('❌ Error al guardar: ' + errorMsg, 'error', 6000);
+    }
+}
+
+function eliminarProduccion(fechaISO) {
+    window.ModalModule.showConfirm({
+        title: '🗑️ Eliminar producción',
+        message: `¿Eliminar la configuración de producción del ${fechaISO}?`,
+        confirmText: '🗑️ Sí, eliminar',
+        cancelText: 'Cancelar',
+        icon: '🗑️',
+        confirmColor: '#ef4444'
+    }).then(confirm => {
+        if (!confirm) return;
+        
+        if (!window.DBModule || typeof window.DBModule.deleteProduccion !== 'function') {
+            window.showToast('❌ Error: función no disponible', 'error', 5000);
+            return;
+        }
+        
+        const result = window.DBModule.deleteProduccion(fechaISO);
+        
+        if (result.success) {
+            window.showToast('✅ Producción eliminada', 'success');
+            closeHorarioDetalleModal();
+            setTimeout(renderCorrienteCalendario, 300);
+        } else {
+            window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 5000);
+        }
+    });
+}
+
+window.guardarProduccion = guardarProduccion;
+window.eliminarProduccion = eliminarProduccion;
+
+// ============================================================
+// CONSULTAR HORARIOS (CON DECIMALES)
 // ============================================================
 
 function consultarHorariosFecha() {
@@ -646,6 +969,8 @@ function consultarHorariosFecha() {
     }
 
     const bloques = window.CorrienteUtils.getBloques(fecha);
+    const prodConfig = getProduccionConfig(fecha);
+    const conteo = contarPedidosYVentasFecha(fecha);
     
     const dateObj = new Date(fecha + 'T00:00:00');
     const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -663,6 +988,7 @@ function consultarHorariosFecha() {
             <div style="text-align: center; color: var(--text-light); font-size: 13px;">
                 <span style="font-size: 28px;">🌙</span>
                 <p style="text-transform: capitalize;">${fechaDisplay}: <strong style="color: #94a3b8;">Sin corriente</strong></p>
+                ${prodConfig ? `<p style="font-size: 12px; color: #8b5cf6;">🔨 Producción: ${formatearCantidadProduccion(prodConfig.cantidad_produccion)} unidades</p>` : ''}
             </div>
         `;
         return;
@@ -671,8 +997,34 @@ function consultarHorariosFecha() {
     let totalHoras = 0;
     let horariosHtml = bloques.map((h, i) => {
         totalHoras += h.duracionHoras;
-        return `<div style="display: inline-block; background: #f59e0b20; color: #f59e0b; padding: 3px 10px; border-radius: 10px; margin: 2px; font-size: 12px;">🟢 ${h.inicioStr} - 🔴 ${h.finStr}</div>`;
+        const esProduccion = prodConfig && prodConfig.bloque_index === i + 1;
+        return `<div style="display: inline-block; background: ${esProduccion ? '#8b5cf620' : '#f59e0b20'}; color: ${esProduccion ? '#8b5cf6' : '#f59e0b'}; padding: 3px 10px; border-radius: 10px; margin: 2px; font-size: 12px; ${esProduccion ? 'border: 1px solid #8b5cf6;' : ''}">${esProduccion ? '🔨' : '🟢'} ${h.inicioStr} - 🔴 ${h.finStr}</div>`;
     }).join(' ');
+
+    let produccionInfo = '';
+    if (prodConfig) {
+        produccionInfo = `
+            <div style="background: linear-gradient(135deg, #8b5cf615 0%, #8b5cf608 100%); border: 1px solid #8b5cf6; border-radius: 6px; padding: 8px 10px; margin-top: 8px; font-size: 12px;">
+                <div style="color: #8b5cf6; font-weight: 600; margin-bottom: 4px;">🔨 Producción programada</div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>📦 Cantidad:</span><strong>${formatearCantidadProduccion(prodConfig.cantidad_produccion)}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>📋 Pedidos:</span><strong>${conteo.pedidos}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>💰 Ventas directas:</span><strong>${conteo.ventas}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-top: 1px solid var(--border-color); margin-top: 4px; padding-top: 4px;">
+                    <span>✅ Disponibles:</span>
+                    <strong style="color: ${conteo.disponibles > 0 ? '#10b981' : '#ef4444'};">
+                        ${formatearCantidadProduccion(conteo.disponibles)} / ${formatearCantidadProduccion(conteo.cantidadProduccion)}
+                    </strong>
+                </div>
+                ${prodConfig.notas ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 4px;">📝 ${prodConfig.notas}</div>` : ''}
+            </div>
+        `;
+    }
 
     resultado.innerHTML = `
         <div style="text-align: center; font-size: 13px;">
@@ -684,11 +1036,12 @@ function consultarHorariosFecha() {
                 ⏰ Total: <strong>${totalHoras.toFixed(1)} horas</strong>
             </p>
         </div>
+        ${produccionInfo}
     `;
 }
 
 // ============================================================
-// GENERAR REPORTE PDF DE CORRIENTE
+// GENERAR REPORTE PDF DE CORRIENTE (CON PRODUCCIÓN DECIMAL)
 // ============================================================
 
 function generarReportePDF(tipo) {
@@ -717,6 +1070,7 @@ function generarReportePDF(tipo) {
         currentDate.setDate(currentDate.getDate() + i);
         const dateStr = window.CorrienteUtils.formatearFechaISO(currentDate);
         const bloques = window.CorrienteUtils.getBloques(dateStr);
+        const prodConfig = getProduccionConfig(dateStr);
         
         let horas = 0;
         let horariosStr = '🌙 Sin corriente';
@@ -732,7 +1086,9 @@ function generarReportePDF(tipo) {
             diaSemana: currentDate.toLocaleDateString('es-ES', { weekday: 'short' }),
             horarios: horariosStr,
             horas: horas,
-            numBloques: bloques ? bloques.length : 0
+            numBloques: bloques ? bloques.length : 0,
+            produccion: prodConfig ? formatearCantidadProduccion(prodConfig.cantidad_produccion) : null,
+            bloqueProduccion: prodConfig ? prodConfig.bloque_index : null
         });
     }
 
@@ -762,13 +1118,14 @@ function generarReportePDF(tipo) {
                 .sin-corriente { color: #94a3b8; }
                 .con-corriente { color: #f59e0b; font-weight: 600; }
                 .bloques-badge { display: inline-block; background: #f59e0b20; padding: 1px 6px; border-radius: 8px; font-size: 10px; color: #f59e0b; }
+                .produccion-badge { display: inline-block; background: #8b5cf620; padding: 1px 6px; border-radius: 8px; font-size: 10px; color: #8b5cf6; font-weight: 600; }
                 .footer { margin-top: 20px; text-align: center; color: #94a3b8; font-size: 10px; border-top: 1px solid #eee; padding-top: 12px; }
                 .nota { margin-top: 12px; padding: 10px; background: #fef9e7; border-radius: 6px; border-left: 3px solid #f59e0b; font-size: 11px; color: #666; }
             </style>
         </head>
         <body>
             <div class="header">
-                <h1>⚡ Reporte de Corriente</h1>
+                <h1>⚡ Reporte de Corriente y Producción</h1>
                 <p>${tipo === 'semana' ? '📅 Semanal' : '📅 Mensual'} - ${new Date(desde).toLocaleDateString('es-ES')} al ${new Date(hasta).toLocaleDateString('es-ES')}</p>
                 <p style="font-size: 11px; color: #94a3b8;">Patrón: ${config.horasCorriente || 3}h corriente / ${config.horasApagon || 12}h apagón</p>
             </div>
@@ -792,9 +1149,10 @@ function generarReportePDF(tipo) {
                 <thead>
                     <tr>
                         <th>Fecha</th>
-                        <th style="width: 40%;">Horario</th>
+                        <th style="width: 35%;">Horario</th>
                         <th style="text-align: center;">#</th>
                         <th style="text-align: right;">Horas</th>
+                        <th style="text-align: center;">🔨</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -804,6 +1162,9 @@ function generarReportePDF(tipo) {
                             <td class="${row.horas > 0 ? 'con-corriente' : 'sin-corriente'}">${row.horarios}</td>
                             <td style="text-align: center;">${row.numBloques > 0 ? `<span class="bloques-badge">${row.numBloques}</span>` : '—'}</td>
                             <td style="text-align: right; font-weight: ${row.horas > 0 ? '700' : '400'}; color: ${row.horas > 0 ? '#f59e0b' : '#94a3b8'};">${row.horas > 0 ? row.horas.toFixed(1) + 'h' : '—'}</td>
+                            <td style="text-align: center;">
+                                ${row.produccion ? `<span class="produccion-badge">${row.produccion}</span>` : '—'}
+                            </td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -812,6 +1173,7 @@ function generarReportePDF(tipo) {
             <div class="nota">
                 💡 Los horarios se generan automáticamente basados en el patrón configurado.
                 <br>🔄 Ciclo: ${config.horasCorriente || 3}h corriente / ${config.horasApagon || 12}h apagón
+                <br>🔨 = Día con producción programada (bloque seleccionado)
             </div>
 
             <div class="footer">
@@ -1154,13 +1516,9 @@ function closeExpensesReportModal() {
 }
 
 // ============================================================
-// 🆕 FASE 2.3: LISTA DE ESPERA EN HERRAMIENTAS
+// LISTA DE ESPERA EN HERRAMIENTAS
 // ============================================================
 
-/**
- * Abre el modal de gestión de lista de espera desde Herramientas.
- * Reutiliza el modal definido en ui-orders.js.
- */
 function showWaitingListFromSettings() {
     if (typeof window.showWaitingListManagerModal === 'function') {
         window.showWaitingListManagerModal();
@@ -1169,9 +1527,6 @@ function showWaitingListFromSettings() {
     }
 }
 
-/**
- * Genera el reporte PDF de la lista de espera desde Herramientas.
- */
 async function reporteListaEsperaFromSettings() {
     if (typeof window.reporteListaEspera === 'function') {
         window.reporteListaEspera();
@@ -1193,30 +1548,16 @@ async function reporteListaEsperaFromSettings() {
 }
 
 // ============================================================
-// 🆕 FASE 2.3: CANCELACIÓN GLOBAL DE PEDIDOS (SOLO ADMIN)
+// CANCELACIÓN GLOBAL DE PEDIDOS (SOLO ADMIN)
 // ============================================================
 
-/**
- * Abre el modal de cancelación global de pedidos.
- * Solo accesible para admin.
- * 
- * Permite:
- *  - Seleccionar rango de fechas (desde/hasta)
- *  - Elegir causa principal (select)
- *  - Añadir nota adicional (opcional)
- *  - Doble confirmación
- *  - Ejecuta OrdersModule.cancelarPedidosGlobalmente()
- *  - Muestra resumen detallado
- */
 function showGlobalCancelModal() {
-    // Verificar permisos
     const user = window.AuthModule.getCurrentUser();
     if (!user || user.is_admin !== 1) {
         window.showToast('🔒 Solo el administrador puede cancelar pedidos globalmente', 'warning', 4000);
         return;
     }
     
-    // Cerrar modales previos
     if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
         window.ModalModule.cerrarTodosLosModales();
     }
@@ -1241,7 +1582,6 @@ function showGlobalCancelModal() {
     modal.innerHTML = `
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 520px; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); animation: modalSlideUp 0.3s ease; border: 2px solid #dc2626;">
             
-            <!-- HEADER -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #dc2626;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 32px;">🚨</span>
@@ -1253,7 +1593,6 @@ function showGlobalCancelModal() {
                 <button onclick="closeGlobalCancelModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
             </div>
             
-            <!-- ADVERTENCIA -->
             <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 12px; color: #991b1b; line-height: 1.6;">
                 ⚠️ <strong>ATENCIÓN:</strong> Esta acción cancelará TODOS los pedidos 
                 <strong>Pendientes, Confirmados, En producción y Listos</strong> dentro del rango de fechas.
@@ -1267,10 +1606,8 @@ function showGlobalCancelModal() {
                 ⚠️ Los clientes en lista de espera con fecha posterior al rango se conservan.
             </div>
             
-            <!-- FORMULARIO -->
             <form id="global-cancel-form" style="display: flex; flex-direction: column; gap: 14px;">
                 
-                <!-- RANGO DE FECHAS -->
                 <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
                     <div style="font-size: 13px; font-weight: 600; color: var(--text-label); margin-bottom: 8px;">
                         📅 Rango de fechas
@@ -1291,7 +1628,6 @@ function showGlobalCancelModal() {
                     </div>
                 </div>
                 
-                <!-- CAUSA -->
                 <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
                     <div style="font-size: 13px; font-weight: 600; color: var(--text-label); margin-bottom: 8px;">
                         📌 Causa principal
@@ -1307,7 +1643,6 @@ function showGlobalCancelModal() {
                     </select>
                 </div>
                 
-                <!-- NOTA -->
                 <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
                     <div style="font-size: 13px; font-weight: 600; color: var(--text-label); margin-bottom: 8px;">
                         📝 Nota adicional (opcional)
@@ -1318,7 +1653,6 @@ function showGlobalCancelModal() {
                               placeholder="Ej: Se espera reanudar la próxima semana"></textarea>
                 </div>
                 
-                <!-- BOTONES -->
                 <div style="display: flex; gap: 8px; margin-top: 4px;">
                     <button type="submit" 
                             class="btn" 
@@ -1340,19 +1674,16 @@ function showGlobalCancelModal() {
     
     window._globalCancelModal = modal;
     
-    // Submit
     const form = document.getElementById('global-cancel-form');
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         await executeGlobalCancel();
     });
     
-    // Cierre con click fuera
     modal.addEventListener('click', (e) => {
         if (e.target === modal) closeGlobalCancelModal();
     });
     
-    // Cierre con Escape
     const escHandler = function(e) {
         if (e.key === 'Escape') {
             closeGlobalCancelModal();
@@ -1362,9 +1693,6 @@ function showGlobalCancelModal() {
     document.addEventListener('keydown', escHandler);
 }
 
-/**
- * Cierra el modal de cancelación global.
- */
 function closeGlobalCancelModal() {
     const modal = document.getElementById('global-cancel-modal');
     if (modal) {
@@ -1378,16 +1706,12 @@ function closeGlobalCancelModal() {
     window._globalCancelModal = null;
 }
 
-/**
- * Ejecuta la cancelación global tras validar y confirmar.
- */
 async function executeGlobalCancel() {
     const fechaDesde = document.getElementById('global-cancel-from')?.value;
     const fechaHasta = document.getElementById('global-cancel-to')?.value;
     const causa = document.getElementById('global-cancel-causa')?.value || '';
     const nota = document.getElementById('global-cancel-nota')?.value?.trim() || '';
     
-    // Validaciones
     if (!fechaDesde || !fechaHasta) {
         window.showToast('⚠️ Debes especificar fecha desde y hasta', 'error');
         return;
@@ -1398,7 +1722,6 @@ async function executeGlobalCancel() {
         return;
     }
     
-    // Verificar que hay pedidos en ese rango
     const negocioId = window.DBModule.getNegocioIdActual();
     const pedidosEnRango = window.DBModule.query(`
         SELECT COUNT(*) as n FROM orders
@@ -1416,7 +1739,6 @@ async function executeGlobalCancel() {
         return;
     }
     
-    // Confirmación 1
     const confirm1 = await window.ModalModule.showConfirm({
         title: '⚠️ Confirmar cancelación',
         message: `Se cancelarán ${count} pedido(s) entre el ${fechaDesde} y el ${fechaHasta}.\n\n📌 Causa: ${causa}\n${nota ? `📝 Nota: ${nota}\n\n` : ''}¿Continuar?`,
@@ -1428,7 +1750,6 @@ async function executeGlobalCancel() {
     
     if (!confirm1) return;
     
-    // Confirmación 2 (última)
     const confirm2 = await window.ModalModule.showConfirm({
         title: '🚨 CONFIRMACIÓN FINAL',
         message: `Esta es la ÚLTIMA advertencia.\n\nSe cancelarán ${count} pedido(s).\nLos pedidos cancelados NO se pueden recuperar (aunque sí los datos quedan en el historial).\n\n¿Confirmas?`,
@@ -1443,18 +1764,13 @@ async function executeGlobalCancel() {
         return;
     }
     
-    // Cerrar el modal de cancelación global
     closeGlobalCancelModal();
     
-    // Ejecutar
     try {
         window.showToast('⏳ Cancelando pedidos...', 'info', 3000);
         
         const result = await window.OrdersModule.cancelarPedidosGlobalmente(
-            fechaDesde,
-            fechaHasta,
-            causa,
-            nota
+            fechaDesde, fechaHasta, causa, nota
         );
         
         if (!result.success) {
@@ -1462,7 +1778,6 @@ async function executeGlobalCancel() {
             return;
         }
         
-        // Modal de resultado
         const erroresHtml = (result.errores && result.errores.length > 0)
             ? `\n\n⚠️ Hubo ${result.errores.length} error(es):\n${result.errores.slice(0, 5).join('\n')}`
             : '';
@@ -1476,14 +1791,11 @@ async function executeGlobalCancel() {
         await window.ModalModule.showAlert({
             title: '✅ Cancelación global exitosa',
             message: mensaje,
-            icon: '✅',
-            type: 'success',
-            buttonText: '✅ Entendido'
+            icon: '✅', type: 'success', buttonText: '✅ Entendido'
         });
         
         window.showToast(`✅ ${result.cancelados} pedido(s) cancelado(s)`, 'success', 5000);
         
-        // Refrescar vistas
         if (typeof window.refreshCurrentView === 'function') {
             setTimeout(window.refreshCurrentView, 500);
         }
@@ -1496,6 +1808,377 @@ async function executeGlobalCancel() {
         window.showToast('❌ Error: ' + error.message, 'error', 6000);
     }
 }
+
+// ============================================================
+// REPROGRAMAR PEDIDOS POR RANGO (SOLO ADMIN)
+// ============================================================
+
+function showReprogramarPedidosModal() {
+    const user = window.AuthModule.getCurrentUser();
+    if (!user || user.is_admin !== 1) {
+        window.showToast('🔒 Solo el administrador puede reprogramar pedidos', 'warning', 4000);
+        return;
+    }
+    
+    if (window.ModalModule && window.ModalModule.cerrarTodosLosModales) {
+        window.ModalModule.cerrarTodosLosModales();
+    }
+    
+    const existingModal = document.getElementById('reprogramar-modal');
+    if (existingModal) existingModal.remove();
+    
+    const hoy = new Date();
+    const en7dias = new Date(hoy);
+    en7dias.setDate(en7dias.getDate() + 7);
+    const en14dias = new Date(hoy);
+    en14dias.setDate(en14dias.getDate() + 14);
+    
+    const modal = document.createElement('div');
+    modal.id = 'reprogramar-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 999999999; padding: 15px;
+        animation: modalFadeIn 0.25s ease;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 560px; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); animation: modalSlideUp 0.3s ease; border: 2px solid #8b5cf6;">
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #8b5cf6;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 32px;">🔄</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 18px; color: #8b5cf6;">Reprogramar Pedidos</h2>
+                        <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">Mueve pedidos de una fecha a otra</p>
+                    </div>
+                </div>
+                <button onclick="closeReprogramarModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+            </div>
+            
+            <div style="background: #f5f3ff; border: 1px solid #c4b5fd; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 12px; color: #5b21b6; line-height: 1.6;">
+                💡 <strong>¿Cómo funciona?</strong><br>
+                Los pedidos en el rango de fechas de origen se moverán a la fecha destino.
+                <br>La causa y nota se añadirán al campo de notas de cada pedido.
+                <br>Solo se reprograman pedidos <strong>pendientes, confirmados, en producción o listos</strong>.
+            </div>
+            
+            <form id="reprogramar-form" style="display: flex; flex-direction: column; gap: 14px;">
+                
+                <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 13px; font-weight: 600; color: var(--text-label); margin-bottom: 8px;">
+                        📅 Rango de fechas ORIGEN
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <div class="form-group">
+                            <label style="font-size: 12px;">Desde</label>
+                            <input type="date" id="reprogramar-from" 
+                                   value="${hoy.toISOString().split('T')[0]}" 
+                                   class="input-field" required
+                                   onchange="actualizarPreviewReprogramacion()">
+                        </div>
+                        <div class="form-group">
+                            <label style="font-size: 12px;">Hasta</label>
+                            <input type="date" id="reprogramar-to" 
+                                   value="${en7dias.toISOString().split('T')[0]}" 
+                                   class="input-field" required
+                                   onchange="actualizarPreviewReprogramacion()">
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 13px; font-weight: 600; color: var(--text-label); margin-bottom: 8px;">
+                        👤 Filtrar por cliente (opcional)
+                    </div>
+                    <input type="text" id="reprogramar-cliente" 
+                           class="input-field" 
+                           placeholder="Dejar vacío para todos los clientes"
+                           oninput="actualizarPreviewReprogramacion()">
+                    <small style="font-size: 11px; color: var(--text-light); display: block; margin-top: 4px;">
+                        Si se especifica, solo se reprograman los pedidos de ese cliente
+                    </small>
+                </div>
+                
+                <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid #10b981;">
+                    <div style="font-size: 13px; font-weight: 600; color: #10b981; margin-bottom: 8px;">
+                        🎯 Fecha DESTINO
+                    </div>
+                    <div class="form-group">
+                        <input type="date" id="reprogramar-destino" 
+                               value="${en14dias.toISOString().split('T')[0]}" 
+                               class="input-field" required
+                               onchange="actualizarPreviewReprogramacion()">
+                    </div>
+                </div>
+                
+                <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 13px; font-weight: 600; color: var(--text-label); margin-bottom: 8px;">
+                        📌 Causa de la reprogramación
+                    </div>
+                    <select id="reprogramar-causa" class="input-select" required>
+                        ${MOTIVOS_REPROGRAMACION.map(m => 
+                            `<option value="${m.value}">${m.label}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                
+                <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 13px; font-weight: 600; color: var(--text-label); margin-bottom: 8px;">
+                        📝 Nota adicional (opcional)
+                    </div>
+                    <textarea id="reprogramar-nota" 
+                              class="input-textarea" 
+                              rows="2" 
+                              placeholder="Ej: Se pospone por mantenimiento del horno"></textarea>
+                </div>
+                
+                <div id="reprogramar-preview" style="background: #f0f9ff; padding: 12px; border-radius: 8px; border: 2px solid #3b82f6; font-size: 12px;">
+                    <div style="text-align: center; color: var(--text-light);">
+                        Cargando vista previa...
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 8px; margin-top: 4px;">
+                    <button type="submit" 
+                            class="btn" 
+                            style="flex: 1; padding: 12px; font-size: 14px; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;">
+                        🔄 REPROGRAMAR PEDIDOS
+                    </button>
+                    <button type="button" 
+                            onclick="closeReprogramarModal()" 
+                            class="btn secondary" 
+                            style="flex: 1; padding: 12px; font-size: 14px;">
+                        ❌ Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    window._reprogramarModal = modal;
+    
+    const form = document.getElementById('reprogramar-form');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await executeReprogramarPedidos();
+    });
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeReprogramarModal();
+    });
+    
+    const escHandler = function(e) {
+        if (e.key === 'Escape') {
+            closeReprogramarModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+    
+    setTimeout(actualizarPreviewReprogramacion, 100);
+}
+
+function closeReprogramarModal() {
+    const modal = document.getElementById('reprogramar-modal');
+    if (modal) {
+        modal.style.animation = 'modalFadeOut 0.2s ease forwards';
+        setTimeout(() => { if (modal.parentNode) modal.remove(); }, 200);
+        setTimeout(() => {
+            const still = document.getElementById('reprogramar-modal');
+            if (still && still.parentNode) still.remove();
+        }, 500);
+    }
+    window._reprogramarModal = null;
+}
+
+function actualizarPreviewReprogramacion() {
+    const preview = document.getElementById('reprogramar-preview');
+    if (!preview) return;
+    
+    const fromDate = document.getElementById('reprogramar-from')?.value;
+    const toDate = document.getElementById('reprogramar-to')?.value;
+    const cliente = document.getElementById('reprogramar-cliente')?.value?.trim() || '';
+    const destinoDate = document.getElementById('reprogramar-destino')?.value;
+    
+    if (!fromDate || !toDate || !destinoDate) {
+        preview.innerHTML = '<div style="text-align: center; color: var(--text-light);">Selecciona las fechas</div>';
+        return;
+    }
+    
+    if (fromDate > toDate) {
+        preview.innerHTML = '<div style="text-align: center; color: #ef4444;">⚠️ La fecha "desde" debe ser anterior a "hasta"</div>';
+        return;
+    }
+    
+    if (destinoDate >= fromDate && destinoDate <= toDate) {
+        preview.innerHTML = '<div style="text-align: center; color: #f59e0b;">⚠️ La fecha destino está dentro del rango origen</div>';
+        return;
+    }
+    
+    const negocioId = window.DBModule.getNegocioIdActual();
+    if (!negocioId) {
+        preview.innerHTML = '<div style="text-align: center; color: #ef4444;">❌ No hay negocio activo</div>';
+        return;
+    }
+    
+    let sql = `
+        SELECT id, client_name, total, status, delivery_date
+        FROM orders
+        WHERE negocio_id = ? 
+          AND deleted_at IS NULL
+          AND status IN ('pending', 'confirmed', 'production', 'ready')
+          AND DATE(delivery_date) >= DATE(?)
+          AND DATE(delivery_date) <= DATE(?)
+    `;
+    let params = [negocioId, fromDate, toDate];
+    
+    if (cliente) {
+        sql += ' AND LOWER(client_name) LIKE LOWER(?)';
+        params.push('%' + cliente + '%');
+    }
+    
+    sql += ' ORDER BY delivery_date ASC';
+    
+    const pedidos = window.DBModule.query(sql, params);
+    
+    if (pedidos.length === 0) {
+        preview.innerHTML = '<div style="text-align: center; color: var(--text-light);">📭 No hay pedidos en el rango especificado</div>';
+        return;
+    }
+    
+    const totalMonto = pedidos.reduce((sum, p) => sum + (p.total || 0), 0);
+    
+    preview.innerHTML = `
+        <div style="margin-bottom: 8px;">
+            <strong style="color: #3b82f6;">📋 Vista previa (${pedidos.length} pedido${pedidos.length > 1 ? 's' : ''})</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 3px 0;">
+            <span>📅 Fecha destino:</span>
+            <strong>${destinoDate}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 3px 0;">
+            <span>💰 Monto total:</span>
+            <strong style="color: #10b981;">$${totalMonto.toFixed(2)}</strong>
+        </div>
+        ${cliente ? `
+            <div style="display: flex; justify-content: space-between; padding: 3px 0;">
+                <span>👤 Cliente filtrado:</span>
+                <strong>${cliente}</strong>
+            </div>
+        ` : ''}
+        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #93c5fd; max-height: 120px; overflow-y: auto;">
+            ${pedidos.slice(0, 10).map(p => `
+                <div style="display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px; color: var(--text-light);">
+                    <span>#${p.id} - ${p.client_name}</span>
+                    <span>📅 ${p.delivery_date.split('T')[0]} → ${destinoDate}</span>
+                </div>
+            `).join('')}
+            ${pedidos.length > 10 ? `<div style="text-align: center; font-size: 11px; color: var(--text-light); padding: 4px;">... y ${pedidos.length - 10} más</div>` : ''}
+        </div>
+    `;
+}
+
+async function executeReprogramarPedidos() {
+    const fechaDesde = document.getElementById('reprogramar-from')?.value;
+    const fechaHasta = document.getElementById('reprogramar-to')?.value;
+    const clienteFiltro = document.getElementById('reprogramar-cliente')?.value?.trim() || '';
+    const fechaDestino = document.getElementById('reprogramar-destino')?.value;
+    const causa = document.getElementById('reprogramar-causa')?.value || '';
+    const nota = document.getElementById('reprogramar-nota')?.value?.trim() || '';
+    
+    if (!fechaDesde || !fechaHasta || !fechaDestino) {
+        window.showToast('⚠️ Debes completar todas las fechas', 'error');
+        return;
+    }
+    
+    if (fechaDesde > fechaHasta) {
+        window.showToast('⚠️ La fecha "desde" debe ser anterior a "hasta"', 'error');
+        return;
+    }
+    
+    if (fechaDestino >= fechaDesde && fechaDestino <= fechaHasta) {
+        window.showToast('⚠️ La fecha destino no puede estar dentro del rango origen', 'error');
+        return;
+    }
+    
+    const negocioId = window.DBModule.getNegocioIdActual();
+    let countSql = `SELECT COUNT(*) as n FROM orders 
+        WHERE negocio_id = ? AND deleted_at IS NULL
+          AND status IN ('pending', 'confirmed', 'production', 'ready')
+          AND DATE(delivery_date) >= DATE(?)
+          AND DATE(delivery_date) <= DATE(?)`;
+    let countParams = [negocioId, fechaDesde, fechaHasta];
+    
+    if (clienteFiltro) {
+        countSql += ' AND LOWER(client_name) LIKE LOWER(?)';
+        countParams.push('%' + clienteFiltro + '%');
+    }
+    
+    const countResult = window.DBModule.query(countSql, countParams);
+    const count = countResult[0]?.n || 0;
+    
+    if (count === 0) {
+        window.showToast('ℹ️ No hay pedidos para reprogramar', 'info', 4000);
+        return;
+    }
+    
+    const confirm1 = await window.ModalModule.showConfirm({
+        title: '🔄 Confirmar reprogramación',
+        message: `Se moverán ${count} pedido(s) desde el rango:\n📅 ${fechaDesde} → ${fechaHasta}\n\nHacia:\n🎯 ${fechaDestino}\n\n📌 Causa: ${causa}\n${nota ? `📝 Nota: ${nota}\n` : ''}${clienteFiltro ? `👤 Cliente: ${clienteFiltro}\n` : ''}\n¿Continuar?`,
+        confirmText: '🔄 CONTINUAR',
+        cancelText: '❌ Cancelar',
+        icon: '🔄',
+        confirmColor: '#8b5cf6'
+    });
+    
+    if (!confirm1) return;
+    
+    closeReprogramarModal();
+    
+    try {
+        window.showToast('⏳ Reprogramando pedidos...', 'info', 3000);
+        
+        const result = await window.OrdersModule.reprogramarPedidosPorRango(
+            fechaDesde, fechaHasta, fechaDestino, causa, nota, clienteFiltro
+        );
+        
+        if (!result.success) {
+            window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 6000);
+            return;
+        }
+        
+        await window.ModalModule.showAlert({
+            title: '✅ Reprogramación exitosa',
+            message: `Se reprogramaron ${result.reprogramados} pedido(s).\n\n` +
+                     `📅 Nueva fecha: ${fechaDestino}\n` +
+                     `📌 Causa: ${causa}\n` +
+                     `${result.errores && result.errores.length > 0 ? `\n⚠️ ${result.errores.length} error(es).` : ''}`,
+            icon: '✅', type: 'success', buttonText: '✅ Entendido'
+        });
+        
+        window.showToast(`✅ ${result.reprogramados} pedido(s) reprogramado(s)`, 'success', 5000);
+        
+        if (typeof window.refreshCurrentView === 'function') {
+            setTimeout(window.refreshCurrentView, 500);
+        }
+        if (typeof window.loadDashboardData === 'function') {
+            setTimeout(window.loadDashboardData, 800);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error en reprogramación:', error);
+        window.showToast('❌ Error: ' + error.message, 'error', 6000);
+    }
+}
+
+window.showReprogramarPedidosModal = showReprogramarPedidosModal;
+window.closeReprogramarModal = closeReprogramarModal;
+window.actualizarPreviewReprogramacion = actualizarPreviewReprogramacion;
+window.executeReprogramarPedidos = executeReprogramarPedidos;
 
 // ============================================================
 // RENDER SETTINGS VIEW - FUNCIÓN PRINCIPAL
@@ -1513,10 +2196,8 @@ function renderSettingsView() {
     const user = window.AuthModule.getCurrentUser();
     const isAdmin = user && user.is_admin === 1;
     
-    // 🆕 FASE 6: Leer la versión actual desde el meta del index.html
     const appVersion = getAppVersion();
     
-    // Contar items en lista de espera (async)
     let waitingCount = 0;
     if (window.OrdersModule && window.OrdersModule.getWaitingListCount) {
         window.OrdersModule.getWaitingListCount().then(count => {
@@ -1566,7 +2247,6 @@ function renderSettingsView() {
         </div>
         ` : ''}
         
-        <!-- 🆕 FASE 2.3: LISTA DE ESPERA -->
         <div class="card" style="border-left: 4px solid #f59e0b; border: 2px solid #f59e0b;">
             <h3 style="margin: 0 0 8px 0; color: #f59e0b; display: flex; align-items: center; gap: 8px;">
                 ⏰ Lista de Espera 
@@ -1586,7 +2266,6 @@ function renderSettingsView() {
         </div>
         
         ${isAdmin ? `
-        <!-- 🆕 FASE 2.3: CANCELACIÓN GLOBAL -->
         <div class="card" style="border-left: 4px solid #dc2626; border: 2px solid #dc2626;">
             <h3 style="margin: 0 0 8px 0; color: #dc2626;">🚨 Cancelación Global de Pedidos</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
@@ -1597,12 +2276,24 @@ function renderSettingsView() {
                 🚨 Cancelar pedidos por rango
             </button>
         </div>
+        
+        <div class="card" style="border-left: 4px solid #8b5cf6; border: 2px solid #8b5cf6; background: linear-gradient(135deg, #8b5cf610 0%, #8b5cf605 100%);">
+            <h3 style="margin: 0 0 8px 0; color: #8b5cf6;">🔄 Reprogramar Pedidos por Rango</h3>
+            <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
+                Mueve todos los pedidos de un rango de fechas a una fecha destino. La causa y nota se añaden automáticamente a cada pedido.
+                <br><strong style="color: #8b5cf6;">Solo administradores.</strong>
+            </p>
+            <button onclick="showReprogramarPedidosModal()" class="btn" style="padding: 10px 16px; font-size: 14px; width: auto; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;">
+                🔄 Reprogramar pedidos por rango
+            </button>
+        </div>
         ` : ''}
         
         <div class="card" style="border-left: 4px solid #f59e0b; border: 2px solid #f59e0b;">
             <h3 style="margin: 0 0 8px 0; color: #f59e0b;">⚡ Horarios de Producción (Corriente)</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
                 Gestiona los horarios de corriente eléctrica para planificar tu producción.
+                <br>🆕 Ahora puedes marcar el bloque de producción y la cantidad a producir (acepta decimales: 6.5 = 6 jabas y media).
             </p>
             <button onclick="showCorrienteModal()" class="btn primary" style="padding: 8px 16px; font-size: 14px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
                 ⚡ Gestionar Horarios
@@ -1639,7 +2330,6 @@ function renderSettingsView() {
             </div>
         </div>
         
-        <!-- 🆕 FASE 1.3.4: Bloque de importar con 3 modos -->
         <div class="card" style="border-left: 4px solid #f59e0b; border: 2px solid #f59e0b;">
             <h3 style="margin: 0 0 8px 0; color: #f59e0b;">📥 Importar copia de seguridad</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
@@ -1747,7 +2437,7 @@ function renderSettingsView() {
 }
 
 // ============================================================
-// 👥 MÓDULO DE USUARIOS (SOLO ADMIN) - FASE B AMPLIADO
+// MÓDULO DE USUARIOS (SOLO ADMIN)
 // ============================================================
 
 async function showUsersModal() {
@@ -2885,17 +3575,12 @@ async function importDatabaseDataOnlyFromFileAction() {
 }
 
 // ============================================================
-// 🆕 FASE 1.3.4: FUSIONAR BASES DE DATOS
+// FUSIONAR BASES DE DATOS
 // ============================================================
 
-/**
- * Acción: fusionar la base de datos de un archivo .db con la actual.
- * Usa importDatabaseDataOnlyFromFile() de db.js (que ya implementa la fusión).
- */
 async function importDatabaseFusionAction() {
     console.log('🔀 [importDatabaseFusionAction] Iniciando fusión...');
     
-    // Verificar que la función existe en DBModule
     if (typeof window.DBModule.importDatabaseDataOnlyFromFile !== 'function') {
         window.showToast('❌ Error: función de fusión no disponible. Recarga la página.', 'error', 6000);
         console.error('❌ window.DBModule.importDatabaseDataOnlyFromFile no es una función');
@@ -2903,7 +3588,6 @@ async function importDatabaseFusionAction() {
     }
     
     try {
-        // La propia función de db.js muestra el confirm con el mensaje adecuado
         const result = await window.DBModule.importDatabaseDataOnlyFromFile();
         
         if (!result) {
@@ -2911,19 +3595,16 @@ async function importDatabaseFusionAction() {
             return;
         }
         
-        // Si el usuario canceló, no hacemos nada más
         if (result.success === false && result.error === 'Cancelado') {
             console.log('🔀 [Fusion] Cancelado por el usuario');
             return;
         }
         
-        // Si hubo error
         if (!result.success) {
             window.showToast('❌ ' + (result.error || 'Error desconocido'), 'error', 6000);
             return;
         }
         
-        // ✅ Fusión exitosa → mostrar resumen detallado
         console.log('🔀 [Fusion] Resultado:', result);
         
         const inserted = result.inserted || 0;
@@ -2931,7 +3612,6 @@ async function importDatabaseFusionAction() {
         const skipped = result.skipped || 0;
         const porTabla = result.porTabla || {};
         
-        // Construir lista de tablas con cambios
         let tablaDetalle = '';
         const tablasConCambios = Object.entries(porTabla)
             .filter(([_, s]) => (s.inserted + s.updated) > 0)
@@ -2947,7 +3627,6 @@ async function importDatabaseFusionAction() {
             }).join('\n');
         }
         
-        // Resumen final
         let mensaje = `✅ Fusión completada correctamente.\n\n`;
         mensaje += `📥 Registros NUEVOS añadidos: ${inserted}\n`;
         mensaje += `🔄 Registros ACTUALIZADOS: ${updated}\n`;
@@ -2969,14 +3648,11 @@ async function importDatabaseFusionAction() {
         await window.ModalModule.showAlert({
             title: '🔀 Fusión completada',
             message: mensaje,
-            icon: '🔀',
-            type: 'success',
-            buttonText: '✅ Entendido'
+            icon: '🔀', type: 'success', buttonText: '✅ Entendido'
         });
         
         window.showToast(`✅ Fusión completada: +${inserted} nuevos, ~${updated} actualizados`, 'success', 5000);
         
-        // Refrescar la vista actual (por si acaso)
         setTimeout(() => {
             if (typeof window.refreshCurrentView === 'function') {
                 window.refreshCurrentView();
@@ -3039,7 +3715,7 @@ async function cleanDeletedData() {
         });
         
         const tables = ['sales', 'transactions', 'orders', 'order_items', 'payments', 
-            'recipes', 'recipe_ingredients', 'clients', 'products', 'dias_sin_ventas'];
+            'recipes', 'recipe_ingredients', 'clients', 'products', 'dias_sin_ventas', 'calendario_produccion'];
         let deletedCount = 0;
         const totalTables = tables.length;
         
@@ -3131,7 +3807,7 @@ async function resetDatabaseWithPassword() {
         const users = window.DBModule.query('SELECT * FROM users WHERE deleted_at IS NULL');
         const tables = ['inventory_movements', 'inventory', 'order_items', 'payments', 'orders',
             'recipe_ingredients', 'recipes', 'sales', 'transactions', 'clients', 'products',
-            'notifications', 'units', 'corriente_config', 'dias_sin_ventas'];
+            'notifications', 'units', 'corriente_config', 'dias_sin_ventas', 'calendario_produccion'];
         
         for (let i = 0; i < tables.length; i++) {
             const table = tables[i];
@@ -3500,7 +4176,6 @@ window.exportDatabaseCompleteAction = exportDatabaseCompleteAction;
 window.exportDatabaseDataOnlyAction = exportDatabaseDataOnlyAction;
 window.importDatabaseSmartAction = importDatabaseSmartAction;
 window.importDatabaseDataOnlyFromFileAction = importDatabaseDataOnlyFromFileAction;
-// 🆕 FASE 1.3.4
 window.importDatabaseFusionAction = importDatabaseFusionAction;
 window.exportSalvaRecetasProductos = exportSalvaRecetasProductos;
 window.importSalvaRecetasProductos = importSalvaRecetasProductos;
@@ -3511,13 +4186,21 @@ window.showCreateUserModal = showCreateUserModal;
 window.showEditUserModal = showEditUserModal;
 window.showChangePasswordModal = showChangePasswordModal;
 window.handleToggleAdmin = handleToggleAdmin;
-// 🆕 FASE 2.3
 window.showWaitingListFromSettings = showWaitingListFromSettings;
 window.reporteListaEsperaFromSettings = reporteListaEsperaFromSettings;
 window.showGlobalCancelModal = showGlobalCancelModal;
 window.closeGlobalCancelModal = closeGlobalCancelModal;
 window.executeGlobalCancel = executeGlobalCancel;
-// 🆕 FASE 6
+window.showReprogramarPedidosModal = showReprogramarPedidosModal;
+window.closeReprogramarModal = closeReprogramarModal;
+window.actualizarPreviewReprogramacion = actualizarPreviewReprogramacion;
+window.executeReprogramarPedidos = executeReprogramarPedidos;
+window.getProduccionConfig = getProduccionConfig;
+window.contarPedidosYVentasFecha = contarPedidosYVentasFecha;
+window.formatearCantidadProduccion = formatearCantidadProduccion;
+window.guardarProduccion = guardarProduccion;
+window.eliminarProduccion = eliminarProduccion;
+window.MOTIVOS_REPROGRAMACION = MOTIVOS_REPROGRAMACION;
 window.getAppVersion = getAppVersion;
 
-console.log('📦 UI Settings Module cargado correctamente v2.1.5 (FASE 6: versión dinámica desde meta)');
+console.log('📦 UI Settings Module cargado correctamente v2.1.8 (FASE 7.2: producción con decimales)');
