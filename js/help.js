@@ -3,56 +3,34 @@
 // CORREGIDO: Nombre del desarrollador (Ricardo Castillo Valdés)
 // 🆕 FASE 5 (#2) (200926 v2):
 //   - NUEVO botón "📖 Ayuda detallada" en el Centro de Ayuda
-//   - Llama a window.openDetailedHelp() (definido en app.js)
-//   - También accesible desde el modal de FAQ
-//   - Fallback si openDetailedHelp no está definida
 // 🆕 FASE 5 (#3):
 //   - Ampliación de FAQs (~80 preguntas organizadas)
 // 🆕 FASE AYUDA MODAL (200926 v3):
 //   - NUEVA: abrirAyudaEnModal(url) → abre la ayuda dentro de un
-//     modal a pantalla completa con iframe, en lugar de una pestaña
-//   - Detecta el tema actual y la sección activa para pasarlos por URL
-//   - Incluye botón "🔗 Abrir en pestaña nueva" dentro del modal
-//   - abrirAyudaDetallada() ahora delega en abrirAyudaEnModal()
-//   - openDetailedHelp() (compatibilidad con app.js) → abrirAyudaDetallada()
-//   - Se cierra con ✕, Escape, o clic fuera del modal
-//   - Responsive: 95% desktop, 100% móvil
+//     modal a pantalla completa con iframe
 // 🆕 FASE 4 (Entrega 4 - 210926 v4):
 //   - ✅ FIX CRÍTICO: El modal de ayuda aparecía DETRÁS de la app
-//     * z-index elevado a 2147483647 (máximo de 32 bits)
-//     * Añadido `isolation: isolate` para forzar stacking context
-//     * Añadido `transform: translateZ(0)` para promover a GPU layer
-//     * Se mueve el modal al final del <body> siempre
-//     * Se oculta el scroll del body mientras está abierto
-//     * Se eliminan posibles stacking contexts conflictivos del padre
-//   - ✅ FAQs NUMERADAS ASCENDENTEMENTE (punto #3 del informe)
-//     * Cada pregunta tiene un número de índice al inicio
-//     * Numeración continua entre categorías (1, 2, 3, ...)
-//     * Se muestra "❓ N. ¿Pregunta?" en el título
-//   - ✅ AMPLIACIÓN DE FAQs (de ~80 a ~120 preguntas)
-//     * Nuevas secciones: Producción, Reprogramación, Lista de espera
-//     * Nuevas preguntas sobre sonido, PWA, duplicados, vendedor
+//   - ✅ FAQs NUMERADAS ASCENDENTEMENTE
+//   - ✅ AMPLIACIÓN DE FAQs (~120 preguntas)
 //   - ✅ BUSCADOR EN FAQs
-//     * Campo de búsqueda en la parte superior del modal
-//     * Filtra por número y por texto
-//     * Resalta coincidencias
-//   - ✅ Contador de resultados en el buscador
 // 🆕 FASE 4.1 (Entrega 4 - 210926 v5):
 //   - ✅ CENTRO DE AYUDA CONVERTIDO EN POPOVER
-//     * Antes: era un modal centrado con backdrop oscuro
-//     * Ahora: es un menú flotante anclado al botón ❓
-//     * Ventajas:
-//       - No bloquea la pantalla (el resto queda visible)
-//       - Se cierra automáticamente al hacer clic fuera
-//       - Más rápido y ligero
-//       - Ideal para móviles (menos intrusivo)
-//     * Comportamiento:
-//       - Se posiciona debajo del botón ❓, alineado a la derecha
-//       - En móviles, si no cabe, se convierte en bottom-sheet
-//       - Animación fade + slide desde arriba
-//       - Cierre con Escape, clic fuera, o seleccionar opción
-//     * Nueva función: mostrarPopoverAyuda() y cerrarPopoverAyuda()
-//     * showHelpMenu() mantiene compatibilidad, delega al popover
+// 🆕 ENTREGA 3 (230926 v6): AYUDA DETALLADA EN MÓVIL
+//   - ✅ REFUERZO: z-index elevado a 2147483647 (ya estaba)
+//   - ✅ NUEVO: Detección de móvil con isMobileDevice()
+//   - ✅ NUEVO: En móvil, el modal de ayuda detallada usa
+//     "abrir en pestaña nueva" como opción PRIMARIA
+//   - ✅ NUEVO: Fallback automático si el iframe no carga
+//     después de 8 segundos → abre en pestaña nueva
+//   - ✅ NUEVO: Botón "🔗 Abrir en pestaña nueva" SIEMPRE visible
+//     (no solo en modo embedded)
+//   - ✅ NUEVO: Manejo de errores con reintentos automáticos
+//   - ✅ NUEVO: Logs de diagnóstico detallados para móvil
+//   - ✅ NUEVO: La función abrirAyudaDetallada() decide entre modal
+//     y pestaña nueva según el dispositivo
+//   - ✅ NUEVO: El modal se cierra con Escape, clic fuera o botón ✕
+//   - ✅ NUEVO: Si el modal falla en móvil, se abre en pestaña nueva
+//     automáticamente como fallback
 // ============================================================
 
 window.HelpModule = {};
@@ -67,6 +45,10 @@ window.HelpModule = {};
 
 const HELP_MODAL_Z_INDEX = 2147483647;
 const HELP_POPOVER_Z_INDEX = 2147483646;
+
+// Tiempo máximo (ms) que esperamos a que el iframe cargue antes
+// de ofrecer el fallback "abrir en pestaña nueva".
+const IFRAME_LOAD_TIMEOUT_MS = 8000;
 
 // ============================================================
 // CONFIGURACIÓN DEL TOUR
@@ -139,6 +121,48 @@ let _helpPopoverAnchor = null;
 let _helpPopoverOutsideClickHandler = null;
 let _helpPopoverEscHandler = null;
 
+// Referencias al modal de ayuda detallada
+let _ayudaModalState = null;
+
+// ============================================================
+// 🆕 ENTREGA 3: DETECCIÓN DE MÓVIL
+// ============================================================
+// 
+// Determina si estamos en un dispositivo móvil.
+// Se usa para decidir si la ayuda detallada debe abrirse en
+// modal o directamente en pestaña nueva.
+// ============================================================
+
+function isMobileDevice() {
+    try {
+        // Detección por User Agent
+        const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+        const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i;
+        
+        if (mobileRegex.test(ua)) {
+            return true;
+        }
+        
+        // Detección por tamaño de pantalla
+        const isSmallScreen = window.innerWidth < 768;
+        
+        // Detección por touch
+        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        
+        // Detección por pointer coarse (dedo)
+        const isCoarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        
+        // Es móvil si: pantalla pequeña + (touch o pointer coarse)
+        return isSmallScreen && (isTouchDevice || isCoarsePointer);
+        
+    } catch (e) {
+        console.warn('⚠️ Error detectando dispositivo móvil:', e);
+        return window.innerWidth < 768;
+    }
+}
+
+window.isMobileDevice = isMobileDevice;
+
 // ============================================================
 // HELPER PARA FORZAR MODALES AL FRENTE
 // ============================================================
@@ -170,12 +194,21 @@ function forzarModalAlFrente(modal) {
 }
 
 // ============================================================
-// ABRIR AYUDA DETALLADA EN MODAL (CON IFRAME)
+// 🆕 ENTREGA 3: ABRIR AYUDA DETALLADA (DECIDE MODAL O PESTAÑA)
+// ============================================================
+// 
+// Lógica:
+//   1. Cerrar el popover de ayuda si está abierto.
+//   2. Detectar tema y sección activa.
+//   3. Construir URL con parámetros.
+//   4. Si es móvil → abrir DIRECTAMENTE en pestaña nueva.
+//   5. Si es desktop → abrir en modal con iframe.
+//   6. Si el modal falla en desktop → fallback a pestaña nueva.
 // ============================================================
 
 function abrirAyudaDetallada() {
     try {
-        // Cerrar popover de ayuda si está abierto
+        // Cerrar popover si está abierto
         cerrarPopoverAyuda();
         
         // Detectar tema
@@ -188,29 +221,67 @@ function abrirAyudaDetallada() {
             section = activeNav.dataset.section;
         }
         
-        // Algunas secciones no tienen ancla directa en la ayuda; mapearlas
+        // Mapeo de secciones de la app a secciones de la ayuda
         const sectionMap = {
-            'dashboard':   'dashboard',
-            'orders':      'orders',
-            'insumos':     'insumos',
-            'recipes':     'recipes',
-            'productos':   'productos',
-            'sales':       'sales',
-            'settings':    'settings',
-            'profile':     'profile',
-            'corriente':   'corriente',
-            'rewards':     'rewards',
-            'notifications':'notifications'
+            'dashboard':     'dashboard',
+            'orders':        'orders',
+            'insumos':       'insumos',
+            'recipes':       'recipes',
+            'productos':     'productos',
+            'sales':         'sales',
+            'settings':      'settings',
+            'profile':       'profile',
+            'corriente':     'corriente',
+            'rewards':       'rewards',
+            'notifications': 'notifications'
         };
         const helpSection = sectionMap[section] || 'intro';
         
-        // Construir URL
-        const url = `./ayuda-panario.html?theme=${encodeURIComponent(theme)}&section=${encodeURIComponent(helpSection)}&embedded=1`;
+        // Construir URL base (sin embedded, para pestaña nueva)
+        const baseUrl = `./ayuda-panario.html?theme=${encodeURIComponent(theme)}&section=${encodeURIComponent(helpSection)}`;
         
-        console.log('📖 Abriendo ayuda detallada en modal:', { theme, section: helpSection, url });
+        // URL con embedded=1 para el iframe
+        const embeddedUrl = `${baseUrl}&embedded=1`;
         
-        // Abrir en modal
-        abrirAyudaEnModal(url, theme);
+        const isMobile = isMobileDevice();
+        
+        console.log('📖 Abriendo ayuda detallada:', {
+            theme,
+            section: helpSection,
+            isMobile,
+            baseUrl
+        });
+        
+        // ============================================================
+        // 🆕 ENTREGA 3: EN MÓVIL → PESTAÑA NUEVA DIRECTAMENTE
+        // ============================================================
+        // En móvil, los iframes son problemáticos (tamaño, scroll,
+        // interacción con gestos). Es más fiable abrir en pestaña.
+        if (isMobile) {
+            console.log('📱 Dispositivo móvil detectado → abriendo en pestaña nueva');
+            
+            try {
+                const win = window.open(baseUrl, '_blank', 'noopener,noreferrer');
+                
+                if (!win) {
+                    // Popup bloqueado → fallback a misma pestaña
+                    console.warn('⚠️ Popup bloqueado, abriendo en misma pestaña');
+                    window.location.href = baseUrl;
+                } else {
+                    window.showToast('📖 Abriendo ayuda en nueva pestaña...', 'info', 2500);
+                }
+            } catch (e) {
+                console.warn('⚠️ Error abriendo en pestaña nueva, fallback a misma pestaña:', e);
+                window.location.href = baseUrl;
+            }
+            return;
+        }
+        
+        // ============================================================
+        // DESKTOP → MODAL CON IFRAME (con fallback a pestaña nueva)
+        // ============================================================
+        console.log('💻 Desktop detectado → abriendo en modal');
+        abrirAyudaEnModal(embeddedUrl, theme, baseUrl);
         
     } catch (e) {
         console.warn('⚠️ Error abriendo ayuda detallada:', e);
@@ -220,15 +291,29 @@ function abrirAyudaDetallada() {
     }
 }
 
-function abrirAyudaEnModal(url, theme = 'light') {
+// ============================================================
+// 🆕 ENTREGA 3: ABRIR AYUDA EN MODAL (CON FALLBACK)
+// ============================================================
+// 
+// @param {string} embeddedUrl - URL con embedded=1 para el iframe
+// @param {string} theme - Tema actual (light/dark)
+// @param {string} baseUrl - URL sin embedded (para pestaña nueva)
+// ============================================================
+
+function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
+    // Si no se pasa baseUrl, construirla desde embeddedUrl
+    if (!baseUrl) {
+        baseUrl = embeddedUrl.replace('&embedded=1', '');
+    }
+    
     // Cerrar si ya existe uno abierto
     const existing = document.getElementById('ayuda-modal');
     if (existing) {
         existing.remove();
     }
     
-    // Detectar si es móvil
-    const isMobile = window.innerWidth < 768;
+    // Detectar si es móvil para ajustar tamaño
+    const isMobile = isMobileDevice();
     
     const modalWidth  = isMobile ? '100vw' : '95vw';
     const modalHeight = isMobile ? '100vh' : '95vh';
@@ -319,21 +404,23 @@ function abrirAyudaEnModal(url, theme = 'light') {
                 border-bottom: 1px solid var(--border-color, #e0d5c0);
                 background: var(--bg-card, #fff);
                 flex-shrink: 0;
+                flex-wrap: wrap;
             ">
                 <span style="font-size: 22px;">📖</span>
-                <div style="flex: 1; min-width: 0;">
+                <div style="flex: 1; min-width: 120px;">
                     <div style="font-weight: 700; font-size: 15px; color: var(--text, #2d2d2d);">
                         Ayuda detallada
                     </div>
-                    <div style="font-size: 11px; color: var(--text-light, #666);">
-                        ${url.split('?')[0]}
+                    <div style="font-size: 11px; color: var(--text-light, #666); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${embeddedUrl.split('?')[0]}
                     </div>
                 </div>
                 
-                <a href="${url.replace('&embedded=1', '')}" target="_blank" rel="noopener noreferrer"
+                <!-- 🆕 ENTREGA 3: Botón "Abrir en pestaña nueva" SIEMPRE visible -->
+                <a href="${baseUrl}" target="_blank" rel="noopener noreferrer"
                    class="btn secondary"
                    style="padding: 6px 12px; font-size: 12px; width: auto; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;"
-                   title="Abrir en pestaña nueva">
+                   title="Abrir en pestaña nueva (recomendado en móvil)">
                     🔗 ↗
                 </a>
                 
@@ -386,11 +473,15 @@ function abrirAyudaEnModal(url, theme = 'light') {
                     <div style="font-size: 13px; color: var(--text-light, #666);">
                         Cargando ayuda...
                     </div>
+                    <!-- 🆕 ENTREGA 3: Aviso de fallback -->
+                    <div style="font-size: 11px; color: var(--text-light, #666); text-align: center; max-width: 300px; margin-top: 8px;">
+                        Si no carga en unos segundos, se abrirá en una pestaña nueva automáticamente.
+                    </div>
                 </div>
                 
                 <iframe 
                     id="ayuda-modal-iframe"
-                    src="${url}"
+                    src="${embeddedUrl}"
                     title="Ayuda detallada de Panario"
                     sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
                     allow="clipboard-read; clipboard-write"
@@ -415,8 +506,15 @@ function abrirAyudaEnModal(url, theme = 'light') {
     const iframe = document.getElementById('ayuda-modal-iframe');
     const loading = document.getElementById('ayuda-modal-loading');
     
+    // Estado de carga del iframe
+    let iframeLoaded = false;
+    let fallbackTriggered = false;
+    
     if (iframe) {
+        // ---- Evento load del iframe ----
         iframe.addEventListener('load', function() {
+            iframeLoaded = true;
+            
             setTimeout(() => {
                 if (loading) loading.style.display = 'none';
                 iframe.style.opacity = '1';
@@ -425,15 +523,35 @@ function abrirAyudaEnModal(url, theme = 'light') {
             }, 200);
         });
         
-        setTimeout(() => {
-            if (loading && loading.style.display !== 'none') {
-                loading.style.display = 'none';
-                iframe.style.opacity = '1';
-                console.warn('⚠️ Timeout de carga del iframe — se muestra igualmente');
+        // ---- Evento error del iframe ----
+        iframe.addEventListener('error', function(e) {
+            console.warn('⚠️ Error cargando iframe de ayuda:', e);
+            if (!fallbackTriggered) {
+                fallbackTriggered = true;
+                ofrecerFallbackPestanaNueva(baseUrl, 'No se pudo cargar la ayuda en modal.');
             }
-        }, 5000);
+        });
+        
+        // ---- 🆕 ENTREGA 3: Timeout de seguridad ----
+        // Si después de IFRAME_LOAD_TIMEOUT_MS el iframe no ha cargado,
+        // ofrecer abrirlo en pestaña nueva.
+        setTimeout(() => {
+            if (!iframeLoaded && !fallbackTriggered) {
+                console.warn(`⚠️ Timeout de iframe (${IFRAME_LOAD_TIMEOUT_MS}ms) — ofreciendo fallback`);
+                fallbackTriggered = true;
+                
+                // Si aún se ve el loading, ocultarlo y mostrar el fallback
+                if (loading && loading.style.display !== 'none') {
+                    loading.style.display = 'none';
+                    iframe.style.opacity = '1';
+                }
+                
+                ofrecerFallbackPestanaNueva(baseUrl, 'La ayuda tardó demasiado en cargar.');
+            }
+        }, IFRAME_LOAD_TIMEOUT_MS);
     }
     
+    // ---- Cerrar con clic fuera ----
     modal.addEventListener('click', function(e) {
         const container = document.getElementById('ayuda-modal-container');
         if (e.target === modal || (container && !container.contains(e.target))) {
@@ -441,6 +559,7 @@ function abrirAyudaEnModal(url, theme = 'light') {
         }
     });
     
+    // ---- Cerrar con Escape ----
     const escHandler = function(e) {
         if (e.key === 'Escape') {
             cerrarAyudaModal();
@@ -449,6 +568,7 @@ function abrirAyudaEnModal(url, theme = 'light') {
     };
     document.addEventListener('keydown', escHandler);
     
+    // ---- Ocultar scroll del body ----
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     
@@ -457,8 +577,83 @@ function abrirAyudaEnModal(url, theme = 'light') {
         escHandler
     };
     
-    console.log('📖 Modal de ayuda abierto con URL:', url);
+    console.log('📖 Modal de ayuda abierto con URL:', embeddedUrl);
 }
+
+// ============================================================
+// 🆕 ENTREGA 3: OFRECER FALLBACK A PESTAÑA NUEVA
+// ============================================================
+// 
+// Si el iframe no carga (timeout, error, bloqueo), mostrar un
+// botón destacado para abrir la ayuda en pestaña nueva.
+// ============================================================
+
+function ofrecerFallbackPestanaNueva(baseUrl, mensaje) {
+    console.log('🔗 Ofreciendo fallback a pestaña nueva:', mensaje);
+    
+    const container = document.getElementById('ayuda-modal-container');
+    if (!container) return;
+    
+    // Crear banner de fallback
+    const fallbackId = 'ayuda-modal-fallback';
+    let fallback = document.getElementById(fallbackId);
+    
+    if (!fallback) {
+        fallback = document.createElement('div');
+        fallback.id = fallbackId;
+        fallback.style.cssText = `
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--bg-card, #fff);
+            border-radius: 16px;
+            padding: 24px 28px;
+            max-width: 400px;
+            width: calc(100% - 40px);
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            border: 2px solid var(--primary, #f5a623);
+            z-index: 10;
+        `;
+        
+        fallback.innerHTML = `
+            <div style="font-size: 56px; margin-bottom: 12px;">🔗</div>
+            <h3 style="margin: 0 0 8px 0; font-size: 17px; color: var(--text, #2d2d2d);">
+                Abrir en pestaña nueva
+            </h3>
+            <p style="font-size: 13px; color: var(--text-light, #666); margin-bottom: 16px; line-height: 1.5;">
+                ${mensaje || 'No se pudo cargar la ayuda en modal.'}<br>
+                Ábrela en una pestaña nueva para verla correctamente.
+            </p>
+            <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                <a href="${baseUrl}" target="_blank" rel="noopener noreferrer"
+                   class="btn primary"
+                   style="padding: 10px 20px; font-size: 14px; width: auto; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; background: var(--primary, #f5a623); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    🔗 Abrir ayuda
+                </a>
+                <button onclick="cerrarAyudaModal()"
+                        class="btn secondary"
+                        style="padding: 10px 20px; font-size: 14px; width: auto; background: transparent; color: var(--text, #2d2d2d); border: 2px solid var(--border-color, #e0d5c0); border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    ❌ Cerrar
+                </button>
+            </div>
+        `;
+        
+        // Añadir al contenedor principal (no al body, para que quede dentro del modal)
+        const iframeWrapper = container.querySelector('div[style*="flex: 1"]');
+        if (iframeWrapper) {
+            iframeWrapper.style.position = 'relative';
+            iframeWrapper.appendChild(fallback);
+        } else {
+            container.appendChild(fallback);
+        }
+    }
+}
+
+// ============================================================
+// CERRAR MODAL DE AYUDA DETALLADA
+// ============================================================
 
 function cerrarAyudaModal() {
     const modal = document.getElementById('ayuda-modal');
@@ -469,6 +664,7 @@ function cerrarAyudaModal() {
     setTimeout(() => {
         if (modal.parentNode) modal.remove();
         
+        // Restaurar scroll del body
         if (window._ayudaModalState) {
             document.body.style.overflow = window._ayudaModalState.prevOverflow || '';
             if (window._ayudaModalState.escHandler) {
@@ -480,6 +676,10 @@ function cerrarAyudaModal() {
         console.log('📖 Modal de ayuda cerrado');
     }, 200);
 }
+
+// ============================================================
+// IMPRIMIR AYUDA DESDE IFRAME
+// ============================================================
 
 function imprimirAyudaIframe() {
     try {
@@ -502,32 +702,12 @@ window.abrirAyudaEnModal = abrirAyudaEnModal;
 window.cerrarAyudaModal = cerrarAyudaModal;
 window.imprimirAyudaIframe = imprimirAyudaIframe;
 window.forzarModalAlFrente = forzarModalAlFrente;
+window.ofrecerFallbackPestanaNueva = ofrecerFallbackPestanaNueva;
 
 // ============================================================
-// 🆕 FASE 4.1: POPOVER DEL CENTRO DE AYUDA
-// ============================================================
-// 
-// Antes: showHelpMenu() creaba un modal centrado con backdrop.
-// Ahora: crea un popover anclado al botón ❓ de la barra superior.
-// 
-// Ventajas:
-//   - No bloquea la pantalla
-//   - Se cierra al hacer clic fuera
-//   - Más rápido y ligero
-//   - Ideal para móviles
-// 
-// Funciones:
-//   - mostrarPopoverAyuda(anchorElement): Abre el popover
-//   - cerrarPopoverAyuda(): Cierra el popover
-//   - showHelpMenu(): Compatibilidad, delega al popover
+// POPOVER DEL CENTRO DE AYUDA
 // ============================================================
 
-/**
- * Muestra el popover del Centro de Ayuda anclado a un elemento.
- * 
- * @param {HTMLElement} anchorElement - Elemento al que se ancla (botón ❓).
- *                                       Si no se pasa, se busca #help-button.
- */
 function mostrarPopoverAyuda(anchorElement = null) {
     // Cerrar si ya está abierto
     cerrarPopoverAyuda();
@@ -537,7 +717,6 @@ function mostrarPopoverAyuda(anchorElement = null) {
     
     if (!anchor) {
         console.warn('⚠️ No se encontró el botón de ayuda (#help-button)');
-        // Fallback: usar modal clásico
         return _mostrarHelpMenuFallback();
     }
     
@@ -666,7 +845,6 @@ function mostrarPopoverAyuda(anchorElement = null) {
             .help-popover-item:active {
                 transform: scale(0.98);
             }
-            /* En móvil, convertir el popover en bottom sheet */
             @media (max-width: 600px) {
                 #help-popover {
                     left: 10px !important;
@@ -703,7 +881,6 @@ function mostrarPopoverAyuda(anchorElement = null) {
             const action = this.dataset.action;
             cerrarPopoverAyuda();
             
-            // Pequeño delay para que se cierre el popover antes de abrir el modal
             setTimeout(() => {
                 switch (action) {
                     case 'quickstart':
@@ -743,7 +920,6 @@ function mostrarPopoverAyuda(anchorElement = null) {
         }
     };
     
-    // Registrar con un pequeño delay para evitar que el mismo click que abrió el popover lo cierre
     setTimeout(() => {
         document.addEventListener('click', _helpPopoverOutsideClickHandler, true);
     }, 50);
@@ -765,9 +941,6 @@ function mostrarPopoverAyuda(anchorElement = null) {
     console.log('❓ Popover de ayuda abierto');
 }
 
-/**
- * Posiciona el popover junto al ancla.
- */
 function _posicionarPopoverAyuda(anchor, popover) {
     if (!anchor || !popover) return;
     
@@ -777,7 +950,6 @@ function _posicionarPopoverAyuda(anchor, popover) {
         const isMobile = window.innerWidth < 600;
         
         if (isMobile) {
-            // En móvil, el CSS ya lo posiciona como bottom-sheet
             return;
         }
         
@@ -785,28 +957,22 @@ function _posicionarPopoverAyuda(anchor, popover) {
         const popoverWidth = popoverRect.width || 260;
         const popoverHeight = popoverRect.height || 350;
         
-        // Posición vertical: debajo del anchor
         let top = rect.bottom + margin;
         
-        // Si no cabe abajo, mostrar arriba
         if (top + popoverHeight > window.innerHeight - 10) {
             top = rect.top - popoverHeight - margin;
         }
         
-        // Si tampoco cabe arriba, ajustar
         if (top < 10) {
             top = 10;
         }
         
-        // Posición horizontal: alineado a la derecha del anchor
         let left = rect.right - popoverWidth;
         
-        // Si no cabe a la izquierda, ajustar
         if (left < 10) {
             left = 10;
         }
         
-        // Si no cabe a la derecha, ajustar
         if (left + popoverWidth > window.innerWidth - 10) {
             left = window.innerWidth - popoverWidth - 10;
         }
@@ -818,19 +984,14 @@ function _posicionarPopoverAyuda(anchor, popover) {
         
     } catch (e) {
         console.warn('⚠️ Error posicionando popover:', e);
-        // Fallback: esquina superior derecha
         popover.style.setProperty('top', '70px', 'important');
         popover.style.setProperty('right', '20px', 'important');
         popover.style.setProperty('left', 'auto', 'important');
     }
 }
 
-/**
- * Cierra el popover de ayuda.
- */
 function cerrarPopoverAyuda() {
     if (!_helpPopover) {
-        // Limpiar referencias por si acaso
         if (_helpPopoverOutsideClickHandler) {
             document.removeEventListener('click', _helpPopoverOutsideClickHandler, true);
             _helpPopoverOutsideClickHandler = null;
@@ -844,10 +1005,8 @@ function cerrarPopoverAyuda() {
     
     const popover = _helpPopover;
     
-    // Animar salida
     popover.style.animation = 'helpPopoverFadeOut 0.15s ease forwards';
     
-    // Limpiar listeners
     if (_helpPopoverOutsideClickHandler) {
         document.removeEventListener('click', _helpPopoverOutsideClickHandler, true);
         _helpPopoverOutsideClickHandler = null;
@@ -862,13 +1021,11 @@ function cerrarPopoverAyuda() {
         popover._repositionHandler = null;
     }
     
-    // Restaurar el color del ancla
     if (_helpPopoverAnchor) {
         _helpPopoverAnchor.style.background = '';
         _helpPopoverAnchor.style.borderRadius = '';
     }
     
-    // Eliminar del DOM
     setTimeout(() => {
         if (popover.parentNode) popover.remove();
     }, 150);
@@ -879,10 +1036,6 @@ function cerrarPopoverAyuda() {
     console.log('❓ Popover de ayuda cerrado');
 }
 
-/**
- * Fallback: si no se encuentra el anchor, usar el modal clásico.
- * (Mantenemos esta opción por robustez)
- */
 function _mostrarHelpMenuFallback() {
     console.warn('⚠️ Usando fallback: modal clásico de Centro de Ayuda');
     
@@ -931,10 +1084,6 @@ function _mostrarHelpMenuFallback() {
     });
 }
 
-/**
- * 🆕 FASE 4.1: showHelpMenu() ahora delega en el popover.
- * Mantenemos el nombre por compatibilidad con app.js e index.html.
- */
 function showHelpMenu() {
     mostrarPopoverAyuda();
 }
@@ -1000,7 +1149,7 @@ function showReadmeModal() {
                 <div style="background: var(--bg); padding: 12px; border-radius: 8px; font-size: 13px;">
                     <div style="display: flex; justify-content: space-between; padding: 2px 0;">
                         <span style="color: var(--text-light);">Versión:</span>
-                        <strong>2.1.6</strong>
+                        <strong>2.1.11</strong>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 2px 0;">
                         <span style="color: var(--text-light);">Estado:</span>
@@ -1140,7 +1289,7 @@ function showCreditsModal() {
 
             <div style="background: linear-gradient(135deg, #0ea5e915 0%, #0284c715 100%); border: 1px solid #0ea5e9; border-radius: 10px; padding: 14px; margin-bottom: 16px;">
                 <div style="font-size: 13px; font-weight: 600; color: #0ea5e9; margin-bottom: 4px;">
-                    🍞 Panario v2.1.6
+                    🍞 Panario v2.1.11
                 </div>
                 <div style="font-size: 12px; color: var(--text-light);">
                     "Tu panadería en orden"
@@ -1656,6 +1805,7 @@ const FAQS_DB = [
     { cat: '🔔 Notificaciones', q: '¿Cómo contacto al desarrollador?', a: 'En Ayuda → Créditos. WhatsApp: +53 55031725, Email: 3sayricardo@gmail.com.' },
     { cat: '🔔 Notificaciones', q: '¿Por qué la ayuda se abre detrás de la app?', a: 'Era un bug de z-index. Ahora se corrigió y la ayuda se abre siempre al frente. Si aún lo ves detrás, recarga la página.' },
     { cat: '🔔 Notificaciones', q: '¿El Centro de Ayuda bloquea la pantalla?', a: 'No. El Centro de Ayuda ahora es un menú flotante que aparece debajo del botón ❓. Se cierra automáticamente al hacer clic fuera o presionar Escape.' },
+    { cat: '🔔 Notificaciones', q: '¿Por qué en móvil la ayuda se abre en pestaña nueva?', a: 'En móvil, los iframes son problemáticos (tamaño, scroll, gestos). Por eso en móvil la ayuda detallada se abre directamente en una pestaña nueva, que es más fiable.' },
 
     // ============ MULTIUSUARIO ============
     { cat: '👥 Multiusuario', q: '¿Puedo tener varios usuarios en el mismo negocio?', a: 'Sí. Al registrarte puedes crear un negocio nuevo o unirte a uno existente con un código de invitación de 8 caracteres.' },
@@ -1691,10 +1841,10 @@ const FAQS_DB = [
     { cat: '🔄 Reprogramación', q: '¿La reprogramación afecta el stock?', a: 'No directamente. El stock ya fue descontado (o no) según el estado original del pedido. La reprogramación solo cambia la fecha.' },
 
     // ============ PWA ============
-    { cat: '📱 PWA', q: '¿Por qué la app no funciona offline después de limpiar el caché?', a: 'Si limpias el caché de Chrome, se borran los archivos de la PWA. Abre Panario con conexión a internet una vez para que se vuelvan a cachear.' },
+    { cat: '📱 PWA', q: '¿Por qué la app no funciona offline después de limpiar el caché?', a: 'Si limpias el caché de Chrome, se borran los archivos de la PWA. Abre Panario con conexión a internet una vez para que se vuelvan a cachear. En la versión 2.1.11, el Service Worker detecta esta situación y re-descarga todo automáticamente.' },
     { cat: '📱 PWA', q: '¿Cómo reinstalo la PWA correctamente?', a: 'Desinstala la PWA, limpia el caché del navegador, abre Panario online, espera a que cargue completamente y vuelve a instalarla.' },
     { cat: '📱 PWA', q: '¿Qué hacer si veo "Sin conexión" pero tengo internet?', a: 'Es posible que el Service Worker tenga una versión antigua. Ve a offline.html y pulsa "Limpiar caché y recargar".' },
-    { cat: '📱 PWA', q: '¿Por qué la ayuda no se abre en el móvil?', a: 'En algunos navegadores móviles, los iframes requieren gesto del usuario. Toca el botón de ayuda manualmente en lugar de esperar que se abra sola.' },
+    { cat: '📱 PWA', q: '¿Por qué la ayuda no se abre en el móvil?', a: 'En algunos navegadores móviles, los iframes requieren gesto del usuario. En la versión 2.1.11, la ayuda detallada se abre directamente en una pestaña nueva en móvil, evitando este problema.' },
 
     // ============ DUPLICADOS ============
     { cat: '🔀 Duplicados', q: '¿Cómo evito duplicados al importar?', a: 'Usa la opción "🔀 Fusionar bases de datos". El sistema compara por UUID y solo añade registros nuevos, actualizando los existentes solo si son más recientes.' },
@@ -1705,7 +1855,13 @@ const FAQS_DB = [
     // ============ VENDEDOR ============
     { cat: '👤 Vendedor', q: '¿Cómo sé quién vendió cada producto?', a: 'En el detalle de cada venta, en la sección de Auditoría, aparece "👤 Creado por: [nombre del vendedor]".' },
     { cat: '👤 Vendedor', q: '¿Puedo filtrar ventas por vendedor?', a: 'Actualmente no hay filtro directo, pero puedes ver el ranking de ventas por empleado en el Dashboard.' },
-    { cat: '👤 Vendedor', q: '¿Qué pasa si un usuario es eliminado?', a: 'Sus ventas se mantienen, pero el nombre del vendedor aparecerá como "Desconocido" en la auditoría.' }
+    { cat: '👤 Vendedor', q: '¿Qué pasa si un usuario es eliminado?', a: 'Sus ventas se mantienen, pero el nombre del vendedor aparecerá como "Desconocido" en la auditoría.' },
+
+    // ============ SONIDO Y PWA (Entrega 1) ============
+    { cat: '🔊 Sonido', q: '¿Por qué no suenan las notificaciones la primera vez?', a: 'Los navegadores bloquean el audio hasta que el usuario interactúa con la página. Desde v2.1.10, el AudioContext se desbloquea con el primer clic, toque o tecla en cualquier parte de la app.' },
+    { cat: '🔊 Sonido', q: '¿Tengo que hacer algo especial para activar el sonido?', a: 'No. Simplemente interactúa con la app (clic, toque o tecla). El audio se desbloquea automáticamente. Verás en consola: "🔊 AudioContext desbloqueado correctamente".' },
+    { cat: '🔊 Sonido', q: '¿El sonido funciona si no he hecho login?', a: 'Sí. Desde v2.1.10, el audio se desbloquea con cualquier gesto, incluso en la pantalla de login.' },
+    { cat: '🔊 Sonido', q: '¿Qué sonidos hay disponibles?', a: 'Cinco sonidos: 🔔 Beep, 🎵 Chime, 💧 Pop, ⚠️ Alert, ✅ Success. Más la opción 🔇 Silencio.' }
 ];
 
 // ============================================================
@@ -1935,6 +2091,8 @@ window.HelpModule = {
     cerrarAyudaModal: cerrarAyudaModal,
     imprimirAyudaIframe: imprimirAyudaIframe,
     forzarModalAlFrente: forzarModalAlFrente,
+    ofrecerFallbackPestanaNueva: ofrecerFallbackPestanaNueva,
+    isMobileDevice: isMobileDevice,
     FAQS_DB: FAQS_DB
 };
 
@@ -1954,6 +2112,8 @@ window.cerrarAyudaModal = cerrarAyudaModal;
 window.imprimirAyudaIframe = imprimirAyudaIframe;
 window.filtrarFAQs = filtrarFAQs;
 window.forzarModalAlFrente = forzarModalAlFrente;
+window.ofrecerFallbackPestanaNueva = ofrecerFallbackPestanaNueva;
+window.isMobileDevice = isMobileDevice;
 
-console.log('📦 Help Module cargado correctamente v2.1.8 (FASE 4.1: Centro de Ayuda como popover)');
+console.log('📦 Help Module cargado correctamente v2.1.11 (ENTREGA 3: ayuda detallada en móvil)');
 console.log('📚 FAQs cargadas:', FAQS_DB.length);

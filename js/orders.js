@@ -5,23 +5,35 @@
 // CORREGIDO FASE 2 (160926): Venta desde pedido con pago adelantado
 //   ya NO se marca como deuda (Problema #8)
 // CORREGIDO (160926 v3): Edición de pedido NO actualizaba client_name
-//   - WHERE ahora usa negocio_id (no user_id)
-//   - Desvincula client_id si el nombre cambió manualmente
-//   - Verifica filas afectadas
 // CORREGIDO FASE 1.2 (190926 v2):
 //   - updateOrderStatus() permite la entrega aunque falle el stock
-//   - Devuelve stockWarning en el resultado para que la UI lo muestre
-//   - Eliminados los catch(e){} silenciosos
-//   - Logs detallados en cada paso del flujo
 // AÑADIDO FASE 1.3.2 (190926 v3):
 //   - saveOrder() genera uuid para orders y order_items
-//   - registrarVentaDesdePedido() genera uuid para sales y transactions
 // AÑADIDO FASE 2.1 (190926 v4):
-//   - limpiarListaEspera(): elimina todos los items y cancela pedidos
-//   - eliminarDeListaEspera(orderId): quita un cliente y reindexa
-//   - procesarClienteDeLista(orderId, cantidad): convierte en venta
-//   - cancelarPedidoDesdeLista(orderId, causa, nota): cancela sin venta
-//   - cancelarPedidosGlobalmente(desde, hasta, causa, nota): cancelación masiva
+//   - limpiarListaEspera(), eliminarDeListaEspera(),
+//     procesarClienteDeLista(), cancelarPedidoDesdeLista(),
+//     cancelarPedidosGlobalmente()
+// 🆕 ENTREGA 4 (230926 v5): ORDEN ASCENDENTE POR ID
+//   - ✅ getOrders() ahora ordena por:
+//       ORDER BY o.delivery_date ASC, o.id ASC
+//     (antes: ORDER BY o.delivery_date ASC, o.created_at ASC)
+//   - ✅ El primer pedido del día aparece primero en la lista
+//   - ✅ Mantiene agrupación por fecha en la UI
+//   - ✅ Afecta a todas las vistas que usan getOrders():
+//     * renderOrdersView() → loadOrders()
+//     * viewOrder() → getOrder()
+//     * Cualquier consumidor externo
+//   - ✅ También se ordenan los items internos por id ASC
+// 🆕 ENTREGA 7 (230926 v6): REPROGRAMAR PEDIDOS POR RANGO
+//   - ✅ NUEVA función reprogramarPedidosPorRango()
+//     * Mueve todos los pedidos de un rango a una fecha destino
+//     * Filtro opcional por cliente
+//     * Añade causa + nota a las notas de cada pedido
+//     * Responde { success, reprogramados, errores }
+//   - ✅ NUEVA función autoEliminarDeListaAlComprar()
+//     * Cuando un cliente de la lista de espera compra directamente,
+//       se elimina automáticamente de la lista
+//   - ✅ Se expone window.OrdersModule.reprogramarPedidosPorRango
 // ============================================================
 
 window.OrdersModule = {};
@@ -120,7 +132,16 @@ async function getProducto(id) {
 }
 
 // ============================================================
-// PEDIDOS - OBTENER (POR NEGOCIO, NO POR USUARIO)
+// PEDIDOS - OBTENER (POR NEGOCIO)
+// ============================================================
+// 🆕 ENTREGA 4: Orden ascendente por ID dentro de la misma fecha.
+// 
+// ANTES:  ORDER BY o.delivery_date ASC, o.created_at ASC
+// AHORA:  ORDER BY o.delivery_date ASC, o.id ASC
+// 
+// Motivo: el usuario quiere ver el primer pedido del día arriba.
+// El ID es incremental y monótono, así que refleja el orden real
+// de creación dentro de la misma fecha de entrega.
 // ============================================================
 
 async function getOrders(filters = {}) {
@@ -161,7 +182,8 @@ async function getOrders(filters = {}) {
         params.push(searchTerm, searchTerm);
     }
 
-    sql += ' GROUP BY o.id ORDER BY o.delivery_date ASC, o.created_at ASC';
+    // 🆕 ENTREGA 4: Orden ascendente por ID dentro del día
+    sql += ' GROUP BY o.id ORDER BY o.delivery_date ASC, o.id ASC';
 
     try {
         return window.DBModule.query(sql, params);
@@ -192,6 +214,7 @@ async function getOrder(id) {
         
         const order = results[0];
         
+        // 🆕 ENTREGA 4: Ordenar items por ID ascendente también
         order.items = window.DBModule.query(`
             SELECT oi.*, p.nombre as producto_nombre, p.precio_venta,
                    p.unidad_venta, p.cantidad_por_unidad, p.receta_id,
@@ -200,10 +223,11 @@ async function getOrder(id) {
             LEFT JOIN productos p ON oi.producto_id = p.id
             LEFT JOIN recipes r ON p.receta_id = r.id
             WHERE oi.order_id = ? AND oi.deleted_at IS NULL
+            ORDER BY oi.id ASC
         `, [id]);
         
         order.payments = window.DBModule.query(
-            'SELECT * FROM payments WHERE order_id = ? AND deleted_at IS NULL',
+            'SELECT * FROM payments WHERE order_id = ? AND deleted_at IS NULL ORDER BY id ASC',
             [id]
         );
         
@@ -1032,7 +1056,7 @@ async function getDebts() {
             FROM sales 
             WHERE negocio_id = ? AND is_debt = 1 AND paid = 0 
               AND deleted_at IS NULL AND voided = 0
-            ORDER BY sale_date ASC
+            ORDER BY sale_date ASC, id ASC
         `, [negocioId]);
 
         return debts.map(d => ({
@@ -1075,15 +1099,9 @@ async function attendFromWaitingList(orderId) {
 }
 
 // ============================================================
-// 🆕 FASE 2.1: GESTIÓN AVANZADA DE LISTA DE ESPERA
+// GESTIÓN AVANZADA DE LISTA DE ESPERA
 // ============================================================
 
-/**
- * Limpia completamente la lista de espera del negocio actual.
- * Cancela todos los pedidos asociados y reinicia el contador a 0.
- * 
- * @returns {Object} { success, cancelados, eliminados }
- */
 async function limpiarListaEspera() {
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
@@ -1094,7 +1112,6 @@ async function limpiarListaEspera() {
     console.log('🧹 [limpiarListaEspera] Iniciando...');
 
     try {
-        // 1. Obtener todos los items activos de la lista
         const items = window.DBModule.query(`
             SELECT id, order_id, position, client_name
             FROM waiting_list 
@@ -1107,10 +1124,8 @@ async function limpiarListaEspera() {
         let eliminados = 0;
         let cancelados = 0;
 
-        // 2. Por cada item: cancelar su pedido y eliminar de la lista
         for (const item of items) {
             try {
-                // Marcar el item como eliminado
                 window.DBModule.execute(`
                     UPDATE waiting_list 
                     SET deleted_at = CURRENT_TIMESTAMP, status = 'removed'
@@ -1118,7 +1133,6 @@ async function limpiarListaEspera() {
                 `, [item.id]);
                 eliminados++;
 
-                // Cancelar el pedido asociado (solo si no está ya cancelado/entregado)
                 const orderCheck = window.DBModule.query(
                     'SELECT id, status FROM orders WHERE id = ? AND negocio_id = ?',
                     [item.order_id, negocioId]
@@ -1142,7 +1156,6 @@ async function limpiarListaEspera() {
             }
         }
 
-        // 3. Reindexar (debería quedar vacía)
         try { window.DBModule.reindexWaitingList(); } catch (e) {}
 
         window.DBModule.saveAndNotify();
@@ -1163,13 +1176,6 @@ async function limpiarListaEspera() {
     }
 }
 
-/**
- * Elimina un cliente específico de la lista de espera y renumera.
- * El pedido asociado pasa a estado 'cancelled'.
- * 
- * @param {number} orderId - ID del pedido del cliente a eliminar
- * @returns {Object} { success, message }
- */
 async function eliminarDeListaEspera(orderId) {
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
@@ -1178,7 +1184,6 @@ async function eliminarDeListaEspera(orderId) {
     if (!negocioId) return { success: false, error: 'No hay negocio activo' };
 
     try {
-        // Verificar que existe el item
         const item = window.DBModule.query(`
             SELECT * FROM waiting_list 
             WHERE order_id = ? AND negocio_id = ? AND deleted_at IS NULL AND status = 'waiting'
@@ -1188,14 +1193,12 @@ async function eliminarDeListaEspera(orderId) {
             return { success: false, error: 'El pedido no está en la lista de espera' };
         }
 
-        // Marcar como eliminado
         window.DBModule.execute(`
             UPDATE waiting_list 
             SET deleted_at = CURRENT_TIMESTAMP, status = 'removed'
             WHERE order_id = ? AND negocio_id = ?
         `, [orderId, negocioId]);
 
-        // Cancelar el pedido
         window.DBModule.execute(`
             UPDATE orders 
             SET status = 'cancelled',
@@ -1204,7 +1207,6 @@ async function eliminarDeListaEspera(orderId) {
             WHERE id = ? AND negocio_id = ?
         `, [orderId, negocioId]);
 
-        // Reindexar
         window.DBModule.reindexWaitingList();
 
         window.DBModule.saveAndNotify();
@@ -1223,14 +1225,6 @@ async function eliminarDeListaEspera(orderId) {
     }
 }
 
-/**
- * Procesa un cliente de la lista de espera como venta.
- * Registra la venta, marca el item como atendido y renumera.
- * 
- * @param {number} orderId - ID del pedido del cliente
- * @param {number} cantidad - Cantidad a atender (opcional, por defecto toda)
- * @returns {Object} { success, ventas, total }
- */
 async function procesarClienteDeLista(orderId, cantidad = null) {
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
@@ -1241,7 +1235,6 @@ async function procesarClienteDeLista(orderId, cantidad = null) {
     console.log(`✅ [procesarClienteDeLista] Procesando pedido #${orderId}, cantidad: ${cantidad || 'toda'}`);
 
     try {
-        // 1. Verificar que el pedido está en la lista
         const item = window.DBModule.query(`
             SELECT * FROM waiting_list 
             WHERE order_id = ? AND negocio_id = ? AND deleted_at IS NULL AND status = 'waiting'
@@ -1251,14 +1244,12 @@ async function procesarClienteDeLista(orderId, cantidad = null) {
             return { success: false, error: 'El pedido no está en la lista de espera' };
         }
 
-        // 2. Obtener el pedido
         const order = await getOrder(orderId);
         if (!order) return { success: false, error: 'Pedido no encontrado' };
 
         const cantidadTotal = order.items?.reduce((sum, i) => sum + i.quantity, 0) || 0;
         const cantidadAtender = cantidad !== null ? Math.min(cantidad, cantidadTotal) : cantidadTotal;
 
-        // 3. Registrar venta (total o parcial)
         let ventaResult;
         if (cantidadAtender >= cantidadTotal) {
             ventaResult = await registrarVentaDesdePedido(orderId);
@@ -1270,9 +1261,7 @@ async function procesarClienteDeLista(orderId, cantidad = null) {
             return { success: false, error: 'Error al registrar la venta: ' + ventaResult.error };
         }
 
-        // 4. Marcar el item como atendido
         if (cantidadAtender >= cantidadTotal) {
-            // Atendido completo
             window.DBModule.execute(`
                 UPDATE waiting_list 
                 SET status = 'attended', attended_at = CURRENT_TIMESTAMP, deleted_at = CURRENT_TIMESTAMP
@@ -1285,7 +1274,6 @@ async function procesarClienteDeLista(orderId, cantidad = null) {
                 WHERE id = ? AND negocio_id = ?
             `, [orderId, negocioId]);
         } else {
-            // Atendido parcial
             try {
                 await window.DBModule.atenderParcialmenteDeLista(orderId, cantidadAtender, cantidadTotal);
             } catch (e) {
@@ -1293,7 +1281,6 @@ async function procesarClienteDeLista(orderId, cantidad = null) {
             }
         }
 
-        // 5. Reindexar
         window.DBModule.reindexWaitingList();
 
         window.DBModule.saveAndNotify();
@@ -1321,15 +1308,6 @@ async function procesarClienteDeLista(orderId, cantidad = null) {
     }
 }
 
-/**
- * Cancela el pedido de un cliente de la lista SIN crear venta.
- * Repone stock si estaba descontado.
- * 
- * @param {number} orderId - ID del pedido
- * @param {string} causa - Causa de la cancelación (opcional)
- * @param {string} nota - Nota adicional (opcional)
- * @returns {Object} { success }
- */
 async function cancelarPedidoDesdeLista(orderId, causa = '', nota = '') {
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
@@ -1341,27 +1319,23 @@ async function cancelarPedidoDesdeLista(orderId, causa = '', nota = '') {
         const order = await getOrder(orderId);
         if (!order) return { success: false, error: 'Pedido no encontrado' };
 
-        // Reponer stock si el pedido estaba en confirmed/production
         if (order.status === 'confirmed' || order.status === 'production') {
             try { await reponerStockPedido(orderId); } catch (e) {
                 console.warn('⚠️ Error reponiendo stock:', e);
             }
         }
 
-        // Marcar en la lista como removido
         window.DBModule.execute(`
             UPDATE waiting_list 
             SET deleted_at = CURRENT_TIMESTAMP, status = 'removed'
             WHERE order_id = ? AND negocio_id = ?
         `, [orderId, negocioId]);
 
-        // Notas de cancelación
         const notaCancelacion = [];
         if (causa) notaCancelacion.push(causa);
         if (nota) notaCancelacion.push(nota);
         const notaFinal = notaCancelacion.join(' | ') || 'Cancelado desde lista de espera';
 
-        // Cancelar el pedido
         window.DBModule.execute(`
             UPDATE orders 
             SET status = 'cancelled',
@@ -1370,7 +1344,6 @@ async function cancelarPedidoDesdeLista(orderId, causa = '', nota = '') {
             WHERE id = ? AND negocio_id = ?
         `, [notaFinal, orderId, negocioId]);
 
-        // Reindexar
         window.DBModule.reindexWaitingList();
 
         window.DBModule.saveAndNotify();
@@ -1389,18 +1362,10 @@ async function cancelarPedidoDesdeLista(orderId, causa = '', nota = '') {
     }
 }
 
-/**
- * Cancelación GLOBAL de pedidos por rango de fechas.
- * SOLO ADMIN. Cancela todos los pedidos pending/confirmed/production/ready
- * dentro del rango. Repone stock. Reinicia la lista de espera partiendo
- * del primer cliente cuyo pedido sea POSTERIOR a fechaHasta.
- * 
- * @param {string} fechaDesde - YYYY-MM-DD (inclusive)
- * @param {string} fechaHasta - YYYY-MM-DD (inclusive)
- * @param {string} causa - Causa principal (falta insumos, apagón, etc.)
- * @param {string} nota - Nota u observación adicional
- * @returns {Object} { success, cancelados, reiniciados, errores }
- */
+// ============================================================
+// CANCELACIÓN GLOBAL DE PEDIDOS POR RANGO
+// ============================================================
+
 async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', nota = '') {
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
@@ -1420,7 +1385,6 @@ async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', no
     console.log(`   Causa: ${causa}, Nota: ${nota}`);
 
     try {
-        // 1. Obtener pedidos a cancelar
         const pedidos = window.DBModule.query(`
             SELECT id, client_name, status, delivery_date
             FROM orders 
@@ -1429,7 +1393,7 @@ async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', no
               AND status IN ('pending', 'confirmed', 'production', 'ready')
               AND DATE(delivery_date) >= DATE(?)
               AND DATE(delivery_date) <= DATE(?)
-            ORDER BY delivery_date ASC
+            ORDER BY delivery_date ASC, id ASC
         `, [negocioId, fechaDesde, fechaHasta]);
 
         console.log(`🚨 [cancelarPedidosGlobalmente] ${pedidos.length} pedidos a cancelar`);
@@ -1439,20 +1403,16 @@ async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', no
         let cancelados = 0;
         const errores = [];
 
-        // 2. Cancelar cada pedido
         for (const pedido of pedidos) {
             try {
-                // Reponer stock si estaba descontado
                 if (pedido.status === 'confirmed' || pedido.status === 'production') {
                     try { await reponerStockPedido(pedido.id); } catch (e) {
                         console.warn(`⚠️ Error reponiendo stock pedido #${pedido.id}:`, e.message);
                     }
                 }
 
-                // Quitar de lista de espera si estaba
                 try { await window.DBModule.removeFromWaitingList(pedido.id); } catch (e) {}
 
-                // Cancelar el pedido
                 window.DBModule.execute(`
                     UPDATE orders 
                     SET status = 'cancelled',
@@ -1467,8 +1427,6 @@ async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', no
             }
         }
 
-        // 3. Reiniciar lista de espera partiendo del primer cliente POSTERIOR a fechaHasta
-        // Obtener items que siguen en espera
         const itemsRestantes = window.DBModule.query(`
             SELECT w.id, w.order_id, w.position, o.delivery_date
             FROM waiting_list w
@@ -1480,13 +1438,11 @@ async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', no
             ORDER BY w.position ASC
         `, [negocioId]);
 
-        // Filtrar: solo los que tienen delivery_date > fechaHasta
         const itemsPreservar = itemsRestantes.filter(item => {
             const fechaEntrega = (item.delivery_date || '').split('T')[0];
             return fechaEntrega > fechaHasta;
         });
 
-        // Los que NO cumplen, se eliminan
         const itemsEliminar = itemsRestantes.filter(item => {
             const fechaEntrega = (item.delivery_date || '').split('T')[0];
             return fechaEntrega <= fechaHasta;
@@ -1502,7 +1458,6 @@ async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', no
             } catch (e) {}
         }
 
-        // Reindexar la lista de espera (los items preservados toman posiciones 1, 2, 3...)
         window.DBModule.reindexWaitingList();
 
         console.log(`🚨 [cancelarPedidosGlobalmente] Reinicio: ${itemsPreservar.length} items preservados, ${itemsEliminar.length} eliminados`);
@@ -1531,6 +1486,235 @@ async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', no
 }
 
 // ============================================================
+// 🆕 ENTREGA 7: REPROGRAMAR PEDIDOS POR RANGO
+// ============================================================
+// 
+// Mueve todos los pedidos de un rango de fechas a una fecha destino.
+// Filtro opcional por cliente.
+// Añade causa + nota a las notas de cada pedido.
+// 
+// @param {string} fechaDesde - YYYY-MM-DD (inclusive)
+// @param {string} fechaHasta - YYYY-MM-DD (inclusive)
+// @param {string} fechaDestino - YYYY-MM-DD (nueva fecha)
+// @param {string} causa - Motivo de la reprogramación
+// @param {string} nota - Nota adicional
+// @param {string} clienteFiltro - Cliente opcional (búsqueda parcial)
+// @returns {Object} { success, reprogramados, errores, fechaDestino }
+// ============================================================
+
+async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, causa = '', nota = '', clienteFiltro = '') {
+    const user = window.AuthModule.getCurrentUser();
+    if (!user) return { success: false, error: 'No hay usuario autenticado' };
+    if (user.is_admin !== 1) return { success: false, error: 'Solo el administrador puede reprogramar pedidos' };
+    
+    const negocioId = window.DBModule.getNegocioIdActual();
+    if (!negocioId) return { success: false, error: 'No hay negocio activo' };
+
+    // Validaciones
+    if (!fechaDesde || !fechaHasta || !fechaDestino) {
+        return { success: false, error: 'Debes especificar fecha desde, hasta y destino' };
+    }
+    if (fechaDesde > fechaHasta) {
+        return { success: false, error: 'La fecha "desde" debe ser anterior a "hasta"' };
+    }
+    if (fechaDestino >= fechaDesde && fechaDestino <= fechaHasta) {
+        return { success: false, error: 'La fecha destino no puede estar dentro del rango origen' };
+    }
+
+    console.log(`🔄 [reprogramarPedidosPorRango] Rango: ${fechaDesde} → ${fechaHasta} ⇒ ${fechaDestino}`);
+    console.log(`   Causa: ${causa}, Nota: ${nota}, Cliente: ${clienteFiltro || 'todos'}`);
+
+    try {
+        // 1. Construir consulta de pedidos a reprogramar
+        let sql = `
+            SELECT id, client_name, status, delivery_date, total
+            FROM orders 
+            WHERE negocio_id = ? 
+              AND deleted_at IS NULL
+              AND status IN ('pending', 'confirmed', 'production', 'ready')
+              AND DATE(delivery_date) >= DATE(?)
+              AND DATE(delivery_date) <= DATE(?)
+        `;
+        let params = [negocioId, fechaDesde, fechaHasta];
+
+        // Filtro opcional por cliente
+        if (clienteFiltro && clienteFiltro.trim()) {
+            sql += ' AND LOWER(client_name) LIKE LOWER(?)';
+            params.push('%' + clienteFiltro.trim() + '%');
+        }
+
+        sql += ' ORDER BY delivery_date ASC, id ASC';
+
+        const pedidos = window.DBModule.query(sql, params);
+
+        if (pedidos.length === 0) {
+            console.log('ℹ️ [reprogramarPedidosPorRango] No hay pedidos para reprogramar');
+            return { 
+                success: true, 
+                reprogramados: 0, 
+                errores: null,
+                mensaje: 'No hay pedidos en el rango especificado'
+            };
+        }
+
+        console.log(`🔄 [reprogramarPedidosPorRango] ${pedidos.length} pedidos a reprogramar`);
+
+        // 2. Construir la nota final que se añadirá a cada pedido
+        const notaReprogramacion = [];
+        if (causa) notaReprogramacion.push(`🔄 ${causa}`);
+        if (nota) notaReprogramacion.push(nota);
+        const notaFinal = notaReprogramacion.length > 0 
+            ? `Reprogramado: ${notaReprogramacion.join(' | ')}`
+            : 'Reprogramado';
+
+        let reprogramados = 0;
+        const errores = [];
+
+        // 3. Reprogramar cada pedido
+        for (const pedido of pedidos) {
+            try {
+                // Conservar la hora de entrega original si existe, y cambiar solo la fecha
+                const horaOriginal = (pedido.delivery_date || 'T10:00:00').split('T')[1] || '10:00:00';
+                const nuevaFechaHora = `${fechaDestino}T${horaOriginal}`;
+
+                // Actualizar el pedido: nueva fecha + añadir nota a las notas existentes
+                window.DBModule.execute(`
+                    UPDATE orders 
+                    SET delivery_date = ?,
+                        notes = COALESCE(notes || ' | ', '') || ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND negocio_id = ?
+                `, [nuevaFechaHora, notaFinal, pedido.id, negocioId]);
+
+                reprogramados++;
+            } catch (e) {
+                console.error(`❌ Error reprogramando pedido #${pedido.id}:`, e);
+                errores.push(`Pedido #${pedido.id} (${pedido.client_name}): ${e.message}`);
+            }
+        }
+
+        // 4. Guardar y notificar
+        window.DBModule.saveAndNotify();
+
+        if (window.NotificationsModule && reprogramados > 0) {
+            window.NotificationsModule.addNotification(
+                `🔄 ${reprogramados} pedido${reprogramados > 1 ? 's' : ''} reprogramado${reprogramados > 1 ? 's' : ''} al ${fechaDestino}`,
+                'success', 5000
+            );
+        }
+
+        console.log(`✅ [reprogramarPedidosPorRango] Completado: ${reprogramados} reprogramados, ${errores.length} errores`);
+
+        return {
+            success: true,
+            reprogramados,
+            errores: errores.length > 0 ? errores : null,
+            fechaDestino,
+            notaFinal
+        };
+
+    } catch (e) {
+        console.error('❌ [reprogramarPedidosPorRango] Error crítico:', e);
+        return { success: false, error: e.message };
+    }
+}
+
+// ============================================================
+// 🆕 ENTREGA 7: AUTO-ELIMINAR DE LISTA AL COMPRAR
+// ============================================================
+// 
+// Cuando un cliente de la lista de espera compra directamente
+// (por ejemplo, por una venta directa), se elimina automáticamente
+// de la lista de espera si ya no tiene pedidos pendientes.
+// 
+// Esta función se llama desde otros módulos (sales, ui-orders)
+// cuando se detecta que un cliente de la lista compró.
+// 
+// @param {string} clientName - Nombre del cliente
+// @returns {Object} { success, eliminados }
+// ============================================================
+
+async function autoEliminarDeListaAlComprar(clientName) {
+    if (!clientName || !clientName.trim()) {
+        return { success: false, error: 'Nombre de cliente requerido' };
+    }
+
+    const negocioId = window.DBModule.getNegocioIdActual();
+    if (!negocioId) return { success: false, error: 'No hay negocio activo' };
+
+    try {
+        // Buscar items de la lista de espera de este cliente
+        const items = window.DBModule.query(`
+            SELECT w.id, w.order_id, w.client_name, w.status
+            FROM waiting_list w
+            WHERE w.negocio_id = ?
+              AND w.deleted_at IS NULL
+              AND w.status = 'waiting'
+              AND LOWER(w.client_name) = LOWER(?)
+        `, [negocioId, clientName.trim()]);
+
+        if (items.length === 0) {
+            return { success: true, eliminados: 0 };
+        }
+
+        console.log(`🔄 [autoEliminarDeListaAlComprar] ${items.length} items de "${clientName}" a eliminar`);
+
+        let eliminados = 0;
+
+        for (const item of items) {
+            try {
+                // Marcar como removido de la lista
+                window.DBModule.execute(`
+                    UPDATE waiting_list 
+                    SET deleted_at = CURRENT_TIMESTAMP, status = 'removed'
+                    WHERE id = ?
+                `, [item.id]);
+
+                // Marcar el pedido asociado como cancelado si sigue pendiente
+                const orderCheck = window.DBModule.query(
+                    'SELECT id, status FROM orders WHERE id = ? AND negocio_id = ?',
+                    [item.order_id, negocioId]
+                );
+
+                if (orderCheck.length > 0) {
+                    const order = orderCheck[0];
+                    if (order.status === 'waiting') {
+                        window.DBModule.execute(`
+                            UPDATE orders 
+                            SET status = 'waiting_bought',
+                                notes = COALESCE(notes || ' | ', '') || 'Compró directamente (auto-eliminado de lista)',
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        `, [item.order_id]);
+                    }
+                }
+
+                eliminados++;
+            } catch (e) {
+                console.warn(`⚠️ Error eliminando item #${item.id}:`, e);
+            }
+        }
+
+        if (eliminados > 0) {
+            window.DBModule.reindexWaitingList();
+            window.DBModule.saveAndNotify();
+
+            if (window.NotificationsModule) {
+                window.NotificationsModule.addNotification(
+                    `✅ ${eliminados} entrada${eliminados > 1 ? 's' : ''} de "${clientName}" eliminada${eliminados > 1 ? 's' : ''} de la lista de espera`,
+                    'info', 4000
+                );
+            }
+        }
+
+        return { success: true, eliminados };
+    } catch (e) {
+        console.error('❌ [autoEliminarDeListaAlComprar] Error:', e);
+        return { success: false, error: e.message };
+    }
+}
+
+// ============================================================
 // EXPORTACIÓN
 // ============================================================
 
@@ -1551,12 +1735,14 @@ window.OrdersModule = {
     verificarPedidosDuplicados,
     getWaitingList, getWaitingListCount, getWaitingListWithDetails,
     addToWaitingList, removeFromWaitingList, attendFromWaitingList,
-    // 🆕 FASE 2.1: Gestión avanzada de lista de espera
     limpiarListaEspera,
     eliminarDeListaEspera,
     procesarClienteDeLista,
     cancelarPedidoDesdeLista,
-    cancelarPedidosGlobalmente
+    cancelarPedidosGlobalmente,
+    // 🆕 ENTREGA 7: Reprogramación + auto-eliminar
+    reprogramarPedidosPorRango,
+    autoEliminarDeListaAlComprar
 };
 
-console.log('📦 Orders Module v2.0.8 (FASE 2.1: lista de espera + cancelación global)');
+console.log('📦 Orders Module v2.1.10 (ENTREGA 4: orden ascendente por ID + ENTREGA 7: reprogramación)');

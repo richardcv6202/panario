@@ -33,34 +33,28 @@
 //   - NUEVA tarjeta: 📉 Peor día (fecha + importe)
 //   - NUEVA tarjeta: 👥 Ventas por empleado (top 3)
 //   - NUEVA función: formatearFechaInteligente() para "Corriente hoy"
-//     * Si el próximo bloque es HOY → "Hoy 3:00 PM"
-//     * Si es MAÑANA → "Mañana 19, 1:00 AM"
-//     * Si es +2 días → "Mié 21, 1:00 AM"
-//     * Si es +7 días o más → "25/09, 1:00 AM"
 //   - Homogeneizado alturas de tarjetas (min-height: 90px)
-//   - Integración con toggles nuevos del perfil:
-//     * show_released_sales
-//     * show_best_worst_day
-//     * show_sales_by_employee
-//     * show_debts (#26)
-//     * show_rewards (#25)
-//   - Compatibilidad total: si los toggles no existen en la config
-//     del usuario, se aplican defaults sensatos
+//   - Integración con toggles nuevos del perfil
 // 🆕 FASE 4.2 (#14) (200926 v7): PERSISTENCIA DEL MODO DEL GRÁFICO
 //   - renderDashboardView() lee chart_mode desde dashConfig (BD)
 //   - changeChartMode() guarda el modo en la BD del usuario
 //   - El selector se hidrata con el modo persistido
 // 🆕 FASE 5 (#2) (200926 v8): ENLACE "AYUDA DETALLADA"
 //   - Nueva función openDetailedHelp() → abre ayuda-panario.html
-//   - Expuesta globalmente como window.openDetailedHelp
 // 🆕 FASE 4 (Entrega 4 - 210926 v9): ALTURAS HOMOGÉNEAS DE TARJETAS
-//   - ✅ Punto #6 del informe resuelto
 //   - Todas las tarjetas de estadísticas avanzadas tienen min-height: 90px
-//   - Fecha de "Primer día venta" acortada a formato "15 sep 2026"
-//   - Flexbox con justify-content y align-items centrados
-//   - Texto responsive con font-size dinámico
-//   - Padding homogéneo en todas las tarjetas
-//   - Se añade helper getAppVersion() para leer versión del meta
+// 🆕 ENTREGA 5 (230926 v10): PEDIDOS MAÑANA EN DASHBOARD
+//   - ✅ renderTarjetaPedidosHoy() muestra 3 columnas:
+//     * 📋 Pedidos hoy
+//     * 📅 Pedidos mañana (NUEVO)
+//     * ⏰ En lista de espera
+//   - ✅ Grid responsivo: 3 columnas en desktop, 1 columna en móvil
+//   - ✅ Alturas homogéneas en las 3 columnas
+//   - ✅ Fallback: si ordersTomorrowCount no existe, muestra "—"
+//   - ✅ Colores diferenciados: azul (hoy), púrpura (mañana), naranja (espera)
+//   - ✅ Click en cada columna navega a Pedidos con filtro apropiado
+//   - ✅ Iconos grandes y legibles
+//   - ✅ Compatibilidad total con el resto del Dashboard
 // ============================================================
 
 let currentUser = null;
@@ -137,7 +131,7 @@ window.getNombreNegocio = getNombreNegocio;
 window.getInicialNegocio = getInicialNegocio;
 
 // ============================================================
-// 🆕 FASE 4 (Entrega 4): HELPER PARA OBTENER LA VERSIÓN
+// 🆕 HELPER PARA OBTENER LA VERSIÓN
 // ============================================================
 
 function getAppVersion() {
@@ -149,7 +143,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.1.6'; // Fallback
+    return '2.1.11'; // Fallback
 }
 
 window.getAppVersion = getAppVersion;
@@ -219,7 +213,6 @@ function formatearFechaConDiaSemana(date = new Date()) {
 
 /**
  * Formatea una fecha YYYY-MM-DD a un formato corto: "15 sep 2026"
- * 🆕 FASE 4: Versión corta para tarjetas con altura homogénea.
  */
 function formatearFechaYYYYMMDD(fechaStr, opciones = {}) {
     if (!fechaStr) return '—';
@@ -1254,33 +1247,114 @@ function renderTarjetaCorrienteHoy() {
     }
 }
 
+// ============================================================
+// 🆕 ENTREGA 5: TARJETA DE PEDIDOS HOY / MAÑANA / LISTA DE ESPERA
+// ============================================================
+// 
+// Muestra 3 columnas equilibradas:
+//   1. 📋 Pedidos hoy
+//   2. 📅 Pedidos mañana (NUEVO)
+//   3. ⏰ En lista de espera
+// 
+// - Grid responsivo: 3 cols en desktop, 1 col en móvil
+// - Alturas homogéneas (min-height: 100px)
+// - Colores diferenciados: azul, púrpura, naranja
+// - Fallback: si ordersTomorrowCount no existe, muestra "—"
+// - Click en cada columna navega a Pedidos
+// ============================================================
+
 function renderTarjetaPedidosHoy(stats) {
     if (!stats) return '';
     
     const pedidosHoy = stats.ordersTodayCount || 0;
+    // 🆕 ENTREGA 5: Nuevo campo ordersTomorrowCount
+    const pedidosManana = (typeof stats.ordersTomorrowCount === 'number') 
+        ? stats.ordersTomorrowCount 
+        : null;
     const waiting = stats.waitingListCount || 0;
     
-    if (pedidosHoy === 0 && waiting === 0) return '';
+    // Si todo está en 0 y no hay mañana, no mostrar la tarjeta
+    if (pedidosHoy === 0 && waiting === 0 && (pedidosManana === 0 || pedidosManana === null)) {
+        return '';
+    }
+    
+    // 🆕 ENTREGA 5: Mostrar "—" si el campo no existe (BD vieja)
+    const pedidosMananaDisplay = (pedidosManana === null) 
+        ? '—' 
+        : pedidosManana;
     
     return `
         <div class="card" style="border-left: 4px solid #3b82f6; padding: 14px; margin-bottom: 16px;">
-            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 100px; text-align: center;">
-                    <div style="font-size: 24px; font-weight: 700; color: #3b82f6;">${pedidosHoy}</div>
-                    <div style="font-size: 11px; color: var(--text-light);">📋 Pedidos hoy</div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                <span style="font-size: 22px;">📋</span>
+                <div style="flex: 1;">
+                    <div style="font-weight: 700; color: #3b82f6; font-size: 15px;">
+                        Pedidos activos
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">
+                        Resumen de pedidos programados
+                    </div>
                 </div>
-                <div style="flex: 1; min-width: 100px; text-align: center;">
-                    <div style="font-size: 24px; font-weight: 700; color: #f59e0b;">${waiting}</div>
-                    <div style="font-size: 11px; color: var(--text-light);">⏰ En lista de espera</div>
-                </div>
+                <button onclick="window.navigate('orders')" class="btn secondary" style="padding: 4px 12px; font-size: 11px; width: auto;">
+                    Ver todos
+                </button>
             </div>
+            
+            <!-- 🆕 ENTREGA 5: Grid de 3 columnas con alturas homogéneas -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                
+                <!-- 📋 Pedidos HOY -->
+                <div onclick="window.navigate('orders')" 
+                     style="background: #3b82f615; border: 1px solid #3b82f6; border-radius: 10px; padding: 12px 8px; text-align: center; min-height: 100px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;"
+                     onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(59,130,246,0.25)';"
+                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                    <div style="font-size: 24px; line-height: 1; margin-bottom: 4px;">📋</div>
+                    <div style="font-size: 26px; font-weight: 700; color: #3b82f6; line-height: 1.1;">${pedidosHoy}</div>
+                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px; font-weight: 500;">
+                        Pedidos hoy
+                    </div>
+                </div>
+                
+                <!-- 📅 Pedidos MAÑANA (NUEVO) -->
+                <div onclick="window.navigate('orders')" 
+                     style="background: #8b5cf615; border: 1px solid #8b5cf6; border-radius: 10px; padding: 12px 8px; text-align: center; min-height: 100px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;"
+                     onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(139,92,246,0.25)';"
+                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                    <div style="font-size: 24px; line-height: 1; margin-bottom: 4px;">📅</div>
+                    <div style="font-size: 26px; font-weight: 700; color: #8b5cf6; line-height: 1.1;">${pedidosMananaDisplay}</div>
+                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px; font-weight: 500;">
+                        Pedidos mañana
+                    </div>
+                </div>
+                
+                <!-- ⏰ Lista de ESPERA -->
+                <div onclick="window.navigate('orders')" 
+                     style="background: #f59e0b15; border: 1px solid #f59e0b; border-radius: 10px; padding: 12px 8px; text-align: center; min-height: 100px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;"
+                     onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(245,158,11,0.25)';"
+                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                    <div style="font-size: 24px; line-height: 1; margin-bottom: 4px;">⏰</div>
+                    <div style="font-size: 26px; font-weight: 700; color: #f59e0b; line-height: 1.1;">${waiting}</div>
+                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px; font-weight: 500;">
+                        En lista de espera
+                    </div>
+                </div>
+                
+            </div>
+            
+            <!-- Ajuste responsivo: 1 columna en móvil -->
+            <style>
+                @media (max-width: 500px) {
+                    #dashboard-orders-today-container > div > div:last-child {
+                        grid-template-columns: 1fr !important;
+                    }
+                }
+            </style>
         </div>
     `;
 }
 
 // ============================================================
 // RENDER DASHBOARD VIEW
-// 🆕 FASE 4: ALTURAS HOMOGÉNEAS EN TODAS LAS TARJETAS
 // ============================================================
 
 function renderDashboardView() {
@@ -1331,9 +1405,6 @@ function renderDashboardView() {
     
     const tarjetaCorriente = dashConfig.show_corriente ? renderTarjetaCorrienteHoy() : '';
     
-    // ============================================================
-    // 🆕 FASE 4: Estilos comunes para tarjetas homogéneas
-    // ============================================================
     const CARD_STYLE_BASE = 'padding: 14px; text-align: center; min-height: 100px; display: flex; flex-direction: column; justify-content: center; align-items: center;';
     const CARD_VALUE_STYLE = 'font-size: 22px; font-weight: 700; line-height: 1.1;';
     const CARD_LABEL_STYLE = 'font-size: 11px; color: var(--text-light); margin-top: 4px;';
@@ -1403,7 +1474,7 @@ function renderDashboardView() {
             </div>
         </div>
         
-        <!-- 🆕 Tarjetas de ventas liberadas + mejor/peor día -->
+        <!-- Tarjetas de ventas liberadas + mejor/peor día -->
         ${(dashConfig.show_released_sales || dashConfig.show_best_worst_day) ? `
         <div id="dashboard-new-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
             
@@ -1444,11 +1515,7 @@ function renderDashboardView() {
         </div>
         ` : ''}
         
-        <!-- ============================================================
-             🆕 FASE 4: Estadísticas avanzadas con ALTURAS HOMOGÉNEAS
-             Punto #6 del informe: "Primer día venta" y "Clientes diferentes"
-             ahora tienen la misma altura que las demás tarjetas.
-             ============================================================ -->
+        <!-- Estadísticas avanzadas con alturas homogéneas -->
         <div id="dashboard-advanced-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
             <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #8b5cf6;">
                 <div style="${CARD_ICON_STYLE}">📅</div>
@@ -2277,7 +2344,7 @@ function renderPieChartCanvas(container, chartData) {
 
 // ============================================================
 // CARGAR DATOS DEL DASHBOARD
-// 🆕 FASE 4: Se usa formatearFechaYYYYMMDD para "Primer día venta"
+// 🆕 ENTREGA 5: Se usa ordersTomorrowCount para la nueva columna
 // ============================================================
 
 async function loadDashboardData() {
@@ -2316,7 +2383,6 @@ async function loadDashboardData() {
             'stat-bank-sales-vs-expenses': '$' + (stats.bank?.salesVsExpenses || 0).toFixed(2),
             'stat-dias-ventas': stats.diasConVentas || 0,
             'stat-promedio-diario': '$' + (stats.promedioVentasDiarias || 0).toFixed(2),
-            // 🆕 FASE 4: Formato corto de fecha para que la tarjeta sea homogénea
             'stat-primer-dia': stats.primerDiaVenta ? formatearFechaYYYYMMDD(stats.primerDiaVenta) : '—',
             'stat-clientes-diferentes': stats.clientesDiferentes || 0
         };
@@ -2362,6 +2428,7 @@ async function loadDashboardData() {
         if (dashConfig.show_orders_today) {
             const ordersTodayContainer = document.getElementById('dashboard-orders-today-container');
             if (ordersTodayContainer) {
+                // 🆕 ENTREGA 5: renderTarjetaPedidosHoy() ahora usa ordersTomorrowCount
                 ordersTodayContainer.innerHTML = renderTarjetaPedidosHoy(stats);
             }
         }
@@ -2399,7 +2466,7 @@ async function loadDashboardData() {
         }
 
         console.log('✅ Dashboard actualizado correctamente (v' + getAppVersion() + ')');
-        console.log('   📅 Primer día de venta:', stats.primerDiaVenta, '→', formatearFechaYYYYMMDD(stats.primerDiaVenta));
+        console.log('   📅 Pedidos HOY:', stats.ordersTodayCount, '| MAÑANA:', stats.ordersTomorrowCount, '| Lista espera:', stats.waitingListCount);
         console.log('   📊 Modo del gráfico:', stats.chartMode, '| isCurrentRange:', stats.isCurrentRange);
 
     } catch (error) {
@@ -2609,6 +2676,11 @@ Fecha: ${new Date().toLocaleString('es-ES')}
   Ganancia neta: $${stats.netProfit.toFixed(2)}
   Pedidos pendientes: ${stats.pendingOrdersCount}
   Deudas pendientes: $${stats.totalDebts.toFixed(2)}
+
+📅 PEDIDOS
+  Pedidos HOY: ${stats.ordersTodayCount || 0}
+  Pedidos MAÑANA: ${stats.ordersTomorrowCount || 0}
+  En lista de espera: ${stats.waitingListCount || 0}
 
 📊 ESTADÍSTICAS AVANZADAS
   Días con ventas: ${stats.diasConVentas}
@@ -3122,7 +3194,7 @@ window.renderSalesByEmployee = renderSalesByEmployee;
 window.openDetailedHelp = openDetailedHelp;
 window.getAppVersion = getAppVersion;
 
-console.log('📦 App Controller v' + getAppVersion() + ' (FASE 4 Entrega 4: alturas homogéneas en tarjetas)');
+console.log('📦 App Controller v' + getAppVersion() + ' (ENTREGA 5: pedidos mañana en dashboard)');
 
 // ============================================================
 // INICIALIZACIÓN AUTOMÁTICA

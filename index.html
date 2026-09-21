@@ -2,19 +2,27 @@
 <html lang="es" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
     <!-- ============================================================ -->
-    <!-- 📑 TÍTULO DINÁMICO -->
-    <!-- El título se actualiza desde app.js cuando el usuario se loguea -->
-    <!-- Formato: "Panadería La Esquina - Panario"                     -->
+    <!-- 🆕 ENTREGA 3: VIEWPORT CORREGIDO                             -->
+    <!-- ============================================================ -->
+    <!-- Se ELIMINA: maximum-scale=1.0 y user-scalable=no             -->
+    <!-- Motivo: rompen iframes en móvil y afectan accesibilidad.     -->
+    <!-- Se MANTIENE: viewport-fit=cover para safe-area en iOS.       -->
+    <!-- ============================================================ -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    
+    <!-- ============================================================ -->
+    <!-- 📑 TÍTULO DINÁMICO                                            -->
+    <!-- El título se actualiza desde app.js cuando el usuario se      -->
+    <!-- loguea. Formato: "Panadería La Esquina - Panario"            -->
     <!-- ============================================================ -->
     <title>Panario - Panadería Artesanal</title>
-    <meta name="app-version" content="2.1.5">
-    <meta name="app-build" content="20260920">
+    <meta name="app-version" content="2.1.11">
+    <meta name="app-build" content="20260923">
     
     <!-- ============================================================ -->
-    <!-- 📱 ICONOS Y FAVICON -->
+    <!-- 📱 ICONOS Y FAVICON                                          -->
     <!-- ============================================================ -->
     <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
@@ -23,7 +31,7 @@
     <link rel="apple-touch-icon" href="assets/icon-192.png">
     
     <!-- ============================================================ -->
-    <!-- 📱 PWA -->
+    <!-- 📱 PWA                                                       -->
     <!-- ============================================================ -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#f5a623">
@@ -32,14 +40,14 @@
     <meta name="apple-mobile-web-app-title" content="Panario">
     
     <!-- ============================================================ -->
-    <!-- 📦 ESTILOS -->
+    <!-- 📦 ESTILOS                                                   -->
     <!-- ============================================================ -->
     <link rel="stylesheet" href="css/style.css">
     
 </head>
 <body>
     <!-- ============================================================ -->
-    <!-- PANTALLA DE LOGIN/REGISTRO -->
+    <!-- PANTALLA DE LOGIN/REGISTRO                                   -->
     <!-- ============================================================ -->
     <div id="authScreen" class="screen active">
         <div class="auth-wrapper">
@@ -130,7 +138,7 @@
     </div>
 
     <!-- ============================================================ -->
-    <!-- APP PRINCIPAL (LOGUEADO) -->
+    <!-- APP PRINCIPAL (LOGUEADO)                                     -->
     <!-- ============================================================ -->
     <div id="appScreen" class="screen">
         <!-- HEADER -->
@@ -217,17 +225,17 @@
     </div>
 
     <!-- ============================================================ -->
-    <!-- 📦 CARGAR SQLITE (SQL.js) - LOCAL -->
+    <!-- 📦 CARGAR SQLITE (SQL.js) - LOCAL                            -->
     <!-- ============================================================ -->
     <script src="lib/sql-wasm.js"></script>
     
     <!-- ============================================================ -->
-    <!-- 📦 CARGAR LIBRERÍA QRCODE - LOCAL -->
+    <!-- 📦 CARGAR LIBRERÍA QRCODE - LOCAL                            -->
     <!-- ============================================================ -->
     <script src="lib/qrcode.js"></script>
     
     <!-- ============================================================ -->
-    <!-- 📦 SCRIPTS DE PANARIO - TODOS LOS MÓDULOS -->
+    <!-- 📦 SCRIPTS DE PANARIO - TODOS LOS MÓDULOS                    -->
     <!-- ============================================================ -->
     
     <!-- Módulo de modales (DEBE IR PRIMERO) -->
@@ -282,18 +290,19 @@
     <script src="js/app.js"></script>
 
     <!-- ============================================================ -->
-    <!-- 🆕 SERVICE WORKER - REGISTRO Y ACTUALIZACIÓN -->
+    <!-- 🆕 SERVICE WORKER - REGISTRO Y ACTUALIZACIÓN                 -->
     <!-- ============================================================ -->
     <script>
     // ============================================================
-    // SERVICE WORKER REGISTRATION - Panario v2.1.5
+    // SERVICE WORKER REGISTRATION - Panario v2.1.11
     // ============================================================
     // Registra el SW con ruta RELATIVA (./sw.js) para que funcione
     // tanto en localhost como en GitHub Pages (subcarpeta).
-    // 
+    //
     // - Detecta nuevas versiones del SW y avisa al usuario.
     // - Maneja errores sin bloquear la app.
     // - Solo registra en contextos seguros (HTTPS o localhost).
+    // - 🆕 ENTREGA 1: Escucha mensajes CACHE_REPAIRED_START/END
     // ============================================================
     
     (function() {
@@ -325,9 +334,6 @@
         // ============================================================
         // REGISTRAR SERVICE WORKER
         // ============================================================
-        // Ruta RELATIVA: './sw.js'
-        // ============================================================
-        
         window.addEventListener('load', function() {
             navigator.serviceWorker.register('./sw.js', {
                 scope: './'
@@ -335,6 +341,56 @@
             .then(function(registration) {
                 console.log('✅ Service Worker registrado correctamente');
                 console.log('   📍 Scope:', registration.scope);
+                
+                // ============================================================
+                // 🆕 ENTREGA 1: ESCUCHAR MENSAJES DEL SW
+                // ============================================================
+                navigator.serviceWorker.addEventListener('message', function(event) {
+                    if (!event.data) return;
+                    
+                    // ---- CACHE_REPAIRED_START ----
+                    if (event.data.type === 'CACHE_REPAIRED_START') {
+                        console.log(`🔧 SW: Iniciando reparación de caché (${event.data.total} assets)...`);
+                        // Avisar al usuario con toast
+                        if (window.showToast) {
+                            window.showToast(
+                                `🔧 Reparando caché (${event.data.total} archivos)...`,
+                                'info',
+                                3000
+                            );
+                        }
+                    }
+                    
+                    // ---- CACHE_REPAIRED_END ----
+                    if (event.data.type === 'CACHE_REPAIRED_END') {
+                        console.log(`✅ SW: Caché reparado (${event.data.downloaded} OK, ${event.data.failed} fallidos)`);
+                        if (window.showToast) {
+                            if (event.data.failed === 0) {
+                                window.showToast(
+                                    `✅ Caché reparado correctamente (${event.data.downloaded} archivos)`,
+                                    'success',
+                                    4000
+                                );
+                            } else {
+                                window.showToast(
+                                    `⚠️ Caché parcialmente reparado (${event.data.downloaded} OK, ${event.data.failed} fallidos)`,
+                                    'warning',
+                                    5000
+                                );
+                            }
+                        }
+                    }
+                    
+                    // ---- CACHE_REPAIRED (compatibilidad v2.1.10) ----
+                    if (event.data.type === 'CACHE_REPAIRED') {
+                        console.log(`✅ SW: Caché reparado (compatibilidad v2.1.10)`);
+                    }
+                    
+                    // ---- INTEGRITY_RESULT ----
+                    if (event.data.type === 'INTEGRITY_RESULT') {
+                        console.log(`🔍 SW: Integridad verificada:`, event.data);
+                    }
+                });
                 
                 // ============================================================
                 // DETECTAR ACTUALIZACIONES DEL SERVICE WORKER
@@ -539,7 +595,7 @@
         }
     })();
     
-    console.log('📦 PWA Scripts cargados correctamente (index.html v2.1.5)');
+    console.log('📦 PWA Scripts cargados correctamente (index.html v2.1.11)');
     </script>
 
 </body>

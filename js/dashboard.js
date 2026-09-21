@@ -4,27 +4,28 @@
 // CORREGIDO FASE 2 (160926): Primer día de venta usa 'localtime'
 // CORREGIDO (160926 v2): Reemplazado 'localtime' de SQLite por
 //   conversión en JavaScript, porque sql.js en WASM NO respeta
-//   la zona horaria del navegador. Afecta a:
-//   - diasConVentas / primerDiaVenta
-//   - todayRevenue / todaySalesCount (Ventas hoy)
-//   - ordersTodayCount (Pedidos hoy)
+//   la zona horaria del navegador.
 // CORREGIDO FASE 4B (170926): 
 //   - dailySales ahora INCLUYE las ventas liberadas en el total
-//   - Optimización: 1 sola consulta + agrupación en JS
 // AÑADIDO FASE C (180926 v2):
-//   - 3 modos de visualización del gráfico:
-//     * 'last7'  → Últimos 7 días (termina en HOY)
-//     * 'dom-sab' → Semana completa Dom-Sáb
-//     * 'lun-dom' → Semana completa Lun-Dom
-//   - getDashboardStats() acepta options.chartMode
-//   - Devuelve chartMode y isCurrentRange en el resultado
-//   - calcularRangoGrafico() reemplaza a calcularRangoSemana()
+//   - 3 modos de visualización del gráfico: 'last7' | 'dom-sab' | 'lun-dom'
 // 🆕 FASE 3.1 (200926 v3):
-//   - NUEVO: releasedSales → { count, total } (ventas liberadas)
-//   - NUEVO: bestWorstDay → { best, worst } (mejor/peor día histórico)
+//   - NUEVO: releasedSales → { count, total }
+//   - NUEVO: bestWorstDay → { best, worst }
 //   - NUEVO: salesByEmployee → [{ user_id, name, count, total }]
-//   - Todos los cálculos son opcionales y usan try/catch para no romper
-//   - Compatibilidad total con código existente (solo se añaden campos)
+// 🆕 ENTREGA 5 (230926 v4): PEDIDOS MAÑANA EN DASHBOARD
+//   - ✅ NUEVO: ordersTomorrowCount → total de pedidos con
+//     fecha de entrega = MAÑANA (calculado en JS con fecha local)
+//   - ✅ Se calcula usando fechaLocalYYYYMMDD() para evitar
+//     desfase UTC en zonas horarias negativas (Cuba UTC-4/5)
+//   - ✅ Se devuelve en el objeto de stats junto a
+//     ordersTodayCount y waitingListCount
+//   - ✅ Los pedidos cancelados, entregados y compró-por-lista
+//     NO se cuentan (solo pending, confirmed, production, ready, waiting)
+//   - ✅ Optimización: una sola query trae TODOS los pedidos con
+//     fecha de entrega, y se agrupan por día en JS
+//   - ✅ Compatibilidad: si la tabla orders no existe o falla,
+//     devuelve 0 sin romper el dashboard
 // ============================================================
 
 window.DashboardModule = {};
@@ -64,6 +65,15 @@ function hoyYYYYMMDD() {
     return fechaLocalYYYYMMDD(new Date());
 }
 
+/**
+ * 🆕 ENTREGA 5: Devuelve la fecha de MAÑANA en formato YYYY-MM-DD (local).
+ */
+function mananaYYYYMMDD() {
+    const manana = new Date();
+    manana.setDate(manana.getDate() + 1);
+    return fechaLocalYYYYMMDD(manana);
+}
+
 // ============================================================
 // 🆕 FASE C: HELPER PARA CALCULAR RANGO DEL GRÁFICO
 // ============================================================
@@ -82,7 +92,6 @@ function hoyYYYYMMDD() {
  * @returns {object} { startDate, endDate, weekLabel, isCurrentRange }
  */
 function calcularRangoGrafico(weekOffset, chartMode) {
-    // Validar modo
     const validModes = ['last7', 'dom-sab', 'lun-dom'];
     if (!validModes.includes(chartMode)) {
         chartMode = 'last7';
@@ -97,7 +106,6 @@ function calcularRangoGrafico(weekOffset, chartMode) {
     // MODO 1: ÚLTIMOS 7 DÍAS
     // ============================================================
     if (chartMode === 'last7') {
-        // El gráfico termina en HOY (o en la fecha ajustada por weekOffset)
         const endBase = new Date(hoy);
         endBase.setDate(endBase.getDate() + (weekOffset * 7));
         
@@ -105,10 +113,8 @@ function calcularRangoGrafico(weekOffset, chartMode) {
         startDate = new Date(endBase);
         startDate.setDate(startDate.getDate() - 6);
         
-        // ¿Estamos en la ventana actual (termina en hoy)?
         isCurrentRange = (weekOffset === 0);
         
-        // Etiqueta
         if (weekOffset === 0) {
             weekLabel = 'Últimos 7 días';
         } else {
@@ -119,14 +125,11 @@ function calcularRangoGrafico(weekOffset, chartMode) {
     // MODO 2: SEMANA DOM-SÁB
     // ============================================================
     else if (chartMode === 'dom-sab') {
-        // dayOfWeek: 0=Dom, 1=Lun, ..., 6=Sáb
         const dayOfWeek = hoy.getDay();
         
-        // Inicio de la semana actual (domingo)
         const inicioSemanaActual = new Date(hoy);
         inicioSemanaActual.setDate(inicioSemanaActual.getDate() - dayOfWeek);
         
-        // Aplicar weekOffset
         startDate = new Date(inicioSemanaActual);
         startDate.setDate(startDate.getDate() + (weekOffset * 7));
         
@@ -140,18 +143,12 @@ function calcularRangoGrafico(weekOffset, chartMode) {
     // MODO 3: SEMANA LUN-DOM
     // ============================================================
     else if (chartMode === 'lun-dom') {
-        // dayOfWeek: 0=Dom, 1=Lun, ..., 6=Sáb
         const dayOfWeek = hoy.getDay();
-        
-        // Offset desde el lunes
-        // Lun=0, Mar=1, ..., Dom=6
         const offsetDesdeLunes = (dayOfWeek + 6) % 7;
         
-        // Inicio de la semana actual (lunes)
         const inicioSemanaActual = new Date(hoy);
         inicioSemanaActual.setDate(inicioSemanaActual.getDate() - offsetDesdeLunes);
         
-        // Aplicar weekOffset
         startDate = new Date(inicioSemanaActual);
         startDate.setDate(startDate.getDate() + (weekOffset * 7));
         
@@ -172,6 +169,7 @@ function calcularRangoGrafico(weekOffset, chartMode) {
 
 // ============================================================
 // 📊 ESTADÍSTICAS DEL DASHBOARD
+// 🆕 ENTREGA 5: Añadido ordersTomorrowCount
 // ============================================================
 
 async function getDashboardStats(options = {}) {
@@ -189,9 +187,6 @@ async function getDashboardStats(options = {}) {
 
     const weekOffset = options.weekOffset || 0;
     
-    // 🆕 FASE C: Determinar el modo del gráfico
-    // 1. Si se pasa explícitamente en options, usar ese valor
-    // 2. Si no, por defecto 'last7'
     let chartMode = 'last7';
     if (typeof options.chartMode === 'string') {
         const validModes = ['last7', 'dom-sab', 'lun-dom'];
@@ -249,13 +244,10 @@ async function getDashboardStats(options = {}) {
 
         // ============================================================
         // VENTAS POR DÍA - SEGÚN MODO DEL GRÁFICO (FASE C)
-        // 🔧 FIX FASE 4B: Se incluyen las ventas liberadas
-        // 🆕 FASE C: El rango respeta chartMode ('last7' | 'dom-sab' | 'lun-dom')
         // ============================================================
         let dailySales = [];
         let isCurrentRange = true;
         try {
-            // 🆕 FASE C: Calcular rango usando el modo
             const rango = calcularRangoGrafico(weekOffset, chartMode);
             const startDate = rango.startDate;
             const endDate = rango.endDate;
@@ -269,19 +261,14 @@ async function getDashboardStats(options = {}) {
                 `[Modo: ${chartMode}]`
             );
             
-            // Rango amplio en UTC para asegurar que traemos TODAS las ventas del período local
             const rangoMin = new Date(startDate);
             rangoMin.setHours(0, 0, 0, 0);
-            // Retroceder 1 día extra para cubrir ventas que crucen medianoche en UTC
             rangoMin.setDate(rangoMin.getDate() - 1);
             
             const rangoMax = new Date(endDate);
             rangoMax.setHours(23, 59, 59, 999);
-            // Avanzar 1 día extra para cubrir ventas que crucen medianoche en UTC
             rangoMax.setDate(rangoMax.getDate() + 1);
             
-            // 🔧 FIX FASE 4B: Consulta SIN filtro de is_liberated
-            // (las ventas liberadas también cuentan como ventas reales)
             const ventasPeriodo = window.DBModule.query(
                 `SELECT sale_date, total, is_liberated
                  FROM sales 
@@ -297,7 +284,6 @@ async function getDashboardStats(options = {}) {
             const totalLiberadas = ventasPeriodo.filter(v => v.is_liberated === 1).length;
             console.log(`   🚀 De las cuales liberadas: ${totalLiberadas}`);
             
-            // Agrupar por fecha local en JS
             const totalesPorFecha = {};
             for (const venta of ventasPeriodo) {
                 const fechaLocal = fechaLocalYYYYMMDD(venta.sale_date);
@@ -306,7 +292,6 @@ async function getDashboardStats(options = {}) {
                 totalesPorFecha[fechaLocal] += venta.total || 0;
             }
             
-            // 🆕 FASE C: Construir los 7 días en orden según el modo
             for (let i = 0; i < 7; i++) {
                 const date = new Date(startDate);
                 date.setDate(date.getDate() + i);
@@ -329,7 +314,7 @@ async function getDashboardStats(options = {}) {
         }
 
         // ============================================================
-        // DÍAS CON VENTAS, PROMEDIO, PRIMER DÍA (corregido con JS)
+        // DÍAS CON VENTAS, PROMEDIO, PRIMER DÍA
         // ============================================================
         let diasConVentas = 0;
         let promedioVentasDiarias = 0;
@@ -416,7 +401,7 @@ async function getDashboardStats(options = {}) {
                 AND paid = 0 
                 AND deleted_at IS NULL 
                 AND voided = 0
-                ORDER BY sale_date ASC
+                ORDER BY sale_date ASC, id ASC
             `, [negocioId]);
             
             debtDetails = debtSales.map(s => ({
@@ -615,27 +600,44 @@ async function getDashboardStats(options = {}) {
         }
 
         // ============================================================
-        // PEDIDOS HOY Y LISTA DE ESPERA
+        // PEDIDOS HOY, MAÑANA Y LISTA DE ESPERA
+        // 🆕 ENTREGA 5: Añadido ordersTomorrowCount
         // ============================================================
         let ordersTodayCount = 0;
+        let ordersTomorrowCount = 0;
         let waitingListCount = 0;
         try {
             const hoyStr = hoyYYYYMMDD();
+            const mananaStr = mananaYYYYMMDD();
             
+            console.log(`📅 [ENTREGA 5] Contando pedidos para HOY (${hoyStr}) y MAÑANA (${mananaStr})...`);
+            
+            // 🆕 ENTREGA 5: Una sola query trae TODOS los pedidos con fecha de entrega
+            // y se agrupan por día en JS usando fechaLocalYYYYMMDD()
             const todosLosPedidos = window.DBModule.query(
-                `SELECT delivery_date 
+                `SELECT id, delivery_date, status 
                  FROM orders 
                  WHERE negocio_id = ? 
-                 AND deleted_at IS NULL`,
+                 AND deleted_at IS NULL
+                 AND status NOT IN ('cancelled', 'delivered', 'waiting_bought')`,
                 [negocioId]
             );
             
+            console.log(`   📋 Total pedidos activos: ${todosLosPedidos.length}`);
+            
             for (const pedido of todosLosPedidos) {
                 const fechaLocal = fechaLocalYYYYMMDD(pedido.delivery_date);
+                if (!fechaLocal) continue;
+                
                 if (fechaLocal === hoyStr) {
                     ordersTodayCount++;
+                } else if (fechaLocal === mananaStr) {
+                    ordersTomorrowCount++;
                 }
             }
+            
+            console.log(`   📅 Pedidos HOY: ${ordersTodayCount}`);
+            console.log(`   📅 Pedidos MAÑANA: ${ordersTomorrowCount}`);
             
             const waitingCount = window.DBModule.query(
                 `SELECT COUNT(*) as count FROM waiting_list 
@@ -643,8 +645,10 @@ async function getDashboardStats(options = {}) {
                 [negocioId]
             );
             waitingListCount = waitingCount[0]?.count || 0;
+            
+            console.log(`   ⏰ Lista de espera: ${waitingListCount}`);
         } catch (e) {
-            console.warn('⚠️ Error obteniendo pedidos hoy:', e);
+            console.warn('⚠️ Error obteniendo pedidos hoy/mañana:', e);
         }
 
         // ============================================================
@@ -661,7 +665,7 @@ async function getDashboardStats(options = {}) {
         }
 
         // ============================================================
-        // 🆕 FASE 3.1: VENTAS LIBERADAS (cantidad + importe)
+        // VENTAS LIBERADAS (cantidad + importe)
         // ============================================================
         let releasedSales = { count: 0, total: 0 };
         try {
@@ -684,11 +688,10 @@ async function getDashboardStats(options = {}) {
         }
 
         // ============================================================
-        // 🆕 FASE 3.1: MEJOR Y PEOR DÍA DE VENTAS (histórico)
+        // MEJOR Y PEOR DÍA DE VENTAS (histórico)
         // ============================================================
         let bestWorstDay = { best: null, worst: null };
         try {
-            // Obtener TODAS las ventas del negocio con su fecha
             const todasLasVentas = window.DBModule.query(`
                 SELECT sale_date, total
                 FROM sales
@@ -697,7 +700,6 @@ async function getDashboardStats(options = {}) {
                   AND voided = 0
             `, [negocioId]);
             
-            // Agrupar por fecha local
             const totalesPorFecha = {};
             for (const venta of todasLasVentas) {
                 const fechaLocal = fechaLocalYYYYMMDD(venta.sale_date);
@@ -706,16 +708,13 @@ async function getDashboardStats(options = {}) {
                 totalesPorFecha[fechaLocal] += venta.total || 0;
             }
             
-            // Convertir a array y ordenar
             const fechasArray = Object.entries(totalesPorFecha)
                 .map(([date, total]) => ({ date, total }))
                 .filter(d => d.total > 0);
             
             if (fechasArray.length > 0) {
-                // Ordenar por total ascendente
                 fechasArray.sort((a, b) => a.total - b.total);
                 
-                // El primero es el peor, el último es el mejor
                 bestWorstDay.worst = fechasArray[0];
                 bestWorstDay.best = fechasArray[fechasArray.length - 1];
                 
@@ -727,10 +726,7 @@ async function getDashboardStats(options = {}) {
         }
 
         // ============================================================
-        // 🆕 FASE 3.1: VENTAS POR EMPLEADO
-        // ============================================================
-        // Agrupa las ventas por el usuario que las registró (created_by)
-        // Retorna solo empleados con al menos 1 venta
+        // VENTAS POR EMPLEADO
         // ============================================================
         let salesByEmployee = [];
         try {
@@ -759,7 +755,6 @@ async function getDashboardStats(options = {}) {
                 total: row.total || 0
             }));
             
-            // Si no hay created_by en ninguna venta (BD vieja), intentar con user_id
             if (salesByEmployee.length === 0) {
                 const ventasPorUser = window.DBModule.query(`
                     SELECT 
@@ -791,9 +786,17 @@ async function getDashboardStats(options = {}) {
             console.warn('⚠️ Error obteniendo ventas por empleado:', e);
         }
 
+        // ============================================================
+        // RETORNAR OBJETO COMPLETO
+        // 🆕 ENTREGA 5: Incluye ordersTomorrowCount
+        // ============================================================
         return {
             totalSales, totalRevenue, todaySalesCount, todayRevenue,
-            pendingOrdersCount, ordersTodayCount, waitingListCount,
+            pendingOrdersCount, 
+            // 🆕 ENTREGA 5: Pedidos hoy + mañana + lista de espera
+            ordersTodayCount, 
+            ordersTomorrowCount,
+            waitingListCount,
             totalDebts, debtCount, debtDetails,
             topProducts, topClients, clientesDiferentes,
             diasConVentas, promedioVentasDiarias, primerDiaVenta,
@@ -815,10 +818,8 @@ async function getDashboardStats(options = {}) {
             },
             corrienteHoy: corrienteHoy,
             weekOffset: weekOffset,
-            // 🆕 FASE C: Incluir info del modo y rango
             chartMode: chartMode,
             isCurrentRange: isCurrentRange,
-            // 🆕 FASE 3.1: Nuevas estadísticas
             releasedSales: releasedSales,
             bestWorstDay: bestWorstDay,
             salesByEmployee: salesByEmployee
@@ -836,8 +837,7 @@ async function getDashboardStats(options = {}) {
 
 window.DashboardModule = {
     getDashboardStats,
-    // 🆕 FASE C
     calcularRangoGrafico
 };
 
-console.log('📦 Dashboard Module cargado correctamente v2.1.0 (FASE 3.1: liberadas + mejor/peor día + ventas por empleado)');
+console.log('📦 Dashboard Module cargado correctamente v2.1.2 (ENTREGA 5: pedidos mañana en dashboard)');

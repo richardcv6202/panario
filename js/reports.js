@@ -2,31 +2,31 @@
 // 📦 REPORTS MODULE - Panario (Generación de Reportes)
 // CORREGIDO: Reporte de pedidos funcional
 // CORREGIDO FASE 2 (160926):
-//   - generateOrdersReport() ahora procesa filtros client/product/onlyDebts (Problema #10)
-//   - generateSalesReport() ahora acepta más filtros (Problema #7)
+//   - generateOrdersReport() ahora procesa filtros client/product/onlyDebts
+//   - generateSalesReport() ahora acepta más filtros
 // AÑADIDO (180926 v4):
 //   - Nombre del negocio en el encabezado y pie de TODOS los reportes
-//   - getNombreNegocioReporte() helper local
 // 🆕 FASE 2.2 (200926 v5):
 //   - NUEVO: generateWaitingListReport() — reporte PDF de la lista de espera
-//   - Muestra posición, cliente, teléfono, producto, cantidad, total,
-//     fecha de entrega y notas
-//   - Tarjetas resumen: total clientes, unidades, monto
-//   - Compatible con el botón "📄 Reporte PDF" del modal de gestión
-//     de lista de espera en ui-orders.js
 // 🆕 FASE 5 (#20) (200926 v6):
 //   - NUEVO: generateDiasSinVentasReport() — reporte PDF de días sin ventas
-//   - Muestra: fecha, día de la semana, motivo (con color), nota
-//   - Tarjetas resumen: total días, motivo más frecuente, rango
-//   - Gráfico de distribución por motivo
-//   - Compatible con el botón "📄 Reporte PDF" del modal de días sin ventas
-//     en ui-sales.js
+// 🆕 ENTREGA 4 (230926 v7): ORDEN ASCENDENTE POR ID
+//   - ✅ generateSalesReport(): ORDER BY sale_date ASC, s.id ASC
+//     (antes: ORDER BY s.sale_date ASC)
+//   - ✅ generateOrdersReport(): ORDER BY delivery_date ASC, o.id ASC
+//     (antes: ORDER BY o.delivery_date ASC)
+//   - ✅ generateDebtsReport(): ORDER BY sale_date ASC, id ASC
+//     (antes: ORDER BY sale_date ASC)
+//   - ✅ El detalle de ventas en el PDF ahora muestra primero las
+//     ventas más antiguas de cada día (ID más bajo)
+//   - ✅ Los pedidos en el PDF muestran el orden cronológico real
+//   - ✅ Las deudas también se ordenan cronológicamente
 // ============================================================
 
 window.ReportsModule = {};
 
 // ============================================================
-// 🆕 HELPER: OBTENER NOMBRE DEL NEGOCIO PARA REPORTES
+// HELPER: OBTENER NOMBRE DEL NEGOCIO PARA REPORTES
 // ============================================================
 
 /**
@@ -42,7 +42,6 @@ function getNombreNegocioReporte() {
             return window.getNombreNegocio();
         }
         
-        // Fallback: intentar obtener del usuario actual
         const user = window.AuthModule?.getCurrentUser();
         if (user) {
             if (user.negocio && user.negocio.nombre) return user.negocio.nombre;
@@ -76,7 +75,8 @@ function _getMotivoDSV(value) {
 }
 
 // ============================================================
-// REPORTE DE VENTAS (CON FILTROS AMPLIADOS - Problema #7)
+// REPORTE DE VENTAS (CON FILTROS AMPLIADOS)
+// 🆕 ENTREGA 4: Orden ascendente por ID dentro del día
 // ============================================================
 
 function generateSalesReport(filters = {}) {
@@ -142,7 +142,10 @@ function generateSalesReport(filters = {}) {
             params.push(filters.session);
         }
 
-        sql += ' ORDER BY s.sale_date ASC';
+        // 🆕 ENTREGA 4: Orden ascendente por ID dentro del día
+        // Antes: ORDER BY s.sale_date ASC
+        // Ahora: ORDER BY s.sale_date ASC, s.id ASC
+        sql += ' ORDER BY s.sale_date ASC, s.id ASC';
 
         const sales = window.DBModule.query(sql, params);
 
@@ -168,7 +171,6 @@ function generateSalesReport(filters = {}) {
             products[name].total += s.total;
         });
 
-        // Clientes con más compras (si no se filtró por cliente)
         const clients = {};
         if (!filters.client) {
             sales.forEach(s => {
@@ -395,6 +397,7 @@ function generateSalesReportHTML(sales, totalVentas, totalIngresos, totalDeudas,
                 <table>
                     <thead>
                         <tr>
+                            <th>#</th>
                             <th>Fecha</th>
                             <th>Producto</th>
                             <th>Cant.</th>
@@ -404,8 +407,9 @@ function generateSalesReportHTML(sales, totalVentas, totalIngresos, totalDeudas,
                         </tr>
                     </thead>
                     <tbody>
-                        ${sales.slice(0, 50).map(s => `
+                        ${sales.slice(0, 100).map(s => `
                             <tr>
+                                <td><strong>#${s.id}</strong></td>
                                 <td>${new Date(s.sale_date).toLocaleDateString('es-ES')}</td>
                                 <td>${s.producto_nombre || s.product_name || 'Producto'}${s.is_liberated === 1 ? ' 🚀' : ''}</td>
                                 <td style="text-align: center;">${s.quantity}</td>
@@ -414,7 +418,7 @@ function generateSalesReportHTML(sales, totalVentas, totalIngresos, totalDeudas,
                                 <td>${s.buyer || '—'}</td>
                             </tr>
                         `).join('')}
-                        ${sales.length > 50 ? `<tr><td colspan="6" style="text-align: center; color: #94a3b8; font-size: 11px;">Mostrando 50 de ${sales.length} ventas</td></tr>` : ''}
+                        ${sales.length > 100 ? `<tr><td colspan="7" style="text-align: center; color: #94a3b8; font-size: 11px;">Mostrando 100 de ${sales.length} ventas</td></tr>` : ''}
                     </tbody>
                 </table>
             </div>
@@ -429,7 +433,8 @@ function generateSalesReportHTML(sales, totalVentas, totalIngresos, totalDeudas,
 }
 
 // ============================================================
-// REPORTE DE PEDIDOS (CON FILTROS CORREGIDOS - Problema #10)
+// REPORTE DE PEDIDOS (CON FILTROS CORREGIDOS)
+// 🆕 ENTREGA 4: Orden ascendente por ID dentro del día
 // ============================================================
 
 function generateOrdersReport(filters = {}) {
@@ -477,7 +482,10 @@ function generateOrdersReport(filters = {}) {
             params.push('%' + filters.product + '%');
         }
 
-        sql += ' ORDER BY o.delivery_date ASC';
+        // 🆕 ENTREGA 4: Orden ascendente por ID dentro del día
+        // Antes: ORDER BY o.delivery_date ASC
+        // Ahora: ORDER BY o.delivery_date ASC, o.id ASC
+        sql += ' ORDER BY o.delivery_date ASC, o.id ASC';
 
         const orders = window.DBModule.query(sql, params);
 
@@ -488,6 +496,7 @@ function generateOrdersReport(filters = {}) {
                 FROM order_items oi
                 LEFT JOIN productos p ON oi.producto_id = p.id
                 WHERE oi.order_id = ? AND oi.deleted_at IS NULL
+                ORDER BY oi.id ASC
             `, [order.id]);
             
             return {
@@ -684,14 +693,14 @@ function generateOrdersReportHTML(orders, totalPedidos, totalEntregados, totalPe
                         </tr>
                     </thead>
                     <tbody>
-                        ${orders.slice(0, 50).map(o => {
+                        ${orders.slice(0, 100).map(o => {
                             const statusClass = o.status === 'delivered' ? 'status-delivered' : 
                                               o.status === 'cancelled' ? 'status-cancelled' :
                                               o.status === 'pending' || o.status === 'waiting' ? 'status-pending' :
                                               o.status === 'confirmed' ? 'status-confirmed' : '';
                             return `
                                 <tr>
-                                    <td>${o.id}</td>
+                                    <td><strong>#${o.id}</strong></td>
                                     <td>${o.client_name}</td>
                                     <td>${new Date(o.delivery_date).toLocaleDateString('es-ES')}</td>
                                     <td>${o.productos_nombres || '—'}</td>
@@ -700,7 +709,7 @@ function generateOrdersReportHTML(orders, totalPedidos, totalEntregados, totalPe
                                 </tr>
                             `;
                         }).join('')}
-                        ${orders.length > 50 ? `<tr><td colspan="6" style="text-align: center; color: #94a3b8; font-size: 11px;">Mostrando 50 de ${orders.length} pedidos</td></tr>` : ''}
+                        ${orders.length > 100 ? `<tr><td colspan="6" style="text-align: center; color: #94a3b8; font-size: 11px;">Mostrando 100 de ${orders.length} pedidos</td></tr>` : ''}
                     </tbody>
                 </table>
             </div>
@@ -866,6 +875,7 @@ function generateInsumosReportHTML(insumos, totalInsumos, totalValor, stockBajo,
 
 // ============================================================
 // REPORTE DE DEUDAS
+// 🆕 ENTREGA 4: Orden ascendente por ID dentro del día
 // ============================================================
 
 function generateDebtsReport() {
@@ -876,10 +886,13 @@ function generateDebtsReport() {
     }
 
     try {
+        // 🆕 ENTREGA 4: Orden ascendente por ID dentro del día
+        // Antes: ORDER BY sale_date ASC
+        // Ahora: ORDER BY sale_date ASC, id ASC
         const debtSales = window.DBModule.query(`
             SELECT * FROM sales 
             WHERE user_id = ? AND is_debt = 1 AND paid = 0 AND deleted_at IS NULL AND voided = 0
-            ORDER BY sale_date ASC
+            ORDER BY sale_date ASC, id ASC
         `, [user.id]);
 
         const totalDebtSales = debtSales.reduce((sum, s) => sum + s.total, 0);
@@ -965,6 +978,7 @@ function generateDebtsReportHTML(debtSales, totalDebtSales) {
                     <table>
                         <thead>
                             <tr>
+                                <th>#</th>
                                 <th>Fecha</th>
                                 <th>Producto</th>
                                 <th>Cliente</th>
@@ -974,6 +988,7 @@ function generateDebtsReportHTML(debtSales, totalDebtSales) {
                         <tbody>
                             ${debtSales.map(s => `
                                 <tr>
+                                    <td><strong>#${s.id}</strong></td>
                                     <td>${new Date(s.sale_date).toLocaleDateString('es-ES')}</td>
                                     <td>${s.product_name}</td>
                                     <td>${s.buyer || '—'}</td>
@@ -981,7 +996,7 @@ function generateDebtsReportHTML(debtSales, totalDebtSales) {
                                 </tr>
                             `).join('')}
                             <tr class="total-row">
-                                <td colspan="3" style="text-align: right;">TOTAL</td>
+                                <td colspan="4" style="text-align: right;">TOTAL</td>
                                 <td style="text-align: right;">$${totalDebtSales.toFixed(2)}</td>
                             </tr>
                         </tbody>
@@ -1151,29 +1166,16 @@ async function generateRecipesReport() {
 }
 
 // ============================================================
-// REPORTE DE LISTA DE ESPERA (FASE 2.2)
+// REPORTE DE LISTA DE ESPERA
 // ============================================================
 
-/**
- * Genera el reporte PDF de la lista de espera actual.
- * 
- * Muestra:
- *  - Encabezado con nombre del negocio y fecha de generación
- *  - Tarjetas resumen: total clientes, unidades, monto
- *  - Tabla detallada: posición, cliente, teléfono, producto,
- *    cantidad, total, fecha de entrega, notas
- * 
- * @returns {Promise<string|null>} HTML del reporte o null si falla
- */
 async function generateWaitingListReport() {
     try {
-        // Verificar módulos
         if (!window.OrdersModule || typeof window.OrdersModule.getWaitingListWithDetails !== 'function') {
             window.showToast('⚠️ Módulo de pedidos no disponible', 'warning');
             return null;
         }
         
-        // Obtener la lista actual
         const lista = await window.OrdersModule.getWaitingListWithDetails();
         
         if (!lista || lista.length === 0) {
@@ -1183,12 +1185,10 @@ async function generateWaitingListReport() {
         
         const nombreNegocio = getNombreNegocioReporte();
         
-        // Calcular totales
         const totalItems = lista.length;
         const totalCantidad = lista.reduce((sum, item) => sum + (item.quantity || 0), 0);
         const totalMonto = lista.reduce((sum, item) => sum + (item.order_total || 0), 0);
         
-        // HTML de las filas
         const filasHtml = lista.map((item, index) => {
             const posicion = item.position || (index + 1);
             const cliente = item.client_name || 'Cliente sin nombre';
@@ -1231,7 +1231,6 @@ async function generateWaitingListReport() {
             `;
         }).join('');
         
-        // Construir HTML completo
         const html = `
             <!DOCTYPE html>
             <html>
@@ -1353,29 +1352,16 @@ async function generateWaitingListReport() {
 }
 
 // ============================================================
-// 🆕 FASE 5 (#20): REPORTE DE DÍAS SIN VENTAS
+// REPORTE DE DÍAS SIN VENTAS
 // ============================================================
 
-/**
- * Genera el reporte PDF de días sin ventas.
- * 
- * Muestra:
- *  - Encabezado con nombre del negocio
- *  - Tarjetas resumen: total días, motivo más frecuente, rango
- *  - Distribución por motivo
- *  - Tabla detallada: fecha, día de la semana, motivo, nota
- * 
- * @returns {Promise<string|null>} HTML del reporte o null si falla
- */
 async function generateDiasSinVentasReport() {
     try {
-        // Verificar módulo de BD
         if (!window.DBModule || typeof window.DBModule.getDiasSinVentas !== 'function') {
             window.showToast('⚠️ Módulo de base de datos no disponible', 'warning');
             return null;
         }
         
-        // Obtener todos los días sin ventas
         const dias = window.DBModule.getDiasSinVentas();
         
         if (!dias || dias.length === 0) {
@@ -1385,10 +1371,8 @@ async function generateDiasSinVentasReport() {
         
         const nombreNegocio = getNombreNegocioReporte();
         
-        // Calcular totales
         const totalDias = dias.length;
         
-        // Contar por motivo
         const porMotivo = {};
         dias.forEach(d => {
             const motivo = d.motivo || 'otro';
@@ -1396,7 +1380,6 @@ async function generateDiasSinVentasReport() {
             porMotivo[motivo]++;
         });
         
-        // Motivo más frecuente
         let motivoFrecuente = null;
         let maxCount = 0;
         Object.entries(porMotivo).forEach(([motivo, count]) => {
@@ -1407,12 +1390,10 @@ async function generateDiasSinVentasReport() {
         });
         const motivoFrecuenteObj = motivoFrecuente ? _getMotivoDSV(motivoFrecuente) : null;
         
-        // Rango de fechas
         const fechasOrdenadas = dias.map(d => d.fecha).sort();
         const fechaMin = fechasOrdenadas[0];
         const fechaMax = fechasOrdenadas[fechasOrdenadas.length - 1];
         
-        // Nombre del día de la semana
         const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
         const MESES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
         
@@ -1437,7 +1418,6 @@ async function generateDiasSinVentasReport() {
             }
         }
         
-        // Filas de la tabla (ordenadas por fecha descendente)
         const filasHtml = dias.map(d => {
             const motivoObj = _getMotivoDSV(d.motivo);
             const fechaConDia = formatearFechaConDia(d.fecha);
@@ -1458,7 +1438,6 @@ async function generateDiasSinVentasReport() {
             `;
         }).join('');
         
-        // Distribución por motivo
         const motivosStatsHtml = Object.entries(porMotivo)
             .sort((a, b) => b[1] - a[1])
             .map(([motivo, count]) => {
@@ -1477,7 +1456,6 @@ async function generateDiasSinVentasReport() {
                 `;
             }).join('');
         
-        // Construir HTML completo
         const html = `
             <!DOCTYPE html>
             <html>
@@ -1652,13 +1630,10 @@ window.ReportsModule = {
     generateInsumosReport: generateInsumosReport,
     generateDebtsReport: generateDebtsReport,
     generateRecipesReport: generateRecipesReport,
-    // 🆕 FASE 2.2
     generateWaitingListReport: generateWaitingListReport,
-    // 🆕 FASE 5 (#20)
     generateDiasSinVentasReport: generateDiasSinVentasReport,
     printReport: printReport,
-    // 🆕 Helper exportado
     getNombreNegocioReporte: getNombreNegocioReporte
 };
 
-console.log('📦 Reports Module cargado correctamente v2.1.1 (FASE 5 #20: reporte de días sin ventas)');
+console.log('📦 Reports Module cargado correctamente v2.1.2 (ENTREGA 4: orden ascendente por ID en reportes)');

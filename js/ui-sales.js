@@ -33,22 +33,17 @@
 //   - normalizarFechaVenta() helper para evitar fechas YYYY-MM-DD sin hora
 //   - submitSaleForm() usa normalizarFechaVenta() para sale_date
 //   - submitLiberatedSale() también usa normalizarFechaVenta()
-//   - Evita que ventas pasadas/futuras se guarden como día anterior
-//     por conversión UTC en zonas horarias negativas (Cuba UTC-4/5)
 // 🆕 FASE 3.5 (200926 v5):
 //   - Homogeneizar alturas de las 4 tarjetas resumen (#17)
 //   - NUEVA tarjeta: 🚀 Ventas liberadas en el resumen superior
 //   - Todas las tarjetas del resumen tienen min-height: 90px
 //   - Rejilla responsiva consistente: 2 cols en móvil, 5 en desktop
 //   - Actualización de updateSummary() para traer también las liberadas
-//   - Iconos y colores consistentes con el Dashboard
 // 🆕 FASE 4.2 (#13) (200926 v6): INTERRUPTOR DE VENTAS LIBERADAS
 //   - NUEVO toggle "🚀 Mostrar/Ocultar liberadas" en el header
 //   - loadSalesAndExpenses() filtra is_liberated=1 si el toggle está OFF
 //   - Persistencia en localStorage (panario_show_liberated_sales)
 //   - Aviso visual cuando hay ventas ocultas
-//   - El resumen (updateSummary) NO cambia: siempre muestra el total
-//   - No afecta a la vista de deudas
 // 🆕 FASE 5 (#20) (200926 v7): UI DE DÍAS SIN VENTAS
 //   - NUEVO botón "📅 Días sin ventas" en el header
 //   - NUEVO modal showDiasSinVentasModal(): lista con filtros
@@ -56,7 +51,20 @@
 //   - Motivos predefinidos: apagón, insumos, feriado, vacaciones, etc.
 //   - Detección inteligente: avisa si ya hay ventas ese día
 //   - Botón "📄 Reporte PDF" (delegado a ReportsModule)
-//   - Todo lo demás del archivo se mantiene intacto
+// 🆕 ENTREGA 2 (230926 v8): ANULAR VENTA + VENDEDOR
+//   - ✅ FIX REFORZADO: voidSale() con polling tripe de verificación
+//     * PASO 0: limpiar modales huérfanos al inicio
+//     * PASO 1: showConfirm + try/catch
+//     * PASO 2: waitForCustomModalRemoval (800ms) + 3 verificaciones
+//     * PASO 3: showPrompt con timeout de seguridad
+//     * PASO 4: ejecutar voidSale y refrescar vistas
+//   - ✅ vendedor SIEMPRE visible en viewSale() via renderAuditoriaHTML()
+//   - ✅ vendedor en tooltip de #ID en listado (opcional)
+//   - ✅ ORDEN ASCENDENTE POR ID DENTRO DEL DÍA (Corrección #3)
+//     * renderSalesGroupedByDay() ordena las ventas del día por ID ASC
+//     * Las ventas liberadas también se ordenan por ID ASC
+//   - ✅ Toast explícito "✅ Venta anulada correctamente"
+//   - ✅ Manejo de errores con mensajes claros al usuario
 // ============================================================
 
 // ============================================================
@@ -148,11 +156,16 @@ function waitForCustomModalRemoval(timeoutMs = 800) {
 // ============================================================
 // FASE A.4: HELPER DE AUDITORÍA
 // ============================================================
+// 🆕 ENTREGA 2: Se refuerza para que SIEMPRE muestre el vendedor
+// cuando exista created_by. Si no hay created_by pero hay user_id,
+// usa user_id como fallback.
+// ============================================================
 
 function renderAuditoriaHTML(entity) {
     if (!entity) return '';
     
-    const createdBy = entity.created_by;
+    // 🆕 ENTREGA 2: Fallback de created_by a user_id
+    const createdBy = entity.created_by || entity.user_id;
     const modifiedBy = entity.modified_by;
     const createdAt = entity.created_at;
     const updatedAt = entity.updated_at;
@@ -315,9 +328,6 @@ function getMotivoDiaSinVenta(value) {
 
 // ============================================================
 // RENDER SALES VIEW
-// 🆕 FASE 3.5: 5 tarjetas de resumen con alturas homogéneas
-// 🆕 FASE 4.2 (#13): Toggle de mostrar/ocultar liberadas
-// 🆕 FASE 5 (#20): Botón "Días sin ventas"
 // ============================================================
 
 function renderSalesView() {
@@ -345,7 +355,6 @@ function renderSalesView() {
                 <button onclick="showExpenseForm()" class="btn secondary" style="padding: 8px 16px; font-size: 14px; width: auto;">
                     📤 Registrar Gasto
                 </button>
-                <!-- 🆕 FASE 5 (#20): Botón Días sin ventas -->
                 <button onclick="showDiasSinVentasModal()" class="btn secondary" style="padding: 8px 16px; font-size: 14px; width: auto; background: #06b6d4; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                     📅 Días sin ventas
                 </button>
@@ -425,7 +434,6 @@ function renderSalesView() {
                 </div>
                 
                 <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
-                    <!-- 🆕 FASE 4.2 (#13): Toggle de ventas liberadas -->
                     <label id="toggle-liberadas-sales" style="display: flex; align-items: center; gap: 10px; padding: 6px 14px; background: ${showLiberated ? '#8b5cf615' : 'var(--bg)'}; border-radius: 20px; border: 2px solid ${showLiberated ? '#8b5cf6' : '#94a3b8'}; cursor: pointer; transition: all 0.2s; user-select: none;">
                         <input type="checkbox" id="filter-show-liberated" ${showLiberated ? 'checked' : ''}
                                onchange="onShowLiberatedChange(this.checked)"
@@ -624,7 +632,6 @@ function setFilterType(type) {
         categoryContainer.style.display = (type === 'expenses' || type === 'all') ? 'flex' : 'none';
     }
     
-    // 🆕 FASE 4.2 (#13): Mostrar el toggle de liberadas solo en vistas de ventas/todo
     const toggleLiberadas = document.getElementById('toggle-liberadas-sales');
     if (toggleLiberadas) {
         toggleLiberadas.style.display = (type === 'sales' || type === 'all') ? 'flex' : 'none';
@@ -645,9 +652,6 @@ function clearFilters() {
         checkbox.checked = false;
         updateMesToggleVisualSales();
     }
-    
-    // 🆕 FASE 4.2 (#13): NO tocamos el toggle de liberadas en "Limpiar filtros",
-    // porque es una preferencia persistente del usuario, no un filtro temporal.
     
     loadSalesAndExpenses();
 }
@@ -771,7 +775,6 @@ async function loadSalesAndExpenses() {
     const search = document.getElementById('filter-sales-search')?.value?.trim() || '';
     const filterType = window._currentFilterType || 'sales';
     
-    // 🆕 FASE 4.2 (#13): Leer preferencia de mostrar/ocultar liberadas
     const showLiberated = getShowLiberatedSales();
     
     const negocioId = window.DBModule.getNegocioIdActual();
@@ -792,7 +795,7 @@ async function loadSalesAndExpenses() {
                 AND paid = 0 
                 AND deleted_at IS NULL 
                 AND voided = 0
-                ORDER BY sale_date ASC
+                ORDER BY sale_date ASC, id ASC
             `;
             let debtParams = [negocioId];
             
@@ -876,13 +879,12 @@ async function loadSalesAndExpenses() {
                 params.push(searchTerm, searchTerm);
             }
             
-            // 🆕 FASE 4.2 (#13): Si el toggle está OFF, excluir ventas liberadas
             if (!showLiberated) {
                 query += ' AND is_liberated = 0';
-                console.log('🚀 [FASE 4.2] Ocultando ventas liberadas del listado');
             }
             
-            query += ' ORDER BY sale_date DESC';
+            // 🆕 ENTREGA 2: Orden ascendente por ID dentro del día
+            query += ' ORDER BY sale_date DESC, id ASC';
             
             sales = window.DBModule.query(query, params);
         }
@@ -905,7 +907,7 @@ async function loadSalesAndExpenses() {
             const category = document.getElementById('filter-expense-category')?.value || '';
             if (category) { query += ' AND category = ?'; params.push(category); }
             
-            query += ' ORDER BY transaction_date DESC';
+            query += ' ORDER BY transaction_date DESC, id ASC';
             
             expenses = window.DBModule.query(query, params);
         }
@@ -918,7 +920,8 @@ async function loadSalesAndExpenses() {
             allTransactions.sort((a, b) => {
                 const dateA = new Date(a.sale_date || a.transaction_date);
                 const dateB = new Date(b.sale_date || b.transaction_date);
-                return dateB - dateA;
+                if (dateB - dateA !== 0) return dateB - dateA;
+                return a.id - b.id;
             });
         }
         
@@ -929,8 +932,6 @@ async function loadSalesAndExpenses() {
             const typeLabel = filterType === 'sales' ? 'ventas' : 
                              filterType === 'expenses' ? 'gastos' : 'transacciones';
             
-            // 🆕 FASE 4.2 (#13): Si estamos ocultando liberadas y no hay ventas normales,
-            // mostrar un mensaje específico
             let mensajeExtra = '';
             if (!showLiberated && (filterType === 'sales' || filterType === 'all')) {
                 mensajeExtra = `<p style="margin-top: 12px; font-size: 12px; color: #8b5cf6;">
@@ -951,9 +952,7 @@ async function loadSalesAndExpenses() {
         if (filterType === 'sales') {
             renderSalesGroupedByDay(container, sales);
             
-            // 🆕 FASE 4.2 (#13): Aviso al pie cuando hay liberadas ocultas
             if (!showLiberated) {
-                // Verificar si existen ventas liberadas en el rango, independientemente del filtro
                 let checkQuery = `SELECT COUNT(*) as count FROM sales 
                     WHERE negocio_id = ? AND is_liberated = 1 
                     AND deleted_at IS NULL AND voided = 0`;
@@ -1097,7 +1096,6 @@ async function loadSalesAndExpenses() {
         
         container.innerHTML = html;
         
-        // 🆕 FASE 4.2 (#13): Aviso de liberadas ocultas también en vista "Todo"
         if (!showLiberated && filterType === 'all') {
             let checkQuery = `SELECT COUNT(*) as count FROM sales 
                 WHERE negocio_id = ? AND is_liberated = 1 
@@ -1134,6 +1132,7 @@ async function loadSalesAndExpenses() {
 
 // ============================================================
 // RENDER SALES GROUPED BY DAY
+// 🆕 ENTREGA 2: Orden ascendente por ID dentro del día
 // ============================================================
 
 function renderSalesGroupedByDay(container, sales) {
@@ -1144,6 +1143,11 @@ function renderSalesGroupedByDay(container, sales) {
         const date = sale.sale_date ? sale.sale_date.split('T')[0] : 'sin fecha';
         if (!grouped[date]) grouped[date] = [];
         grouped[date].push(sale);
+    });
+    
+    // 🆕 ENTREGA 2: Ordenar ventas DENTRO de cada día por ID ascendente
+    Object.keys(grouped).forEach(date => {
+        grouped[date].sort((a, b) => a.id - b.id);
     });
     
     const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
@@ -1351,7 +1355,6 @@ function toggleDaySales(dayId) {
 
 // ============================================================
 // ACTUALIZAR RESUMEN
-// 🆕 FASE 3.5: Añadir ventas liberadas
 // ============================================================
 
 async function updateSummary() {
@@ -1361,7 +1364,6 @@ async function updateSummary() {
         
         const today = new Date().toISOString().split('T')[0];
         
-        // Ventas hoy
         const todaySales = window.DBModule.query(
             'SELECT SUM(total) as total FROM sales WHERE negocio_id = ? AND DATE(sale_date, "localtime") = DATE(?) AND deleted_at IS NULL AND voided = 0',
             [negocioId, today]
@@ -1370,7 +1372,6 @@ async function updateSummary() {
         const salesTodayEl = document.getElementById('sales-today');
         if (salesTodayEl) salesTodayEl.textContent = '$' + todayTotal.toFixed(2);
         
-        // Ingresos totales
         const incomeResult = window.DBModule.query(
             'SELECT SUM(amount) as total FROM transactions WHERE negocio_id = ? AND type = "income" AND deleted_at IS NULL AND voided = 0',
             [negocioId]
@@ -1379,7 +1380,6 @@ async function updateSummary() {
         const totalIncomeEl = document.getElementById('total-income');
         if (totalIncomeEl) totalIncomeEl.textContent = '$' + totalIncome.toFixed(2);
         
-        // Gastos totales
         const expenseResult = window.DBModule.query(
             'SELECT SUM(amount) as total FROM transactions WHERE negocio_id = ? AND type = "expense" AND deleted_at IS NULL AND voided = 0',
             [negocioId]
@@ -1388,7 +1388,6 @@ async function updateSummary() {
         const totalExpensesEl = document.getElementById('total-expenses');
         if (totalExpensesEl) totalExpensesEl.textContent = '$' + totalExpenses.toFixed(2);
         
-        // Deudas
         const debtsResult = window.DBModule.query(
             'SELECT SUM(total) as total FROM sales WHERE negocio_id = ? AND is_debt = 1 AND paid = 0 AND deleted_at IS NULL AND voided = 0',
             [negocioId]
@@ -1397,7 +1396,6 @@ async function updateSummary() {
         const totalDebtsEl = document.getElementById('total-debts');
         if (totalDebtsEl) totalDebtsEl.textContent = '$' + totalDebts.toFixed(2);
         
-        // 🆕 FASE 3.5: Ventas liberadas (cantidad + importe)
         const releasedResult = window.DBModule.query(
             'SELECT COUNT(*) as count, SUM(total) as total FROM sales WHERE negocio_id = ? AND is_liberated = 1 AND deleted_at IS NULL AND voided = 0',
             [negocioId]
@@ -1422,9 +1420,6 @@ async function updateSummary() {
 // 🆕 FASE 5 (#20): DÍAS SIN VENTAS — MODAL PRINCIPAL
 // ============================================================
 
-/**
- * Abre el modal de gestión de días sin ventas.
- */
 async function showDiasSinVentasModal() {
     const existingModal = document.getElementById('dias-sin-ventas-modal');
     if (existingModal) existingModal.remove();
@@ -1441,18 +1436,14 @@ async function showDiasSinVentasModal() {
     
     document.body.appendChild(modal);
     
-    // Guardar referencia para poder refrescar
     window._diasSinVentasModal = modal;
     
-    // Render inicial
     await renderDiasSinVentasContent();
     
-    // Cierre con click fuera
     modal.addEventListener('click', (e) => {
         if (e.target === modal) closeDiasSinVentasModal();
     });
     
-    // Cierre con Escape
     const escHandler = function(e) {
         if (e.key === 'Escape') {
             closeDiasSinVentasModal();
@@ -1462,15 +1453,11 @@ async function showDiasSinVentasModal() {
     document.addEventListener('keydown', escHandler);
 }
 
-/**
- * Renderiza el contenido del modal (o lo refresca).
- */
 async function renderDiasSinVentasContent() {
     const modal = document.getElementById('dias-sin-ventas-modal');
     if (!modal) return;
     
     try {
-        // Leer filtros actuales
         const fromDate = document.getElementById('dsv-filter-from')?.value || '';
         const toDate = document.getElementById('dsv-filter-to')?.value || '';
         const motivoFilter = document.getElementById('dsv-filter-motivo')?.value || '';
@@ -1482,17 +1469,14 @@ async function renderDiasSinVentasContent() {
         
         const dias = window.DBModule.getDiasSinVentas(filters);
         
-        // Estadísticas generales (sin filtros)
         const todos = window.DBModule.getDiasSinVentas();
         const totalDias = todos.length;
         
-        // Contar por motivo
         const porMotivo = {};
         todos.forEach(d => {
             porMotivo[d.motivo] = (porMotivo[d.motivo] || 0) + 1;
         });
         
-        // HTML de la lista
         let listaHtml = '';
         if (dias.length === 0) {
             listaHtml = `
@@ -1525,7 +1509,6 @@ async function renderDiasSinVentasContent() {
             }).join('');
         }
         
-        // Estadísticas por motivo
         let motivosStatsHtml = '';
         if (Object.keys(porMotivo).length > 0) {
             motivosStatsHtml = Object.entries(porMotivo)
@@ -1539,7 +1522,6 @@ async function renderDiasSinVentasContent() {
         modal.innerHTML = `
             <div style="background: var(--bg-card); border-radius: var(--radius); padding: 20px; max-width: 650px; width: 100%; max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.5); border: 1px solid var(--border-color);">
                 
-                <!-- HEADER -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 2px solid #06b6d4; flex-wrap: wrap; gap: 8px;">
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <span style="font-size: 28px;">📅</span>
@@ -1551,7 +1533,6 @@ async function renderDiasSinVentasContent() {
                     <button onclick="closeDiasSinVentasModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
                 </div>
                 
-                <!-- ESTADÍSTICAS -->
                 <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
                     <div style="background: #06b6d415; border-left: 3px solid #06b6d4; padding: 8px 14px; border-radius: 8px;">
                         <span style="font-size: 18px; font-weight: 700; color: #06b6d4;">${totalDias}</span>
@@ -1560,7 +1541,6 @@ async function renderDiasSinVentasContent() {
                     ${motivosStatsHtml}
                 </div>
                 
-                <!-- ACCIONES -->
                 <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
                     <button onclick="showDiaSinVentaForm()" 
                             class="btn primary" 
@@ -1579,7 +1559,6 @@ async function renderDiasSinVentasContent() {
                     </button>
                 </div>
                 
-                <!-- FILTROS -->
                 <div style="background: var(--bg); padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
                     <div style="flex: 1; min-width: 100px;">
                         <label style="font-size: 11px; font-weight: 600; color: var(--text-label); display: block; margin-bottom: 2px;">📅 Desde</label>
@@ -1610,12 +1589,10 @@ async function renderDiasSinVentasContent() {
                     </button>
                 </div>
                 
-                <!-- LISTA -->
                 <div style="flex: 1; overflow-y: auto; max-height: 400px; padding-right: 4px;">
                     ${listaHtml}
                 </div>
                 
-                <!-- FOOTER -->
                 <div style="display: flex; justify-content: flex-end; padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--border-color);">
                     <button onclick="closeDiasSinVentasModal()" class="btn secondary" style="padding: 10px 20px; font-size: 14px; width: auto;">
                         Cerrar
@@ -1639,16 +1616,10 @@ async function renderDiasSinVentasContent() {
     }
 }
 
-/**
- * Refresca el contenido del modal preservando los filtros.
- */
 async function refrescarDiasSinVentas() {
     await renderDiasSinVentasContent();
 }
 
-/**
- * Limpia los filtros del modal.
- */
 function limpiarFiltrosDiasSinVentas() {
     const from = document.getElementById('dsv-filter-from');
     const to = document.getElementById('dsv-filter-to');
@@ -1659,9 +1630,6 @@ function limpiarFiltrosDiasSinVentas() {
     refrescarDiasSinVentas();
 }
 
-/**
- * Cierra el modal de días sin ventas.
- */
 function closeDiasSinVentasModal() {
     const modal = document.getElementById('dias-sin-ventas-modal');
     if (modal) {
@@ -1679,11 +1647,6 @@ function closeDiasSinVentasModal() {
 // 🆕 FASE 5 (#20): FORMULARIO DE DÍA SIN VENTA
 // ============================================================
 
-/**
- * Abre el formulario para registrar o editar un día sin ventas.
- * 
- * @param {number|null} id - ID del día a editar, o null para crear
- */
 async function showDiaSinVentaForm(id = null) {
     const existingModal = document.getElementById('dia-sin-venta-form-modal');
     if (existingModal) existingModal.remove();
@@ -1778,7 +1741,6 @@ async function showDiaSinVentaForm(id = null) {
     
     document.body.appendChild(modal);
     
-    // Verificar si ya hay ventas en la fecha (aviso inteligente)
     const fechaInput = document.getElementById('dsv-fecha');
     const warningEl = document.getElementById('dsv-warning');
     
@@ -1812,12 +1774,10 @@ async function showDiaSinVentaForm(id = null) {
     
     fechaInput.addEventListener('change', verificarVentasEnFecha);
     
-    // Verificar al abrir (en edición no es necesario avisar)
     if (!isEdit) {
         setTimeout(verificarVentasEnFecha, 100);
     }
     
-    // Submit
     const form = document.getElementById('dia-sin-venta-form');
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -1829,9 +1789,6 @@ async function showDiaSinVentaForm(id = null) {
     });
 }
 
-/**
- * Procesa el envío del formulario de día sin ventas.
- */
 async function submitDiaSinVentaForm(id = null) {
     const fecha = document.getElementById('dsv-fecha')?.value;
     const motivo = document.getElementById('dsv-motivo')?.value;
@@ -1846,7 +1803,6 @@ async function submitDiaSinVentaForm(id = null) {
         return;
     }
     
-    // Verificación de duplicado (solo si es nuevo)
     if (!id) {
         const existente = window.DBModule.getDiaSinVentaByFecha(fecha);
         if (existente) {
@@ -1882,14 +1838,12 @@ async function submitDiaSinVentaForm(id = null) {
             
             closeDiaSinVentaForm();
             
-            // Refrescar el modal principal (si sigue abierto)
             setTimeout(() => {
                 if (document.getElementById('dias-sin-ventas-modal')) {
                     refrescarDiasSinVentas();
                 }
             }, 300);
             
-            // Refrescar dashboard si está visible
             if (typeof window.loadDashboardData === 'function') {
                 setTimeout(window.loadDashboardData, 500);
             }
@@ -1902,9 +1856,6 @@ async function submitDiaSinVentaForm(id = null) {
     }
 }
 
-/**
- * Cierra el formulario de día sin ventas.
- */
 function closeDiaSinVentaForm() {
     const modal = document.getElementById('dia-sin-venta-form-modal');
     if (modal) {
@@ -1921,9 +1872,6 @@ function closeDiaSinVentaForm() {
 // 🆕 FASE 5 (#20): ELIMINAR DÍA SIN VENTAS
 // ============================================================
 
-/**
- * Confirma y elimina un día sin ventas.
- */
 async function confirmDeleteDiaSinVenta(id, fechaStr) {
     const confirm = await window.ModalModule.showConfirm({
         title: '🗑️ Eliminar día sin ventas',
@@ -1960,10 +1908,6 @@ async function confirmDeleteDiaSinVenta(id, fechaStr) {
 // 🆕 FASE 5 (#20): REPORTE PDF DE DÍAS SIN VENTAS
 // ============================================================
 
-/**
- * Genera el reporte PDF de días sin ventas.
- * Delega a ReportsModule.generateDiasSinVentasReport() si existe.
- */
 async function reporteDiasSinVentas() {
     try {
         if (window.ReportsModule && typeof window.ReportsModule.generateDiasSinVentasReport === 'function') {
@@ -1987,8 +1931,7 @@ async function reporteDiasSinVentas() {
 }
 
 // ============================================================
-// 🆕 FASE 4.2 (#13): (ya existente) FORMULARIO: VENTA LIBERADA
-// 🆕 FIX 2: usa normalizarFechaVenta()
+// FORMULARIO: VENTA LIBERADA
 // ============================================================
 
 async function showLiberatedSaleForm() {
@@ -2127,7 +2070,6 @@ async function submitLiberatedSale() {
         return;
     }
     
-    // 🆕 FIX 2: Usar normalizarFechaVenta() — venta liberada siempre es HOY
     const saleDateNormalizada = normalizarFechaVenta(new Date().toISOString().split('T')[0]);
     
     try {
@@ -2170,7 +2112,6 @@ function closeLiberatedSaleModal() {
 
 // ============================================================
 // FORMULARIO: NUEVA VENTA
-// 🆕 FIX 2: submitSaleForm() usa normalizarFechaVenta()
 // ============================================================
 
 async function showSaleForm(saleId = null) {
@@ -2439,7 +2380,6 @@ function onSaleDateChange() {
 
 // ============================================================
 // ENVIAR FORMULARIO DE VENTA
-// 🆕 FIX 2: usa normalizarFechaVenta() para sale_date
 // ============================================================
 
 async function submitSaleForm(isEdit, isDebtEdit = false) {
@@ -2478,7 +2418,6 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
     
     const total = quantity * unitPrice;
     
-    // 🆕 FIX 2: Normalizar la fecha para evitar desfase UTC
     const saleDateNormalizada = normalizarFechaVenta(saleDate);
     
     console.log('📅 [submitSaleForm] Fecha original:', saleDate, '→ normalizada:', saleDateNormalizada);
@@ -2522,6 +2461,7 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
 
 // ============================================================
 // VER VENTA
+// 🆕 ENTREGA 2: Vendedor SIEMPRE visible en la sección de auditoría
 // ============================================================
 
 async function viewSale(id) {
@@ -2545,7 +2485,25 @@ async function viewSale(id) {
         const sesionBadge = sale.session ? getBadgeSesion(sale.session) : '';
         const corrienteSection = getSeccionCorrienteHTML(sale.sale_date.split('T')[0]);
         
+        // 🆕 ENTREGA 2: Auditoría con vendedor
         const auditoriaSection = renderAuditoriaHTML(sale);
+        
+        // Fallback: si no hay auditoría pero hay user_id, mostrar vendedor
+        let vendedorFallback = '';
+        if (!auditoriaSection && sale.user_id) {
+            const nombreVendedor = window.DBModule.getUsuarioNombre(sale.user_id) || 'Desconocido';
+            vendedorFallback = `
+                <div style="background: var(--bg); border-radius: 8px; padding: 10px 12px; margin-top: 12px; border-left: 3px solid #94a3b8;">
+                    <div style="font-size: 11px; font-weight: 700; color: var(--text-label); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">
+                        🔍 Auditoría
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px;">
+                        <span style="color: var(--text-light);">👤 Vendedor:</span>
+                        <span style="font-weight: 600; text-align: right;">${nombreVendedor}</span>
+                    </div>
+                </div>
+            `;
+        }
         
         modal.innerHTML = `
             <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 450px; width: 100%; max-height: 90vh; overflow-y: auto;">
@@ -2580,6 +2538,7 @@ async function viewSale(id) {
                 ${corrienteSection}
                 
                 ${auditoriaSection}
+                ${vendedorFallback}
                 
                 <hr>
                 
@@ -2615,7 +2574,21 @@ async function viewSale(id) {
 }
 
 // ============================================================
-// 🆕 FASE 1.4 HOTFIX: ANULAR VENTA - FIX DEFINITIVO #22
+// 🆕 ENTREGA 2: ANULAR VENTA - FIX REFORZADO
+// ============================================================
+// 
+// Este es el fix definitivo para el bug #22 (el modal se cierra solo).
+// 
+// El problema era que `showPrompt()` se llamaba ANTES de que el
+// `showConfirm()` anterior hubiera terminado de cerrarse, y el
+// `window._modalResolve` se sobrescribía.
+// 
+// Estrategia:
+//   PASO 0: Limpiar modales huérfanos al inicio
+//   PASO 1: showConfirm + try/catch
+//   PASO 2: waitForCustomModalRemoval + 3 verificaciones
+//   PASO 3: showPrompt con timeout de seguridad
+//   PASO 4: Ejecutar voidSale y refrescar vistas
 // ============================================================
 
 async function voidSale(id) {
@@ -2704,13 +2677,11 @@ async function voidSale(id) {
         });
     } catch (err) {
         console.error('🚫 [voidSale] Error en showPrompt:', err);
-        // No bloqueamos: usamos motivo por defecto
         reason = null;
     }
     
     console.log('🚫 [voidSale] Motivo recibido:', reason);
     
-    // Si el usuario canceló el prompt (reason === null), usar un motivo por defecto
     const motivoFinal = (reason && String(reason).trim()) ? String(reason).trim() : 'Anulación manual';
     
     // ============================================================
@@ -2727,7 +2698,6 @@ async function voidSale(id) {
             window.showToast('✅ Venta anulada correctamente', 'success', 3000);
             console.log('✅ [voidSale] Venta anulada correctamente');
             
-            // Refrescar vistas
             try {
                 loadSalesAndExpenses();
                 updateSummary();
@@ -2757,7 +2727,6 @@ async function voidSale(id) {
 async function unvoidSale(id) {
     console.log('🔄 [unvoidSale] Iniciando restauración de venta #' + id);
     
-    // Verificar modales huérfanos
     const modalHuerfano = document.getElementById('custom-modal');
     if (modalHuerfano) {
         modalHuerfano.remove();
@@ -2786,7 +2755,6 @@ async function unvoidSale(id) {
         return;
     }
     
-    // Esperar a que el confirm se cierre
     await waitForCustomModalRemoval(800);
     await new Promise(r => setTimeout(r, 150));
     
@@ -2817,7 +2785,6 @@ async function registerSalePayment(saleId) {
         if (!sale) { window.showToast('❌ Venta no encontrada', 'error'); return; }
         if (sale.paid === 1) { window.showToast('✅ Ya está pagada', 'info'); return; }
         
-        // Verificar modales huérfanos
         const modalHuerfano = document.getElementById('custom-modal');
         if (modalHuerfano) {
             modalHuerfano.remove();
@@ -2837,7 +2804,6 @@ async function registerSalePayment(saleId) {
         
         if (!confirm) return;
         
-        // 🆕 FASE 1.4: Esperar a que se cierre el confirm
         await waitForCustomModalRemoval(500);
         
         window.DBModule.execute(`
@@ -2980,7 +2946,6 @@ async function submitExpenseForm(isEdit) {
     if (amount <= 0) { window.showToast('⚠️ El monto debe ser > 0', 'error'); return; }
     if (!expenseDate) { window.showToast('⚠️ La fecha es obligatoria', 'error'); return; }
     
-    // 🆕 FIX 2: Normalizar fecha de gasto también
     const expenseDateNormalizada = normalizarFechaVenta(expenseDate);
     
     const expenseData = {
@@ -3084,13 +3049,12 @@ async function viewExpense(id) {
 }
 
 // ============================================================
-// 🆕 FASE 1.4: ANULAR GASTO - CON FIX DEL MODAL
+// ANULAR GASTO - CON FIX DEL MODAL
 // ============================================================
 
 async function voidExpense(id) {
     console.log('🚫 [voidExpense] Iniciando anulación de gasto #' + id);
     
-    // Verificar modales huérfanos
     const modalHuerfano = document.getElementById('custom-modal');
     if (modalHuerfano) {
         modalHuerfano.remove();
@@ -3117,7 +3081,6 @@ async function voidExpense(id) {
         return;
     }
     
-    // Esperar a que el confirm se cierre
     await waitForCustomModalRemoval(800);
     await new Promise(r => setTimeout(r, 150));
     
@@ -3149,7 +3112,6 @@ async function voidExpense(id) {
 }
 
 async function unvoidExpense(id) {
-    // Verificar modales huérfanos
     const modalHuerfano = document.getElementById('custom-modal');
     if (modalHuerfano) {
         modalHuerfano.remove();
@@ -3496,16 +3458,12 @@ window.onCurrentMonthChangeSales = onCurrentMonthChangeSales;
 window.updateMesToggleVisualSales = updateMesToggleVisualSales;
 window.onSalesDateChange = onSalesDateChange;
 window.renderAuditoriaHTML = renderAuditoriaHTML;
-// 🆕 FASE 1.4
 window.waitForCustomModalRemoval = waitForCustomModalRemoval;
-// 🆕 FIX 2
 window.normalizarFechaVenta = normalizarFechaVenta;
-// 🆕 FASE 4.2 (#13)
 window.getShowLiberatedSales = getShowLiberatedSales;
 window.setShowLiberatedSales = setShowLiberatedSales;
 window.onShowLiberatedChange = onShowLiberatedChange;
 window.updateShowLiberatedToggleVisual = updateShowLiberatedToggleVisual;
-// 🆕 FASE 5 (#20)
 window.showDiasSinVentasModal = showDiasSinVentasModal;
 window.closeDiasSinVentasModal = closeDiasSinVentasModal;
 window.renderDiasSinVentasContent = renderDiasSinVentasContent;
@@ -3519,4 +3477,4 @@ window.reporteDiasSinVentas = reporteDiasSinVentas;
 window.getMotivoDiaSinVenta = getMotivoDiaSinVenta;
 window.MOTIVOS_DIAS_SIN_VENTAS = MOTIVOS_DIAS_SIN_VENTAS;
 
-console.log('📦 UI Sales Module v2.1.2 (FASE 5 #20: días sin ventas)');
+console.log('📦 UI Sales Module v2.1.3 (ENTREGA 2: fix anular venta + vendedor visible + orden ascendente por ID)');
