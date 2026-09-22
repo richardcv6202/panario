@@ -31,23 +31,40 @@
 // 🆕 FASE 7.3 (210926 v9): MOSTRAR PRODUCCIÓN + BLOQUEO DEFINITIVO
 //   - renderProduccionInfoHTML() ahora se invoca SIEMPRE en loadOrders()
 // 🆕 v2.1.12 (210926 v10): CORRECCIÓN #2 - BLOQUEO POR RECETAS NO COMPARTIDAS
-//   - ✅ loadOrders(): Verifica permisos de cada pedido y muestra badge "🔒 Solo lectura"
-//   - ✅ loadOrders(): Oculta botones de acción (Editar) en pedidos bloqueados
-//   - ✅ viewOrder(): Muestra el detalle en modo solo-lectura cuando está bloqueado
-//     - Oculta botones: Editar, Entregar, Cancelar, Lista de espera
-//     - Muestra aviso rojo con explicación
-//   - ✅ showOrderForm(): Bloquea si el pedido está en modo solo-lectura
-//   - ✅ updateOrderStatusAndReload(): Verifica permisos ANTES del confirm
-//   - ✅ renderWaitingManagerContent(): Filtra pedidos bloqueados
-//     - Los pedidos en lista de espera que usen recetas no compartidas
-//       no aparecen para usuarios no-admin
-//   - ✅ Los pedidos bloqueados se muestran con:
-//     - Borde gris en lugar de color de estado
-//     - Badge "🔒 Solo lectura"
-//     - Icono 🔒 en el título
-//     - Sin botones de acción
-//   - ✅ Nueva función helper: renderBadgeSoloLectura()
-//   - ✅ Nueva función helper: aplicarBloqueoVisual()
+//   - loadOrders(): Verifica permisos y muestra badge "🔒 Solo lectura"
+//   - viewOrder(): Muestra detalle en modo solo-lectura cuando está bloqueado
+//   - showOrderForm(): Bloquea si el pedido está en modo solo-lectura
+//   - updateOrderStatusAndReload(): Verifica permisos ANTES del confirm
+//   - renderWaitingManagerContent(): Filtra pedidos bloqueados
+// 🆕 v2.1.13 (210926 v11): CORRECCIÓN #4 - EXCLUIR DÍAS DE LA SEMANA
+//   - ✅ showMultiOrderForm(): nueva sección "🚫 Excluir días" (visible SOLO
+//     cuando patron.tipo === 'rango'). Permite marcar uno o varios días de
+//     la semana para excluirlos de la reserva.
+//   - ✅ Nuevo campo en el estado: `_multiOrderState.patron.diasExcluidos = []`
+//   - ✅ Nuevas funciones globales:
+//     * selectDiasExcluidos(arrayDias) → marca los días pasados por parámetro
+//     * limpiarDiasExcluidos() → desmarca todos
+//     * updateExclusionSummary() → actualiza el resumen visual
+//   - ✅ onMultiPatronChange(): lee los checkboxes de exclusión y actualiza
+//     el estado. También llama a updateExclusionSummary().
+//   - ✅ selectPatronType(): muestra/oculta el contenedor de exclusiones
+//     según el tipo de patrón. Si cambia fuera de 'rango', limpia.
+//   - ✅ actualizarVistaPrevia(): muestra los días excluidos en el resumen
+//     global para dar feedback visual al usuario.
+// 🆕 CORRECCIÓN #6 (211026 v12): PRODUCCIÓN DEL DÍA ANTERIOR
+//   - ✅ getProduccionInfo() ahora detecta si el bloque guardado es del
+//     día anterior (es_bloque_dia_anterior === 1) y expone:
+//     * esBloqueDiaAnterior: true/false
+//     * fechaBloqueReal: "YYYY-MM-DD" (día real del bloque)
+//     * bloqueTextoAyer: "5:00 PM - 8:00 PM" (texto simplificado)
+//   - ✅ renderProduccionInfoHTML() muestra un badge adicional
+//     "🌙 Prod. ayer" cuando corresponde.
+//   - ✅ onOrderDateChange() muestra aviso cuando la producción del día
+//     seleccionado se hace en el bloque del día anterior.
+//   - ✅ viewOrder() muestra correctamente el bloque de producción cuando
+//     es del día anterior (badge morado + texto).
+//   - ✅ Compatibilidad total con versiones anteriores: si el pedido no
+//     tiene producción programada con bloque de ayer, se comporta igual.
 // ============================================================
 
 // ============================================================
@@ -83,22 +100,14 @@ if (typeof window.normalizarFechaVenta !== 'function') {
 const ORDERS_MODAL_Z_INDEX = 9999999998;
 
 // ============================================================
-// 🆕 v2.1.12: HELPERS DE BLOQUEO (Corrección #2)
+// HELPERS DE BLOQUEO (Corrección #2)
 // ============================================================
 
-/**
- * Verifica si el usuario puede procesar un pedido.
- * Delega a la función del backend (orders.js).
- * 
- * @param {number|Object} orderIdOrObject
- * @returns {Object} { puede, razon, recetasBloqueadas }
- */
 function checkOrderPermission(orderIdOrObject) {
     try {
         if (typeof window.OrdersModule?.puedeUsuarioActualProcesarPedido === 'function') {
             return window.OrdersModule.puedeUsuarioActualProcesarPedido(orderIdOrObject);
         }
-        // Fallback: si no está disponible, permitir (compatibilidad)
         return { puede: true, razon: '', recetasBloqueadas: [] };
     } catch (e) {
         console.warn('⚠️ Error verificando permisos:', e);
@@ -106,30 +115,15 @@ function checkOrderPermission(orderIdOrObject) {
     }
 }
 
-/**
- * Renderiza un badge visual "🔒 Solo lectura" para pedidos bloqueados.
- */
 function renderBadgeSoloLectura() {
     return `<span style="font-size: 10px; background: #94a3b820; color: #94a3b8; padding: 2px 8px; border-radius: 10px; font-weight: 600; border: 1px solid #94a3b8;">🔒 Solo lectura</span>`;
 }
 
-/**
- * Aplica bloqueo visual a un contenedor de pedido (tarjeta).
- * Devuelve un objeto con los estilos modificados.
- */
 function aplicarBloqueoVisual(bloqueado) {
     if (bloqueado) {
-        return {
-            borderColor: '#94a3b8',
-            opacity: 0.75,
-            cursor: 'not-allowed'
-        };
+        return { borderColor: '#94a3b8', opacity: 0.75, cursor: 'not-allowed' };
     }
-    return {
-        borderColor: null,
-        opacity: 1,
-        cursor: 'pointer'
-    };
+    return { borderColor: null, opacity: 1, cursor: 'pointer' };
 }
 
 window.checkOrderPermission = checkOrderPermission;
@@ -157,31 +151,72 @@ window.updateOrderTotal = function() {
 };
 
 // ============================================================
-// 🆕 FASE 7.3: HELPER PARA OBTENER INFO DE PRODUCCIÓN
+// 🆕 CORRECCIÓN #6: HELPER PARA OBTENER INFO DE PRODUCCIÓN
+// (con soporte para bloque del día anterior)
 // ============================================================
 
 function getProduccionInfo(fechaISO) {
     try {
         if (typeof window.getProduccionConfig !== 'function' || 
             typeof window.contarPedidosYVentasFecha !== 'function') {
-            return { tieneProduccion: false, pedidos: 0, ventas: 0, disponibles: 0, cantidadProduccion: 0 };
+            return { 
+                tieneProduccion: false, 
+                pedidos: 0, 
+                ventas: 0, 
+                disponibles: 0, 
+                cantidadProduccion: 0,
+                esBloqueDiaAnterior: false,
+                fechaBloqueReal: null,
+                bloqueTextoAyer: null
+            };
         }
         
         const config = window.getProduccionConfig(fechaISO);
         const conteo = window.contarPedidosYVentasFecha(fechaISO);
         
         if (!config) {
-            return { tieneProduccion: false, ...conteo };
+            return { 
+                tieneProduccion: false, 
+                esBloqueDiaAnterior: false,
+                fechaBloqueReal: null,
+                bloqueTextoAyer: null,
+                ...conteo 
+            };
         }
         
-        const bloques = window.CorrienteUtils ? window.CorrienteUtils.getBloques(fechaISO) : [];
+        // ============================================================
+        // 🆕 CORRECCIÓN #6: Determinar si el bloque es del día anterior
+        // ============================================================
+        const esBloqueDiaAnterior = config.es_bloque_dia_anterior === 1;
+        const fechaBloqueReal = config.fecha_bloque_real || fechaISO;
+        
+        // Determinar qué día usar para buscar los bloques:
+        //   - Si es del día anterior → fechaBloqueReal
+        //   - Si no → fechaISO (día de entrega)
+        const fechaParaBloques = esBloqueDiaAnterior ? fechaBloqueReal : fechaISO;
+        
+        const bloques = window.CorrienteUtils 
+            ? window.CorrienteUtils.getBloques(fechaParaBloques) 
+            : [];
+        
         let bloqueTexto = '';
+        let bloqueTextoAyer = null;
+        
         if (bloques && bloques.length >= config.bloque_index) {
             const bloque = bloques[config.bloque_index - 1];
-            const fechaObj = new Date(fechaISO + 'T00:00:00');
-            const dia = String(fechaObj.getDate()).padStart(2, '0');
-            const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
-            bloqueTexto = `${dia}/${mes} de ${bloque.inicioStr} a ${bloque.finStr}`;
+            
+            if (esBloqueDiaAnterior) {
+                // 🆕 CORRECCIÓN #6: Texto simplificado para el día anterior
+                // Ej: "5:00 PM - 8:00 PM"
+                bloqueTexto = `${bloque.inicioStr} - ${bloque.finStr}`;
+                bloqueTextoAyer = bloqueTexto;
+            } else {
+                // Texto con fecha completa (comportamiento original)
+                const fechaObj = new Date(fechaISO + 'T00:00:00');
+                const dia = String(fechaObj.getDate()).padStart(2, '0');
+                const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
+                bloqueTexto = `${dia}/${mes} de ${bloque.inicioStr} a ${bloque.finStr}`;
+            }
         }
         
         return {
@@ -189,18 +224,31 @@ function getProduccionInfo(fechaISO) {
             bloqueTexto,
             cantidadProduccion: parseFloat(config.cantidad_produccion) || 0,
             notas: config.notas,
+            // 🆕 CORRECCIÓN #6: metadatos del día anterior
+            esBloqueDiaAnterior,
+            fechaBloqueReal,
+            bloqueTextoAyer,
             ...conteo
         };
     } catch (e) {
         console.warn('⚠️ Error obteniendo info de producción:', e);
-        return { tieneProduccion: false, pedidos: 0, ventas: 0, disponibles: 0, cantidadProduccion: 0 };
+        return { 
+            tieneProduccion: false, 
+            pedidos: 0, 
+            ventas: 0, 
+            disponibles: 0, 
+            cantidadProduccion: 0,
+            esBloqueDiaAnterior: false,
+            fechaBloqueReal: null,
+            bloqueTextoAyer: null
+        };
     }
 }
 
 window.getProduccionInfo = getProduccionInfo;
 
 // ============================================================
-// 🆕 FASE 7.3: FORMATEO DE CANTIDAD (fallback defensivo)
+// FORMATEO DE CANTIDAD (fallback defensivo)
 // ============================================================
 
 if (typeof window.formatearCantidadProduccion !== 'function') {
@@ -334,7 +382,6 @@ async function mostrarAlertaStockWarning(orderId, stockWarning) {
 
 // ============================================================
 // MODAL DE GESTIÓN DE LISTA DE ESPERA
-// 🆕 v2.1.12: Filtra pedidos bloqueados por permisos
 // ============================================================
 
 async function showWaitingListManagerModal() {
@@ -378,10 +425,8 @@ async function renderWaitingManagerContent() {
     if (!modal) return;
     
     try {
-        // 🆕 v2.1.12: getWaitingListWithDetails() ya filtra por permisos internamente
         const listaCompleta = await window.OrdersModule.getWaitingListWithDetails();
         
-        // Filtrar por permisos (redundante pero seguro)
         const lista = listaCompleta.filter(item => {
             const permisos = checkOrderPermission(item.order_id);
             return permisos.puede;
@@ -592,7 +637,6 @@ async function refrescarListaEsperaUI() {
 async function procesarClienteDeListaUI(orderId) {
     if (!orderId) return;
     
-    // 🆕 v2.1.12: Verificar permisos ANTES de mostrar el confirm
     const permisos = checkOrderPermission(orderId);
     if (!permisos.puede) {
         window.showToast('🔒 ' + permisos.razon, 'error', 5000);
@@ -640,7 +684,6 @@ async function procesarClienteDeListaUI(orderId) {
 async function cancelarClienteDeListaUI(orderId, clientName) {
     if (!orderId) return;
     
-    // 🆕 v2.1.12: Verificar permisos
     const permisos = checkOrderPermission(orderId);
     if (!permisos.puede) {
         window.showToast('🔒 ' + permisos.razon, 'error', 5000);
@@ -702,7 +745,6 @@ async function cancelarClienteDeListaUI(orderId, clientName) {
 async function eliminarClienteDeListaUI(orderId, clientName) {
     if (!orderId) return;
     
-    // 🆕 v2.1.12: Verificar permisos
     const permisos = checkOrderPermission(orderId);
     if (!permisos.puede) {
         window.showToast('🔒 ' + permisos.razon, 'error', 5000);
@@ -826,7 +868,8 @@ async function reporteListaEspera() {
 }
 
 // ============================================================
-// 🆕 FASE 7.3: RENDER INFO DE PRODUCCIÓN EN TARJETA DE FECHA
+// 🆕 CORRECCIÓN #6: RENDER INFO DE PRODUCCIÓN EN TARJETA DE FECHA
+// (con soporte para bloque del día anterior)
 // ============================================================
 
 function renderProduccionInfoHTML(fechaISO) {
@@ -839,6 +882,7 @@ function renderProduccionInfoHTML(fechaISO) {
         const cantidadProd = info.cantidadProduccion;
         const pedidos = info.pedidos;
         const ventas = info.ventas;
+        const esAyer = info.esBloqueDiaAnterior === true;
         
         const fmt = window.formatearCantidadProduccion || (v => String(v));
         
@@ -852,11 +896,20 @@ function renderProduccionInfoHTML(fechaISO) {
             bgDisponible = '#f59e0b15';
         }
         
+        // ============================================================
+        // 🆕 CORRECCIÓN #6: Badge especial si es bloque de ayer
+        // ============================================================
+        const badgeBloqueHoy = esAyer
+            ? `<span style="background: #8b5cf615; color: #8b5cf6; padding: 3px 10px; border-radius: 6px; font-weight: 600; border: 1px dashed #8b5cf6;">
+                  🌙 Prod. ayer: ${info.bloqueTexto}
+               </span>`
+            : `<span style="background: #8b5cf615; color: #8b5cf6; padding: 3px 10px; border-radius: 6px; font-weight: 600;">
+                  🔨 Producción: ${info.bloqueTexto}
+               </span>`;
+        
         return `
             <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-color); font-size: 11px;">
-                <span style="background: #8b5cf615; color: #8b5cf6; padding: 3px 10px; border-radius: 6px; font-weight: 600;">
-                    🔨 Producción: ${info.bloqueTexto}
-                </span>
+                ${badgeBloqueHoy}
                 <span style="background: ${bgDisponible}; color: ${colorDisponible}; padding: 3px 10px; border-radius: 6px; font-weight: 600;">
                     📋 Pedidos: ${pedidos}/${fmt(cantidadProd)}
                 </span>
@@ -1212,7 +1265,7 @@ function getBadgeSesion(sesion) {
 }
 
 // ============================================================
-// 🆕 v2.1.12: LOAD ORDERS - CON VERIFICACIÓN DE PERMISOS
+// LOAD ORDERS - CON VERIFICACIÓN DE PERMISOS
 // ============================================================
 
 async function loadOrders() {
@@ -1268,7 +1321,6 @@ async function loadOrders() {
         const grouped = {};
         const today = new Date().toISOString().split('T')[0];
         
-        // 🆕 v2.1.12: Verificar permisos para cada pedido
         const permisosPorPedido = {};
         orders.forEach(order => {
             permisosPorPedido[order.id] = checkOrderPermission(order.id);
@@ -1299,7 +1351,6 @@ async function loadOrders() {
             
             const produccionInfoHtml = renderProduccionInfoHTML(dateKey);
             
-            // Contar pedidos bloqueados del día
             const bloqueadosDelDia = dayOrders.filter(o => !permisosPorPedido[o.id]?.puede).length;
             const badgeBloqueados = bloqueadosDelDia > 0 
                 ? `<span style="font-size: 11px; background: #94a3b820; color: #94a3b8; padding: 1px 8px; border-radius: 10px; font-weight: 600; border: 1px solid #94a3b8;">🔒 ${bloqueadosDelDia} bloqueado${bloqueadosDelDia > 1 ? 's' : ''}</span>`
@@ -1340,7 +1391,6 @@ async function loadOrders() {
                         
                         const sesionBadge = getBadgeSesion(order.session);
                         
-                        // 🆕 v2.1.12: Verificar permisos del pedido
                         const permisos = permisosPorPedido[order.id] || { puede: true };
                         const bloqueado = !permisos.puede;
                         
@@ -1582,7 +1632,6 @@ function closeOrdersReportModal() {
 
 // ============================================================
 // FORMULARIO DE PEDIDO INDIVIDUAL
-// 🆕 v2.1.12: Bloquea si el pedido está en modo solo-lectura
 // ============================================================
 
 async function showOrderForm(orderId = null) {
@@ -1594,7 +1643,6 @@ async function showOrderForm(orderId = null) {
     
     const isEdit = !!orderId;
     
-    // 🆕 v2.1.12: Verificar permisos ANTES de cargar
     if (isEdit) {
         const permisos = checkOrderPermission(orderId);
         if (!permisos.puede) {
@@ -1846,6 +1894,7 @@ async function showOrderForm(orderId = null) {
 
 // ============================================================
 // RESERVA POR PERÍODO
+// 🆕 v2.1.13: Con exclusión de días de la semana
 // ============================================================
 
 async function showMultiOrderForm() {
@@ -1859,7 +1908,8 @@ async function showMultiOrderForm() {
             fechaFin: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
             diasSemana: [],
             diasEspecificos: [],
-            paridad: 'todos'
+            paridad: 'todos',
+            diasExcluidos: []
         },
         items: [],
         fechasGeneradas: [],
@@ -1969,6 +2019,62 @@ async function showMultiOrderForm() {
                     </div>
                 </div>
                 
+                <div id="multi-exclusion-container" style="margin-bottom: 12px; padding: 10px 12px; background: #ef444410; border-radius: 8px; border: 1px dashed #ef4444;">
+                    <div style="font-size: 12px; font-weight: 600; color: #ef4444; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                        <span>🚫</span>
+                        <span>Excluir días de la semana (opcional)</span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-light); margin-bottom: 8px;">
+                        Los días marcados NO se incluirán en la reserva (útil para excluir los días que no trabajas).
+                    </div>
+                    
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                        <label class="multi-dia-excluido" data-dia="1" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px; transition: all 0.2s;">
+                            <input type="checkbox" name="multi-excluido" value="1" style="display: none;">
+                            Lun
+                        </label>
+                        <label class="multi-dia-excluido" data-dia="2" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px; transition: all 0.2s;">
+                            <input type="checkbox" name="multi-excluido" value="2" style="display: none;">
+                            Mar
+                        </label>
+                        <label class="multi-dia-excluido" data-dia="3" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px; transition: all 0.2s;">
+                            <input type="checkbox" name="multi-excluido" value="3" style="display: none;">
+                            Mié
+                        </label>
+                        <label class="multi-dia-excluido" data-dia="4" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px; transition: all 0.2s;">
+                            <input type="checkbox" name="multi-excluido" value="4" style="display: none;">
+                            Jue
+                        </label>
+                        <label class="multi-dia-excluido" data-dia="5" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px; transition: all 0.2s;">
+                            <input type="checkbox" name="multi-excluido" value="5" style="display: none;">
+                            Vie
+                        </label>
+                        <label class="multi-dia-excluido" data-dia="6" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px; transition: all 0.2s;">
+                            <input type="checkbox" name="multi-excluido" value="6" style="display: none;">
+                            Sáb
+                        </label>
+                        <label class="multi-dia-excluido" data-dia="0" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px; transition: all 0.2s;">
+                            <input type="checkbox" name="multi-excluido" value="0" style="display: none;">
+                            Dom
+                        </label>
+                    </div>
+                    
+                    <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">
+                        <button type="button" onclick="selectDiasExcluidos([0, 6])" 
+                                class="btn secondary" 
+                                style="padding: 4px 10px; font-size: 11px; width: auto; background: #ef444415; color: #ef4444; border-color: #ef4444;">
+                            🚫 Excluir fines de semana
+                        </button>
+                        <button type="button" onclick="limpiarDiasExcluidos()" 
+                                class="btn secondary" 
+                                style="padding: 4px 10px; font-size: 11px; width: auto;">
+                            🗑️ Limpiar exclusiones
+                        </button>
+                    </div>
+                    
+                    <div id="multi-exclusion-summary" style="font-size: 11px; color: #ef4444; margin-top: 6px; font-style: italic;"></div>
+                </div>
+                
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
                     <div class="form-group">
                         <label style="font-size: 12px;">📅 Desde</label>
@@ -1985,33 +2091,33 @@ async function showMultiOrderForm() {
                 </div>
                 
                 <div id="multi-dias-semana" style="display: none; margin-bottom: 8px;">
-                    <label style="font-size: 12px; font-weight: 600; color: var(--text-label);">Días de la semana:</label>
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-label);">Días de la semana a incluir:</label>
                     <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
-                        <label class="multi-dia-semana" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px;" data-dia="1">
+                        <label class="multi-dia-semana" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px; transition: all 0.2s;" data-dia="1">
                             <input type="checkbox" name="multi-dia" value="1" style="display: none;">
                             Lun
                         </label>
-                        <label class="multi-dia-semana" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px;" data-dia="2">
+                        <label class="multi-dia-semana" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px; transition: all 0.2s;" data-dia="2">
                             <input type="checkbox" name="multi-dia" value="2" style="display: none;">
                             Mar
                         </label>
-                        <label class="multi-dia-semana" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px;" data-dia="3">
+                        <label class="multi-dia-semana" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px; transition: all 0.2s;" data-dia="3">
                             <input type="checkbox" name="multi-dia" value="3" style="display: none;">
                             Mié
                         </label>
-                        <label class="multi-dia-semana" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px;" data-dia="4">
+                        <label class="multi-dia-semana" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px; transition: all 0.2s;" data-dia="4">
                             <input type="checkbox" name="multi-dia" value="4" style="display: none;">
                             Jue
                         </label>
-                        <label class="multi-dia-semana" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px;" data-dia="5">
+                        <label class="multi-dia-semana" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px; transition: all 0.2s;" data-dia="5">
                             <input type="checkbox" name="multi-dia" value="5" style="display: none;">
                             Vie
                         </label>
-                        <label class="multi-dia-semana" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px;" data-dia="6">
+                        <label class="multi-dia-semana" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px; transition: all 0.2s;" data-dia="6">
                             <input type="checkbox" name="multi-dia" value="6" style="display: none;">
                             Sáb
                         </label>
-                        <label class="multi-dia-semana" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px;" data-dia="0">
+                        <label class="multi-dia-semana" style="flex: 1; min-width: 60px; padding: 6px 8px; border-radius: 6px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg-card); font-size: 12px; transition: all 0.2s;" data-dia="0">
                             <input type="checkbox" name="multi-dia" value="0" style="display: none;">
                             Dom
                         </label>
@@ -2100,6 +2206,19 @@ async function showMultiOrderForm() {
         });
     });
     
+    modal.querySelectorAll('.multi-dia-excluido').forEach(label => {
+        label.addEventListener('click', function(e) {
+            e.preventDefault();
+            const checkbox = this.querySelector('input[type="checkbox"]');
+            checkbox.checked = !checkbox.checked;
+            this.style.borderColor = checkbox.checked ? '#ef4444' : 'var(--border-color)';
+            this.style.background = checkbox.checked ? '#ef444415' : 'var(--bg-card)';
+            this.style.fontWeight = checkbox.checked ? '600' : 'normal';
+            this.style.color = checkbox.checked ? '#ef4444' : 'inherit';
+            onMultiPatronChange();
+        });
+    });
+    
     modal.querySelectorAll('.multi-paridad-option').forEach(label => {
         label.addEventListener('click', function(e) {
             e.preventDefault();
@@ -2156,10 +2275,19 @@ function selectPatronType(tipo) {
     const diasSemanaDiv = document.getElementById('multi-dias-semana');
     const diasEspDiv = document.getElementById('multi-dias-especificos');
     const paridadDiv = document.getElementById('multi-paridad-container');
+    const exclusionDiv = document.getElementById('multi-exclusion-container');
     
     if (diasSemanaDiv) diasSemanaDiv.style.display = tipo === 'semana' ? 'block' : 'none';
     if (diasEspDiv) diasEspDiv.style.display = tipo === 'especificos' ? 'block' : 'none';
     if (paridadDiv) paridadDiv.style.display = tipo === 'rango' ? 'block' : 'none';
+    
+    if (exclusionDiv) {
+        exclusionDiv.style.display = tipo === 'rango' ? 'block' : 'none';
+    }
+    
+    if (tipo !== 'rango') {
+        limpiarDiasExcluidos();
+    }
     
     onMultiPatronChange();
 }
@@ -2186,6 +2314,81 @@ function selectMultiSesion(sesion) {
     onMultiPatronChange();
 }
 
+// ============================================================
+// HELPERS DE EXCLUSIÓN DE DÍAS
+// ============================================================
+
+function selectDiasExcluidos(dias) {
+    if (!Array.isArray(dias)) return;
+    
+    const set = new Set(dias.map(d => parseInt(d)));
+    
+    document.querySelectorAll('.multi-dia-excluido').forEach(label => {
+        const dia = parseInt(label.dataset.dia);
+        const checkbox = label.querySelector('input[type="checkbox"]');
+        if (!checkbox) return;
+        
+        const marcar = set.has(dia);
+        checkbox.checked = marcar;
+        label.style.borderColor = marcar ? '#ef4444' : 'var(--border-color)';
+        label.style.background = marcar ? '#ef444415' : 'var(--bg-card)';
+        label.style.fontWeight = marcar ? '600' : 'normal';
+        label.style.color = marcar ? '#ef4444' : 'inherit';
+    });
+    
+    onMultiPatronChange();
+}
+
+function limpiarDiasExcluidos() {
+    document.querySelectorAll('.multi-dia-excluido').forEach(label => {
+        const checkbox = label.querySelector('input[type="checkbox"]');
+        if (!checkbox) return;
+        checkbox.checked = false;
+        label.style.borderColor = 'var(--border-color)';
+        label.style.background = 'var(--bg-card)';
+        label.style.fontWeight = 'normal';
+        label.style.color = 'inherit';
+    });
+    
+    onMultiPatronChange();
+}
+
+function updateExclusionSummary() {
+    const summaryEl = document.getElementById('multi-exclusion-summary');
+    if (!summaryEl) return;
+    
+    const checkboxes = document.querySelectorAll('input[name="multi-excluido"]:checked');
+    const diasExcluidos = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    
+    if (diasExcluidos.length === 0) {
+        summaryEl.innerHTML = '';
+        return;
+    }
+    
+    const nombresDias = diasExcluidos
+        .sort((a, b) => {
+            const orden = [1, 2, 3, 4, 5, 6, 0];
+            return orden.indexOf(a) - orden.indexOf(b);
+        })
+        .map(d => {
+            if (typeof window.OrdersModule?.getNombreDiaSemana === 'function') {
+                return window.OrdersModule.getNombreDiaSemana(d, true);
+            }
+            return ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][d];
+        })
+        .join(', ');
+    
+    summaryEl.innerHTML = `🚫 Excluyendo: <strong>${nombresDias}</strong>`;
+}
+
+window.selectDiasExcluidos = selectDiasExcluidos;
+window.limpiarDiasExcluidos = limpiarDiasExcluidos;
+window.updateExclusionSummary = updateExclusionSummary;
+
+// ============================================================
+// ON MULTI PATRON CHANGE
+// ============================================================
+
 function onMultiPatronChange() {
     const state = window._multiOrderState;
     
@@ -2206,8 +2409,17 @@ function onMultiPatronChange() {
     const paridadRadio = document.querySelector('input[name="multi-paridad"]:checked');
     state.patron.paridad = paridadRadio ? paridadRadio.value : 'todos';
     
+    const excluidosCheckboxes = document.querySelectorAll('input[name="multi-excluido"]:checked');
+    state.patron.diasExcluidos = Array.from(excluidosCheckboxes).map(cb => parseInt(cb.value));
+    
+    updateExclusionSummary();
+    
     actualizarVistaPrevia();
 }
+
+// ============================================================
+// ACTUALIZAR VISTA PREVIA
+// ============================================================
 
 async function actualizarVistaPrevia() {
     const state = window._multiOrderState;
@@ -2243,8 +2455,33 @@ async function actualizarVistaPrevia() {
         console.error('Error generando fechas:', e);
     }
     
+    let infoExclusiones = '';
+    if (state.patron.tipo === 'rango' && state.patron.diasExcluidos && state.patron.diasExcluidos.length > 0) {
+        const nombres = state.patron.diasExcluidos
+            .sort((a, b) => {
+                const orden = [1, 2, 3, 4, 5, 6, 0];
+                return orden.indexOf(a) - orden.indexOf(b);
+            })
+            .map(d => {
+                if (typeof window.OrdersModule?.getNombreDiaSemana === 'function') {
+                    return window.OrdersModule.getNombreDiaSemana(d, true);
+                }
+                return ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][d];
+            })
+            .join(', ');
+        
+        infoExclusiones = `
+            <div style="background: #ef444415; border: 1px solid #ef4444; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; font-size: 11px; color: #ef4444;">
+                🚫 <strong>Excluidos:</strong> ${nombres}
+            </div>
+        `;
+    }
+    
     if (fechas.length === 0) {
-        preview.innerHTML = '<p style="color: var(--text-light); text-align: center; font-size: 12px;">El patrón no genera fechas válidas</p>';
+        preview.innerHTML = `
+            ${infoExclusiones}
+            <p style="color: var(--text-light); text-align: center; font-size: 12px;">El patrón no genera fechas válidas</p>
+        `;
         countEl.textContent = '0';
         totalEl.textContent = '$0.00';
         if (submitBtn) submitBtn.disabled = true;
@@ -2310,7 +2547,10 @@ async function actualizarVistaPrevia() {
             }
             
             if (prodInfo.tieneProduccion) {
-                textoExtra += ` <span style="color: #8b5cf6;">🔨 ${prodInfo.pedidos}/${fmt(prodInfo.cantidadProduccion)}</span>`;
+                const prodBadge = prodInfo.esBloqueDiaAnterior 
+                    ? `🌙 ${prodInfo.pedidos}/${fmt(prodInfo.cantidadProduccion)}` 
+                    : `🔨 ${prodInfo.pedidos}/${fmt(prodInfo.cantidadProduccion)}`;
+                textoExtra += ` <span style="color: #8b5cf6;">${prodBadge}</span>`;
             }
         }
         
@@ -2324,6 +2564,7 @@ async function actualizarVistaPrevia() {
     });
     
     preview.innerHTML = `
+        ${infoExclusiones}
         <div style="margin-bottom: 8px; font-size: 12px;">
             <span style="background: #10b98120; color: #10b981; padding: 2px 8px; border-radius: 10px; margin-right: 6px;">✅ ${creadosCount} se crearán</span>
             ${omitidosCount > 0 ? `<span style="background: #ef444420; color: #ef4444; padding: 2px 8px; border-radius: 10px;">🚫 ${omitidosCount} omitidos</span>` : ''}
@@ -2540,9 +2781,26 @@ async function submitMultiOrderForm() {
         patronDesc += ` (${state.patron.paridad === 'pares' ? 'solo pares' : 'solo impares'})`;
     }
     
+    let exclusionDesc = '';
+    if (state.patron.tipo === 'rango' && state.patron.diasExcluidos && state.patron.diasExcluidos.length > 0) {
+        const nombres = state.patron.diasExcluidos
+            .sort((a, b) => {
+                const orden = [1, 2, 3, 4, 5, 6, 0];
+                return orden.indexOf(a) - orden.indexOf(b);
+            })
+            .map(d => {
+                if (typeof window.OrdersModule?.getNombreDiaSemana === 'function') {
+                    return window.OrdersModule.getNombreDiaSemana(d, true);
+                }
+                return ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][d];
+            })
+            .join(', ');
+        exclusionDesc = `\n🚫 Excluyendo: ${nombres}`;
+    }
+    
     const confirm = await window.ModalModule.showConfirm({
         title: '📅 Confirmar reserva',
-        message: `Se crearán ${fechasAProcesar.length} pedido(s) para "${clientName}".\n\nPatrón: ${patronDesc}\n${Object.keys(duplicados).filter(f => duplicados[f]).length > 0 ? `⚠️ Se omitirán ${Object.keys(duplicados).filter(f => duplicados[f]).length} fecha(s) por duplicados.\n\n` : ''}¿Continuar?`,
+        message: `Se crearán ${fechasAProcesar.length} pedido(s) para "${clientName}".\n\nPatrón: ${patronDesc}${exclusionDesc}\n${Object.keys(duplicados).filter(f => duplicados[f]).length > 0 ? `⚠️ Se omitirán ${Object.keys(duplicados).filter(f => duplicados[f]).length} fecha(s) por duplicados.\n\n` : ''}¿Continuar?`,
         confirmText: `✅ SÍ, CREAR ${fechasAProcesar.length}`,
         cancelText: 'Cancelar',
         icon: '📅',
@@ -2645,6 +2903,10 @@ function highlightSesionSelection(sesion) {
     });
 }
 
+// ============================================================
+// 🆕 CORRECCIÓN #6: onOrderDateChange con soporte de bloque ayer
+// ============================================================
+
 function onOrderDateChange() {
     const dateInput = document.getElementById('order-delivery-date');
     const bannerContainer = document.getElementById('order-corriente-banner');
@@ -2673,6 +2935,7 @@ function onOrderDateChange() {
         } else {
             const disponibles = info.disponibles;
             const fmt = window.formatearCantidadProduccion || (v => String(v));
+            const esAyer = info.esBloqueDiaAnterior === true;
             
             let colorDisponible = '#10b981';
             let bgDisponible = '#10b98115';
@@ -2688,12 +2951,26 @@ function onOrderDateChange() {
                 borderColor = '#f59e0b';
             }
             
+            // ============================================================
+            // 🆕 CORRECCIÓN #6: Título según si es bloque de ayer
+            // ============================================================
+            const tituloProduccion = esAyer
+                ? `<span style="font-weight: 700; color: #8b5cf6; font-size: 13px;">🌙 Prod. ayer: ${info.bloqueTexto}</span>`
+                : `<span style="font-weight: 700; color: #8b5cf6; font-size: 13px;">🔨 Horario de producción: ${info.bloqueTexto}</span>`;
+            
+            const iconoProduccion = esAyer ? '🌙' : '🔨';
+            
             prodInfoContainer.innerHTML = `
-                <div style="background: ${bgDisponible}; border: 2px solid ${borderColor}; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px;">
+                <div style="background: ${bgDisponible}; border: 2px solid ${esAyer ? '#8b5cf6' : borderColor}; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px;">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                        <span style="font-size: 20px;">🔨</span>
-                        <span style="font-weight: 700; color: ${colorDisponible}; font-size: 13px;">Horario de producción: ${info.bloqueTexto}</span>
+                        <span style="font-size: 20px;">${iconoProduccion}</span>
+                        ${tituloProduccion}
                     </div>
+                    ${esAyer ? `
+                        <div style="font-size: 11px; color: #8b5cf6; background: #8b5cf615; padding: 4px 8px; border-radius: 6px; margin-bottom: 6px; border-left: 2px solid #8b5cf6;">
+                            💡 Esta producción se hace en el bloque del día anterior (${info.fechaBloqueReal}).
+                        </div>
+                    ` : ''}
                     <div style="display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px;">
                         <span style="background: var(--bg); padding: 3px 10px; border-radius: 8px;">
                             📋 Pedidos: <strong>${info.pedidos}/${fmt(info.cantidadProduccion)}</strong>
@@ -2707,7 +2984,7 @@ function onOrderDateChange() {
                             ${disponibles === 0 ? '⛔ COMPLETO' : `✅ ${fmt(disponibles)} disponibles`}
                         </span>
                     </div>
-                    ${info.notas ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 6px;">📝 ${info.notas}</div>` : ''}
+                    ${info.notas ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 6px;">📝 ${info.notes || info.notas}</div>` : ''}
                 </div>
             `;
         }
@@ -2990,7 +3267,7 @@ async function submitOrderForm(isEdit) {
 
 // ============================================================
 // VER PEDIDO EN DETALLE
-// 🆕 v2.1.12: Modo solo-lectura si el usuario no puede procesar
+// 🆕 CORRECCIÓN #6: producción del día anterior visible
 // ============================================================
 
 async function viewOrder(id) {
@@ -2998,7 +3275,6 @@ async function viewOrder(id) {
         const order = await window.OrdersModule.getOrder(id);
         if (!order) { window.showToast('❌ Pedido no encontrado', 'error'); return; }
         
-        // 🆕 v2.1.12: Verificar permisos
         const permisos = checkOrderPermission(order);
         const bloqueado = !permisos.puede;
         
@@ -3039,16 +3315,29 @@ async function viewOrder(id) {
         const corrienteSection = getSeccionCorrienteHTML(order.delivery_date.split('T')[0]);
         const auditoriaSection = renderAuditoriaHTML(order);
         
+        // ============================================================
+        // 🆕 CORRECCIÓN #6: Info de producción con soporte de bloque ayer
+        // ============================================================
         const prodInfo = getProduccionInfo(order.delivery_date.split('T')[0]);
         const fmt = window.formatearCantidadProduccion || (v => String(v));
         
         let produccionSection = '';
         if (prodInfo.tieneProduccion) {
+            const esAyer = prodInfo.esBloqueDiaAnterior === true;
+            
             produccionSection = `
-                <div style="background: linear-gradient(135deg, #8b5cf615 0%, #8b5cf608 100%); border: 1px solid #8b5cf6; border-radius: 8px; padding: 10px 12px; margin: 10px 0;">
+                <div style="background: linear-gradient(135deg, #8b5cf615 0%, #8b5cf608 100%); border: ${esAyer ? '2px dashed' : '1px solid'} #8b5cf6; border-radius: 8px; padding: 10px 12px; margin: 10px 0;">
                     <div style="font-size: 13px; font-weight: 600; color: #8b5cf6; margin-bottom: 4px;">
-                        🔨 Horario de producción: ${prodInfo.bloqueTexto}
+                        ${esAyer 
+                            ? `🌙 Producción del día anterior: ${prodInfo.bloqueTexto}` 
+                            : `🔨 Horario de producción: ${prodInfo.bloqueTexto}`
+                        }
                     </div>
+                    ${esAyer ? `
+                        <div style="font-size: 11px; color: #8b5cf6; background: #8b5cf615; padding: 3px 8px; border-radius: 6px; margin-bottom: 4px; border-left: 2px solid #8b5cf6; font-style: italic;">
+                            📅 Bloque real: ${prodInfo.fechaBloqueReal}
+                        </div>
+                    ` : ''}
                     <div style="font-size: 12px; color: var(--text-light);">
                         📋 Pedidos: ${prodInfo.pedidos}/${fmt(prodInfo.cantidadProduccion)}
                         ${prodInfo.notas ? ` · 📝 ${prodInfo.notas}` : ''}
@@ -3057,7 +3346,6 @@ async function viewOrder(id) {
             `;
         }
         
-        // 🆕 v2.1.12: Aviso de bloqueo
         let avisoBloqueo = '';
         if (bloqueado) {
             const recetasList = permisos.recetasBloqueadas && permisos.recetasBloqueadas.length > 0
@@ -3093,7 +3381,6 @@ async function viewOrder(id) {
         let statusButtons = '';
         const currentStatus = order.status;
         
-        // 🆕 v2.1.12: Solo mostrar botones de acción si NO está bloqueado
         if (!bloqueado && currentStatus !== 'cancelled' && currentStatus !== 'delivered' && currentStatus !== 'waiting_bought') {
             const statusOptions = [
                 { value: 'confirmed', label: '✅ Confirmar', color: 'primary' },
@@ -3206,7 +3493,6 @@ async function viewOrder(id) {
 }
 
 async function abrirEdicionDesdeVista(orderId) {
-    // 🆕 v2.1.12: Verificar permisos
     const permisos = checkOrderPermission(orderId);
     if (!permisos.puede) {
         window.showToast('🔒 ' + permisos.razon, 'error', 5000);
@@ -3221,7 +3507,6 @@ async function abrirEdicionDesdeVista(orderId) {
 async function updateOrderStatusAndReload(orderId, status) {
     if (!orderId) { window.showToast('❌ ID no válido', 'error'); return; }
     
-    // 🆕 v2.1.12: Verificar permisos ANTES de mostrar el confirm
     const permisos = checkOrderPermission(orderId);
     if (!permisos.puede) {
         window.showToast('🔒 ' + permisos.razon, 'error', 5000);
@@ -3337,7 +3622,6 @@ function showWaitingListProcessingModal(order, candidatos, cantidadDisponible) {
     const existingModal = document.getElementById('waiting-processing-modal');
     if (existingModal) existingModal.remove();
     
-    // 🆕 v2.1.12: Filtrar candidatos bloqueados
     const candidatosFiltrados = candidatos.filter(c => {
         const permisos = checkOrderPermission(c.order_id);
         return permisos.puede;
@@ -3713,16 +3997,16 @@ window.reporteListaEspera = reporteListaEspera;
 window.getProduccionInfo = getProduccionInfo;
 window.renderProduccionInfoHTML = renderProduccionInfoHTML;
 
-// 🆕 v2.1.12: Helpers de bloqueo
 window.checkOrderPermission = checkOrderPermission;
 window.renderBadgeSoloLectura = renderBadgeSoloLectura;
 window.aplicarBloqueoVisual = aplicarBloqueoVisual;
 
-console.log('📦 UI Orders Module v2.1.12 (ENTREGA B: corrección #2 - bloqueo por recetas no compartidas)');
-console.log('   ✅ loadOrders(): muestra badge 🔒 y oculta botones en pedidos bloqueados');
-console.log('   ✅ viewOrder(): modo solo-lectura con aviso explicativo');
-console.log('   ✅ showOrderForm(): bloquea si el pedido está bloqueado');
-console.log('   ✅ updateOrderStatusAndReload(): verifica permisos ANTES del confirm');
-console.log('   ✅ renderWaitingManagerContent(): filtra pedidos bloqueados');
-console.log('   ✅ procesarSeleccionListaEspera(): filtra candidatos bloqueados');
-console.log('   ✅ procesarClienteDeListaUI/cancelarClienteDeListaUI/eliminarClienteDeListaUI: verifican permisos');
+window.selectDiasExcluidos = selectDiasExcluidos;
+window.limpiarDiasExcluidos = limpiarDiasExcluidos;
+window.updateExclusionSummary = updateExclusionSummary;
+
+console.log('📦 UI Orders Module v2.1.15 (CORRECCIÓN #6: producción del día anterior)');
+console.log('   ✅ getProduccionInfo(): detecta es_bloque_dia_anterior y expone fechaBloqueReal');
+console.log('   ✅ renderProduccionInfoHTML(): badge "🌙 Prod. ayer" cuando corresponde');
+console.log('   ✅ onOrderDateChange(): aviso morado cuando la producción es del día anterior');
+console.log('   ✅ viewOrder(): muestra el bloque de producción del día anterior con estilo diferenciado');

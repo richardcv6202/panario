@@ -4,6 +4,15 @@
 // AÑADIDO FASE B (170926 v2):
 //   - Restricción para no-admin: solo lectura en productos
 //   - Solo el admin puede crear, editar o eliminar productos
+// 🆕 ENTREGA B (221026 v3): CAPACIDAD MÁXIMA DE PRODUCCIÓN
+//   - ✅ NUEVO campo en el formulario: 🏭 Capacidad máx/bloque
+//     * Acepta decimales (0.5, 1.5, 7, 12.5)
+//     * Valor 0 o vacío = sin límite definido
+//     * Se guarda en columna capacidad_max_bloque
+//   - ✅ Validación: acepta cualquier número real >= 0
+//   - ✅ Ayuda contextual clara
+//   - ✅ Badge "🏭 X/bloque" en la tarjeta si el producto tiene CMPBC
+//   - ✅ Texto explicativo en el formulario
 // ============================================================
 
 // ============================================================
@@ -18,7 +27,10 @@ function canModifyProductos() {
     }
 }
 
-// Renderizar vista de productos
+// ============================================================
+// RENDER VISTA DE PRODUCTOS
+// ============================================================
+
 function renderProductosView() {
     const main = document.getElementById('mainContent');
     const isAdmin = canModifyProductos();
@@ -62,7 +74,10 @@ function renderProductosView() {
     loadProductos();
 }
 
-// Cargar productos
+// ============================================================
+// CARGAR PRODUCTOS
+// ============================================================
+
 async function loadProductos() {
     const container = document.getElementById('productos-list');
     if (!container) return;
@@ -93,6 +108,13 @@ async function loadProductos() {
             const costoPorProducto = costo.success ? costo.costo_por_producto : 0;
             const margen = costoPorProducto > 0 ? ((item.precio_venta - costoPorProducto) / item.precio_venta * 100) : 0;
             
+            // 🆕 ENTREGA B: Badge de CMPBC si está definido
+            const cmpbc = parseFloat(item.capacidad_max_bloque);
+            const tieneCMPBC = !isNaN(cmpbc) && cmpbc > 0;
+            const cmpbcBadge = tieneCMPBC 
+                ? `<span style="font-size: 11px; background: #8b5cf620; color: #8b5cf6; padding: 2px 8px; border-radius: 8px; font-weight: 600; border: 1px solid #8b5cf6;">🏭 ${formatearCMPBC(cmpbc)}/bloque</span>` 
+                : '';
+            
             // 🆕 FASE A.4: Línea de auditoría
             let auditoriaLine = '';
             if (item.created_by) {
@@ -118,9 +140,10 @@ async function loadProductos() {
                 <div class="card" style="border-left: 4px solid ${item.receta_id ? '#10b981' : '#f59e0b'};">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
                         <div style="flex: 1; min-width: 0;">
-                            <h3 style="margin: 0; font-size: 16px;">
+                            <h3 style="margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                 ${item.nombre}
                                 ${item.receta_id ? '<span style="font-size: 12px; color: #10b981;">📋 Con receta</span>' : '<span style="font-size: 12px; color: #f59e0b;">⚠️ Sin receta</span>'}
+                                ${cmpbcBadge}
                             </h3>
                             ${item.descripcion ? `<p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-light);">${item.descripcion}</p>` : ''}
                             <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; font-size: 13px; color: var(--text-light);">
@@ -160,6 +183,22 @@ async function loadProductos() {
 }
 
 // ============================================================
+// 🆕 ENTREGA B: HELPER PARA FORMATEAR CMPBC
+// ============================================================
+
+/**
+ * Formatea el CMPBC para mostrarlo en la UI.
+ * Ej: 7 → "7", 7.5 → "7.5", 7.25 → "7.25"
+ */
+function formatearCMPBC(cmpbc) {
+    if (cmpbc === null || cmpbc === undefined) return '—';
+    const num = parseFloat(cmpbc);
+    if (isNaN(num)) return '—';
+    if (num === Math.floor(num)) return String(Math.floor(num));
+    return num.toFixed(2).replace(/\.?0+$/, '');
+}
+
+// ============================================================
 // FORMULARIO: AGREGAR/EDITAR PRODUCTO (SOLO ADMIN)
 // ============================================================
 
@@ -196,6 +235,15 @@ function showProductoForm(itemId = null) {
     };
     
     const renderForm = (item, recetas) => {
+        // 🆕 ENTREGA B: Valor del CMPBC (o vacío si no está definido)
+        let cmpbcValue = '';
+        if (item && item.capacidad_max_bloque !== null && item.capacidad_max_bloque !== undefined) {
+            const parsed = parseFloat(item.capacidad_max_bloque);
+            if (!isNaN(parsed) && parsed > 0) {
+                cmpbcValue = formatearCMPBC(parsed);
+            }
+        }
+        
         const modal = document.createElement('div');
         modal.id = 'producto-modal';
         modal.style.cssText = `
@@ -206,7 +254,7 @@ function showProductoForm(itemId = null) {
         `;
         
         modal.innerHTML = `
-            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 450px; width: 100%; max-height: 90vh; overflow-y: auto;">
+            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 480px; width: 100%; max-height: 92vh; overflow-y: auto;">
                 <h2 style="margin: 0 0 16px 0;">${isEdit ? '✏️ Editar Producto' : '📝 Nuevo Producto'}</h2>
                 
                 <form id="producto-form" style="display: flex; flex-direction: column; gap: 12px;">
@@ -262,6 +310,38 @@ function showProductoForm(itemId = null) {
                         </div>
                     </div>
                     
+                    <!-- 🆕 ENTREGA B: Campo de Capacidad Máxima por Bloque -->
+                    <div style="background: linear-gradient(135deg, #8b5cf610 0%, #8b5cf605 100%); border: 2px dashed #8b5cf6; border-radius: 10px; padding: 12px 14px; margin-top: 4px;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <span style="font-size: 22px;">🏭</span>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 700; font-size: 14px; color: #8b5cf6;">
+                                    Capacidad máxima por bloque
+                                </div>
+                                <div style="font-size: 11px; color: var(--text-light); margin-top: 1px;">
+                                    ¿Cuántas unidades puedes producir en un bloque de corriente?
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label style="font-size: 12px; font-weight: 600; color: #8b5cf6;">
+                                🏭 Capacidad máx/bloque
+                            </label>
+                            <input type="number" id="producto-cmpbc" 
+                                   value="${cmpbcValue}" 
+                                   step="any" 
+                                   min="0" 
+                                   placeholder="Ej: 7 (opcional)"
+                                   style="width: 100%; padding: 8px 12px; border: 2px solid #8b5cf6; border-radius: 8px; background: var(--bg-input); color: var(--text); font-size: 15px;">
+                            <small style="font-size: 11px; color: var(--text-light); display: block; margin-top: 4px; line-height: 1.5;">
+                                💡 <strong>Opcional.</strong> Déjalo vacío o en 0 si no quieres calcular bloques automáticamente.
+                                <br>📦 Acepta cualquier número real: 6, 6.5, 7.25, etc.
+                                <br>🎯 Se usa en el modal de producción para sugerir automáticamente cuántos bloques usar.
+                            </small>
+                        </div>
+                    </div>
+                    
                     <div style="display: flex; gap: 8px; margin-top: 8px;">
                         <button type="submit" class="btn primary" style="flex: 1;">
                             💾 Guardar
@@ -275,6 +355,11 @@ function showProductoForm(itemId = null) {
         `;
         
         document.body.appendChild(modal);
+        
+        // Enfocar el primer campo
+        setTimeout(() => {
+            document.getElementById('producto-nombre')?.focus();
+        }, 100);
         
         const form = document.getElementById('producto-form');
         form.addEventListener('submit', async (e) => {
@@ -292,6 +377,10 @@ function showProductoForm(itemId = null) {
     loadItemData();
 }
 
+// ============================================================
+// ENVIAR FORMULARIO DE PRODUCTO
+// ============================================================
+
 async function submitProducto(isEdit) {
     // 🆕 FASE B: Doble verificación
     if (!canModifyProductos()) {
@@ -306,6 +395,23 @@ async function submitProducto(isEdit) {
     const cantidad = parseInt(document.getElementById('producto-cantidad').value) || 1;
     const recetaId = document.getElementById('producto-receta').value;
     
+    // 🆕 ENTREGA B: Leer el CMPBC
+    const cmpbcRaw = document.getElementById('producto-cmpbc').value?.trim() || '';
+    let capacidadMaxBloque = null;
+    
+    if (cmpbcRaw !== '') {
+        const parsed = parseFloat(cmpbcRaw);
+        if (!isNaN(parsed) && parsed > 0) {
+            capacidadMaxBloque = parsed;
+        } else if (!isNaN(parsed) && parsed === 0) {
+            // 0 explícito = sin límite (equivalente a vacío)
+            capacidadMaxBloque = null;
+        } else if (isNaN(parsed)) {
+            window.showToast('⚠️ El CMPBC debe ser un número válido', 'error', 4000);
+            return;
+        }
+    }
+    
     if (!nombre) {
         window.showToast('⚠️ El nombre es obligatorio', 'error');
         return;
@@ -316,13 +422,19 @@ async function submitProducto(isEdit) {
         return;
     }
     
+    if (cantidad < 1) {
+        window.showToast('⚠️ La cantidad por unidad debe ser al menos 1', 'error');
+        return;
+    }
+    
     const itemData = {
         nombre: nombre,
         descripcion: descripcion || null,
         precio_venta: precio,
         unidad_venta: unidad,
         cantidad_por_unidad: cantidad,
-        receta_id: recetaId || null
+        receta_id: recetaId || null,
+        capacidad_max_bloque: capacidadMaxBloque
     };
     
     const idInput = document.getElementById('producto-id');
@@ -334,7 +446,14 @@ async function submitProducto(isEdit) {
         const result = await window.DBModule.saveProducto(itemData);
         if (result.success) {
             window.closeProductoModal();
-            window.showToast(`✅ Producto ${isEdit ? 'actualizado' : 'agregado'} correctamente`, 'success');
+            
+            // 🆕 ENTREGA B: Mensaje enriquecido si se guardó el CMPBC
+            let mensaje = `✅ Producto ${isEdit ? 'actualizado' : 'agregado'} correctamente`;
+            if (capacidadMaxBloque !== null) {
+                mensaje += ` · 🏭 ${formatearCMPBC(capacidadMaxBloque)}/bloque`;
+            }
+            window.showToast(mensaje, 'success', 4000);
+            
             loadProductos();
         } else {
             window.showToast('❌ Error: ' + result.error, 'error');
@@ -356,9 +475,15 @@ async function deleteProducto(id) {
         return;
     }
     
+    const producto = await window.DBModule.getProducto(id);
+    if (!producto) {
+        window.showToast('❌ Producto no encontrado', 'error');
+        return;
+    }
+    
     const confirm = await window.ModalModule.showConfirm({
         title: 'Eliminar producto',
-        message: '¿Seguro que quieres eliminar este producto?',
+        message: `¿Seguro que quieres eliminar el producto "${producto.nombre}"?\n\n${producto.capacidad_max_bloque ? `🏭 CMPBC: ${formatearCMPBC(producto.capacidad_max_bloque)}/bloque\n\n` : ''}⚠️ Esta acción se puede revertir desde "Limpiar datos eliminados".`,
         confirmText: 'Sí, eliminar',
         cancelText: 'Cancelar',
         icon: '🗑️',
@@ -404,5 +529,11 @@ window.loadProductos = loadProductos;
 window.showProductoForm = showProductoForm;
 window.deleteProducto = deleteProducto;
 window.canModifyProductos = canModifyProductos;
+window.formatearCMPBC = formatearCMPBC;
 
-console.log('📦 UI Productos Module cargado correctamente v2.0.2 (FASE A.4 + FASE B: solo lectura para no-admin)');
+console.log('📦 UI Productos Module cargado correctamente v2.1.19 (ENTREGA B: campo CMPBC añadido)');
+console.log('   🆕 Novedades:');
+console.log('      • Campo 🏭 Capacidad máx/bloque en el formulario');
+console.log('      • Badge "🏭 X/bloque" en tarjetas de producto');
+console.log('      • Validación de CMPBC (acepta cualquier número real >= 0)');
+console.log('      • Helper formatearCMPBC() para mostrar valores');

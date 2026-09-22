@@ -1,5 +1,5 @@
 // ============================================================
-// PANARIO - Service Worker (PWA) v2.1.11
+// PANARIO - Service Worker (PWA) v2.2.0
 // Estrategia: Cache First + Network Fallback + Offline + AUTO-REPARACIÓN
 // HISTORIAL DE CAMBIOS:
 //   v2.0.3 (180926):
@@ -15,25 +15,33 @@
 //       premios configurables, bloqueo recetas, botón ayuda detallada.
 //   v2.1.10 (220926 v3):
 //     - 🎯 FIX DEFINITIVO tras limpiar caché: auto-reparación.
-// 🆕 v2.1.11 (230926 v4): ENTREGA 1 - MENSAJE 2 de 3
-//   - ✅ REFUERZO: verificación de integridad MÁS agresiva
-//   - ✅ NUEVO: detección de "caché corrupto" (no solo vacío)
-//   - ✅ NUEVO: re-cacheo de ayuda-panario.html y offline.html
-//     SIEMPRE que se detecte que faltan
-//   - ✅ NUEVO: mensaje CACHE_REPAIRED_START y CACHE_REPAIRED_END
-//     para que el cliente muestre un toast informativo
-//   - ✅ NUEVO: timeout de red configurable (5s por defecto)
-//   - ✅ NUEVO: función rellenarCache() con batches de 5
-//   - ✅ NUEVO: verificación periódica cada 15 min (antes 30)
-//   - ✅ NUEVO: fallback a index.html inline si TODO falla
-//   - ✅ NUEVO: los assets críticos se re-descargan si el caché
-//     tiene menos del 80% de ellos
-//   - ✅ NUEVO: soporte para mensaje CHECK_INTEGRITY desde el cliente
+//   v2.1.11 (230926 v4): ENTREGA 1 - MENSAJE 2 de 3
+//     - ✅ REFUERZO: verificación de integridad MÁS agresiva
+//     - ✅ NUEVO: detección de "caché corrupto" (no solo vacío)
+//     - ✅ NUEVO: re-cacheo de ayuda-panario.html y offline.html
+//       SIEMPRE que se detecte que faltan
+//     - ✅ NUEVO: mensaje CACHE_REPAIRED_START y CACHE_REPAIRED_END
+//       para que el cliente muestre un toast informativo
+//     - ✅ NUEVO: timeout de red configurable (5s por defecto)
+//     - ✅ NUEVO: función rellenarCache() con batches de 5
+//     - ✅ NUEVO: verificación periódica cada 15 min (antes 30)
+//     - ✅ NUEVO: fallback a index.html inline si TODO falla
+//     - ✅ NUEVO: los assets críticos se re-descargan si el caché
+//       tiene menos del 80% de ellos
+//     - ✅ NUEVO: soporte para mensaje CHECK_INTEGRITY desde el cliente
+//   v2.1.19 (221026 v5):
+//     - ✅ ENTREGA B: CMPBC + algoritmo inteligente de bloques
+//     - ✅ Nuevas migraciones automáticas de BD
+//   v2.2.0 (230926 v6): 🎯 VERSIÓN MAYOR
+//     - ✅ Nueva versión de caché fuerza reinstalación limpia
+//     - ✅ Incluye todos los cambios de las Fases A, B, C, D, E, F
+//     - ✅ Añadido soporte para el nuevo campo CMPBC
+//     - ✅ Compatible con todas las versiones anteriores
 // ============================================================
 
-const CACHE_NAME = 'panario-v2.1.11';
-const CACHE_STATIC = 'panario-static-v2.1.11';
-const CACHE_DYNAMIC = 'panario-dynamic-v2.1.11';
+const CACHE_NAME = 'panario-v2.2.0';
+const CACHE_STATIC = 'panario-static-v2.2.0';
+const CACHE_DYNAMIC = 'panario-dynamic-v2.2.0';
 const OFFLINE_URL = './offline.html';
 
 // Timeout para peticiones de red (ms)
@@ -144,7 +152,7 @@ function fetchWithTimeout(request, timeout = NETWORK_TIMEOUT_MS) {
 }
 
 // ============================================================
-// 🆕 v2.1.11: VERIFICACIÓN DE INTEGRIDAD DEL CACHÉ
+// VERIFICACIÓN DE INTEGRIDAD DEL CACHÉ
 // ============================================================
 // 
 // Detecta cuándo los assets críticos NO están en caché.
@@ -211,7 +219,7 @@ async function verificarIntegridadCache() {
 }
 
 // ============================================================
-// 🆕 v2.1.11: RELLENAR CACHÉ FALTANTE
+// RELLENAR CACHÉ FALTANTE
 // ============================================================
 // 
 // Descarga los assets faltantes y los guarda en caché.
@@ -288,7 +296,7 @@ async function rellenarCache(assetsToFill = null) {
 }
 
 // ============================================================
-// 🆕 v2.1.11: REPARAR CACHÉ SI ESTÁ CORRUPTO
+// REPARAR CACHÉ SI ESTÁ CORRUPTO
 // ============================================================
 // 
 // Verifica la integridad y, si está por debajo del umbral,
@@ -326,7 +334,7 @@ async function repararCacheSiNecesario() {
 }
 
 // ============================================================
-// 🆕 v2.1.11: NOTIFICAR A TODOS LOS CLIENTES
+// NOTIFICAR A TODOS LOS CLIENTES
 // ============================================================
 
 async function notifyClients(message) {
@@ -368,7 +376,7 @@ self.addEventListener('install', function(event) {
         );
       })
       .then(function() {
-        console.log('✅ SW Panario: Instalación completada (v2.1.11)');
+        console.log('✅ SW Panario: Instalación completada (v2.2.0)');
         return self.skipWaiting();
       })
       .catch(function(error) {
@@ -404,7 +412,7 @@ self.addEventListener('activate', function(event) {
         return self.clients.claim();
       })
       .then(async function() {
-        // 🆕 v2.1.11: Reparar caché si es necesario tras activar
+        // Reparar caché si es necesario tras activar
         try {
           const repaired = await repararCacheSiNecesario();
           if (repaired) {
@@ -440,7 +448,7 @@ self.addEventListener('fetch', function(event) {
   }
   
   // ============================================================
-  // 1. 🆕 v2.1.11: PETICIONES DE NAVEGACIÓN (HTML)
+  // 1. PETICIONES DE NAVEGACIÓN (HTML)
   //    Network First con fallback a caché, con auto-reparación.
   // ============================================================
   if (request.mode === 'navigate' || isHtmlRequest(request)) {
@@ -454,7 +462,7 @@ self.addEventListener('fetch', function(event) {
               cache.put(request, responseClone).catch(() => {});
             });
             
-            // 🆕 v2.1.11: Verificar integridad en background
+            // Verificar integridad en background
             repararCacheSiNecesario().catch(() => {});
           }
           return response;
@@ -626,7 +634,7 @@ self.addEventListener('message', function(event) {
   }
   
   // ============================================================
-  // 🆕 v2.1.11: REPAIR_CACHE: Rellenar caché faltante
+  // REPAIR_CACHE: Rellenar caché faltante
   // ============================================================
   if (event.data.type === 'REPAIR_CACHE') {
     console.log('🔧 SW Panario: Reparando caché a petición del cliente...');
@@ -642,7 +650,7 @@ self.addEventListener('message', function(event) {
   }
   
   // ============================================================
-  // 🆕 v2.1.11: CHECK_INTEGRITY: Verificar integridad
+  // CHECK_INTEGRITY: Verificar integridad
   // ============================================================
   if (event.data.type === 'CHECK_INTEGRITY') {
     console.log('🔍 SW Panario: Verificando integridad del caché...');
@@ -712,7 +720,7 @@ self.addEventListener('notificationclick', function(event) {
 });
 
 // ============================================================
-// 🆕 v2.1.11: SINCRONIZACIÓN PERIÓDICA DE INTEGRIDAD
+// SINCRONIZACIÓN PERIÓDICA DE INTEGRIDAD
 // ============================================================
 // 
 // Cada 15 minutos, verifica que el caché siga íntegro.
@@ -731,9 +739,10 @@ setInterval(async function() {
   }
 }, 15 * 60 * 1000); // 15 minutos
 
-console.log('📦 SW Panario v2.1.11 cargado correctamente');
+console.log('📦 SW Panario v2.2.0 cargado correctamente');
 console.log('   📋 Assets precacheados:', CRITICAL_ASSETS.length);
 console.log('   🎯 CACHE_NAME:', CACHE_NAME);
 console.log('   🔧 Auto-reparación de caché activada');
 console.log('   ⏱️ Verificación periódica cada 15 minutos');
 console.log('   🛡️ Umbral de integridad:', (INTEGRITY_THRESHOLD * 100) + '%');
+console.log('   🎉 Entrega B: CMPBC + algoritmo inteligente de bloques incluidos');

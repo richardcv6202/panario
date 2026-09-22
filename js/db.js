@@ -28,16 +28,22 @@
 // 🆕 FASE 7.1 (210926 v7): FIX CRÍTICO - LA TABLA NO SE CREABA
 // 🆕 FASE 7.2 (210926 v8): CANTIDAD DE PRODUCCIÓN ACEPTA DECIMALES
 // 🆕 ENTREGA 6 (230926 v9): LOGS DETALLADOS PARA DIAGNÓSTICO
-//   - ✅ Logs detallados en ensureCalendarioProduccionTable()
-//   - ✅ Logs detallados en migrateCantidadProduccionToReal()
-//   - ✅ Logs detallados en saveProduccion() con datos de entrada y resultado
-//   - ✅ Logs detallados en getProduccionByFecha()
-//   - ✅ Logs detallados en deleteProduccion()
-//   - ✅ Logs detallados en getProduccionRango()
-//   - ✅ Verificación de que la tabla existe antes de operar
-//   - ✅ Mensajes de error más descriptivos con contexto
-//   - ✅ Try/catch reforzados en cada operación crítica
-//   - ✅ Nivel de log (INFO/WARN/ERROR) con prefijos claros
+// 🆕 v2.1.14 (210926 v10): CORRECCIÓN #6 - BLOQUE DEL DÍA ANTERIOR
+// 🆕 CORRECCIÓN #7 (211026 v11): PRODUCCIÓN POR RANGO DE FECHAS
+// 🆕 ENTREGA B (221026 v12): CAPACIDAD MÁXIMA DE PRODUCCIÓN
+//   - ✅ NUEVA columna en productos: capacidad_max_bloque REAL DEFAULT NULL
+//   - ✅ Migración automática idempotente
+//   - ✅ saveProducto() guarda capacidad_max_bloque
+//   - ✅ getProductos() y getProducto() devuelven capacidad_max_bloque
+//   - ✅ NUEVAS funciones auxiliares:
+//     * getCMPBCProducto(productoId) → devuelve el CMPBC o null
+//     * getProductosConCMPBC() → solo productos con CMPBC > 0
+//   - ✅ NUEVAS columnas en calendario_produccion:
+//     * bloques_usados INTEGER DEFAULT 1
+//     * distribucion_bloques TEXT (JSON)
+//   - ✅ saveProduccion() acepta los nuevos campos (opcionales)
+//   - ✅ Compatibilidad total: si no se pasan los campos, se comportan
+//     como antes (0/null)
 // ============================================================
 
 let db = null;
@@ -64,6 +70,7 @@ const UUID_PREFIXES = {
     'sales':                  'sal_',
     'transactions':           'trx_',
     'products':               'prd_',
+    'productos':              'prd_',
     'recipes':                'rec_',
     'recipe_ingredients':     'rin_',
     'receta_insumos':         'ris_',
@@ -287,9 +294,11 @@ async function initDB() {
         await ensureDashboardColumns(db);
         await ensurePremiosConfigTable(db);
         await ensureDiasSinVentasTable(db);
-        // 🆕 FASE 7.1 + 7.2: Crear tabla de producción ANTES de migrar uuid
         await ensureCalendarioProduccionTable(db);
-        await migrateCantidadProduccionToReal(db);    // 🆕 FASE 7.2
+        await migrateCantidadProduccionToReal(db);
+        // 🆕 ENTREGA B: migración CMPBC + columnas de bloques
+        await ensureCapacidadMaxBloqueColumn(db);
+        await ensureBloquesDistribucionColumns(db);
         await ensureNegociosTable(db);
         await ensureNegocioIdColumn(db);
         await migrateToMultiUser(db);
@@ -318,13 +327,100 @@ async function initDB() {
 }
 
 // ============================================================
-// 🆕 FASE 7.1 + 7.2 + ENTREGA 6: TABLA CALENDARIO_PRODUCCION
+// 🆕 ENTREGA B: MIGRACIÓN CMPBC
 // ============================================================
-//
-// CRÍTICO: Esta función debe crear la tabla si no existe.
-// 
-// 🆕 ENTREGA 6: Logs detallados en cada paso para facilitar
-// el diagnóstico si algo falla.
+
+/**
+ * 🆕 ENTREGA B: Asegura que exista la columna `capacidad_max_bloque`
+ * en la tabla `productos`.
+ * 
+ * Semántica:
+ *   - NULL  → sin límite definido (comportamiento anterior)
+ *   - > 0   → capacidad máxima por bloque de corriente
+ *   - 0     → sin límite (equivalente a NULL)
+ */
+async function ensureCapacidadMaxBloqueColumn(db) {
+    const LOG_PREFIX = '🔧 [ensureCapacidadMaxBloqueColumn]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        // Verificar que la tabla productos existe
+        const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='productos'`);
+        if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ La tabla productos no existe todavía. Se creará con la migración.`);
+            return;
+        }
+        
+        // Verificar columnas
+        const columns = db.exec('PRAGMA table_info(productos)');
+        const columnNames = columns[0]?.values?.map(row => row[1]) || [];
+        
+        if (!columnNames.includes('capacidad_max_bloque')) {
+            try {
+                db.run('ALTER TABLE productos ADD COLUMN capacidad_max_bloque REAL DEFAULT NULL');
+                console.log(`${LOG_PREFIX} ✅ Columna capacidad_max_bloque añadida`);
+            } catch (e) {
+                console.warn(`${LOG_PREFIX} ⚠️ Error añadiendo columna:`, e.message);
+            }
+        } else {
+            console.log(`${LOG_PREFIX} ✓ Columna capacidad_max_bloque ya existe`);
+        }
+        
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+/**
+ * 🆕 ENTREGA B: Asegura que existan las columnas `bloques_usados` y
+ * `distribucion_bloques` en la tabla `calendario_produccion`.
+ */
+async function ensureBloquesDistribucionColumns(db) {
+    const LOG_PREFIX = '🔧 [ensureBloquesDistribucionColumns]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='calendario_produccion'`);
+        if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ Tabla calendario_produccion no existe, se omite.`);
+            return;
+        }
+        
+        const columns = db.exec('PRAGMA table_info(calendario_produccion)');
+        const columnNames = columns[0]?.values?.map(row => row[1]) || [];
+        
+        const requiredColumns = [
+            { name: 'bloques_usados', type: 'INTEGER DEFAULT 1' },
+            { name: 'distribucion_bloques', type: 'TEXT' }
+        ];
+        
+        let addedCount = 0;
+        for (const col of requiredColumns) {
+            if (!columnNames.includes(col.name)) {
+                try {
+                    db.run(`ALTER TABLE calendario_produccion ADD COLUMN ${col.name} ${col.type}`);
+                    console.log(`${LOG_PREFIX} ✅ Columna añadida: ${col.name}`);
+                    addedCount++;
+                } catch (e) {
+                    console.warn(`${LOG_PREFIX} ⚠️ Error añadiendo ${col.name}:`, e.message);
+                }
+            } else {
+                console.log(`${LOG_PREFIX} ✓ Columna ${col.name} ya existe`);
+            }
+        }
+        
+        console.log(`${LOG_PREFIX} ✅ ${addedCount} columnas nuevas añadidas`);
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+// ============================================================
+// TABLA CALENDARIO_PRODUCCION
 // ============================================================
 
 async function ensureCalendarioProduccionTable(db) {
@@ -332,11 +428,7 @@ async function ensureCalendarioProduccionTable(db) {
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
-        console.log(`${LOG_PREFIX} Verificando tabla calendario_produccion...`);
         
-        // ============================================================
-        // PASO 1: Crear tabla si no existe
-        // ============================================================
         console.log(`${LOG_PREFIX} PASO 1: CREATE TABLE IF NOT EXISTS...`);
         
         db.run(`
@@ -349,6 +441,10 @@ async function ensureCalendarioProduccionTable(db) {
                 bloque_index INTEGER NOT NULL,
                 cantidad_produccion REAL DEFAULT 0,
                 notas TEXT,
+                es_bloque_dia_anterior INTEGER DEFAULT 0,
+                fecha_bloque_real TEXT,
+                bloques_usados INTEGER DEFAULT 1,
+                distribucion_bloques TEXT,
                 created_by INTEGER,
                 modified_by INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -360,50 +456,27 @@ async function ensureCalendarioProduccionTable(db) {
         `);
         console.log(`${LOG_PREFIX} ✅ Tabla creada o ya existía`);
         
-        // ============================================================
-        // PASO 2: Crear índices
-        // ============================================================
-        console.log(`${LOG_PREFIX} PASO 2: Creando índices...`);
-        
         try {
             db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_negocio ON calendario_produccion(negocio_id)');
-            console.log(`${LOG_PREFIX}   ✅ Índice negocio_id OK`);
-        } catch (e) {
-            console.warn(`${LOG_PREFIX}   ⚠️ Error creando idx negocio:`, e.message);
-        }
-        
-        try {
             db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_fecha ON calendario_produccion(fecha)');
-            console.log(`${LOG_PREFIX}   ✅ Índice fecha OK`);
-        } catch (e) {
-            console.warn(`${LOG_PREFIX}   ⚠️ Error creando idx fecha:`, e.message);
-        }
-        
-        try {
             db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_calendario_produccion_unique ON calendario_produccion(negocio_id, fecha) WHERE deleted_at IS NULL');
-            console.log(`${LOG_PREFIX}   ✅ Índice único (negocio, fecha) OK`);
+            console.log(`${LOG_PREFIX} ✅ Índices OK`);
         } catch (e) {
-            console.warn(`${LOG_PREFIX}   ⚠️ Error creando idx único:`, e.message);
+            console.warn(`${LOG_PREFIX} ⚠️ Error creando índices:`, e.message);
         }
         
-        // ============================================================
-        // PASO 3: Verificar columnas existentes
-        // ============================================================
-        console.log(`${LOG_PREFIX} PASO 3: Verificando columnas...`);
-        
+        // Verificar/añadir columnas
         const columns = db.exec('PRAGMA table_info(calendario_produccion)');
         const columnNames = columns[0]?.values?.map(row => row[1]) || [];
-        console.log(`${LOG_PREFIX}   📋 Columnas actuales (${columnNames.length}):`, columnNames.join(', '));
-        
-        // ============================================================
-        // PASO 4: Añadir columnas faltantes (si la tabla existía)
-        // ============================================================
-        console.log(`${LOG_PREFIX} PASO 4: Verificando columnas requeridas...`);
         
         const requiredColumns = [
             { name: 'bloque_index', type: 'INTEGER DEFAULT 1' },
             { name: 'cantidad_produccion', type: 'REAL DEFAULT 0' },
             { name: 'notas', type: 'TEXT' },
+            { name: 'es_bloque_dia_anterior', type: 'INTEGER DEFAULT 0' },
+            { name: 'fecha_bloque_real', type: 'TEXT' },
+            { name: 'bloques_usados', type: 'INTEGER DEFAULT 1' },
+            { name: 'distribucion_bloques', type: 'TEXT' },
             { name: 'created_by', type: 'INTEGER' },
             { name: 'modified_by', type: 'INTEGER' },
             { name: 'uuid', type: 'TEXT' },
@@ -412,46 +485,28 @@ async function ensureCalendarioProduccionTable(db) {
             { name: 'deleted_at', type: 'DATETIME DEFAULT NULL' }
         ];
         
-        let addedCount = 0;
         for (const col of requiredColumns) {
             if (!columnNames.includes(col.name)) {
                 try {
                     db.run(`ALTER TABLE calendario_produccion ADD COLUMN ${col.name} ${col.type}`);
-                    console.log(`${LOG_PREFIX}   ✅ Columna añadida: ${col.name} (${col.type})`);
-                    addedCount++;
+                    console.log(`${LOG_PREFIX}   ✅ Columna añadida: ${col.name}`);
                 } catch (e) {
                     console.warn(`${LOG_PREFIX}   ⚠️ No se pudo añadir ${col.name}:`, e.message);
                 }
-            } else {
-                console.log(`${LOG_PREFIX}   ✓ Columna ya existe: ${col.name}`);
             }
         }
         
-        console.log(`${LOG_PREFIX} ✅ ${addedCount} columnas nuevas añadidas`);
-        console.log(`${LOG_PREFIX} ✅ Tabla calendario_produccion verificada correctamente`);
+        console.log(`${LOG_PREFIX} ✅ Tabla calendario_produccion verificada`);
         console.log(`${LOG_PREFIX} ========== FIN ==========`);
         
     } catch (error) {
-        console.error(`${LOG_PREFIX} ❌ ERROR CRÍTICO:`, error);
-        console.error(`${LOG_PREFIX}   Mensaje:`, error.message);
-        console.error(`${LOG_PREFIX}   Stack:`, error.stack);
+        console.error(`${LOG_PREFIX} ❌ ERROR:`, error);
         throw error;
     }
 }
 
 // ============================================================
-// 🆕 FASE 7.2 + ENTREGA 6: MIGRACIÓN DE CANTIDAD_PRODUCCION A REAL
-// ============================================================
-// 
-// SQLite no permite ALTER COLUMN, así que hay que:
-//   1. Detectar si la columna es INTEGER
-//   2. Crear tabla nueva con REAL
-//   3. Copiar datos
-//   4. Eliminar tabla vieja
-//   5. Renombrar tabla nueva
-//   6. Recrear índices
-// 
-// 🆕 ENTREGA 6: Logs detallados en cada paso
+// MIGRACIÓN DE CANTIDAD_PRODUCCION A REAL
 // ============================================================
 
 async function migrateCantidadProduccionToReal(db) {
@@ -459,11 +514,7 @@ async function migrateCantidadProduccionToReal(db) {
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
-        console.log(`${LOG_PREFIX} Verificando tipo de cantidad_produccion...`);
         
-        // ============================================================
-        // PASO 1: Obtener el tipo actual
-        // ============================================================
         const pragmaResult = db.exec('PRAGMA table_info(calendario_produccion)');
         if (pragmaResult.length === 0 || !pragmaResult[0].values) {
             console.log(`${LOG_PREFIX} ℹ️ Tabla no existe, nada que migrar`);
@@ -474,38 +525,23 @@ async function migrateCantidadProduccionToReal(db) {
         const cantidadCol = columnas.find(col => col[1] === 'cantidad_produccion');
         
         if (!cantidadCol) {
-            console.log(`${LOG_PREFIX} ℹ️ Columna cantidad_produccion no existe, nada que migrar`);
+            console.log(`${LOG_PREFIX} ℹ️ Columna no existe`);
             return;
         }
         
         const tipoActual = String(cantidadCol[2]).toUpperCase();
-        console.log(`${LOG_PREFIX} 📊 Tipo actual de cantidad_produccion: ${tipoActual}`);
+        console.log(`${LOG_PREFIX} 📊 Tipo actual: ${tipoActual}`);
         
-        // ============================================================
-        // PASO 2: Si ya es REAL, no hacer nada
-        // ============================================================
         if (tipoActual.includes('REAL') || tipoActual.includes('FLOAT') || 
             tipoActual.includes('DOUBLE') || tipoActual.includes('NUMERIC')) {
-            console.log(`${LOG_PREFIX} ✅ La columna ya acepta decimales (${tipoActual})`);
-            console.log(`${LOG_PREFIX} ========== FIN (sin cambios) ==========`);
+            console.log(`${LOG_PREFIX} ✅ La columna ya acepta decimales`);
             return;
         }
         
-        // ============================================================
-        // PASO 3: Migrar de INTEGER a REAL
-        // ============================================================
-        console.log(`${LOG_PREFIX} 🔄 Migrando cantidad_produccion de ${tipoActual} a REAL...`);
+        console.log(`${LOG_PREFIX} 🔄 Migrando a REAL...`);
         
-        // Contar registros antes
-        const countBefore = db.exec('SELECT COUNT(*) as n FROM calendario_produccion');
-        const registrosAntes = countBefore[0]?.values?.[0]?.[0] || 0;
-        console.log(`${LOG_PREFIX}   📊 Registros existentes: ${registrosAntes}`);
-        
-        // Deshabilitar foreign keys temporalmente
         try { db.run('PRAGMA foreign_keys = OFF'); } catch (e) {}
         
-        // 3.1. Crear tabla temporal con REAL
-        console.log(`${LOG_PREFIX}   PASO 3.1: Creando tabla temporal...`);
         db.run(`
             CREATE TABLE calendario_produccion_new (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -516,6 +552,10 @@ async function migrateCantidadProduccionToReal(db) {
                 bloque_index INTEGER NOT NULL,
                 cantidad_produccion REAL DEFAULT 0,
                 notas TEXT,
+                es_bloque_dia_anterior INTEGER DEFAULT 0,
+                fecha_bloque_real TEXT,
+                bloques_usados INTEGER DEFAULT 1,
+                distribucion_bloques TEXT,
                 created_by INTEGER,
                 modified_by INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -524,57 +564,46 @@ async function migrateCantidadProduccionToReal(db) {
                 uuid TEXT
             )
         `);
-        console.log(`${LOG_PREFIX}   ✅ Tabla temporal creada`);
         
-        // 3.2. Copiar datos
-        console.log(`${LOG_PREFIX}   PASO 3.2: Copiando datos...`);
+        const columnasOriginales = columnas.map(col => col[1]);
+        const tieneEsBloqueAyer = columnasOriginales.includes('es_bloque_dia_anterior');
+        const tieneFechaBloqueReal = columnasOriginales.includes('fecha_bloque_real');
+        const tieneBloquesUsados = columnasOriginales.includes('bloques_usados');
+        const tieneDistribucion = columnasOriginales.includes('distribucion_bloques');
+        
+        const esBloqueAyerSelect = tieneEsBloqueAyer ? 'es_bloque_dia_anterior' : '0';
+        const fechaBloqueRealSelect = tieneFechaBloqueReal ? 'fecha_bloque_real' : 'NULL';
+        const bloquesUsadosSelect = tieneBloquesUsados ? 'bloques_usados' : '1';
+        const distribucionSelect = tieneDistribucion ? 'distribucion_bloques' : 'NULL';
+        
         db.run(`
             INSERT INTO calendario_produccion_new 
             (id, negocio_id, fecha, hora_inicio, hora_fin, bloque_index, 
-             cantidad_produccion, notas, created_by, modified_by, 
-             created_at, updated_at, deleted_at, uuid)
+             cantidad_produccion, notas, es_bloque_dia_anterior, fecha_bloque_real,
+             bloques_usados, distribucion_bloques,
+             created_by, modified_by, created_at, updated_at, deleted_at, uuid)
             SELECT id, negocio_id, fecha, hora_inicio, hora_fin, bloque_index, 
-                   cantidad_produccion, notas, created_by, modified_by, 
-                   created_at, updated_at, deleted_at, uuid
+                   cantidad_produccion, notas, ${esBloqueAyerSelect}, ${fechaBloqueRealSelect},
+                   ${bloquesUsadosSelect}, ${distribucionSelect},
+                   created_by, modified_by, created_at, updated_at, deleted_at, uuid
             FROM calendario_produccion
         `);
         
-        const countAfter = db.exec('SELECT COUNT(*) as n FROM calendario_produccion_new');
-        const registrosCopiados = countAfter[0]?.values?.[0]?.[0] || 0;
-        console.log(`${LOG_PREFIX}   ✅ Datos copiados: ${registrosCopiados}/${registrosAntes}`);
-        
-        // 3.3. Eliminar tabla vieja
-        console.log(`${LOG_PREFIX}   PASO 3.3: Eliminando tabla vieja...`);
         db.run('DROP TABLE calendario_produccion');
-        console.log(`${LOG_PREFIX}   ✅ Tabla vieja eliminada`);
-        
-        // 3.4. Renombrar tabla nueva
-        console.log(`${LOG_PREFIX}   PASO 3.4: Renombrando tabla temporal...`);
         db.run('ALTER TABLE calendario_produccion_new RENAME TO calendario_produccion');
-        console.log(`${LOG_PREFIX}   ✅ Tabla renombrada`);
         
-        // 3.5. Recrear índices
-        console.log(`${LOG_PREFIX}   PASO 3.5: Recreando índices...`);
         try {
             db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_negocio ON calendario_produccion(negocio_id)');
             db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_fecha ON calendario_produccion(fecha)');
             db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_calendario_produccion_unique ON calendario_produccion(negocio_id, fecha) WHERE deleted_at IS NULL');
-            console.log(`${LOG_PREFIX}   ✅ Índices recreados`);
-        } catch (e) {
-            console.warn(`${LOG_PREFIX}   ⚠️ Error recreando índices:`, e.message);
-        }
+        } catch (e) {}
         
-        // 3.6. Reactivar foreign keys
         try { db.run('PRAGMA foreign_keys = ON'); } catch (e) {}
         
-        console.log(`${LOG_PREFIX} ✅ Migración completada: cantidad_produccion ahora es REAL`);
-        console.log(`${LOG_PREFIX} ========== FIN (migrado) ==========`);
+        console.log(`${LOG_PREFIX} ✅ Migración completada`);
         
     } catch (error) {
-        console.error(`${LOG_PREFIX} ❌ ERROR migrando cantidad_produccion:`, error);
-        console.error(`${LOG_PREFIX}   Mensaje:`, error.message);
-        console.error(`${LOG_PREFIX}   Stack:`, error.stack);
-        // No relanzar el error para no bloquear la inicialización
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
     }
 }
 
@@ -603,18 +632,14 @@ async function ensureAuditColumns(db) {
                 try {
                     db.run(`ALTER TABLE ${table} ADD COLUMN created_by INTEGER`);
                     addedColumns++;
-                } catch (e) {
-                    console.warn(`⚠️ No se pudo añadir created_by a ${table}:`, e.message);
-                }
+                } catch (e) {}
             }
             
             if (!columnNames.includes('modified_by')) {
                 try {
                     db.run(`ALTER TABLE ${table} ADD COLUMN modified_by INTEGER`);
                     addedColumns++;
-                } catch (e) {
-                    console.warn(`⚠️ No se pudo añadir modified_by a ${table}:`, e.message);
-                }
+                } catch (e) {}
             }
             
             try {
@@ -622,9 +647,7 @@ async function ensureAuditColumns(db) {
                 db.run(`CREATE INDEX IF NOT EXISTS idx_${table}_modified_by ON ${table}(modified_by)`);
             } catch (e) {}
             
-        } catch (error) {
-            console.warn(`⚠️ Error auditando ${table}:`, error.message);
-        }
+        } catch (error) {}
     }
     
     console.log(`✅ FASE A.4: Auditoría verificada (${addedColumns} columnas añadidas)`);
@@ -643,17 +666,13 @@ async function ensureUuidColumns(db) {
     for (const table of tables) {
         try {
             const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='${table}'`);
-            if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
-                console.warn(`⚠️ FASE 1.3.1: tabla ${table} no existe, omitiendo`);
-                continue;
-            }
+            if (tableCheck.length === 0 || tableCheck[0].values.length === 0) continue;
             
             const columns = db.exec(`PRAGMA table_info(${table})`);
             const columnNames = columns[0]?.values?.map(row => row[1]) || [];
             
             if (!columnNames.includes('uuid')) {
                 db.run(`ALTER TABLE ${table} ADD COLUMN uuid TEXT`);
-                console.log(`✅ FASE 1.3.1: ${table}: columna uuid añadida`);
                 totalAdded++;
             }
             
@@ -664,20 +683,15 @@ async function ensureUuidColumns(db) {
                     db.run(`CREATE INDEX IF NOT EXISTS idx_${table}_uuid ON ${table}(uuid)`);
                 } catch (e2) {}
             }
-            
-        } catch (error) {
-            console.warn(`⚠️ FASE 1.3.1: Error procesando ${table}:`, error.message);
-        }
+        } catch (error) {}
     }
     
-    console.log(`✅ FASE 1.3.1: Migración completada (${totalAdded} columnas uuid añadidas)`);
+    console.log(`✅ FASE 1.3.1: ${totalAdded} columnas uuid añadidas`);
 }
 
 async function migrateUuids(db) {
     const tables = Object.keys(UUID_PREFIXES);
     let totalUpdated = 0;
-    
-    console.log(`🔄 FASE 1.3.1: Migrando UUIDs en registros existentes...`);
     
     for (const table of tables) {
         try {
@@ -690,36 +704,22 @@ async function migrateUuids(db) {
             
             const countResult = db.exec(`SELECT COUNT(*) as count FROM ${table} WHERE uuid IS NULL`);
             const count = countResult[0]?.values?.[0]?.[0] || 0;
-            
             if (count === 0) continue;
-            
-            console.log(`🔄 FASE 1.3.1: ${table}: ${count} registros sin UUID → generando...`);
             
             const idsResult = db.exec(`SELECT id FROM ${table} WHERE uuid IS NULL`);
             const ids = idsResult[0]?.values?.map(row => row[0]) || [];
             
             const prefix = UUID_PREFIXES[table] || 'gen_';
-            let updated = 0;
-            
             for (const id of ids) {
                 try {
-                    const uuid = generateUuid(prefix);
-                    db.run(`UPDATE ${table} SET uuid = ? WHERE id = ?`, [uuid, id]);
-                    updated++;
-                } catch (e) {
-                    console.warn(`⚠️ FASE 1.3.1: error actualizando ${table}#${id}:`, e.message);
-                }
+                    db.run(`UPDATE ${table} SET uuid = ? WHERE id = ?`, [generateUuid(prefix), id]);
+                    totalUpdated++;
+                } catch (e) {}
             }
-            
-            totalUpdated += updated;
-            console.log(`✅ FASE 1.3.1: ${table}: ${updated} UUIDs generados`);
-            
-        } catch (error) {
-            console.warn(`⚠️ FASE 1.3.1: Error migrando UUIDs en ${table}:`, error.message);
-        }
+        } catch (error) {}
     }
     
-    console.log(`✅ FASE 1.3.1: Migración de UUIDs completada (${totalUpdated} registros actualizados)`);
+    console.log(`✅ FASE 1.3.1: ${totalUpdated} UUIDs generados`);
 }
 
 // ============================================================
@@ -728,28 +728,15 @@ async function migrateUuids(db) {
 
 function forceReloadFromStorage() {
     try {
-        console.log('🔄 Forzando recarga de BD desde localStorage...');
-        
         const saved = localStorage.getItem('panario_db_data');
-        if (!saved) {
-            console.warn('⚠️ No hay datos en localStorage');
-            return false;
-        }
+        if (!saved) return false;
         
-        if (db) {
-            try { db.close(); } catch (e) {}
-        }
+        if (db) { try { db.close(); } catch (e) {} }
         
         dbInitialized = false;
-        window.dbInitialized = false;
-        window._dbInitialized = false;
-        
         const savedData = new Uint8Array(JSON.parse(saved));
         
-        if (!sqlJsInstance) {
-            console.error('❌ sqlJsInstance no disponible');
-            return false;
-        }
+        if (!sqlJsInstance) return false;
         
         db = new sqlJsInstance.Database(savedData);
         dbInitialized = true;
@@ -764,9 +751,7 @@ function forceReloadFromStorage() {
 
 function reloadFromStorageAndNotify() {
     const success = forceReloadFromStorage();
-    if (success) {
-        saveAndNotify();
-    }
+    if (success) saveAndNotify();
     return success;
 }
 
@@ -834,9 +819,7 @@ async function ensurePremiosConfigTable(db) {
         }
 
         console.log('✅ Tabla premios_config verificada');
-    } catch (error) {
-        console.warn('⚠️ Error verificando premios_config:', error.message);
-    }
+    } catch (error) {}
 }
 
 async function ensureDiasSinVentasTable(db) {
@@ -865,9 +848,7 @@ async function ensureDiasSinVentasTable(db) {
         } catch (e) {}
         
         console.log('✅ Tabla dias_sin_ventas verificada');
-    } catch (error) {
-        console.warn('⚠️ Error verificando dias_sin_ventas:', error.message);
-    }
+    } catch (error) {}
 }
 
 async function ensureNegociosTable(db) {
@@ -1323,7 +1304,9 @@ async function createAllTables(db) {
         db.run(`CREATE TABLE IF NOT EXISTS productos (
             id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, negocio_id INTEGER,
             nombre TEXT NOT NULL, descripcion TEXT, precio_venta REAL NOT NULL DEFAULT 0,
-            unidad_venta TEXT DEFAULT 'unidad', cantidad_por_unidad INTEGER DEFAULT 1, receta_id INTEGER,
+            unidad_venta TEXT DEFAULT 'unidad', cantidad_por_unidad INTEGER DEFAULT 1, 
+            receta_id INTEGER,
+            capacidad_max_bloque REAL DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             deleted_at DATETIME DEFAULT NULL, FOREIGN KEY (user_id) REFERENCES users(id),
             FOREIGN KEY (receta_id) REFERENCES recipes(id))`);
@@ -1452,7 +1435,6 @@ async function createAllTables(db) {
             deleted_at DATETIME DEFAULT NULL, uuid TEXT,
             FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
 
-        // 🆕 FASE 7.2 + ENTREGA 6: Tabla calendario_produccion con cantidad REAL
         db.run(`CREATE TABLE IF NOT EXISTS calendario_produccion (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             negocio_id INTEGER NOT NULL,
@@ -1462,6 +1444,10 @@ async function createAllTables(db) {
             bloque_index INTEGER NOT NULL,
             cantidad_produccion REAL DEFAULT 0,
             notas TEXT,
+            es_bloque_dia_anterior INTEGER DEFAULT 0,
+            fecha_bloque_real TEXT,
+            bloques_usados INTEGER DEFAULT 1,
+            distribucion_bloques TEXT,
             created_by INTEGER,
             modified_by INTEGER,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -1641,18 +1627,67 @@ function execute(sql, params = []) {
 }
 
 // ============================================================
-// 🆕 FASE 7.2 + ENTREGA 6: FUNCIONES CRUD DE CALENDARIO_PRODUCCION
+// 🆕 ENTREGA B: FUNCIONES CMPBC
 // ============================================================
-// 
-// 🆕 ENTREGA 6: Logs detallados en cada función para facilitar
-// el diagnóstico de errores.
+
+/**
+ * 🆕 ENTREGA B: Obtiene el CMPBC (Capacidad Máxima de Producción
+ * por Bloque de Corriente) de un producto.
+ * 
+ * @param {number} productoId - ID del producto
+ * @returns {number|null} - El valor o null si no está definido o es 0
+ */
+function getCMPBCProducto(productoId) {
+    try {
+        if (!productoId) return null;
+        const results = query(
+            'SELECT capacidad_max_bloque FROM productos WHERE id = ? AND deleted_at IS NULL',
+            [productoId]
+        );
+        if (results.length === 0) return null;
+        const valor = parseFloat(results[0].capacidad_max_bloque);
+        if (isNaN(valor) || valor <= 0) return null;
+        return valor;
+    } catch (e) {
+        console.warn('⚠️ Error en getCMPBCProducto:', e);
+        return null;
+    }
+}
+
+/**
+ * 🆕 ENTREGA B: Devuelve todos los productos que tienen un CMPBC definido
+ * (mayor que 0).
+ * 
+ * @returns {Array} - Array de productos con CMPBC
+ */
+function getProductosConCMPBC() {
+    try {
+        const negocioId = getNegocioIdActual();
+        return query(
+            `SELECT id, nombre, capacidad_max_bloque, receta_id, precio_venta, unidad_venta 
+             FROM productos 
+             WHERE negocio_id = ? 
+               AND deleted_at IS NULL 
+               AND capacidad_max_bloque IS NOT NULL 
+               AND capacidad_max_bloque > 0
+             ORDER BY nombre`,
+            [negocioId]
+        );
+    } catch (e) {
+        console.warn('⚠️ Error en getProductosConCMPBC:', e);
+        return [];
+    }
+}
+
+window.getCMPBCProducto = getCMPBCProducto;
+window.getProductosConCMPBC = getProductosConCMPBC;
+
+// ============================================================
+// CALENDARIO_PRODUCCION
 // ============================================================
 
 /**
  * Obtiene la configuración de producción para una fecha.
- * 
- * @param {string} fecha - Fecha en formato YYYY-MM-DD
- * @returns {Object|null} Registro o null si no existe
  */
 function getProduccionByFecha(fecha) {
     const LOG_PREFIX = '🔍 [getProduccionByFecha]';
@@ -1681,7 +1716,7 @@ function getProduccionByFecha(fecha) {
         
         if (result.length > 0) {
             const reg = result[0];
-            console.log(`${LOG_PREFIX} ✅ Encontrado: id=${reg.id}, cantidad=${reg.cantidad_produccion}, bloque=${reg.bloque_index}`);
+            console.log(`${LOG_PREFIX} ✅ Encontrado: id=${reg.id}, cantidad=${reg.cantidad_produccion}, bloque=${reg.bloque_index}, es_dia_ant=${reg.es_bloque_dia_anterior}`);
             return reg;
         }
         
@@ -1690,16 +1725,23 @@ function getProduccionByFecha(fecha) {
         
     } catch (e) {
         console.error(`${LOG_PREFIX} ❌ Error:`, e);
-        console.error(`${LOG_PREFIX}   Mensaje:`, e.message);
         return null;
     }
 }
 
 /**
- * Guarda la producción con cantidad DECIMAL.
+ * Guarda la producción con cantidad DECIMAL y soporte para bloque del día anterior.
  * 
- * @param {Object} data - { fecha, hora_inicio, hora_fin, bloque_index, cantidad_produccion, notas }
- * @returns {Object} { success, id, updated, error }
+ * 🆕 ENTREGA B: Acepta también los campos `bloques_usados` y
+ * `distribucion_bloques` (JSON string) — opcionales.
+ * 
+ * @param {Object} data - { 
+ *     fecha, hora_inicio, hora_fin, bloque_index, cantidad_produccion, notas,
+ *     es_bloque_dia_anterior (0|1, opcional),
+ *     fecha_bloque_real (YYYY-MM-DD, opcional),
+ *     bloques_usados (number, opcional, default 1),
+ *     distribucion_bloques (string JSON, opcional)
+ * }
  */
 function saveProduccion(data) {
     const LOG_PREFIX = '💾 [saveProduccion]';
@@ -1708,9 +1750,6 @@ function saveProduccion(data) {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
         console.log(`${LOG_PREFIX} Datos recibidos:`, JSON.stringify(data));
         
-        // ============================================================
-        // PASO 1: Validaciones previas
-        // ============================================================
         const negocioId = getNegocioIdActual();
         const currentUserId = getCurrentUserId();
         
@@ -1733,7 +1772,6 @@ function saveProduccion(data) {
             return { success: false, error: 'Falta el bloque de producción' };
         }
         
-        // parseFloat para aceptar decimales
         const cantidad = parseFloat(data.cantidad_produccion);
         
         if (isNaN(cantidad) || cantidad <= 0) {
@@ -1741,13 +1779,16 @@ function saveProduccion(data) {
             return { success: false, error: 'La cantidad a producir debe ser mayor a 0' };
         }
         
+        const esBloqueDiaAnterior = data.es_bloque_dia_anterior ? 1 : 0;
+        const fechaBloqueReal = data.fecha_bloque_real || null;
+        const bloquesUsados = parseInt(data.bloques_usados) || 1;
+        const distribucionBloques = data.distribucion_bloques || null;
+        
         console.log(`${LOG_PREFIX}   ✅ Validaciones OK`);
         console.log(`${LOG_PREFIX}   📊 Cantidad parseada: ${cantidad}`);
-        
-        // ============================================================
-        // PASO 2: Verificar que la tabla existe
-        // ============================================================
-        console.log(`${LOG_PREFIX} PASO 2: Verificando que la tabla existe...`);
+        console.log(`${LOG_PREFIX}   🔨 Es bloque día anterior: ${esBloqueDiaAnterior}`);
+        console.log(`${LOG_PREFIX}   📅 Fecha bloque real: ${fechaBloqueReal || '(ninguna)'}`);
+        console.log(`${LOG_PREFIX}   🔢 Bloques usados: ${bloquesUsados}`);
         
         const db = getDB();
         const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='calendario_produccion'`);
@@ -1759,24 +1800,18 @@ function saveProduccion(data) {
         
         console.log(`${LOG_PREFIX}   ✅ Tabla existe`);
         
-        // ============================================================
-        // PASO 3: Verificar si ya existe un registro para esa fecha
-        // ============================================================
         console.log(`${LOG_PREFIX} PASO 3: Buscando registro existente...`);
-        
         const existing = getProduccionByFecha(data.fecha);
         
         if (existing) {
-            // ============================================================
-            // PASO 4A: Actualizar registro existente
-            // ============================================================
             console.log(`${LOG_PREFIX} PASO 4A: Actualizando registro existente id=${existing.id}`);
-            console.log(`${LOG_PREFIX}   Valores: hora_inicio=${data.hora_inicio}, hora_fin=${data.hora_fin}, bloque=${data.bloque_index}, cantidad=${cantidad}`);
             
             execute(`
                 UPDATE calendario_produccion 
                 SET hora_inicio = ?, hora_fin = ?, bloque_index = ?, 
                     cantidad_produccion = ?, notas = ?, 
+                    es_bloque_dia_anterior = ?, fecha_bloque_real = ?,
+                    bloques_usados = ?, distribucion_bloques = ?,
                     modified_by = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ? AND negocio_id = ?
             `, [
@@ -1785,6 +1820,10 @@ function saveProduccion(data) {
                 data.bloque_index,
                 cantidad,
                 data.notas || null,
+                esBloqueDiaAnterior,
+                fechaBloqueReal,
+                bloquesUsados,
+                distribucionBloques,
                 currentUserId,
                 existing.id,
                 negocioId
@@ -1795,20 +1834,18 @@ function saveProduccion(data) {
             return { success: true, id: existing.id, updated: true };
             
         } else {
-            // ============================================================
-            // PASO 4B: Crear nuevo registro
-            // ============================================================
             console.log(`${LOG_PREFIX} PASO 4B: Creando nuevo registro`);
             
             const uuid = generateUuidForTable('calendario_produccion');
             console.log(`${LOG_PREFIX}   UUID generado: ${uuid}`);
-            console.log(`${LOG_PREFIX}   Valores: negocio_id=${negocioId}, fecha=${data.fecha}, hora_inicio=${data.hora_inicio}, hora_fin=${data.hora_fin}, bloque_index=${data.bloque_index}, cantidad=${cantidad}, notas=${data.notas || 'null'}, created_by=${currentUserId}`);
             
             const result = execute(`
                 INSERT INTO calendario_produccion 
                 (negocio_id, fecha, hora_inicio, hora_fin, bloque_index, 
-                 cantidad_produccion, notas, created_by, modified_by, uuid)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 cantidad_produccion, notas, es_bloque_dia_anterior, fecha_bloque_real,
+                 bloques_usados, distribucion_bloques,
+                 created_by, modified_by, uuid)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `, [
                 negocioId,
                 data.fecha,
@@ -1817,6 +1854,10 @@ function saveProduccion(data) {
                 data.bloque_index,
                 cantidad,
                 data.notas || null,
+                esBloqueDiaAnterior,
+                fechaBloqueReal,
+                bloquesUsados,
+                distribucionBloques,
                 currentUserId,
                 currentUserId,
                 uuid
@@ -1824,33 +1865,16 @@ function saveProduccion(data) {
             
             console.log(`${LOG_PREFIX} ✅ INSERT ejecutado. lastId=${result.lastId}`);
             
-            // Verificar que se guardó
-            const verify = query(
-                `SELECT id, cantidad_produccion FROM calendario_produccion WHERE uuid = ?`,
-                [uuid]
-            );
-            
-            if (verify.length > 0) {
-                console.log(`${LOG_PREFIX} ✅ Verificación OK: id=${verify[0].id}, cantidad=${verify[0].cantidad_produccion}`);
-            } else {
-                console.warn(`${LOG_PREFIX} ⚠️ No se pudo verificar el INSERT`);
-            }
-            
             console.log(`${LOG_PREFIX} ========== FIN (creado) ==========`);
             return { success: true, id: result.lastId, updated: false };
         }
         
     } catch (e) {
         console.error(`${LOG_PREFIX} ❌ EXCEPCIÓN:`, e);
-        console.error(`${LOG_PREFIX}   Mensaje:`, e.message);
-        console.error(`${LOG_PREFIX}   Stack:`, e.stack);
         return { success: false, error: e.message };
     }
 }
 
-/**
- * Elimina (soft-delete) la configuración de producción de una fecha.
- */
 function deleteProduccion(fecha) {
     const LOG_PREFIX = '🗑️ [deleteProduccion]';
     
@@ -1860,12 +1884,10 @@ function deleteProduccion(fecha) {
         
         const negocioId = getNegocioIdActual();
         if (!negocioId) {
-            console.error(`${LOG_PREFIX} ❌ No hay negocioId`);
             return { success: false, error: 'Falta negocio' };
         }
         
         if (!fecha) {
-            console.error(`${LOG_PREFIX} ❌ Falta la fecha`);
             return { success: false, error: 'Falta fecha' };
         }
         
@@ -1881,21 +1903,16 @@ function deleteProduccion(fecha) {
         
     } catch (e) {
         console.error(`${LOG_PREFIX} ❌ Error:`, e);
-        console.error(`${LOG_PREFIX}   Mensaje:`, e.message);
         return { success: false, error: e.message };
     }
 }
 
-/**
- * Obtiene todas las configuraciones de producción en un rango.
- */
 function getProduccionRango(desde, hasta) {
     const LOG_PREFIX = '🔍 [getProduccionRango]';
     
     try {
         const negocioId = getNegocioIdActual();
         if (!negocioId) {
-            console.warn(`${LOG_PREFIX} ⚠️ No hay negocioId`);
             return [];
         }
         
@@ -1920,6 +1937,217 @@ function getProduccionRango(desde, hasta) {
 }
 
 // ============================================================
+// CORRECCIÓN #7: PRODUCCIÓN POR RANGO DE FECHAS
+// ============================================================
+
+/**
+ * Guarda la MISMA configuración de producción para múltiples fechas
+ * en una sola transacción.
+ * 
+ * @param {Object} data - {
+ *     fechas: string[],
+ *     hora_inicio: 'HH:MM',
+ *     hora_fin: 'HH:MM',
+ *     bloque_index: number,
+ *     cantidad_produccion: number,
+ *     notas: string|null,
+ *     es_bloque_dia_anterior: 0|1,
+ *     fecha_bloque_real: string|null
+ * }
+ * @returns {Object} { success, creados, actualizados, total, fallidos }
+ */
+function saveProduccionRango(data) {
+    const LOG_PREFIX = '💾💾 [saveProduccionRango]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        const negocioId = getNegocioIdActual();
+        const currentUserId = getCurrentUserId();
+        
+        if (!negocioId) {
+            return { success: false, error: 'No hay negocio activo', creados: 0, actualizados: 0, total: 0, fallidos: [] };
+        }
+        
+        if (!Array.isArray(data.fechas) || data.fechas.length === 0) {
+            return { success: false, error: 'Debes proporcionar al menos una fecha', creados: 0, actualizados: 0, total: 0, fallidos: [] };
+        }
+        
+        if (!data.bloque_index) {
+            return { success: false, error: 'Falta el bloque de producción', creados: 0, actualizados: 0, total: 0, fallidos: [] };
+        }
+        
+        const cantidad = parseFloat(data.cantidad_produccion);
+        if (isNaN(cantidad) || cantidad <= 0) {
+            return { success: false, error: 'La cantidad a producir debe ser mayor a 0', creados: 0, actualizados: 0, total: 0, fallidos: [] };
+        }
+        
+        if (!data.hora_inicio || !data.hora_fin) {
+            return { success: false, error: 'Faltan horas del bloque', creados: 0, actualizados: 0, total: 0, fallidos: [] };
+        }
+        
+        const esBloqueDiaAnterior = data.es_bloque_dia_anterior ? 1 : 0;
+        const fechaBloqueReal = data.fecha_bloque_real || null;
+        
+        console.log(`${LOG_PREFIX} Procesando ${data.fechas.length} fechas...`);
+        
+        const db = getDB();
+        const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='calendario_produccion'`);
+        if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
+            return { success: false, error: 'La tabla de producción no existe. Reinicia la app.', creados: 0, actualizados: 0, total: 0, fallidos: [] };
+        }
+        
+        let creados = 0;
+        let actualizados = 0;
+        const fallidos = [];
+        
+        db.run('BEGIN TRANSACTION');
+        
+        try {
+            for (const fecha of data.fechas) {
+                try {
+                    const existing = query(
+                        `SELECT id FROM calendario_produccion 
+                         WHERE negocio_id = ? AND fecha = ? AND deleted_at IS NULL 
+                         LIMIT 1`,
+                        [negocioId, fecha]
+                    );
+                    
+                    if (existing.length > 0) {
+                        db.run(`
+                            UPDATE calendario_produccion 
+                            SET hora_inicio = ?, hora_fin = ?, bloque_index = ?, 
+                                cantidad_produccion = ?, notas = ?, 
+                                es_bloque_dia_anterior = ?, fecha_bloque_real = ?,
+                                modified_by = ?, updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ? AND negocio_id = ?
+                        `, [
+                            data.hora_inicio, data.hora_fin, data.bloque_index,
+                            cantidad, data.notas || null,
+                            esBloqueDiaAnterior, fechaBloqueReal,
+                            currentUserId, existing[0].id, negocioId
+                        ]);
+                        actualizados++;
+                    } else {
+                        const uuid = generateUuidForTable('calendario_produccion');
+                        db.run(`
+                            INSERT INTO calendario_produccion 
+                            (negocio_id, fecha, hora_inicio, hora_fin, bloque_index, 
+                             cantidad_produccion, notas, es_bloque_dia_anterior, fecha_bloque_real,
+                             created_by, modified_by, uuid)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        `, [
+                            negocioId, fecha, data.hora_inicio, data.hora_fin, data.bloque_index,
+                            cantidad, data.notas || null,
+                            esBloqueDiaAnterior, fechaBloqueReal,
+                            currentUserId, currentUserId, uuid
+                        ]);
+                        creados++;
+                    }
+                } catch (errFecha) {
+                    console.warn(`${LOG_PREFIX} ⚠️ Error en fecha ${fecha}:`, errFecha.message);
+                    fallidos.push(`${fecha}: ${errFecha.message}`);
+                }
+            }
+            
+            if (fallidos.length > 0) {
+                console.error(`${LOG_PREFIX} ❌ ${fallidos.length} fallos. ROLLBACK...`);
+                db.run('ROLLBACK');
+                return {
+                    success: false,
+                    error: `Fallaron ${fallidos.length} de ${data.fechas.length} fechas`,
+                    creados: 0, actualizados: 0, total: data.fechas.length, fallidos
+                };
+            }
+            
+            db.run('COMMIT');
+            saveAndNotify();
+            
+            console.log(`${LOG_PREFIX} ✅ Procesadas ${data.fechas.length} fechas: +${creados} nuevos, ~${actualizados} actualizados`);
+            
+            return {
+                success: true,
+                creados: creados,
+                actualizados: actualizados,
+                total: data.fechas.length,
+                fallidos: []
+            };
+            
+        } catch (errTrans) {
+            console.error(`${LOG_PREFIX} ❌ Error en transacción. ROLLBACK:`, errTrans);
+            try { db.run('ROLLBACK'); } catch (e) {}
+            return {
+                success: false, error: errTrans.message,
+                creados: 0, actualizados: 0, total: data.fechas.length, fallidos: []
+            };
+        }
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ EXCEPCIÓN:`, e);
+        return {
+            success: false, error: e.message,
+            creados: 0, actualizados: 0, total: 0, fallidos: []
+        };
+    }
+}
+
+function contarProduccionEnRango(desde, hasta) {
+    try {
+        const negocioId = getNegocioIdActual();
+        if (!negocioId || !desde || !hasta) {
+            return { total: 0, fechas: [] };
+        }
+        
+        const result = query(`
+            SELECT fecha FROM calendario_produccion 
+            WHERE negocio_id = ? 
+              AND fecha >= ? 
+              AND fecha <= ? 
+              AND deleted_at IS NULL
+            ORDER BY fecha ASC
+        `, [negocioId, desde, hasta]);
+        
+        return {
+            total: result.length,
+            fechas: result.map(r => r.fecha)
+        };
+    } catch (e) {
+        console.warn('⚠️ Error contando producción en rango:', e);
+        return { total: 0, fechas: [] };
+    }
+}
+
+function getProduccionRangoFechas(desde, hasta) {
+    try {
+        const negocioId = getNegocioIdActual();
+        if (!negocioId || !desde || !hasta) return {};
+        
+        const result = query(`
+            SELECT * FROM calendario_produccion 
+            WHERE negocio_id = ? 
+              AND fecha >= ? 
+              AND fecha <= ? 
+              AND deleted_at IS NULL
+        `, [negocioId, desde, hasta]);
+        
+        const mapa = {};
+        for (const reg of result) {
+            mapa[reg.fecha] = {
+                tiene: true,
+                cantidad: parseFloat(reg.cantidad_produccion) || 0,
+                bloque_index: reg.bloque_index,
+                es_bloque_dia_anterior: reg.es_bloque_dia_anterior === 1,
+                fecha_bloque_real: reg.fecha_bloque_real
+            };
+        }
+        return mapa;
+    } catch (e) {
+        console.warn('⚠️ Error obteniendo producción en rango:', e);
+        return {};
+    }
+}
+
+// ============================================================
 // BACKUP META
 // ============================================================
 
@@ -1938,7 +2166,7 @@ function writeBackupMeta(db, backupType) {
         db.run(`INSERT INTO ${BACKUP_META_TABLE} 
             (backup_type, backup_date, backup_version, backup_negocio_id, backup_negocio_nombre, backup_user, backup_user_role)
             VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-            backupType, new Date().toISOString(), '2.1.11', negocioId,
+            backupType, new Date().toISOString(), '2.1.19', negocioId,
             negocio?.nombre || 'Desconocido', user?.username || 'Desconocido',
             user?.is_admin === 1 ? 'admin' : 'user'
         ]);
@@ -2060,7 +2288,7 @@ function exportRecetasProductosSalva() {
 
         const salva = {
             _meta: {
-                app: 'Panario', version: '2.1.11', type: 'salva_recetas_productos',
+                app: 'Panario', version: '2.1.19', type: 'salva_recetas_productos',
                 exportDate: new Date().toISOString(), negocio_id: negocioId,
                 negocio_nombre: getNombreNegocioDB(),
                 counts: {
@@ -2245,22 +2473,32 @@ function saveProducto(productoData) {
     const currentUserId = getCurrentUserId();
 
     try {
+        // 🆕 ENTREGA B: Normalizar capacidad_max_bloque
+        let capacidadMax = null;
+        if (productoData.capacidad_max_bloque !== undefined && productoData.capacidad_max_bloque !== null && productoData.capacidad_max_bloque !== '') {
+            const parsed = parseFloat(productoData.capacidad_max_bloque);
+            if (!isNaN(parsed) && parsed > 0) capacidadMax = parsed;
+        }
+
         if (productoData.id) {
             execute(`UPDATE productos SET nombre = ?, descripcion = ?, precio_venta = ?, 
-                    unidad_venta = ?, cantidad_por_unidad = ?, receta_id = ?, modified_by = ?
+                    unidad_venta = ?, cantidad_por_unidad = ?, receta_id = ?, 
+                    capacidad_max_bloque = ?, modified_by = ?
                 WHERE id = ? AND negocio_id = ?`, [
                 productoData.nombre, productoData.descripcion || null,
                 productoData.precio_venta || 0, productoData.unidad_venta || 'unidad',
                 productoData.cantidad_por_unidad || 1, productoData.receta_id || null,
+                capacidadMax,
                 currentUserId, productoData.id, negocioId]);
             return { success: true, id: productoData.id };
         } else {
             const result = execute(`INSERT INTO productos 
-                (user_id, negocio_id, nombre, descripcion, precio_venta, unidad_venta, cantidad_por_unidad, receta_id, created_by, modified_by, uuid)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+                (user_id, negocio_id, nombre, descripcion, precio_venta, unidad_venta, cantidad_por_unidad, receta_id, capacidad_max_bloque, created_by, modified_by, uuid)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
                 user.id, negocioId, productoData.nombre, productoData.descripcion || null,
                 productoData.precio_venta || 0, productoData.unidad_venta || 'unidad',
                 productoData.cantidad_por_unidad || 1, productoData.receta_id || null,
+                capacidadMax,
                 currentUserId, currentUserId, generateUuidForTable('productos')]);
             return { success: true, id: result.lastId };
         }
@@ -3122,8 +3360,6 @@ function fusionarTabla(localDb, backupDb, tabla, negocioIdActual, uuidMap) {
         const backupColumns = backupRows[0].columns;
         const filasBackup = backupRows[0].values;
         
-        const tieneNegocioId = localCols.includes('negocio_id');
-        
         let sqlBuscarUuid = null;
         if (tieneUuid) {
             sqlBuscarUuid = `SELECT * FROM ${tabla} WHERE uuid = ? LIMIT 1`;
@@ -3407,6 +3643,12 @@ window.DBModule = {
     ensureNegociosTable, ensureNegocioIdColumn, migrateToMultiUser,
     ensureNegocioIdInAllTables, migrateNegocioIdToAllTables, createNegocioIdIndexes,
     ensureIsAdminColumn,
+    // 🆕 ENTREGA B
+    ensureCapacidadMaxBloqueColumn,
+    ensureBloquesDistribucionColumns,
+    getCMPBCProducto,
+    getProductosConCMPBC,
+    // Generales
     generateUuid, generateUuidForTable, ensureUuidColumns, migrateUuids,
     UUID_PREFIXES,
     TABLAS_FUSION_ORDER, TABLAS_FK_MAP, fusionarTabla, findDuplicateByData,
@@ -3436,12 +3678,20 @@ window.DBModule = {
     saveProduccion,
     deleteProduccion,
     getProduccionRango,
+    // CORRECCIÓN #7
+    saveProduccionRango,
+    contarProduccionEnRango,
+    getProduccionRangoFechas,
     exportDatabase, downloadDatabase, importDatabase, importDatabaseFromFile,
     importDatabaseDataOnly, importDatabaseDataOnlyFromFile,
     exportRecetasProductosSalva, importRecetasProductosSalva, readSalvaFile,
     BACKUP_TYPE_COMPLETE, BACKUP_TYPE_DATA_ONLY
 };
 
-console.log('📦 DB Module cargado correctamente v2.1.11 (ENTREGA 6: logs detallados de producción)');
-console.log('   🔧 Producción: saveProduccion, getProduccionByFecha, deleteProduccion, getProduccionRango');
-console.log('   📋 Toda función de producción exportada y con logs detallados');
+console.log('📦 DB Module cargado correctamente v2.1.19 (ENTREGA B: CMPBC + migraciones completas)');
+console.log('   🆕 Novedades:');
+console.log('      • Columna capacidad_max_bloque en productos');
+console.log('      • Columnas bloques_usados y distribucion_bloques en calendario_produccion');
+console.log('      • getCMPBCProducto() → devuelve el CMPBC o null');
+console.log('      • getProductosConCMPBC() → solo productos con CMPBC definido');
+console.log('      • saveProducto() y saveProduccion() actualizados');

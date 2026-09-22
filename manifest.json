@@ -1,8 +1,8 @@
 {
   "name": "Panario - Sistema de Gestión",
   "short_name": "Panario",
-  "description": "Plataforma integral de gestión y control operativo para panadería artesanal. Incluye lista de espera, fusión de bases de datos, multiusuario, premios configurables, días sin ventas, dashboard enriquecido y análisis avanzados.",
-  "version": "2.1.5",
+  "description": "Plataforma integral de gestión y control operativo para panadería artesanal. Incluye insumos, recetas, productos, ventas, pedidos, lista de espera, fusión de bases de datos, multiusuario, premios configurables, días sin ventas, dashboard enriquecido, planificación de producción según horarios de corriente, capacidad máxima por bloque (CMPBC) y cálculo automático inteligente de bloques de producción.",
+  "version": "2.2.0",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -78,6 +78,13 @@
       "short_name": "Ventas",
       "description": "Registrar ventas y gastos",
       "url": "./index.html?section=sales",
+      "icons": [{ "src": "./assets/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Producción",
+      "short_name": "Producción",
+      "description": "Planificar producción según corriente",
+      "url": "./index.html?section=settings",
       "icons": [{ "src": "./assets/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {

@@ -2,6 +2,13 @@
 // ⚡ CORRIENTE UTILS - Panario
 // Módulo global para consultar horarios de corriente desde
 // cualquier parte de la aplicación.
+// 🆕 CORRECCIÓN #6 (211026 v2):
+//   - NUEVA: getFechaAnteriorISO(fecha) → devuelve YYYY-MM-DD del día anterior
+//   - NUEVA: getUltimoBloqueDiaAnterior(fecha) → devuelve el ÚLTIMO bloque
+//     de corriente del día anterior. Útil para programar la producción
+//     que se hará en el bloque de la tarde/noche del día anterior
+//     (por ejemplo cuando el primer bloque del día de venta comienza
+//     después del amanecer y el pan debe estar listo para el desayuno).
 // ============================================================
 
 window.CorrienteUtils = {};
@@ -339,10 +346,6 @@ function calcularBloques(fechaReferencia, horaInicio, horaFin, hcc, hsc, fechaOb
     const bloques = [];
     
     // 🔧 FIX CRÍTICO: Se eliminó el límite de MAX_BLOQUES = 100.
-    // Ahora usamos un límite de seguridad muy alto (5000 iteraciones)
-    // que cubre 500 ciclos atrás + ~10 ciclos hasta cubrir el día objetivo.
-    // 5000 iteraciones × 15h = 75,000 horas ≈ 8.5 años de cobertura,
-    // más que suficiente para cualquier consulta razonable.
     const MAX_ITERACIONES_SEGURIDAD = 5000;
     let iteraciones = 0;
     
@@ -364,6 +367,104 @@ function calcularBloques(fechaReferencia, horaInicio, horaFin, hcc, hsc, fechaOb
     }
     
     return bloques;
+}
+
+// ============================================================
+// 🆕 CORRECCIÓN #6: HELPERS DE DÍA ANTERIOR
+// ============================================================
+
+/**
+ * Devuelve la fecha ISO (YYYY-MM-DD) del día anterior a una fecha dada.
+ * 
+ * @param {string|Date} fecha - Fecha de referencia (YYYY-MM-DD o Date)
+ * @returns {string|null} - Fecha ISO del día anterior o null si hay error
+ */
+function getFechaAnteriorISO(fecha) {
+    try {
+        let fechaStr;
+        if (fecha instanceof Date) {
+            fechaStr = formatearFechaISO(fecha);
+        } else if (typeof fecha === 'string') {
+            const match = fecha.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            fechaStr = match ? `${match[1]}-${match[2]}-${match[3]}` : null;
+        }
+        
+        if (!fechaStr) return null;
+        
+        const [y, m, d] = fechaStr.split('-').map(Number);
+        const fechaObj = new Date(y, m - 1, d);
+        fechaObj.setDate(fechaObj.getDate() - 1);
+        
+        return formatearFechaISO(fechaObj);
+    } catch (e) {
+        console.warn('⚠️ Error en getFechaAnteriorISO:', e);
+        return null;
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #6: Devuelve el ÚLTIMO bloque de corriente del día anterior
+ * a una fecha dada.
+ * 
+ * Esto es útil para programar la producción que se hará el día anterior
+ * al día de venta. Por ejemplo, si el primer bloque del día de venta
+ * comienza a las 8:00 AM, el panadero querrá producir ese pan el día
+ * anterior en el bloque de la tarde/noche (5:00 PM - 8:00 PM).
+ * 
+ * @param {string|Date} fecha - Fecha de referencia (día de venta)
+ * @returns {object|null} - Objeto bloque enriquecido con metadatos o null
+ *   {
+ *     inicio: Date,
+ *     fin: Date,
+ *     cruzaMedianoche: boolean,
+ *     index: number,
+ *     inicioStr: "5:00 PM",
+ *     finStr: "8:00 PM",
+ *     inicioStr24: "17:00",
+ *     finStr24: "20:00",
+ *     duracionHoras: 3,
+ *     // Metadatos del día anterior
+ *     esDiaAnterior: true,
+ *     fechaBloqueReal: "2026-09-21",   // fecha real del bloque
+ *     indexEnDiaAnterior: 4,           // posición dentro del día anterior
+ *     etiquetaUI: "🔨 Último bloque de ayer: 5:00 PM - 8:00 PM",
+ *     textoCorto: "Ayer 5:00 PM - 8:00 PM"
+ *   }
+ */
+function getUltimoBloqueDiaAnterior(fecha) {
+    try {
+        const fechaAnteriorISO = getFechaAnteriorISO(fecha);
+        if (!fechaAnteriorISO) return null;
+        
+        // Obtener todos los bloques del día anterior
+        const bloquesAnterior = getBloques(fechaAnteriorISO);
+        if (!bloquesAnterior || bloquesAnterior.length === 0) {
+            return null;
+        }
+        
+        // Tomar el último bloque del día anterior
+        const ultimoBloque = bloquesAnterior[bloquesAnterior.length - 1];
+        const indexEnDiaAnterior = bloquesAnterior.length;
+        
+        // Etiqueta para mostrar en UI
+        const etiquetaUI = `🔨 Último bloque de ayer: ${ultimoBloque.inicioStr} - ${ultimoBloque.finStr}`;
+        const textoCorto = `Ayer ${ultimoBloque.inicioStr} - ${ultimoBloque.finStr}`;
+        
+        return {
+            ...ultimoBloque,
+            // Metadatos del día anterior
+            esDiaAnterior: true,
+            fechaBloqueReal: fechaAnteriorISO,
+            indexEnDiaAnterior,
+            // Etiquetas listas para UI
+            etiquetaUI,
+            textoCorto
+        };
+        
+    } catch (e) {
+        console.warn('⚠️ Error en getUltimoBloqueDiaAnterior:', e);
+        return null;
+    }
 }
 
 // ============================================================
@@ -551,6 +652,10 @@ window.CorrienteUtils = {
     getResumen,
     getTextoDetallado,
     
+    // 🆕 CORRECCIÓN #6: día anterior
+    getFechaAnteriorISO,
+    getUltimoBloqueDiaAnterior,
+    
     // Utilidades
     formatearFecha,
     formatearFechaISO,
@@ -565,4 +670,7 @@ window.CorrienteUtils = {
     SESIONES
 };
 
-console.log('📦 Corriente Utils Module cargado correctamente (con fix MAX_BLOQUES)');
+console.log('📦 Corriente Utils Module cargado correctamente (con fix MAX_BLOQUES + CORRECCIÓN #6)');
+console.log('   🆕 Nuevas funciones:');
+console.log('      • getFechaAnteriorISO(fecha) → "2026-09-21"');
+console.log('      • getUltimoBloqueDiaAnterior(fecha) → último bloque del día anterior');

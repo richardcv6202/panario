@@ -20,21 +20,24 @@
 //   - NUEVA función autoEliminarDeListaAlComprar()
 // 🆕 v2.1.12 (210926 v7): CORRECCIÓN #2 - BLOQUEO POR RECETAS NO COMPARTIDAS
 //   - ✅ NUEVA función puedeUsuarioActualProcesarPedido(orderOrId)
-//     * Determina si el usuario actual puede procesar (ver, editar, entregar,
-//       cancelar, anular, etc.) un pedido.
-//     * Admin siempre puede.
-//     * Usuario no-admin SOLO puede si TODAS las recetas asociadas a los
-//       items del pedido están compartidas (shared=1) o son propias.
-//     * Devuelve { puede: boolean, razon: string, recetasBloqueadas: [] }
-//   - ✅ NUEVA función puedeUsuarioActualProcesarVenta() (por simetría, se usa
-//     desde sales.js)
-//   - ✅ updateOrderStatus() ahora verifica permisos antes de ejecutar
+//   - ✅ NUEVA función puedeUsuarioActualProcesarVenta() (por simetría)
+//   - ✅ updateOrderStatus() verifica permisos antes de ejecutar
 //   - ✅ registrarVentaDesdePedido() verifica permisos antes de crear la venta
 //   - ✅ cancelarPedidoDesdeLista() verifica permisos
 //   - ✅ procesarClienteDeLista() verifica permisos
 //   - ✅ eliminarDeListaEspera() verifica permisos
 //   - ✅ Los pedidos de la lista de espera también se filtran por permisos
 //   - ✅ Se guarda en la caché interna para evitar queries repetidas
+// 🆕 v2.1.13 (210926 v8): CORRECCIÓN #4 - EXCLUIR DÍAS DE LA SEMANA EN RANGO
+//   - ✅ NUEVA función getNombreDiaSemana(diaNumero) para UI
+//   - ✅ generarFechasPorPatron() acepta nuevo campo: diasExcluidos
+//     * Aplica SOLO cuando patron.tipo === 'rango'
+//     * Se combina con paridad (pares/impares)
+//     * Ej: "Rango 1-30 octubre, solo pares, excluyendo domingos"
+//   - ✅ getDiasExcluidosDelPatron() helper para normalizar entrada
+//   - ✅ Compatibilidad total: si no se pasa diasExcluidos, se comporta igual que antes
+//   - ✅ Verificación en crearPedidosMultiples() para excluir fechas correctamente
+//   - ✅ Logs de diagnóstico de exclusión
 // ============================================================
 
 window.OrdersModule = {};
@@ -42,17 +45,10 @@ window.OrdersModule = {};
 // ============================================================
 // 🆕 v2.1.12: CACHÉ DE PERMISOS POR PEDIDO
 // ============================================================
-// Evita hacer queries repetidas para el mismo pedido al renderizar listas.
 
-const _permisosPedidosCache = new Map(); // { orderId: {puede, razon, recetasBloqueadas} }
+const _permisosPedidosCache = new Map();
 const _permisosVentasCache = new Map();
 
-/**
- * Limpia la caché de permisos. Llamar cuando:
- *  - Se cambia de usuario
- *  - Se comparten/descomparten recetas
- *  - Se editan los items de un pedido o venta
- */
 function limpiarCachePermisos() {
     _permisosPedidosCache.clear();
     _permisosVentasCache.clear();
@@ -65,21 +61,6 @@ window.limpiarCachePermisos = limpiarCachePermisos;
 // 🆕 v2.1.12: VERIFICAR PERMISOS DE UN PEDIDO
 // ============================================================
 
-/**
- * Determina si el usuario actual puede procesar un pedido.
- * 
- * Reglas:
- *   - Si no hay usuario autenticado → NO puede
- *   - Si es admin → SIEMPRE puede
- *   - Si es usuario regular:
- *       * Puede VER el pedido siempre (es su negocio)
- *       * Puede PROCESAR (entregar, cancelar, editar, etc.) solo si
- *         TODAS las recetas asociadas a sus items están compartidas
- *         (shared=1) o son propias (user_id === currentUser.id)
- * 
- * @param {Object|number} orderOrId - Pedido completo o su ID
- * @returns {Object} { puede: boolean, razon: string, recetasBloqueadas: [] }
- */
 function puedeUsuarioActualProcesarPedido(orderOrId) {
     try {
         const user = window.AuthModule?.getCurrentUser();
@@ -87,12 +68,10 @@ function puedeUsuarioActualProcesarPedido(orderOrId) {
             return { puede: false, razon: 'No hay usuario autenticado', recetasBloqueadas: [] };
         }
         
-        // Admin siempre puede
         if (user.is_admin === 1) {
             return { puede: true, razon: '', recetasBloqueadas: [] };
         }
         
-        // Obtener el ID del pedido
         let orderId = null;
         let order = null;
         
@@ -104,15 +83,13 @@ function puedeUsuarioActualProcesarPedido(orderOrId) {
         }
         
         if (!orderId) {
-            return { puede: true, razon: '', recetasBloqueadas: [] }; // Fallback conservador
+            return { puede: true, razon: '', recetasBloqueadas: [] };
         }
         
-        // Revisar caché
         if (_permisosPedidosCache.has(orderId)) {
             return _permisosPedidosCache.get(orderId);
         }
         
-        // Cargar items si no los tenemos
         if (!order || !order.items) {
             try {
                 const items = window.DBModule.query(
@@ -131,18 +108,16 @@ function puedeUsuarioActualProcesarPedido(orderOrId) {
             }
         }
         
-        // Si no tiene items, no hay bloqueo
         if (!order.items || order.items.length === 0) {
             const result = { puede: true, razon: '', recetasBloqueadas: [] };
             _permisosPedidosCache.set(orderId, result);
             return result;
         }
         
-        // Verificar cada receta asociada
         const recetasBloqueadas = [];
         
         for (const item of order.items) {
-            if (!item.receta_id) continue; // Sin receta, no hay bloqueo
+            if (!item.receta_id) continue;
             
             try {
                 const recetas = window.DBModule.query(
@@ -153,7 +128,6 @@ function puedeUsuarioActualProcesarPedido(orderOrId) {
                 );
                 
                 if (recetas.length === 0) {
-                    // Receta no existe (fue eliminada)
                     recetasBloqueadas.push({
                         id: item.receta_id,
                         nombre: item.receta_nombre || item.producto_nombre || 'Receta eliminada',
@@ -164,9 +138,6 @@ function puedeUsuarioActualProcesarPedido(orderOrId) {
                 
                 const receta = recetas[0];
                 
-                // Bloqueada si:
-                // - NO es del usuario actual Y
-                // - NO está compartida
                 if (receta.user_id !== user.id && receta.shared !== 1) {
                     recetasBloqueadas.push({
                         id: receta.id,
@@ -176,7 +147,6 @@ function puedeUsuarioActualProcesarPedido(orderOrId) {
                 }
             } catch (e) {
                 console.warn(`⚠️ Error verificando receta ${item.receta_id}:`, e);
-                // En caso de error de query, bloquear por seguridad
                 recetasBloqueadas.push({
                     id: item.receta_id,
                     nombre: item.receta_nombre || 'Receta',
@@ -201,22 +171,10 @@ function puedeUsuarioActualProcesarPedido(orderOrId) {
         
     } catch (e) {
         console.error('❌ Error en puedeUsuarioActualProcesarPedido:', e);
-        return { puede: true, razon: '', recetasBloqueadas: [] }; // Fallback conservador
+        return { puede: true, razon: '', recetasBloqueadas: [] };
     }
 }
 
-/**
- * Igual que puedeUsuarioActualProcesarPedido pero para ventas.
- * 
- * Reglas:
- *   - Si la venta NO tiene receta asociada → siempre puede
- *   - Si la venta tiene receta_id:
- *       * Si la receta está compartida o es propia → puede
- *       * Si NO está compartida y es de otro → NO puede
- * 
- * @param {Object|number} saleOrId - Venta completa o su ID
- * @returns {Object} { puede, razon, recetaBloqueada }
- */
 function puedeUsuarioActualProcesarVenta(saleOrId) {
     try {
         const user = window.AuthModule?.getCurrentUser();
@@ -224,7 +182,6 @@ function puedeUsuarioActualProcesarVenta(saleOrId) {
             return { puede: false, razon: 'No hay usuario autenticado', recetaBloqueada: null };
         }
         
-        // Admin siempre puede
         if (user.is_admin === 1) {
             return { puede: true, razon: '', recetaBloqueada: null };
         }
@@ -243,12 +200,10 @@ function puedeUsuarioActualProcesarVenta(saleOrId) {
             return { puede: true, razon: '', recetaBloqueada: null };
         }
         
-        // Revisar caché
         if (_permisosVentasCache.has(saleId)) {
             return _permisosVentasCache.get(saleId);
         }
         
-        // Cargar la venta si no la tenemos
         if (!sale) {
             try {
                 const sales = window.DBModule.query(
@@ -271,14 +226,12 @@ function puedeUsuarioActualProcesarVenta(saleOrId) {
             }
         }
         
-        // Sin receta → no hay bloqueo
         if (!sale.receta_id) {
             const result = { puede: true, razon: '', recetaBloqueada: null };
             _permisosVentasCache.set(saleId, result);
             return result;
         }
         
-        // Verificar la receta
         try {
             const recetas = window.DBModule.query(
                 `SELECT id, user_id, shared, name 
@@ -548,7 +501,6 @@ async function saveOrder(orderData) {
             if (!oldOrder) return { success: false, error: 'Pedido no encontrado o no tienes permiso' };
             isUpdate = true;
             
-            // 🆕 v2.1.12: Verificar permisos si es edición de pedido
             const permisos = puedeUsuarioActualProcesarPedido(oldOrder);
             if (!permisos.puede) {
                 return { success: false, error: '🔒 ' + permisos.razon };
@@ -642,7 +594,6 @@ async function saveOrder(orderData) {
             }
         }
 
-        // 🆕 v2.1.12: Limpiar caché de permisos porque el pedido cambió
         _permisosPedidosCache.delete(orderId);
 
         if (status === 'confirmed' || status === 'production') {
@@ -687,7 +638,46 @@ async function saveOrder(orderData) {
 }
 
 // ============================================================
+// 🆕 v2.1.13: HELPERS DE DÍAS DE LA SEMANA
+// ============================================================
+
+/**
+ * Devuelve el nombre del día de la semana en español.
+ * @param {number} diaNumero - 0=Domingo, 1=Lunes, ..., 6=Sábado
+ * @param {boolean} corto - Si true, devuelve abreviatura (Lun, Mar...)
+ */
+function getNombreDiaSemana(diaNumero, corto = false) {
+    const diasLargo = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const diasCorto = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    const idx = parseInt(diaNumero);
+    if (isNaN(idx) || idx < 0 || idx > 6) return '';
+    return corto ? diasCorto[idx] : diasLargo[idx];
+}
+
+/**
+ * Normaliza el array de días excluidos.
+ * Acepta: undefined, null, [], [0, 6], ['0', '6']
+ * Devuelve: array de enteros únicos válidos (0-6) o [] si no hay
+ */
+function getDiasExcluidosDelPatron(patron) {
+    if (!patron) return [];
+    const raw = patron.diasExcluidos;
+    if (!raw || !Array.isArray(raw) || raw.length === 0) return [];
+    
+    const set = new Set();
+    raw.forEach(d => {
+        const n = parseInt(d);
+        if (!isNaN(n) && n >= 0 && n <= 6) set.add(n);
+    });
+    return Array.from(set).sort();
+}
+
+window.getNombreDiaSemana = getNombreDiaSemana;
+window.getDiasExcluidosDelPatron = getDiasExcluidosDelPatron;
+
+// ============================================================
 // RESERVA POR PERÍODO - GENERADOR DE FECHAS
+// 🆕 v2.1.13: Soporta exclusiones de días de la semana
 // ============================================================
 
 function generarFechasPorPatron(patron) {
@@ -699,6 +689,14 @@ function generarFechasPorPatron(patron) {
     const inicio = new Date(fechaInicio + 'T00:00:00');
     const fin = new Date(fechaFin + 'T00:00:00');
     if (inicio > fin) return fechas;
+
+    // 🆕 v2.1.13: Normalizar días excluidos
+    const diasExcluidos = getDiasExcluidosDelPatron(patron);
+    const excluidosSet = new Set(diasExcluidos);
+    
+    if (diasExcluidos.length > 0) {
+        console.log(`📅 [generarFechasPorPatron] Excluyendo días: ${diasExcluidos.map(d => getNombreDiaSemana(d, true)).join(', ')}`);
+    }
 
     const cursor = new Date(inicio);
 
@@ -726,10 +724,19 @@ function generarFechasPorPatron(patron) {
                 incluir = true;
         }
 
+        // 🆕 v2.1.13: Aplicar exclusión SOLO en modo 'rango'
+        // (en 'semana' y 'especificos' el usuario ya selecciona qué días incluir)
+        if (incluir && tipo === 'rango' && excluidosSet.size > 0) {
+            if (excluidosSet.has(diaSemana)) {
+                incluir = false;
+            }
+        }
+
         if (incluir) fechas.push(fechaStr);
         cursor.setDate(cursor.getDate() + 1);
     }
 
+    console.log(`📅 [generarFechasPorPatron] Generadas ${fechas.length} fechas (tipo=${tipo}, excluidos=${diasExcluidos.length})`);
     return fechas;
 }
 
@@ -868,7 +875,6 @@ async function crearPedidosMultiples(data) {
 
 // ============================================================
 // REGISTRAR VENTA DESDE PEDIDO
-// 🆕 v2.1.12: Verifica permisos antes de crear la venta
 // ============================================================
 
 async function registrarVentaDesdePedido(orderId, cantidadOverride = null) {
@@ -878,7 +884,6 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null) {
     const negocioId = window.DBModule.getNegocioIdActual();
     if (!negocioId) return { success: false, error: 'No hay negocio activo' };
 
-    // 🆕 v2.1.12: Verificar permisos
     const permisos = puedeUsuarioActualProcesarPedido(orderId);
     if (!permisos.puede) {
         console.warn('🔒 [registrarVentaDesdePedido] Bloqueado:', permisos.razon);
@@ -1026,7 +1031,6 @@ async function procesarListaEsperaAlCancelar(orderId, seleccionados = []) {
                 const cantidadAtender = sel.cantidadAtender || 0;
                 if (cantidadAtender <= 0) continue;
 
-                // 🆕 v2.1.12: Verificar permisos del pedido en lista de espera
                 const permisos = puedeUsuarioActualProcesarPedido(waitingOrderId);
                 if (!permisos.puede) {
                     console.warn(`🔒 Pedido #${waitingOrderId} bloqueado por permisos:`, permisos.razon);
@@ -1222,7 +1226,6 @@ async function reponerStockPedido(orderId) {
 
 // ============================================================
 // CAMBIAR ESTADO DEL PEDIDO
-// 🆕 v2.1.12: Verifica permisos antes de ejecutar
 // ============================================================
 
 async function updateOrderStatus(orderId, status) {
@@ -1232,7 +1235,6 @@ async function updateOrderStatus(orderId, status) {
     const negocioId = window.DBModule.getNegocioIdActual();
     if (!negocioId) return { success: false, error: 'No hay negocio activo' };
 
-    // 🆕 v2.1.12: Verificar permisos
     const permisos = puedeUsuarioActualProcesarPedido(orderId);
     if (!permisos.puede) {
         console.warn('🔒 [updateOrderStatus] Bloqueado:', permisos.razon);
@@ -1312,7 +1314,6 @@ async function updateOrderStatus(orderId, status) {
 
         if (!result.success) return { success: false, error: result.error || 'Error al actualizar estado' };
 
-        // 🆕 v2.1.12: Limpiar caché de permisos del pedido
         _permisosPedidosCache.delete(orderId);
 
         window.DBModule.saveAndNotify();
@@ -1400,10 +1401,9 @@ async function getWaitingListWithDetails(excludeOrderId = null) {
     try {
         const lista = window.DBModule.getWaitingListWithDetails(excludeOrderId);
         
-        // 🆕 v2.1.12: Filtrar por permisos - solo mostrar los que el usuario puede procesar
         const user = window.AuthModule?.getCurrentUser();
         if (!user || user.is_admin === 1) {
-            return lista; // Admin ve todo
+            return lista;
         }
         
         const listaFiltrada = lista.filter(item => {
@@ -1463,7 +1463,6 @@ async function limpiarListaEspera() {
 
         for (const item of items) {
             try {
-                // 🆕 v2.1.12: Verificar permisos antes de limpiar
                 const permisos = puedeUsuarioActualProcesarPedido(item.order_id);
                 if (!permisos.puede) {
                     bloqueados++;
@@ -1527,7 +1526,6 @@ async function eliminarDeListaEspera(orderId) {
     const negocioId = window.DBModule.getNegocioIdActual();
     if (!negocioId) return { success: false, error: 'No hay negocio activo' };
 
-    // 🆕 v2.1.12: Verificar permisos
     const permisos = puedeUsuarioActualProcesarPedido(orderId);
     if (!permisos.puede) {
         return { success: false, error: '🔒 ' + permisos.razon };
@@ -1583,7 +1581,6 @@ async function procesarClienteDeLista(orderId, cantidad = null) {
     const negocioId = window.DBModule.getNegocioIdActual();
     if (!negocioId) return { success: false, error: 'No hay negocio activo' };
 
-    // 🆕 v2.1.12: Verificar permisos
     const permisos = puedeUsuarioActualProcesarPedido(orderId);
     if (!permisos.puede) {
         return { success: false, error: '🔒 ' + permisos.razon };
@@ -1673,7 +1670,6 @@ async function cancelarPedidoDesdeLista(orderId, causa = '', nota = '') {
     const negocioId = window.DBModule.getNegocioIdActual();
     if (!negocioId) return { success: false, error: 'No hay negocio activo' };
 
-    // 🆕 v2.1.12: Verificar permisos
     const permisos = puedeUsuarioActualProcesarPedido(orderId);
     if (!permisos.puede) {
         return { success: false, error: '🔒 ' + permisos.razon };
@@ -2072,11 +2068,13 @@ window.OrdersModule = {
     // 🆕 v2.1.12: Permisos
     puedeUsuarioActualProcesarPedido,
     puedeUsuarioActualProcesarVenta,
-    limpiarCachePermisos
+    limpiarCachePermisos,
+    // 🆕 v2.1.13: Helpers de días de la semana
+    getNombreDiaSemana,
+    getDiasExcluidosDelPatron
 };
 
-console.log('📦 Orders Module v2.1.12 (ENTREGA B: corrección #2 - bloqueo por recetas no compartidas)');
-console.log('   ✅ Nueva función: puedeUsuarioActualProcesarPedido()');
-console.log('   ✅ Nueva función: puedeUsuarioActualProcesarVenta()');
-console.log('   ✅ Verificaciones en: updateOrderStatus, registrarVentaDesdePedido, procesarClienteDeLista, cancelarPedidoDesdeLista, eliminarDeListaEspera, saveOrder (edición)');
-console.log('   ✅ Caché de permisos para evitar queries repetidas');
+console.log('📦 Orders Module v2.1.13 (ENTREGA C: corrección #4 - excluir días de la semana en rango)');
+console.log('   ✅ generarFechasPorPatron() acepta diasExcluidos para modo "rango"');
+console.log('   ✅ Nueva función getNombreDiaSemana(diaNumero, corto)');
+console.log('   ✅ Nueva función getDiasExcluidosDelPatron(patron)');

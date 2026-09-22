@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     
     <!-- ============================================================ -->
-    <!-- 🆕 ENTREGA 3: VIEWPORT CORREGIDO                             -->
+    <!-- VIEWPORT CORREGIDO                                           -->
     <!-- ============================================================ -->
     <!-- Se ELIMINA: maximum-scale=1.0 y user-scalable=no             -->
     <!-- Motivo: rompen iframes en móvil y afectan accesibilidad.     -->
@@ -18,7 +18,7 @@
     <!-- loguea. Formato: "Panadería La Esquina - Panario"            -->
     <!-- ============================================================ -->
     <title>Panario - Panadería Artesanal</title>
-    <meta name="app-version" content="2.1.11">
+    <meta name="app-version" content="2.2.0">
     <meta name="app-build" content="20260923">
     
     <!-- ============================================================ -->
@@ -86,7 +86,7 @@
                         <input type="text" id="regName" placeholder="Tu nombre y apellidos">
                     </div>
                     
-                    <!-- 🆕 SELECCIÓN DE MODO DE NEGOCIO -->
+                    <!-- SELECCIÓN DE MODO DE NEGOCIO -->
                     <div class="form-group">
                         <label>🏢 Modo de negocio</label>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -144,7 +144,7 @@
         <!-- HEADER -->
         <header>
             <!-- 
-              🆕 FASE 5 (#19): Logo clickeable → ir al Dashboard
+              Logo clickeable → ir al Dashboard
               El atributo id="appHeaderTitle" permite que app.js lo modifique.
               Al hacer clic, se navega al Dashboard (Panel de Control).
               Fallback: "🍞 Panario" si no hay negocio asignado.
@@ -294,7 +294,7 @@
     <!-- ============================================================ -->
     <script>
     // ============================================================
-    // SERVICE WORKER REGISTRATION - Panario v2.1.11
+    // SERVICE WORKER REGISTRATION - Panario v2.2.0
     // ============================================================
     // Registra el SW con ruta RELATIVA (./sw.js) para que funcione
     // tanto en localhost como en GitHub Pages (subcarpeta).
@@ -302,7 +302,7 @@
     // - Detecta nuevas versiones del SW y avisa al usuario.
     // - Maneja errores sin bloquear la app.
     // - Solo registra en contextos seguros (HTTPS o localhost).
-    // - 🆕 ENTREGA 1: Escucha mensajes CACHE_REPAIRED_START/END
+    // - Escucha mensajes CACHE_REPAIRED_START/END
     // ============================================================
     
     (function() {
@@ -343,7 +343,7 @@
                 console.log('   📍 Scope:', registration.scope);
                 
                 // ============================================================
-                // 🆕 ENTREGA 1: ESCUCHAR MENSAJES DEL SW
+                // ESCUCHAR MENSAJES DEL SW
                 // ============================================================
                 navigator.serviceWorker.addEventListener('message', function(event) {
                     if (!event.data) return;
@@ -594,7 +594,7 @@
         }
     })();
     
-    console.log('📦 PWA Scripts cargados correctamente (index.html v2.1.11)');
+    console.log('📦 PWA Scripts cargados correctamente (index.html v2.2.0)');
     </script>
 
 </body>
