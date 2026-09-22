@@ -14,7 +14,6 @@
 //   - updateOrderStatusAndReload() cierra todos los modales antes del confirm
 // CORREGIDO FASE A.2 (170926 v2):
 //   - Modales de ui-orders usan z-index 9999999998
-//   - Se reemplazaron setTimeout frágiles por cerrarTodosLosModales()
 // AÑADIDO FASE A.4 (170926 v3):
 //   - viewOrder() muestra sección de Auditoría
 // AÑADIDO FASE 1.2 (190926 v3):
@@ -27,26 +26,28 @@
 // 🆕 FASE 2.2 (200926 v5):
 //   - NUEVO: Botón "⏰ Lista de espera" en el header
 //   - NUEVA: showWaitingListManagerModal()
-// 🆕 FASE 2.2 FIX (200926 v6):
-//   - Reestructurado el layout del modal de gestión de lista
 // 🆕 FASE 7 (Entrega 5 - 200926 v7):
 //   - NUEVO: Validación de cantidad de producción al crear pedidos
-//   - NUEVO: Horario de producción en tarjeta de fecha
-//   - NUEVO: getProduccionInfo() y renderProduccionInfoHTML()
-// 🆕 FASE 7.2 (210926 v8): CANTIDAD DE PRODUCCIÓN CON DECIMALES
-//   - getProduccionInfo() usa parseFloat() para cantidad
-//   - renderProduccionInfoHTML() usa formatearCantidadProduccion()
-//   - Validación al crear pedidos con decimales
-//   - Vista previa de reserva por período con decimales
 // 🆕 FASE 7.3 (210926 v9): MOSTRAR PRODUCCIÓN + BLOQUEO DEFINITIVO
 //   - renderProduccionInfoHTML() ahora se invoca SIEMPRE en loadOrders()
-//   - El bloqueo al crear pedidos usa getProduccionInfo() correctamente
-//   - Detección robusta: si DBModule/ui-settings no está cargado, no falla
-//   - El modal de "Pedidos completos" muestra info decimal
-//   - Vista previa de reserva por período muestra "Completo n/m"
-//   - Validación también en modo edición (si cambia la fecha)
-//   - Mejora del layout de la tarjeta de fecha con producción
-//   - Console.logs de diagnóstico para producción
+// 🆕 v2.1.12 (210926 v10): CORRECCIÓN #2 - BLOQUEO POR RECETAS NO COMPARTIDAS
+//   - ✅ loadOrders(): Verifica permisos de cada pedido y muestra badge "🔒 Solo lectura"
+//   - ✅ loadOrders(): Oculta botones de acción (Editar) en pedidos bloqueados
+//   - ✅ viewOrder(): Muestra el detalle en modo solo-lectura cuando está bloqueado
+//     - Oculta botones: Editar, Entregar, Cancelar, Lista de espera
+//     - Muestra aviso rojo con explicación
+//   - ✅ showOrderForm(): Bloquea si el pedido está en modo solo-lectura
+//   - ✅ updateOrderStatusAndReload(): Verifica permisos ANTES del confirm
+//   - ✅ renderWaitingManagerContent(): Filtra pedidos bloqueados
+//     - Los pedidos en lista de espera que usen recetas no compartidas
+//       no aparecen para usuarios no-admin
+//   - ✅ Los pedidos bloqueados se muestran con:
+//     - Borde gris en lugar de color de estado
+//     - Badge "🔒 Solo lectura"
+//     - Icono 🔒 en el título
+//     - Sin botones de acción
+//   - ✅ Nueva función helper: renderBadgeSoloLectura()
+//   - ✅ Nueva función helper: aplicarBloqueoVisual()
 // ============================================================
 
 // ============================================================
@@ -82,6 +83,60 @@ if (typeof window.normalizarFechaVenta !== 'function') {
 const ORDERS_MODAL_Z_INDEX = 9999999998;
 
 // ============================================================
+// 🆕 v2.1.12: HELPERS DE BLOQUEO (Corrección #2)
+// ============================================================
+
+/**
+ * Verifica si el usuario puede procesar un pedido.
+ * Delega a la función del backend (orders.js).
+ * 
+ * @param {number|Object} orderIdOrObject
+ * @returns {Object} { puede, razon, recetasBloqueadas }
+ */
+function checkOrderPermission(orderIdOrObject) {
+    try {
+        if (typeof window.OrdersModule?.puedeUsuarioActualProcesarPedido === 'function') {
+            return window.OrdersModule.puedeUsuarioActualProcesarPedido(orderIdOrObject);
+        }
+        // Fallback: si no está disponible, permitir (compatibilidad)
+        return { puede: true, razon: '', recetasBloqueadas: [] };
+    } catch (e) {
+        console.warn('⚠️ Error verificando permisos:', e);
+        return { puede: true, razon: '', recetasBloqueadas: [] };
+    }
+}
+
+/**
+ * Renderiza un badge visual "🔒 Solo lectura" para pedidos bloqueados.
+ */
+function renderBadgeSoloLectura() {
+    return `<span style="font-size: 10px; background: #94a3b820; color: #94a3b8; padding: 2px 8px; border-radius: 10px; font-weight: 600; border: 1px solid #94a3b8;">🔒 Solo lectura</span>`;
+}
+
+/**
+ * Aplica bloqueo visual a un contenedor de pedido (tarjeta).
+ * Devuelve un objeto con los estilos modificados.
+ */
+function aplicarBloqueoVisual(bloqueado) {
+    if (bloqueado) {
+        return {
+            borderColor: '#94a3b8',
+            opacity: 0.75,
+            cursor: 'not-allowed'
+        };
+    }
+    return {
+        borderColor: null,
+        opacity: 1,
+        cursor: 'pointer'
+    };
+}
+
+window.checkOrderPermission = checkOrderPermission;
+window.renderBadgeSoloLectura = renderBadgeSoloLectura;
+window.aplicarBloqueoVisual = aplicarBloqueoVisual;
+
+// ============================================================
 // DEFINICIÓN GLOBAL DE updateOrderTotal
 // ============================================================
 
@@ -104,22 +159,9 @@ window.updateOrderTotal = function() {
 // ============================================================
 // 🆕 FASE 7.3: HELPER PARA OBTENER INFO DE PRODUCCIÓN
 // ============================================================
-//
-// Esta función es DEFENSIVA: si ui-settings.js no está cargado o
-// no tiene las funciones de producción, devuelve un objeto vacío
-// con tieneProduccion: false para no romper la UI.
-// ============================================================
 
-/**
- * Obtiene la información de producción para una fecha.
- * 
- * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
- * @returns {Object} { tieneProduccion, bloqueTexto, cantidadProduccion, 
- *                     pedidos, ventas, disponibles, notas }
- */
 function getProduccionInfo(fechaISO) {
     try {
-        // Verificar que las funciones de ui-settings.js estén disponibles
         if (typeof window.getProduccionConfig !== 'function' || 
             typeof window.contarPedidosYVentasFecha !== 'function') {
             return { tieneProduccion: false, pedidos: 0, ventas: 0, disponibles: 0, cantidadProduccion: 0 };
@@ -132,7 +174,6 @@ function getProduccionInfo(fechaISO) {
             return { tieneProduccion: false, ...conteo };
         }
         
-        // Formatear el horario del bloque
         const bloques = window.CorrienteUtils ? window.CorrienteUtils.getBloques(fechaISO) : [];
         let bloqueTexto = '';
         if (bloques && bloques.length >= config.bloque_index) {
@@ -203,7 +244,7 @@ function waitForModalRemoval(modalId, timeoutMs = 600) {
 function renderAuditoriaHTML(entity) {
     if (!entity) return '';
     
-    const createdBy = entity.created_by;
+    const createdBy = entity.created_by || entity.user_id;
     const modifiedBy = entity.modified_by;
     const createdAt = entity.created_at;
     const updatedAt = entity.updated_at;
@@ -293,6 +334,7 @@ async function mostrarAlertaStockWarning(orderId, stockWarning) {
 
 // ============================================================
 // MODAL DE GESTIÓN DE LISTA DE ESPERA
+// 🆕 v2.1.12: Filtra pedidos bloqueados por permisos
 // ============================================================
 
 async function showWaitingListManagerModal() {
@@ -314,7 +356,6 @@ async function showWaitingListManagerModal() {
     `;
     
     document.body.appendChild(modal);
-    
     window._waitingManagerModal = modal;
     
     await renderWaitingManagerContent();
@@ -337,7 +378,16 @@ async function renderWaitingManagerContent() {
     if (!modal) return;
     
     try {
-        const lista = await window.OrdersModule.getWaitingListWithDetails();
+        // 🆕 v2.1.12: getWaitingListWithDetails() ya filtra por permisos internamente
+        const listaCompleta = await window.OrdersModule.getWaitingListWithDetails();
+        
+        // Filtrar por permisos (redundante pero seguro)
+        const lista = listaCompleta.filter(item => {
+            const permisos = checkOrderPermission(item.order_id);
+            return permisos.puede;
+        });
+        
+        const bloqueados = listaCompleta.length - lista.length;
         
         const totalItems = lista.length;
         const totalCantidad = lista.reduce((sum, item) => sum + (item.quantity || 0), 0);
@@ -346,11 +396,16 @@ async function renderWaitingManagerContent() {
         let listaHtml = '';
         
         if (lista.length === 0) {
+            let mensajeBloqueados = '';
+            if (bloqueados > 0) {
+                mensajeBloqueados = `<p style="font-size: 12px; color: #94a3b8; margin-top: 8px;">🔒 ${bloqueados} pedido(s) ocultos por permisos de recetas no compartidas</p>`;
+            }
             listaHtml = `
                 <div style="text-align: center; padding: 40px 20px; color: var(--text-light);">
                     <span style="font-size: 56px;">🎉</span>
                     <p style="margin-top: 12px; font-size: 15px; font-weight: 600;">No hay clientes en espera</p>
-                    <p style="font-size: 13px;">La lista está vacía</p>
+                    <p style="font-size: 13px;">La lista está vacía o no tienes permisos</p>
+                    ${mensajeBloqueados}
                 </div>
             `;
         } else {
@@ -441,6 +496,12 @@ async function renderWaitingManagerContent() {
                         <div style="font-size: 20px; font-weight: 700; color: #10b981;">$${totalMonto.toFixed(2)}</div>
                         <div style="font-size: 11px; color: var(--text-light);">💰 Total</div>
                     </div>
+                    ${bloqueados > 0 ? `
+                    <div style="background: #94a3b815; border-left: 3px solid #94a3b8; padding: 8px 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 20px; font-weight: 700; color: #94a3b8;">${bloqueados}</div>
+                        <div style="font-size: 11px; color: var(--text-light);">🔒 Bloqueados</div>
+                    </div>
+                    ` : ''}
                 </div>
                 
                 <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
@@ -465,6 +526,7 @@ async function renderWaitingManagerContent() {
                 
                 <div style="background: #fef9e7; border: 1px solid #f59e0b; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: #92400e;">
                     💡 <strong>Procesar</strong> → crea la venta · <strong>Cancelar</strong> → cancela el pedido · <strong>Quitar</strong> → solo quita de la lista
+                    ${bloqueados > 0 ? `<br>🔒 <strong>${bloqueados} pedido(s) oculto(s)</strong> por usar recetas no compartidas contigo.` : ''}
                 </div>
                 
                 <div id="waiting-manager-list" style="flex: 1; overflow-y: auto; max-height: 500px; padding-right: 4px;">
@@ -530,6 +592,13 @@ async function refrescarListaEsperaUI() {
 async function procesarClienteDeListaUI(orderId) {
     if (!orderId) return;
     
+    // 🆕 v2.1.12: Verificar permisos ANTES de mostrar el confirm
+    const permisos = checkOrderPermission(orderId);
+    if (!permisos.puede) {
+        window.showToast('🔒 ' + permisos.razon, 'error', 5000);
+        return;
+    }
+    
     const confirm = await window.ModalModule.showConfirm({
         title: '✅ Procesar cliente',
         message: `¿Procesar al cliente de la posición #${orderId}?\n\n✅ Se creará la VENTA automáticamente.\n✅ Se descontará del stock.\n✅ El cliente saldrá de la lista.`,
@@ -570,6 +639,13 @@ async function procesarClienteDeListaUI(orderId) {
 
 async function cancelarClienteDeListaUI(orderId, clientName) {
     if (!orderId) return;
+    
+    // 🆕 v2.1.12: Verificar permisos
+    const permisos = checkOrderPermission(orderId);
+    if (!permisos.puede) {
+        window.showToast('🔒 ' + permisos.razon, 'error', 5000);
+        return;
+    }
     
     const nombre = clientName || 'Cliente';
     
@@ -626,6 +702,13 @@ async function cancelarClienteDeListaUI(orderId, clientName) {
 async function eliminarClienteDeListaUI(orderId, clientName) {
     if (!orderId) return;
     
+    // 🆕 v2.1.12: Verificar permisos
+    const permisos = checkOrderPermission(orderId);
+    if (!permisos.puede) {
+        window.showToast('🔒 ' + permisos.razon, 'error', 5000);
+        return;
+    }
+    
     const nombre = clientName || 'Cliente';
     
     const confirm = await window.ModalModule.showConfirm({
@@ -668,7 +751,7 @@ async function eliminarClienteDeListaUI(orderId, clientName) {
 async function limpiarListaEsperaUI() {
     const confirm1 = await window.ModalModule.showConfirm({
         title: '⚠️ Limpiar lista de espera',
-        message: `¿Estás seguro de que quieres LIMPIAR TODA la lista de espera?\n\n⚠️ Se cancelarán TODOS los pedidos en espera.\n⚠️ NO se crearán ventas.\n⚠️ Se repondrá el stock.\n\n⚠️ Esta acción no se puede deshacer.`,
+        message: `¿Estás seguro de que quieres LIMPIAR TODA la lista de espera?\n\n⚠️ Se cancelarán TODOS los pedidos en espera a los que tengas acceso.\n⚠️ NO se crearán ventas.\n⚠️ Se repondrá el stock.\n\n⚠️ Esta acción no se puede deshacer.`,
         confirmText: '⚠️ CONTINUAR',
         cancelText: '❌ Cancelar',
         icon: '⚠️',
@@ -697,7 +780,9 @@ async function limpiarListaEsperaUI() {
         const result = await window.OrdersModule.limpiarListaEspera();
         
         if (result.success) {
-            window.showToast(`✅ Lista limpiada: ${result.eliminados} eliminados, ${result.cancelados} cancelados`, 'success', 5000);
+            let msg = `✅ Lista limpiada: ${result.eliminados} eliminados, ${result.cancelados} cancelados`;
+            if (result.bloqueados > 0) msg += `, ${result.bloqueados} omitidos por permisos`;
+            window.showToast(msg, 'success', 5000);
             
             await refrescarListaEsperaUI();
             
@@ -744,12 +829,6 @@ async function reporteListaEspera() {
 // 🆕 FASE 7.3: RENDER INFO DE PRODUCCIÓN EN TARJETA DE FECHA
 // ============================================================
 
-/**
- * Genera el HTML de la info de producción para mostrar en la tarjeta de fecha.
- * 
- * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
- * @returns {string} HTML con la info de producción o cadena vacía
- */
 function renderProduccionInfoHTML(fechaISO) {
     try {
         const info = getProduccionInfo(fechaISO);
@@ -761,17 +840,15 @@ function renderProduccionInfoHTML(fechaISO) {
         const pedidos = info.pedidos;
         const ventas = info.ventas;
         
-        // Usar formatearCantidadProduccion (con fallback)
         const fmt = window.formatearCantidadProduccion || (v => String(v));
         
-        // Determinar color según disponibilidad
-        let colorDisponible = '#10b981'; // verde
+        let colorDisponible = '#10b981';
         let bgDisponible = '#10b98115';
         if (disponibles === 0) {
-            colorDisponible = '#ef4444'; // rojo
+            colorDisponible = '#ef4444';
             bgDisponible = '#ef444415';
         } else if (disponibles <= 3) {
-            colorDisponible = '#f59e0b'; // naranja
+            colorDisponible = '#f59e0b';
             bgDisponible = '#f59e0b15';
         }
         
@@ -1135,15 +1212,7 @@ function getBadgeSesion(sesion) {
 }
 
 // ============================================================
-// 🆕 FASE 7.3: LOAD ORDERS - CON INFO DE PRODUCCIÓN
-// ============================================================
-//
-// IMPORTANTE: Se llama a renderProduccionInfoHTML(dateKey) para cada
-// fecha del listado. Esto muestra:
-//   - 🔨 Producción: dd/mm de hh:mm a hh:mm
-//   - 📋 Pedidos: n/m
-//   - 💰 Ventas directas: v
-//   - ✅ x disponibles  o  ⛔ COMPLETO
+// 🆕 v2.1.12: LOAD ORDERS - CON VERIFICACIÓN DE PERMISOS
 // ============================================================
 
 async function loadOrders() {
@@ -1199,6 +1268,12 @@ async function loadOrders() {
         const grouped = {};
         const today = new Date().toISOString().split('T')[0];
         
+        // 🆕 v2.1.12: Verificar permisos para cada pedido
+        const permisosPorPedido = {};
+        orders.forEach(order => {
+            permisosPorPedido[order.id] = checkOrderPermission(order.id);
+        });
+        
         orders.forEach(order => {
             const dateKey = order.delivery_date ? order.delivery_date.split('T')[0] : 'sin fecha';
             if (!grouped[dateKey]) grouped[dateKey] = [];
@@ -1222,8 +1297,13 @@ async function loadOrders() {
             const fechaLarga = formatearFechaLarga(dateKey);
             const badgeCorriente = getBadgeCorriente(dateKey);
             
-            // 🆕 FASE 7.3: Info de producción (renderiza SIEMPRE si hay config)
             const produccionInfoHtml = renderProduccionInfoHTML(dateKey);
+            
+            // Contar pedidos bloqueados del día
+            const bloqueadosDelDia = dayOrders.filter(o => !permisosPorPedido[o.id]?.puede).length;
+            const badgeBloqueados = bloqueadosDelDia > 0 
+                ? `<span style="font-size: 11px; background: #94a3b820; color: #94a3b8; padding: 1px 8px; border-radius: 10px; font-weight: 600; border: 1px solid #94a3b8;">🔒 ${bloqueadosDelDia} bloqueado${bloqueadosDelDia > 1 ? 's' : ''}</span>`
+                : '';
             
             html += `
                 <div class="card" style="padding: 10px 12px; margin-bottom: 8px; cursor: pointer; border-left: 4px solid ${isToday ? '#f59e0b' : 'var(--border-color)'};" 
@@ -1237,6 +1317,7 @@ async function loadOrders() {
                                 📅 ${fechaLarga}
                                 ${isToday ? ' <span style="font-size: 11px; color: #f59e0b; background: #f59e0b20; padding: 1px 8px; border-radius: 10px;">HOY</span>' : ''}
                                 ${badgeCorriente}
+                                ${badgeBloqueados}
                             </span>
                             <span style="font-size: 12px; color: var(--text-light);">
                                 ${dayOrders.length} ${dayOrders.length === 1 ? 'pedido' : 'pedidos'}
@@ -1259,16 +1340,26 @@ async function loadOrders() {
                         
                         const sesionBadge = getBadgeSesion(order.session);
                         
+                        // 🆕 v2.1.12: Verificar permisos del pedido
+                        const permisos = permisosPorPedido[order.id] || { puede: true };
+                        const bloqueado = !permisos.puede;
+                        
+                        const statusColor = bloqueado ? '#94a3b8' : (statusColors[order.status] || '#94a3b8');
+                        const cardOpacity = bloqueado ? 0.75 : 1;
+                        
                         return `
-                        <div class="card" style="border-left: 4px solid ${statusColors[order.status] || '#94a3b8'}; padding: 10px 14px; margin-bottom: 4px;">
+                        <div class="card" style="border-left: 4px solid ${statusColor}; padding: 10px 14px; margin-bottom: 4px; opacity: ${cardOpacity};">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
                                 <div style="flex: 1; min-width: 120px;">
                                     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                        <span style="font-weight: 600; font-size: 14px;">#${order.id} - ${order.client_name}</span>
+                                        <span style="font-weight: 600; font-size: 14px;">
+                                            ${bloqueado ? '🔒' : ''} #${order.id} - ${order.client_name}
+                                        </span>
                                         ${waitingBadge}
-                                        <span style="font-size: 11px; color: ${statusColors[order.status] || '#94a3b8'}; background: ${statusColors[order.status] || '#94a3b8'}20; padding: 1px 8px; border-radius: 10px;">
+                                        <span style="font-size: 11px; color: ${statusColor}; background: ${statusColor}20; padding: 1px 8px; border-radius: 10px;">
                                             ${statusLabels[order.status] || order.status}
                                         </span>
+                                        ${bloqueado ? renderBadgeSoloLectura() : ''}
                                         ${sesionBadge}
                                         ${order.priority === 'urgent' ? '<span style="font-size: 11px; color: #ef4444; font-weight: 600;">🔴 URGENTE</span>' : ''}
                                     </div>
@@ -1276,16 +1367,17 @@ async function loadOrders() {
                                         ${order.productos_nombres ? `<span>📦 ${order.productos_nombres}</span>` : ''}
                                         ${order.client_phone ? `<span>📞 ${order.client_phone}</span>` : ''}
                                     </div>
+                                    ${bloqueado ? `<div style="margin-top: 4px; font-size: 11px; color: #94a3b8; font-style: italic;">🔒 ${permisos.razon}</div>` : ''}
                                 </div>
                                 <div style="text-align: right;">
-                                    <div style="font-size: 16px; font-weight: 700; color: var(--primary);">
+                                    <div style="font-size: 16px; font-weight: 700; color: ${bloqueado ? '#94a3b8' : 'var(--primary)'};">
                                         $${parseFloat(order.total).toFixed(2)}
                                     </div>
                                     <div style="display: flex; gap: 4px; margin-top: 4px; justify-content: flex-end;">
                                         <button onclick="event.stopPropagation(); viewOrder(${order.id})" class="btn secondary" style="padding: 2px 10px; font-size: 11px; width: auto;">
                                             👁️ Ver
                                         </button>
-                                        ${order.status !== 'delivered' && order.status !== 'cancelled' && order.status !== 'waiting_bought' ? `
+                                        ${!bloqueado && order.status !== 'delivered' && order.status !== 'cancelled' && order.status !== 'waiting_bought' ? `
                                             <button onclick="event.stopPropagation(); showOrderForm(${order.id})" class="btn secondary" style="padding: 2px 10px; font-size: 11px; width: auto;">
                                                 ✏️
                                             </button>
@@ -1490,7 +1582,7 @@ function closeOrdersReportModal() {
 
 // ============================================================
 // FORMULARIO DE PEDIDO INDIVIDUAL
-// 🆕 FASE 7.3: Con validación de producción decimal
+// 🆕 v2.1.12: Bloquea si el pedido está en modo solo-lectura
 // ============================================================
 
 async function showOrderForm(orderId = null) {
@@ -1501,6 +1593,21 @@ async function showOrderForm(orderId = null) {
     if (viewModal) viewModal.remove();
     
     const isEdit = !!orderId;
+    
+    // 🆕 v2.1.12: Verificar permisos ANTES de cargar
+    if (isEdit) {
+        const permisos = checkOrderPermission(orderId);
+        if (!permisos.puede) {
+            await window.ModalModule.showAlert({
+                title: '🔒 Pedido bloqueado',
+                message: `No puedes editar este pedido.\n\n${permisos.razon}\n\n💡 Pídele al administrador que comparta las recetas asociadas con el negocio.`,
+                icon: '🔒',
+                type: 'warning',
+                buttonText: 'Entendido'
+            });
+            return;
+        }
+    }
     
     const loadData = async () => {
         let orderData = null;
@@ -2169,7 +2276,6 @@ async function actualizarVistaPrevia() {
             ? window.CorrienteUtils.getResumen(fecha).tieneCorriente 
             : true;
         
-        // 🆕 FASE 7.3: Verificar producción decimal
         const prodInfo = getProduccionInfo(fecha);
         const produccionCompleta = prodInfo.tieneProduccion && prodInfo.disponibles <= 0;
         
@@ -2203,7 +2309,6 @@ async function actualizarVistaPrevia() {
                 textoExtra = `<span style="color: #f59e0b;">⚡ ${resumen.numBloques} bloque${resumen.numBloques > 1 ? 's' : ''}</span>`;
             }
             
-            // Añadir info de producción decimal si existe
             if (prodInfo.tieneProduccion) {
                 textoExtra += ` <span style="color: #8b5cf6;">🔨 ${prodInfo.pedidos}/${fmt(prodInfo.cantidadProduccion)}</span>`;
             }
@@ -2560,7 +2665,6 @@ function onOrderDateChange() {
         bannerContainer.innerHTML = getBannerCorrienteHTML(fechaISO);
     }
     
-    // 🆕 FASE 7.3: Mostrar info de producción (con decimales)
     if (prodInfoContainer) {
         const info = getProduccionInfo(fechaISO);
         
@@ -2756,8 +2860,7 @@ function clearOrderItems() {
 }
 
 // ============================================================
-// 🆕 FASE 7.3: ENVIAR FORMULARIO INDIVIDUAL
-// VALIDACIÓN DE PRODUCCIÓN DECIMAL AL CREAR/EDITAR
+// ENVIAR FORMULARIO INDIVIDUAL
 // ============================================================
 
 async function submitOrderForm(isEdit) {
@@ -2791,7 +2894,6 @@ async function submitOrderForm(isEdit) {
     if (!deliveryDateRaw) { window.showToast('⚠️ La fecha de entrega es obligatoria', 'error'); return; }
     if (hasAdvancePayment && advanceAmount <= 0) { window.showToast('⚠️ Monto adelanto > 0', 'error'); return; }
     
-    // 🆕 FASE 7.3: Validar producción disponible (solo para pedidos nuevos o cambios de fecha)
     if (!isEdit) {
         const prodInfo = getProduccionInfo(deliveryDateRaw);
         const fmt = window.formatearCantidadProduccion || (v => String(v));
@@ -2888,12 +2990,17 @@ async function submitOrderForm(isEdit) {
 
 // ============================================================
 // VER PEDIDO EN DETALLE
+// 🆕 v2.1.12: Modo solo-lectura si el usuario no puede procesar
 // ============================================================
 
 async function viewOrder(id) {
     try {
         const order = await window.OrdersModule.getOrder(id);
         if (!order) { window.showToast('❌ Pedido no encontrado', 'error'); return; }
+        
+        // 🆕 v2.1.12: Verificar permisos
+        const permisos = checkOrderPermission(order);
+        const bloqueado = !permisos.puede;
         
         const editModal = document.getElementById('order-modal');
         if (editModal) editModal.remove();
@@ -2932,7 +3039,6 @@ async function viewOrder(id) {
         const corrienteSection = getSeccionCorrienteHTML(order.delivery_date.split('T')[0]);
         const auditoriaSection = renderAuditoriaHTML(order);
         
-        // 🆕 FASE 7.3: Info de producción con formato decimal
         const prodInfo = getProduccionInfo(order.delivery_date.split('T')[0]);
         const fmt = window.formatearCantidadProduccion || (v => String(v));
         
@@ -2951,10 +3057,44 @@ async function viewOrder(id) {
             `;
         }
         
+        // 🆕 v2.1.12: Aviso de bloqueo
+        let avisoBloqueo = '';
+        if (bloqueado) {
+            const recetasList = permisos.recetasBloqueadas && permisos.recetasBloqueadas.length > 0
+                ? permisos.recetasBloqueadas.map(r => `• ${r.nombre}`).join('\n')
+                : '';
+            
+            avisoBloqueo = `
+                <div style="background: #ef444415; border: 2px solid #ef4444; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: flex-start; gap: 10px;">
+                        <span style="font-size: 24px; flex-shrink: 0;">🔒</span>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 700; color: #ef4444; font-size: 14px; margin-bottom: 4px;">
+                                Solo lectura
+                            </div>
+                            <div style="font-size: 12px; color: var(--text); line-height: 1.5;">
+                                ${permisos.razon}
+                            </div>
+                            ${recetasList ? `
+                                <div style="margin-top: 8px; padding: 6px 10px; background: var(--bg-card); border-radius: 6px; font-size: 11px; color: var(--text-light); white-space: pre-line;">
+                                    <strong style="color: #ef4444;">Recetas bloqueadas:</strong>
+                                    ${recetasList}
+                                </div>
+                            ` : ''}
+                            <div style="margin-top: 8px; font-size: 11px; color: var(--text-light); font-style: italic;">
+                                💡 Pídele al administrador que comparta las recetas con el negocio para poder procesar este pedido.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
         let statusButtons = '';
         const currentStatus = order.status;
         
-        if (currentStatus !== 'cancelled' && currentStatus !== 'delivered' && currentStatus !== 'waiting_bought') {
+        // 🆕 v2.1.12: Solo mostrar botones de acción si NO está bloqueado
+        if (!bloqueado && currentStatus !== 'cancelled' && currentStatus !== 'delivered' && currentStatus !== 'waiting_bought') {
             const statusOptions = [
                 { value: 'confirmed', label: '✅ Confirmar', color: 'primary' },
                 { value: 'production', label: '🔨 Producción', color: 'secondary' },
@@ -2976,16 +3116,18 @@ async function viewOrder(id) {
         let waitingButtons = '';
         let waitingPositionInfo = '';
         
-        if (currentStatus === 'waiting' && order.waiting_list) {
-            waitingPositionInfo = `<div style="width: 100%; padding: 8px 12px; background: #f59e0b20; border-radius: 6px; margin-bottom: 8px; font-size: 13px; color: #f59e0b; text-align: center; font-weight: 600;">⏰ Posición #${order.waiting_list.position} en lista de espera</div>`;
-        }
-        
-        if (currentStatus !== 'waiting' && currentStatus !== 'waiting_bought' && currentStatus !== 'delivered' && currentStatus !== 'cancelled') {
-            waitingButtons = `<button onclick="updateOrderStatusAndReload(${order.id}, 'waiting')" class="btn secondary" style="padding: 6px 16px; font-size: 13px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 6px; cursor: pointer;">⏰ Lista de espera</button>`;
+        if (!bloqueado) {
+            if (currentStatus === 'waiting' && order.waiting_list) {
+                waitingPositionInfo = `<div style="width: 100%; padding: 8px 12px; background: #f59e0b20; border-radius: 6px; margin-bottom: 8px; font-size: 13px; color: #f59e0b; text-align: center; font-weight: 600;">⏰ Posición #${order.waiting_list.position} en lista de espera</div>`;
+            }
+            
+            if (currentStatus !== 'waiting' && currentStatus !== 'waiting_bought' && currentStatus !== 'delivered' && currentStatus !== 'cancelled') {
+                waitingButtons = `<button onclick="updateOrderStatusAndReload(${order.id}, 'waiting')" class="btn secondary" style="padding: 6px 16px; font-size: 13px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 6px; cursor: pointer;">⏰ Lista de espera</button>`;
+            }
         }
         
         let attendButton = '';
-        if (currentStatus === 'waiting') {
+        if (!bloqueado && currentStatus === 'waiting') {
             attendButton = `
                 ${waitingPositionInfo}
                 <button onclick="updateOrderStatusAndReload(${order.id}, 'waiting_bought')" class="btn success" style="padding: 6px 16px; font-size: 13px; width: auto; background: #8b5cf6; color: #fff; border: none; border-radius: 6px; cursor: pointer; width: 100%;">🛒 Atender (Compro por lista de espera)</button>
@@ -2994,16 +3136,18 @@ async function viewOrder(id) {
         }
         
         let deliverButton = '';
-        if (currentStatus !== 'delivered' && currentStatus !== 'waiting_bought' && currentStatus !== 'cancelled') {
+        if (!bloqueado && currentStatus !== 'delivered' && currentStatus !== 'waiting_bought' && currentStatus !== 'cancelled') {
             deliverButton = `<button onclick="updateOrderStatusAndReload(${order.id}, 'delivered')" class="btn success" style="padding: 6px 16px; font-size: 13px; width: auto; background: #10b981; color: #fff; border: none; border-radius: 6px; cursor: pointer;">🚚 Entregar (crea venta)</button>`;
         }
         
         modal.innerHTML = `
             <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <h2 style="margin: 0;">📋 Pedido #${order.id}</h2>
+                    <h2 style="margin: 0;">📋 Pedido #${order.id} ${bloqueado ? '🔒' : ''}</h2>
                     <button onclick="window.closeOrderViewModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
                 </div>
+                
+                ${avisoBloqueo}
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; font-size: 14px;">
                     <div><strong>Cliente:</strong></div><div>${nombreCliente}</div>
@@ -3047,8 +3191,8 @@ async function viewOrder(id) {
                     ${waitingButtons}
                     ${attendButton}
                     ${deliverButton}
-                    ${currentStatus !== 'cancelled' && currentStatus !== 'delivered' && currentStatus !== 'waiting_bought' && currentStatus !== 'waiting' ? `<button onclick="updateOrderStatusAndReload(${order.id}, 'cancelled')" class="btn danger" style="padding: 6px 16px; font-size: 13px; width: auto;">❌ Cancelar</button>` : ''}
-                    <button onclick="abrirEdicionDesdeVista(${order.id})" class="btn secondary" style="padding: 6px 16px; font-size: 13px; width: auto;">✏️ Editar</button>
+                    ${!bloqueado && currentStatus !== 'cancelled' && currentStatus !== 'delivered' && currentStatus !== 'waiting_bought' && currentStatus !== 'waiting' ? `<button onclick="updateOrderStatusAndReload(${order.id}, 'cancelled')" class="btn danger" style="padding: 6px 16px; font-size: 13px; width: auto;">❌ Cancelar</button>` : ''}
+                    ${!bloqueado ? `<button onclick="abrirEdicionDesdeVista(${order.id})" class="btn secondary" style="padding: 6px 16px; font-size: 13px; width: auto;">✏️ Editar</button>` : ''}
                     <button onclick="window.closeOrderViewModal()" class="btn secondary" style="padding: 6px 16px; font-size: 13px; width: auto;">Cerrar</button>
                 </div>
             </div>
@@ -3062,6 +3206,13 @@ async function viewOrder(id) {
 }
 
 async function abrirEdicionDesdeVista(orderId) {
+    // 🆕 v2.1.12: Verificar permisos
+    const permisos = checkOrderPermission(orderId);
+    if (!permisos.puede) {
+        window.showToast('🔒 ' + permisos.razon, 'error', 5000);
+        return;
+    }
+    
     window.closeOrderViewModal();
     await new Promise(r => setTimeout(r, 250));
     showOrderForm(orderId);
@@ -3069,6 +3220,13 @@ async function abrirEdicionDesdeVista(orderId) {
 
 async function updateOrderStatusAndReload(orderId, status) {
     if (!orderId) { window.showToast('❌ ID no válido', 'error'); return; }
+    
+    // 🆕 v2.1.12: Verificar permisos ANTES de mostrar el confirm
+    const permisos = checkOrderPermission(orderId);
+    if (!permisos.puede) {
+        window.showToast('🔒 ' + permisos.razon, 'error', 5000);
+        return;
+    }
     
     const order = await window.OrdersModule.getOrder(orderId);
     if (!order) { window.showToast('❌ Pedido no encontrado', 'error'); return; }
@@ -3179,7 +3337,20 @@ function showWaitingListProcessingModal(order, candidatos, cantidadDisponible) {
     const existingModal = document.getElementById('waiting-processing-modal');
     if (existingModal) existingModal.remove();
     
-    const cantidadTotalCandidatos = candidatos.reduce((sum, c) => sum + c.quantity, 0);
+    // 🆕 v2.1.12: Filtrar candidatos bloqueados
+    const candidatosFiltrados = candidatos.filter(c => {
+        const permisos = checkOrderPermission(c.order_id);
+        return permisos.puede;
+    });
+    
+    const candidatosBloqueados = candidatos.length - candidatosFiltrados.length;
+    
+    if (candidatosFiltrados.length === 0) {
+        window.showToast('🔒 No hay candidatos disponibles que puedas procesar', 'warning', 4000);
+        return;
+    }
+    
+    const cantidadTotalCandidatos = candidatosFiltrados.reduce((sum, c) => sum + c.quantity, 0);
     const cabenMultiples = cantidadTotalCandidatos <= cantidadDisponible;
     const usarCheckbox = cabenMultiples && cantidadDisponible > 1;
     
@@ -3192,7 +3363,7 @@ function showWaitingListProcessingModal(order, candidatos, cantidadDisponible) {
         z-index: ${ORDERS_MODAL_Z_INDEX}; padding: 20px;
     `;
     
-    const candidatosHtml = candidatos.map(c => {
+    const candidatosHtml = candidatosFiltrados.map(c => {
         const cabe = c.quantity <= cantidadDisponible;
         const cabeParcial = !cabe && cantidadDisponible > 0;
         
@@ -3227,6 +3398,16 @@ function showWaitingListProcessingModal(order, candidatos, cantidadDisponible) {
         `;
     }).join('');
     
+    let infoBloqueados = '';
+    if (candidatosBloqueados > 0) {
+        infoBloqueados = `
+            <div style="background: #94a3b815; border: 1px solid #94a3b8; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 12px; color: #94a3b8; display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 18px;">🔒</span>
+                <span>${candidatosBloqueados} candidato(s) oculto(s) por recetas no compartidas contigo.</span>
+            </div>
+        `;
+    }
+    
     modal.innerHTML = `
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 20px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto;">
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid var(--border-color);">
@@ -3239,6 +3420,8 @@ function showWaitingListProcessingModal(order, candidatos, cantidadDisponible) {
                 </div>
             </div>
             
+            ${infoBloqueados}
+            
             <div style="background: #fef9e7; border: 1px solid #f59e0b; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px; color: #92400e;">
                 💡 Selecciona los clientes a atender.
                 ${!usarCheckbox ? '<br>⚠️ <strong>Solo puedes seleccionar uno</strong>.' : '<br>✅ <strong>Puedes seleccionar varios</strong>.'}
@@ -3246,7 +3429,7 @@ function showWaitingListProcessingModal(order, candidatos, cantidadDisponible) {
             
             <div style="margin-bottom: 12px;">
                 <div style="font-size: 12px; font-weight: 600; color: var(--text-label); margin-bottom: 6px;">
-                    📋 Candidatos en espera (${candidatos.length}):
+                    📋 Candidatos en espera (${candidatosFiltrados.length}):
                 </div>
                 ${candidatosHtml}
             </div>
@@ -3527,8 +3710,19 @@ window.eliminarClienteDeListaUI = eliminarClienteDeListaUI;
 window.limpiarListaEsperaUI = limpiarListaEsperaUI;
 window.reporteListaEspera = reporteListaEspera;
 
-// 🆕 FASE 7.3
 window.getProduccionInfo = getProduccionInfo;
 window.renderProduccionInfoHTML = renderProduccionInfoHTML;
 
-console.log('📦 UI Orders Module v2.1.9 (FASE 7.3: info de producción decimal en tarjetas + bloqueo definitivo al crear pedidos)');
+// 🆕 v2.1.12: Helpers de bloqueo
+window.checkOrderPermission = checkOrderPermission;
+window.renderBadgeSoloLectura = renderBadgeSoloLectura;
+window.aplicarBloqueoVisual = aplicarBloqueoVisual;
+
+console.log('📦 UI Orders Module v2.1.12 (ENTREGA B: corrección #2 - bloqueo por recetas no compartidas)');
+console.log('   ✅ loadOrders(): muestra badge 🔒 y oculta botones en pedidos bloqueados');
+console.log('   ✅ viewOrder(): modo solo-lectura con aviso explicativo');
+console.log('   ✅ showOrderForm(): bloquea si el pedido está bloqueado');
+console.log('   ✅ updateOrderStatusAndReload(): verifica permisos ANTES del confirm');
+console.log('   ✅ renderWaitingManagerContent(): filtra pedidos bloqueados');
+console.log('   ✅ procesarSeleccionListaEspera(): filtra candidatos bloqueados');
+console.log('   ✅ procesarClienteDeListaUI/cancelarClienteDeListaUI/eliminarClienteDeListaUI: verifican permisos');

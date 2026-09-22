@@ -13,122 +13,106 @@
 //   - Se muestra el #ID de cada venta en TODAS las vistas
 // CORREGIDO FASE 1.1 (190926):
 //   - loadSalesAndExpenses() ahora filtra por negocio_id (no user_id)
-//   - updateSummary() ahora filtra por negocio_id (no user_id)
-//   - Vista de deudas ahora filtra por negocio_id
-// CORREGIDO FASE 1.4 (190926 v2):
-//   - voidSale() AHORA FUNCIONA: espera a que el confirm-modal se elimine
-//     del DOM antes de abrir el prompt-modal. El bug era que el prompt
-//     se abría encima del confirm sin haber cerrado el anterior, y el
-//     _modalResolve se sobrescribía.
-//   - Añadido helper waitForCustomModalRemoval()
-//   - voidSale() muestra toast de éxito/error
-//   - unvoidSale() y voidExpense() con el mismo fix
-// CORREGIDO FASE 1.4 HOTFIX (190926 v3): 🔧 FIX DEFINITIVO #22
-//   - voidSale() ahora VERIFICA que cada modal se eliminó realmente
-//     antes de abrir el siguiente (doble verificación con polling)
-//   - Timeout de espera ampliado a 800ms (era 500ms)
-//   - Logs de diagnóstico detallados en cada paso
-//   - unvoidSale() y voidExpense() con el mismo refuerzo
-// 🆕 FIX 2 (190926 v4):
-//   - normalizarFechaVenta() helper para evitar fechas YYYY-MM-DD sin hora
-//   - submitSaleForm() usa normalizarFechaVenta() para sale_date
-//   - submitLiberatedSale() también usa normalizarFechaVenta()
-// 🆕 FASE 3.5 (200926 v5):
-//   - Homogeneizar alturas de las 4 tarjetas resumen (#17)
-//   - NUEVA tarjeta: 🚀 Ventas liberadas en el resumen superior
-//   - Todas las tarjetas del resumen tienen min-height: 90px
-//   - Rejilla responsiva consistente: 2 cols en móvil, 5 en desktop
-//   - Actualización de updateSummary() para traer también las liberadas
+// CORREGIDO FASE 1.4 (190926 v2-v3): voidSale() con triple verificación
+// 🆕 FIX 2 (190926 v4): normalizarFechaVenta() helper
+// 🆕 FASE 3.5 (200926 v5): 5 tarjetas de alturas homogéneas
 // 🆕 FASE 4.2 (#13) (200926 v6): INTERRUPTOR DE VENTAS LIBERADAS
-//   - NUEVO toggle "🚀 Mostrar/Ocultar liberadas" en el header
-//   - loadSalesAndExpenses() filtra is_liberated=1 si el toggle está OFF
-//   - Persistencia en localStorage (panario_show_liberated_sales)
-//   - Aviso visual cuando hay ventas ocultas
 // 🆕 FASE 5 (#20) (200926 v7): UI DE DÍAS SIN VENTAS
-//   - NUEVO botón "📅 Días sin ventas" en el header
-//   - NUEVO modal showDiasSinVentasModal(): lista con filtros
-//   - NUEVO formulario showDiaSinVentaForm(): fecha + motivo + nota
-//   - Motivos predefinidos: apagón, insumos, feriado, vacaciones, etc.
-//   - Detección inteligente: avisa si ya hay ventas ese día
-//   - Botón "📄 Reporte PDF" (delegado a ReportsModule)
 // 🆕 ENTREGA 2 (230926 v8): ANULAR VENTA + VENDEDOR
-//   - ✅ FIX REFORZADO: voidSale() con polling tripe de verificación
-//     * PASO 0: limpiar modales huérfanos al inicio
-//     * PASO 1: showConfirm + try/catch
-//     * PASO 2: waitForCustomModalRemoval (800ms) + 3 verificaciones
-//     * PASO 3: showPrompt con timeout de seguridad
-//     * PASO 4: ejecutar voidSale y refrescar vistas
-//   - ✅ vendedor SIEMPRE visible en viewSale() via renderAuditoriaHTML()
-//   - ✅ vendedor en tooltip de #ID en listado (opcional)
-//   - ✅ ORDEN ASCENDENTE POR ID DENTRO DEL DÍA (Corrección #3)
-//     * renderSalesGroupedByDay() ordena las ventas del día por ID ASC
-//     * Las ventas liberadas también se ordenan por ID ASC
-//   - ✅ Toast explícito "✅ Venta anulada correctamente"
-//   - ✅ Manejo de errores con mensajes claros al usuario
+// 🆕 v2.1.12 (210926 v9): CORRECCIÓN #2 - BLOQUEO POR RECETAS NO COMPARTIDAS
+//   - ✅ NUEVO helper local: checkSalePermission(saleOrId)
+//   - ✅ NUEVO helper local: renderBadgeSoloLecturaVenta()
+//   - ✅ loadSalesAndExpenses(): muestra badge "🔒 Solo lectura" en ventas
+//     bloqueadas y NO las oculta (para que el usuario sepa que existen)
+//   - ✅ renderSalesGroupedByDay(): oculta botones ✏️ y 🚫 en ventas bloqueadas
+//     y muestra borde gris + opacidad reducida
+//   - ✅ Vista de DEUDAS: filtra deudas bloqueadas (no las muestra para
+//     que el usuario no-admin no intente cobrarlas). Muestra aviso con
+//     contador de deudas ocultas.
+//   - ✅ viewSale(): muestra aviso rojo "🔒 Solo lectura" y oculta los
+//     botones ✏️ Editar y 🚫 Anular. Solo deja 🔄 Restaurar si estaba
+//     anulada y Cerrar.
+//   - ✅ showSaleForm(): bloquea si la venta está bloqueada (aviso)
+//   - ✅ voidSale(): verifica permisos ANTES del confirm
+//   - ✅ unvoidSale(): verifica permisos ANTES del confirm
+//   - ✅ registerSalePayment(): verifica permisos ANTES del confirm
+//   - ✅ Los GASTOS NO se ven afectados (no tienen receta)
+//   - ✅ Los usuarios ADMIN ven todo normalmente sin cambios
 // ============================================================
 
 // ============================================================
-// 🆕 FIX 2: NORMALIZACIÓN DE FECHAS DE VENTA
-// ============================================================
-// 
-// PROBLEMA:
-//   new Date("2026-09-17") → 17 sept 00:00 UTC → 16 sept 20:00 local (UTC-4) ❌
-//   new Date("2026-09-17T00:00:00") → 17 sept 00:00 LOCAL ✅
-//   Pero si SQLite lo interpreta como UTC → 16 sept 20:00 local ❌
-//
-// SOLUCIÓN:
-//   - Si la fecha es HOY → usar hora actual (new Date().toISOString())
-//   - Si la fecha es otra → usar mediodía UTC (T12:00:00.000Z)
-//   
-//   Mediodía UTC siempre cae en el mismo día local en cualquier zona
-//   horaria razonable (UTC-12 a UTC+12).
+// FIX 2: NORMALIZACIÓN DE FECHAS DE VENTA
 // ============================================================
 
 function normalizarFechaVenta(fechaInput) {
-    // Si no hay fecha, usar hora actual
     if (!fechaInput) {
         return new Date().toISOString();
     }
     
-    // Si ya viene con hora (ISO completo), respetarla
     if (typeof fechaInput === 'string' && fechaInput.includes('T')) {
         return fechaInput;
     }
     
-    // Si viene como YYYY-MM-DD (de <input type="date">)
     const fechaStr = String(fechaInput).trim();
     
-    // Validar formato YYYY-MM-DD
     const match = fechaStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!match) {
         console.warn('⚠️ [normalizarFechaVenta] Formato no reconocido:', fechaInput);
         return new Date().toISOString();
     }
     
-    // ¿Es hoy?
     const hoyStr = new Date().toISOString().split('T')[0];
     if (fechaStr === hoyStr) {
-        // Hoy → hora actual real (preserva la hora exacta de la venta)
         return new Date().toISOString();
     }
     
-    // Otra fecha → mediodía UTC (garantiza el mismo día local)
     return `${fechaStr}T12:00:00.000Z`;
 }
+
+// ============================================================
+// 🆕 v2.1.12: HELPERS DE BLOQUEO POR RECETAS NO COMPARTIDAS
+// ============================================================
+
+/**
+ * Verifica si el usuario actual puede procesar (editar, anular,
+ * restaurar, cobrar) una venta.
+ * 
+ * Delega a SalesModule._puedeUsuarioActualProcesarVenta() si existe,
+ * o a OrdersModule.puedeUsuarioActualProcesarVenta() como fallback.
+ * 
+ * @param {number|Object} saleOrId
+ * @returns {Object} { puede, razon, recetaBloqueada }
+ */
+function checkSalePermission(saleOrId) {
+    try {
+        if (typeof window.SalesModule?._puedeUsuarioActualProcesarVenta === 'function') {
+            return window.SalesModule._puedeUsuarioActualProcesarVenta(saleOrId);
+        }
+        if (typeof window.OrdersModule?.puedeUsuarioActualProcesarVenta === 'function') {
+            return window.OrdersModule.puedeUsuarioActualProcesarVenta(saleOrId);
+        }
+        // Fallback: permitir
+        return { puede: true, razon: '', recetaBloqueada: null };
+    } catch (e) {
+        console.warn('⚠️ Error verificando permisos de venta:', e);
+        return { puede: true, razon: '', recetaBloqueada: null };
+    }
+}
+
+/**
+ * Renderiza el badge visual "🔒 Solo lectura" para ventas bloqueadas.
+ */
+function renderBadgeSoloLecturaVenta() {
+    return `<span style="font-size: 10px; background: #94a3b820; color: #94a3b8; padding: 2px 8px; border-radius: 10px; font-weight: 600; border: 1px solid #94a3b8;">🔒 Solo lectura</span>`;
+}
+
+window.checkSalePermission = checkSalePermission;
+window.renderBadgeSoloLecturaVenta = renderBadgeSoloLecturaVenta;
 
 // ============================================================
 // 🆕 FASE 1.4: HELPER PARA ESPERAR A QUE EL custom-modal SE CIERRE
 // ============================================================
 
-/**
- * Espera a que el `custom-modal` (el de ModalModule) se elimine del DOM.
- * Esto es necesario cuando se encadenan showConfirm() → showPrompt()
- * porque el segundo showConfirm sobrescribe `window._modalResolve` 
- * si el primero aún no terminó de cerrarse.
- * 
- * @param {number} timeoutMs - Timeout máximo de espera
- * @returns {Promise<boolean>} - true si se cerró, false si timeout
- */
 function waitForCustomModalRemoval(timeoutMs = 800) {
     return new Promise((resolve) => {
         const start = Date.now();
@@ -140,7 +124,6 @@ function waitForCustomModalRemoval(timeoutMs = 800) {
             }
             if (Date.now() - start > timeoutMs) {
                 console.warn('⚠️ Timeout esperando cierre de custom-modal, forzando...');
-                // Forzar remoción
                 if (modal.parentNode) modal.remove();
                 window._modalResolve = null;
                 window._modalResolved = false;
@@ -156,15 +139,10 @@ function waitForCustomModalRemoval(timeoutMs = 800) {
 // ============================================================
 // FASE A.4: HELPER DE AUDITORÍA
 // ============================================================
-// 🆕 ENTREGA 2: Se refuerza para que SIEMPRE muestre el vendedor
-// cuando exista created_by. Si no hay created_by pero hay user_id,
-// usa user_id como fallback.
-// ============================================================
 
 function renderAuditoriaHTML(entity) {
     if (!entity) return '';
     
-    // 🆕 ENTREGA 2: Fallback de created_by a user_id
     const createdBy = entity.created_by || entity.user_id;
     const modifiedBy = entity.modified_by;
     const createdAt = entity.created_at;
@@ -233,22 +211,16 @@ function renderAuditoriaHTML(entity) {
 
 const SHOW_LIBERATED_KEY = 'panario_show_liberated_sales';
 
-/**
- * Lee la preferencia desde localStorage. Por defecto: true.
- */
 function getShowLiberatedSales() {
     try {
         const stored = localStorage.getItem(SHOW_LIBERATED_KEY);
-        if (stored === null) return true;  // Default: mostrar
+        if (stored === null) return true;
         return stored === 'true';
     } catch (e) {
         return true;
     }
 }
 
-/**
- * Guarda la preferencia en localStorage.
- */
 function setShowLiberatedSales(value) {
     try {
         localStorage.setItem(SHOW_LIBERATED_KEY, value ? 'true' : 'false');
@@ -257,17 +229,11 @@ function setShowLiberatedSales(value) {
     }
 }
 
-/**
- * Handler del checkbox del toggle.
- */
 function onShowLiberatedChange(checked) {
     setShowLiberatedSales(checked);
     updateShowLiberatedToggleVisual();
-    
-    // Recargar el listado
     loadSalesAndExpenses();
     
-    // Toast informativo
     window.showToast(
         checked ? '🚀 Mostrando ventas liberadas' : '🚀 Ventas liberadas ocultas',
         'info',
@@ -275,9 +241,6 @@ function onShowLiberatedChange(checked) {
     );
 }
 
-/**
- * Actualiza el visual del toggle (slider, color, etiqueta).
- */
 function updateShowLiberatedToggleVisual() {
     const toggle = document.getElementById('toggle-liberadas-sales');
     const checkbox = document.getElementById('filter-show-liberated');
@@ -319,9 +282,6 @@ const MOTIVOS_DIAS_SIN_VENTAS = [
     { value: 'otro', label: '🔄 Otro', color: '#94a3b8' }
 ];
 
-/**
- * Devuelve el objeto de motivo para un valor dado.
- */
 function getMotivoDiaSinVenta(value) {
     return MOTIVOS_DIAS_SIN_VENTAS.find(m => m.value === value) || MOTIVOS_DIAS_SIN_VENTAS[MOTIVOS_DIAS_SIN_VENTAS.length - 1];
 }
@@ -339,7 +299,6 @@ function renderSalesView() {
     const fechaInicioMes = primerDiaMes.toISOString().split('T')[0];
     const fechaFinMes = ultimoDiaMes.toISOString().split('T')[0];
     
-    // 🆕 FASE 4.2 (#13): Leer preferencia
     const showLiberated = getShowLiberatedSales();
     
     main.innerHTML = `
@@ -376,7 +335,6 @@ function renderSalesView() {
             </div>
         </div>
         
-        <!-- 🆕 FASE 3.5: Resumen con 5 tarjetas de alturas homogéneas -->
         <div id="sales-summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; align-items: stretch;">
             
             <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-left: 4px solid var(--primary);">
@@ -412,7 +370,6 @@ function renderSalesView() {
             
         </div>
         
-        <!-- Filtros -->
         <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; background: var(--bg-card); padding: 16px; border-radius: var(--radius); border: 1px solid var(--border-color);">
             <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: space-between;">
                 <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
@@ -761,8 +718,7 @@ if (typeof window.getSeccionCorrienteHTML !== 'function') {
 }
 
 // ============================================================
-// LOAD SALES AND EXPENSES
-// 🆕 FASE 4.2 (#13): Filtrar liberadas si el toggle está OFF
+// 🆕 v2.1.12: LOAD SALES AND EXPENSES - CON VERIFICACIÓN DE PERMISOS
 // ============================================================
 
 async function loadSalesAndExpenses() {
@@ -787,6 +743,10 @@ async function loadSalesAndExpenses() {
     }
     
     try {
+        // ============================================================
+        // VISTA DE DEUDAS
+        // 🆕 v2.1.12: Filtra deudas bloqueadas para no-admin
+        // ============================================================
         if (filterType === 'debts') {
             let debtQuery = `
                 SELECT * FROM sales 
@@ -811,13 +771,50 @@ async function loadSalesAndExpenses() {
                 return;
             }
             
+            // 🆕 v2.1.12: Separar deudas accesibles de las bloqueadas
+            const deudasAccesibles = [];
+            const deudasBloqueadas = [];
+            
+            debtSales.forEach(sale => {
+                const permisos = checkSalePermission(sale.id);
+                if (permisos.puede) {
+                    deudasAccesibles.push(sale);
+                } else {
+                    deudasBloqueadas.push(sale);
+                }
+            });
+            
             const paymentIcons = { 'cash': '💵', 'transfer': '🏦', 'debt': '💳', 'other': '🔄' };
             
-            let html = `
+            let html = '';
+            
+            // Aviso de deudas bloqueadas
+            if (deudasBloqueadas.length > 0) {
+                const totalBloqueado = deudasBloqueadas.reduce((sum, s) => sum + s.total, 0);
+                html += `
+                    <div style="background: #94a3b815; border-left: 4px solid #94a3b8; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: var(--text-light);">
+                        <strong>🔒 ${deudasBloqueadas.length} deuda(s) oculta(s)</strong> — $${totalBloqueado.toFixed(2)}
+                        <br><span style="font-size: 11px;">Usan recetas que no te han compartido.</span>
+                    </div>
+                `;
+            }
+            
+            if (deudasAccesibles.length === 0) {
+                html += `
+                    <div class="card" style="text-align: center; padding: 40px;">
+                        <span style="font-size: 48px;">🔒</span>
+                        <p style="margin-top: 8px; color: var(--text-light);">No tienes deudas accesibles para gestionar</p>
+                    </div>
+                `;
+                container.innerHTML = html;
+                return;
+            }
+            
+            html += `
                 <div style="margin-bottom: 12px;">
-                    <h4 style="margin: 0 0 8px 0; color: #ef4444;">💰 Deudas de Ventas (${debtSales.length})</h4>
+                    <h4 style="margin: 0 0 8px 0; color: #ef4444;">💰 Deudas de Ventas (${deudasAccesibles.length})</h4>
             `;
-            html += debtSales.map(sale => {
+            html += deudasAccesibles.map(sale => {
                 const sesionBadge = sale.session ? getBadgeSesion(sale.session) : '';
                 return `
                 <div class="card" style="border-left: 4px solid #ef4444; margin-bottom: 8px;">
@@ -857,6 +854,9 @@ async function loadSalesAndExpenses() {
             return;
         }
         
+        // ============================================================
+        // VISTA DE VENTAS / GASTOS / TODO
+        // ============================================================
         let sales = [];
         let expenses = [];
         let allTransactions = [];
@@ -883,7 +883,6 @@ async function loadSalesAndExpenses() {
                 query += ' AND is_liberated = 0';
             }
             
-            // 🆕 ENTREGA 2: Orden ascendente por ID dentro del día
             query += ' ORDER BY sale_date DESC, id ASC';
             
             sales = window.DBModule.query(query, params);
@@ -1031,20 +1030,36 @@ async function loadSalesAndExpenses() {
         } else {
             html = allTransactions.map(item => {
                 const isVoid = item.voided === 1;
+                
                 if (item._type === 'sale') {
+                    // 🆕 v2.1.12: Verificar permisos
+                    const permisos = checkSalePermission(item.id);
+                    const bloqueado = !permisos.puede;
+                    
                     const isDebt = item.is_debt === 1 && item.paid === 0;
                     const isLiberated = item.is_liberated === 1;
                     const sesionBadge = item.session ? getBadgeSesion(item.session) : '';
+                    
+                    let borderColor;
+                    if (isVoid) borderColor = '#94a3b8';
+                    else if (bloqueado) borderColor = '#94a3b8';
+                    else if (isLiberated) borderColor = '#8b5cf6';
+                    else if (isDebt) borderColor = '#ef4444';
+                    else borderColor = '#10b981';
+                    
+                    const cardOpacity = (isVoid || bloqueado) ? 0.6 : 1;
+                    
                     return `
-                        <div class="card" style="border-left: 4px solid ${isVoid ? '#94a3b8' : (isLiberated ? '#8b5cf6' : (isDebt ? '#ef4444' : '#10b981'))}; opacity: ${isVoid ? 0.6 : 1};">
+                        <div class="card" style="border-left: 4px solid ${borderColor}; opacity: ${cardOpacity};">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
                                 <div>
                                     <h3 style="margin: 0; font-size: 16px;">
-                                        🛒 <span style="color: var(--text-light); font-weight: 600;">#${item.id}</span> ${item.producto_nombre || item.product_name || 'Producto'}
+                                        ${bloqueado ? '🔒' : '🛒'} <span style="color: var(--text-light); font-weight: 600;">#${item.id}</span> ${item.producto_nombre || item.product_name || 'Producto'}
                                         ${isVoid ? '<span style="font-size: 12px; color: #94a3b8;"> 🚫 (ANULADA)</span>' : ''}
-                                        ${isLiberated && !isVoid ? '<span style="font-size: 11px; color: #8b5cf6; background: #8b5cf620; padding: 0 8px; border-radius: 4px;">LIBERADA</span>' : ''}
-                                        ${isDebt && !isVoid && !isLiberated ? '<span style="font-size: 11px; color: #ef4444; background: #ef444420; padding: 0 8px; border-radius: 4px;">DEUDA</span>' : ''}
-                                        ${!isVoid && !isDebt && !isLiberated ? '<span style="font-size: 11px; color: #10b981; background: #10b98120; padding: 0 8px; border-radius: 4px;">INGRESO</span>' : ''}
+                                        ${isLiberated && !isVoid && !bloqueado ? '<span style="font-size: 11px; color: #8b5cf6; background: #8b5cf620; padding: 0 8px; border-radius: 4px;">LIBERADA</span>' : ''}
+                                        ${isDebt && !isVoid && !isLiberated && !bloqueado ? '<span style="font-size: 11px; color: #ef4444; background: #ef444420; padding: 0 8px; border-radius: 4px;">DEUDA</span>' : ''}
+                                        ${!isVoid && !isDebt && !isLiberated && !bloqueado ? '<span style="font-size: 11px; color: #10b981; background: #10b98120; padding: 0 8px; border-radius: 4px;">INGRESO</span>' : ''}
+                                        ${bloqueado ? renderBadgeSoloLecturaVenta() : ''}
                                         ${sesionBadge}
                                     </h3>
                                     <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; font-size: 13px; color: var(--text-light);">
@@ -1052,9 +1067,10 @@ async function loadSalesAndExpenses() {
                                         <span>${paymentIcons[item.payment_method] || '💵'} ${item.payment_method}</span>
                                         ${item.buyer ? `<span>👤 ${item.buyer}</span>` : ''}
                                     </div>
+                                    ${bloqueado ? `<div style="margin-top: 4px; font-size: 11px; color: #94a3b8; font-style: italic;">🔒 ${permisos.razon}</div>` : ''}
                                 </div>
                                 <div style="text-align: right;">
-                                    <div style="font-size: 18px; font-weight: 700; color: ${isVoid ? '#94a3b8' : (isLiberated ? '#8b5cf6' : (isDebt ? '#ef4444' : '#10b981'))};">
+                                    <div style="font-size: 18px; font-weight: 700; color: ${isVoid ? '#94a3b8' : (bloqueado ? '#94a3b8' : (isLiberated ? '#8b5cf6' : (isDebt ? '#ef4444' : '#10b981')))};">
                                         ${isVoid ? '🚫' : (isDebt ? '💳' : '+')}$${parseFloat(item.total).toFixed(2)}
                                     </div>
                                     <div style="font-size: 11px; color: var(--text-light);">
@@ -1131,8 +1147,7 @@ async function loadSalesAndExpenses() {
 }
 
 // ============================================================
-// RENDER SALES GROUPED BY DAY
-// 🆕 ENTREGA 2: Orden ascendente por ID dentro del día
+// 🆕 v2.1.12: RENDER SALES GROUPED BY DAY CON BLOQUEO
 // ============================================================
 
 function renderSalesGroupedByDay(container, sales) {
@@ -1145,7 +1160,6 @@ function renderSalesGroupedByDay(container, sales) {
         grouped[date].push(sale);
     });
     
-    // 🆕 ENTREGA 2: Ordenar ventas DENTRO de cada día por ID ascendente
     Object.keys(grouped).forEach(date => {
         grouped[date].sort((a, b) => a.id - b.id);
     });
@@ -1182,6 +1196,12 @@ function renderSalesGroupedByDay(container, sales) {
         const fechaLarga = formatearFechaLarga(date);
         const badgeCorriente = getBadgeCorriente(date);
         
+        // 🆕 v2.1.12: Contar ventas bloqueadas del día
+        const bloqueadosDelDia = daySales.filter(s => !checkSalePermission(s.id).puede).length;
+        const badgeBloqueados = bloqueadosDelDia > 0 
+            ? `<span style="font-size: 11px; background: #94a3b820; color: #94a3b8; padding: 2px 8px; border-radius: 10px; font-weight: 600; border: 1px solid #94a3b8;">🔒 ${bloqueadosDelDia} bloqueada${bloqueadosDelDia > 1 ? 's' : ''}</span>`
+            : '';
+        
         const borderColor = tieneDeudas ? '#ef4444' : (isToday ? '#f59e0b' : '#10b981');
         
         const badgeDeuda = tieneDeudas 
@@ -1210,6 +1230,7 @@ function renderSalesGroupedByDay(container, sales) {
                             ${isToday ? ' <span style="font-size: 11px; color: #f59e0b; background: #f59e0b20; padding: 1px 8px; border-radius: 10px;">HOY</span>' : ''}
                             ${badgeCorriente}
                             ${badgeDeuda}
+                            ${badgeBloqueados}
                         </span>
                         <span style="font-size: 12px; color: var(--text-light);">
                             ${daySales.length} ${daySales.length === 1 ? 'venta' : 'ventas'}
@@ -1226,16 +1247,23 @@ function renderSalesGroupedByDay(container, sales) {
                 ${ventasNormales.map(sale => {
                     const isVoid = sale.voided === 1;
                     const isDebt = sale.is_debt === 1 && sale.paid === 0;
-                    const statusColor = isVoid ? '#94a3b8' : (isDebt ? '#ef4444' : '#10b981');
-                    const statusLabel = isVoid ? '🚫 ANULADA' : (isDebt ? '💳 Deuda' : '✅ Pagado');
+                    
+                    // 🆕 v2.1.12: Verificar permisos
+                    const permisos = checkSalePermission(sale.id);
+                    const bloqueado = !permisos.puede;
+                    
+                    const statusColor = (isVoid || bloqueado) ? '#94a3b8' : (isDebt ? '#ef4444' : '#10b981');
+                    const statusLabel = isVoid ? '🚫 ANULADA' : (bloqueado ? '🔒 Solo lectura' : (isDebt ? '💳 Deuda' : '✅ Pagado'));
                     const sesionBadge = sale.session ? getBadgeSesion(sale.session) : '';
                     
                     return `
-                        <div class="card" style="border-left: 4px solid ${statusColor}; padding: 12px 16px; margin-bottom: 6px; opacity: ${isVoid ? 0.6 : 1};">
+                        <div class="card" style="border-left: 4px solid ${statusColor}; padding: 12px 16px; margin-bottom: 6px; opacity: ${(isVoid || bloqueado) ? 0.65 : 1};">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
                                 <div style="flex: 1;">
                                     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                        <span style="font-weight: 600; font-size: 15px;">🛒 <span style="color: var(--text-light); font-weight: 600;">#${sale.id}</span> ${sale.product_name}</span>
+                                        <span style="font-weight: 600; font-size: 15px;">
+                                            ${bloqueado ? '🔒' : '🛒'} <span style="color: var(--text-light); font-weight: 600;">#${sale.id}</span> ${sale.product_name}
+                                        </span>
                                         <span style="font-size: 11px; color: ${statusColor}; background: ${statusColor}20; padding: 1px 8px; border-radius: 10px;">${statusLabel}</span>
                                         ${sesionBadge}
                                     </div>
@@ -1245,6 +1273,7 @@ function renderSalesGroupedByDay(container, sales) {
                                         <span>${paymentIcons[sale.payment_method] || '💵'} ${sale.payment_method}</span>
                                         ${sale.buyer ? `<span>👤 ${sale.buyer}</span>` : ''}
                                     </div>
+                                    ${bloqueado ? `<div style="margin-top: 4px; font-size: 11px; color: #94a3b8; font-style: italic;">🔒 ${permisos.razon}</div>` : ''}
                                 </div>
                                 <div style="text-align: right;">
                                     <div style="font-size: 17px; font-weight: 700; color: ${statusColor};">
@@ -1254,18 +1283,19 @@ function renderSalesGroupedByDay(container, sales) {
                                         <button onclick="viewSale(${sale.id})" class="btn secondary" style="padding: 2px 10px; font-size: 11px; width: auto;">
                                             👁️ Ver
                                         </button>
-                                        ${!isVoid ? `
+                                        ${!isVoid && !bloqueado ? `
                                             <button onclick="showSaleForm(${sale.id})" class="btn secondary" style="padding: 2px 10px; font-size: 11px; width: auto;">
                                                 ✏️
                                             </button>
                                             <button onclick="voidSale(${sale.id})" class="btn secondary" style="padding: 2px 10px; font-size: 11px; width: auto; color: #ef4444; border-color: #ef4444;">
                                                 🚫
                                             </button>
-                                        ` : `
+                                        ` : ''}
+                                        ${isVoid && !bloqueado ? `
                                             <button onclick="unvoidSale(${sale.id})" class="btn secondary" style="padding: 2px 10px; font-size: 11px; width: auto; color: #10b981; border-color: #10b981;">
                                                 🔄
                                             </button>
-                                        `}
+                                        ` : ''}
                                     </div>
                                 </div>
                             </div>
@@ -1294,22 +1324,32 @@ function renderSalesGroupedByDay(container, sales) {
                         ${ventasLiberadas.map(sale => {
                             const isVoid = sale.voided === 1;
                             const sesionBadge = sale.session ? getBadgeSesion(sale.session) : '';
+                            
+                            // 🆕 v2.1.12: Verificar permisos
+                            const permisos = checkSalePermission(sale.id);
+                            const bloqueado = !permisos.puede;
+                            
                             return `
-                                <div class="card" style="border-left: 4px solid ${isVoid ? '#94a3b8' : '#8b5cf6'}; padding: 8px 14px; margin-bottom: 4px; opacity: ${isVoid ? 0.6 : 1};">
+                                <div class="card" style="border-left: 4px solid ${(isVoid || bloqueado) ? '#94a3b8' : '#8b5cf6'}; padding: 8px 14px; margin-bottom: 4px; opacity: ${(isVoid || bloqueado) ? 0.65 : 1};">
                                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                                         <div style="flex: 1;">
                                             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                                <span style="font-size: 14px;">🛒 <span style="color: var(--text-light); font-weight: 600;">#${sale.id}</span> ${sale.product_name}</span>
-                                                <span style="font-size: 11px; color: #8b5cf6; background: #8b5cf620; padding: 1px 6px; border-radius: 8px;">🚀 Liberada</span>
+                                                <span style="font-size: 14px;">
+                                                    ${bloqueado ? '🔒' : '🛒'} <span style="color: var(--text-light); font-weight: 600;">#${sale.id}</span> ${sale.product_name}
+                                                </span>
+                                                <span style="font-size: 11px; color: ${bloqueado ? '#94a3b8' : '#8b5cf6'}; background: ${bloqueado ? '#94a3b820' : '#8b5cf620'}; padding: 1px 6px; border-radius: 8px;">
+                                                    ${bloqueado ? '🔒 Solo lectura' : '🚀 Liberada'}
+                                                </span>
                                                 ${sesionBadge}
                                             </div>
                                             <div style="display: flex; gap: 8px; margin-top: 2px; font-size: 12px; color: var(--text-light);">
                                                 <span>📦 ${sale.quantity}</span>
                                                 <span>${paymentIcons[sale.payment_method] || '💵'} ${sale.payment_method}</span>
                                             </div>
+                                            ${bloqueado ? `<div style="margin-top: 2px; font-size: 10px; color: #94a3b8; font-style: italic;">🔒 ${permisos.razon}</div>` : ''}
                                         </div>
                                         <div style="display: flex; gap: 8px; align-items: center;">
-                                            <span style="font-size: 15px; font-weight: 700; color: #8b5cf6;">$${parseFloat(sale.total).toFixed(2)}</span>
+                                            <span style="font-size: 15px; font-weight: 700; color: ${bloqueado ? '#94a3b8' : '#8b5cf6'};">$${parseFloat(sale.total).toFixed(2)}</span>
                                             <button onclick="viewSale(${sale.id})" class="btn secondary" style="padding: 2px 8px; font-size: 11px; width: auto;">👁️</button>
                                         </div>
                                     </div>
@@ -1417,7 +1457,7 @@ async function updateSummary() {
 }
 
 // ============================================================
-// 🆕 FASE 5 (#20): DÍAS SIN VENTAS — MODAL PRINCIPAL
+// DÍAS SIN VENTAS — MODAL PRINCIPAL
 // ============================================================
 
 async function showDiasSinVentasModal() {
@@ -1435,7 +1475,6 @@ async function showDiasSinVentasModal() {
     `;
     
     document.body.appendChild(modal);
-    
     window._diasSinVentasModal = modal;
     
     await renderDiasSinVentasContent();
@@ -1644,7 +1683,7 @@ function closeDiasSinVentasModal() {
 }
 
 // ============================================================
-// 🆕 FASE 5 (#20): FORMULARIO DE DÍA SIN VENTA
+// FORMULARIO DE DÍA SIN VENTA
 // ============================================================
 
 async function showDiaSinVentaForm(id = null) {
@@ -1868,10 +1907,6 @@ function closeDiaSinVentaForm() {
     }
 }
 
-// ============================================================
-// 🆕 FASE 5 (#20): ELIMINAR DÍA SIN VENTAS
-// ============================================================
-
 async function confirmDeleteDiaSinVenta(id, fechaStr) {
     const confirm = await window.ModalModule.showConfirm({
         title: '🗑️ Eliminar día sin ventas',
@@ -1903,10 +1938,6 @@ async function confirmDeleteDiaSinVenta(id, fechaStr) {
         window.showToast('❌ Error: ' + error.message, 'error');
     }
 }
-
-// ============================================================
-// 🆕 FASE 5 (#20): REPORTE PDF DE DÍAS SIN VENTAS
-// ============================================================
 
 async function reporteDiasSinVentas() {
     try {
@@ -2112,6 +2143,7 @@ function closeLiberatedSaleModal() {
 
 // ============================================================
 // FORMULARIO: NUEVA VENTA
+// 🆕 v2.1.12: Bloquea si la venta está en modo solo-lectura
 // ============================================================
 
 async function showSaleForm(saleId = null) {
@@ -2119,6 +2151,21 @@ async function showSaleForm(saleId = null) {
     if (existingModal) existingModal.remove();
     
     const isEdit = !!saleId;
+    
+    // 🆕 v2.1.12: Verificar permisos ANTES de cargar
+    if (isEdit) {
+        const permisos = checkSalePermission(saleId);
+        if (!permisos.puede) {
+            await window.ModalModule.showAlert({
+                title: '🔒 Venta bloqueada',
+                message: `No puedes editar esta venta.\n\n${permisos.razon}\n\n💡 Pídele al administrador que comparta las recetas asociadas con el negocio.`,
+                icon: '🔒',
+                type: 'warning',
+                buttonText: 'Entendido'
+            });
+            return;
+        }
+    }
     
     const loadData = async () => {
         let saleData = null;
@@ -2461,13 +2508,17 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
 
 // ============================================================
 // VER VENTA
-// 🆕 ENTREGA 2: Vendedor SIEMPRE visible en la sección de auditoría
+// 🆕 v2.1.12: Modo solo-lectura si el usuario no puede procesar
 // ============================================================
 
 async function viewSale(id) {
     try {
         const sale = await window.SalesModule.getSale(id);
         if (!sale) { window.showToast('❌ Venta no encontrada', 'error'); return; }
+        
+        // 🆕 v2.1.12: Verificar permisos
+        const permisos = checkSalePermission(sale);
+        const bloqueado = !permisos.puede;
         
         const modal = document.createElement('div');
         modal.id = 'sale-view-modal';
@@ -2485,10 +2536,8 @@ async function viewSale(id) {
         const sesionBadge = sale.session ? getBadgeSesion(sale.session) : '';
         const corrienteSection = getSeccionCorrienteHTML(sale.sale_date.split('T')[0]);
         
-        // 🆕 ENTREGA 2: Auditoría con vendedor
         const auditoriaSection = renderAuditoriaHTML(sale);
         
-        // Fallback: si no hay auditoría pero hay user_id, mostrar vendedor
         let vendedorFallback = '';
         if (!auditoriaSection && sale.user_id) {
             const nombreVendedor = window.DBModule.getUsuarioNombre(sale.user_id) || 'Desconocido';
@@ -2505,12 +2554,47 @@ async function viewSale(id) {
             `;
         }
         
+        // 🆕 v2.1.12: Aviso de bloqueo
+        let avisoBloqueo = '';
+        if (bloqueado) {
+            const recetaInfo = permisos.recetaBloqueada
+                ? `• ${permisos.recetaBloqueada.nombre}`
+                : '';
+            
+            avisoBloqueo = `
+                <div style="background: #ef444415; border: 2px solid #ef4444; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: flex-start; gap: 10px;">
+                        <span style="font-size: 24px; flex-shrink: 0;">🔒</span>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 700; color: #ef4444; font-size: 14px; margin-bottom: 4px;">
+                                Solo lectura
+                            </div>
+                            <div style="font-size: 12px; color: var(--text); line-height: 1.5;">
+                                ${permisos.razon}
+                            </div>
+                            ${recetaInfo ? `
+                                <div style="margin-top: 8px; padding: 6px 10px; background: var(--bg-card); border-radius: 6px; font-size: 11px; color: var(--text-light);">
+                                    <strong style="color: #ef4444;">Receta bloqueada:</strong><br>
+                                    ${recetaInfo}
+                                </div>
+                            ` : ''}
+                            <div style="margin-top: 8px; font-size: 11px; color: var(--text-light); font-style: italic;">
+                                💡 Pídele al administrador que comparta la receta con el negocio para poder procesar esta venta.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
         modal.innerHTML = `
             <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 450px; width: 100%; max-height: 90vh; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <h2 style="margin: 0;">💰 Detalle de Venta #${sale.id}</h2>
+                    <h2 style="margin: 0;">💰 Detalle de Venta #${sale.id} ${bloqueado ? '🔒' : ''}</h2>
                     <button onclick="window.closeSaleViewModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
                 </div>
+                
+                ${avisoBloqueo}
                 
                 ${isVoid ? '<div style="background: #94a3b820; padding: 8px 12px; border-radius: 8px; color: #94a3b8; margin-bottom: 12px;">🚫 Venta ANULADA</div>' : ''}
                 ${isLiberated ? '<div style="background: #8b5cf620; padding: 8px 12px; border-radius: 8px; color: #8b5cf6; margin-bottom: 12px;">🚀 Venta LIBERADA</div>' : ''}
@@ -2543,18 +2627,19 @@ async function viewSale(id) {
                 <hr>
                 
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    ${!isVoid ? `
+                    ${!bloqueado && !isVoid ? `
                         <button onclick="showSaleForm(${sale.id})" class="btn secondary" style="padding: 6px 16px; font-size: 13px; width: auto;">
                             ✏️ Editar
                         </button>
                         <button onclick="voidSale(${sale.id})" class="btn danger" style="padding: 6px 16px; font-size: 13px; width: auto;">
                             🚫 Anular
                         </button>
-                    ` : `
+                    ` : ''}
+                    ${!bloqueado && isVoid ? `
                         <button onclick="unvoidSale(${sale.id})" class="btn success" style="padding: 6px 16px; font-size: 13px; width: auto;">
                             🔄 Restaurar
                         </button>
-                    `}
+                    ` : ''}
                     <button onclick="window.closeSaleViewModal()" class="btn secondary" style="padding: 6px 16px; font-size: 13px; width: auto;">
                         Cerrar
                     </button>
@@ -2574,30 +2659,22 @@ async function viewSale(id) {
 }
 
 // ============================================================
-// 🆕 ENTREGA 2: ANULAR VENTA - FIX REFORZADO
-// ============================================================
-// 
-// Este es el fix definitivo para el bug #22 (el modal se cierra solo).
-// 
-// El problema era que `showPrompt()` se llamaba ANTES de que el
-// `showConfirm()` anterior hubiera terminado de cerrarse, y el
-// `window._modalResolve` se sobrescribía.
-// 
-// Estrategia:
-//   PASO 0: Limpiar modales huérfanos al inicio
-//   PASO 1: showConfirm + try/catch
-//   PASO 2: waitForCustomModalRemoval + 3 verificaciones
-//   PASO 3: showPrompt con timeout de seguridad
-//   PASO 4: Ejecutar voidSale y refrescar vistas
+// 🆕 v2.1.12: ANULAR VENTA CON VERIFICACIÓN DE PERMISOS
 // ============================================================
 
 async function voidSale(id) {
     console.log('🚫 [voidSale] ========== INICIO ==========');
     console.log('🚫 [voidSale] Anulando venta #' + id);
     
-    // ============================================================
+    // 🆕 v2.1.12: Verificar permisos ANTES de todo
+    const permisos = checkSalePermission(id);
+    if (!permisos.puede) {
+        console.warn('🔒 [voidSale] Bloqueado:', permisos.razon);
+        window.showToast('🔒 ' + permisos.razon, 'error', 6000);
+        return;
+    }
+    
     // PASO 0: Verificar que no haya modales huérfanos
-    // ============================================================
     const modalHuerfano = document.getElementById('custom-modal');
     if (modalHuerfano) {
         console.warn('🚫 [voidSale] Modal huérfano detectado, eliminando...');
@@ -2607,9 +2684,7 @@ async function voidSale(id) {
         await new Promise(r => setTimeout(r, 200));
     }
     
-    // ============================================================
     // PASO 1: Confirmación
-    // ============================================================
     console.log('🚫 [voidSale] Paso 1: Mostrando confirmación...');
     
     let confirm = false;
@@ -2636,14 +2711,11 @@ async function voidSale(id) {
         return;
     }
     
-    // ============================================================
     // PASO 2: Esperar a que el confirm-modal se elimine del DOM
-    // ============================================================
     console.log('🚫 [voidSale] Paso 2: Esperando a que el confirm-modal se cierre...');
     
     await waitForCustomModalRemoval(800);
     
-    // Verificación adicional: poll hasta 3 veces
     for (let i = 0; i < 3; i++) {
         const stillThere = document.getElementById('custom-modal');
         if (!stillThere) {
@@ -2660,11 +2732,9 @@ async function voidSale(id) {
         }
     }
     
-    await new Promise(r => setTimeout(r, 150)); // Pequeño delay extra de seguridad
+    await new Promise(r => setTimeout(r, 150));
     
-    // ============================================================
     // PASO 3: Prompt de motivo
-    // ============================================================
     console.log('🚫 [voidSale] Paso 3: Mostrando prompt de motivo...');
     
     let reason = null;
@@ -2684,9 +2754,7 @@ async function voidSale(id) {
     
     const motivoFinal = (reason && String(reason).trim()) ? String(reason).trim() : 'Anulación manual';
     
-    // ============================================================
     // PASO 4: Ejecutar la anulación
-    // ============================================================
     console.log('🚫 [voidSale] Paso 4: Ejecutando anulación con motivo:', motivoFinal);
     
     try {
@@ -2722,10 +2790,19 @@ async function voidSale(id) {
 
 // ============================================================
 // RESTAURAR VENTA
+// 🆕 v2.1.12: Verifica permisos antes del confirm
 // ============================================================
 
 async function unvoidSale(id) {
     console.log('🔄 [unvoidSale] Iniciando restauración de venta #' + id);
+    
+    // 🆕 v2.1.12: Verificar permisos ANTES de todo
+    const permisos = checkSalePermission(id);
+    if (!permisos.puede) {
+        console.warn('🔒 [unvoidSale] Bloqueado:', permisos.razon);
+        window.showToast('🔒 ' + permisos.razon, 'error', 6000);
+        return;
+    }
     
     const modalHuerfano = document.getElementById('custom-modal');
     if (modalHuerfano) {
@@ -2777,6 +2854,7 @@ async function unvoidSale(id) {
 
 // ============================================================
 // COBRAR DEUDA
+// 🆕 v2.1.12: Verifica permisos antes del confirm
 // ============================================================
 
 async function registerSalePayment(saleId) {
@@ -2784,6 +2862,14 @@ async function registerSalePayment(saleId) {
         const sale = await window.SalesModule.getSale(saleId);
         if (!sale) { window.showToast('❌ Venta no encontrada', 'error'); return; }
         if (sale.paid === 1) { window.showToast('✅ Ya está pagada', 'info'); return; }
+        
+        // 🆕 v2.1.12: Verificar permisos
+        const permisos = checkSalePermission(sale);
+        if (!permisos.puede) {
+            console.warn('🔒 [registerSalePayment] Bloqueado:', permisos.razon);
+            window.showToast('🔒 ' + permisos.razon, 'error', 6000);
+            return;
+        }
         
         const modalHuerfano = document.getElementById('custom-modal');
         if (modalHuerfano) {
@@ -2842,7 +2928,7 @@ async function registerSalePayment(saleId) {
 }
 
 // ============================================================
-// GASTOS CON ORIGEN DEL PAGO
+// GASTOS
 // ============================================================
 
 async function showExpenseForm(expenseId = null) {
@@ -3049,7 +3135,7 @@ async function viewExpense(id) {
 }
 
 // ============================================================
-// ANULAR GASTO - CON FIX DEL MODAL
+// ANULAR GASTO
 // ============================================================
 
 async function voidExpense(id) {
@@ -3477,4 +3563,15 @@ window.reporteDiasSinVentas = reporteDiasSinVentas;
 window.getMotivoDiaSinVenta = getMotivoDiaSinVenta;
 window.MOTIVOS_DIAS_SIN_VENTAS = MOTIVOS_DIAS_SIN_VENTAS;
 
-console.log('📦 UI Sales Module v2.1.3 (ENTREGA 2: fix anular venta + vendedor visible + orden ascendente por ID)');
+// 🆕 v2.1.12: Helpers de bloqueo
+window.checkSalePermission = checkSalePermission;
+window.renderBadgeSoloLecturaVenta = renderBadgeSoloLecturaVenta;
+
+console.log('📦 UI Sales Module v2.1.12 (ENTREGA B: corrección #2 - bloqueo por recetas no compartidas)');
+console.log('   ✅ checkSalePermission() y renderBadgeSoloLecturaVenta() añadidos');
+console.log('   ✅ loadSalesAndExpenses(): badge 🔒 y filtro de deudas bloqueadas');
+console.log('   ✅ renderSalesGroupedByDay(): oculta botones en ventas bloqueadas');
+console.log('   ✅ viewSale(): modo solo-lectura con aviso explicativo');
+console.log('   ✅ showSaleForm(): bloquea si la venta está bloqueada');
+console.log('   ✅ voidSale()/unvoidSale()/registerSalePayment(): verifican permisos');
+console.log('   ✅ Gastos NO se bloquean (no tienen receta)');

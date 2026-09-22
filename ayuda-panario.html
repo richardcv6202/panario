@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Panario v2.1.6 — Ayuda Completa</title>
+    <title>Panario v2.1.12 — Ayuda Completa</title>
     <style>
         /* ============================================================
            RESET Y VARIABLES
@@ -496,6 +496,7 @@
             font-size: 13px;
             color: var(--text-light);
             line-height: 1.7;
+            white-space: pre-line;
         }
 
         /* ============================================================
@@ -588,7 +589,7 @@
         }
 
         /* ============================================================
-           🆕 MODO EMBEDDED (dentro de un iframe)
+           MODO EMBEDDED (dentro de un iframe)
            ============================================================ */
         body.embedded {
             min-height: 100%;
@@ -758,7 +759,7 @@
         <h1 class="help-title">Panario — Ayuda Completa</h1>
         <p class="help-subtitle">Guía de uso de todos los módulos</p>
     </div>
-    <span class="help-version">v2.1.6</span>
+    <span class="help-version">v2.1.12</span>
     <div class="help-controls">
         <button class="help-btn" onclick="toggleTheme()" title="Cambiar tema">
             <span id="theme-icon">🌙</span>
@@ -766,7 +767,6 @@
         <button class="help-btn" onclick="window.print()" title="Imprimir / Guardar PDF">
             🖨️
         </button>
-        <!-- 🆕 Abrir en pestaña nueva (solo visible en modo embedded) -->
         <a id="btn-open-new-tab" class="help-btn primary" href="#" target="_blank" rel="noopener" style="display:none;" title="Abrir en pestaña nueva">
             🔗 ↗
         </a>
@@ -822,7 +822,7 @@
         <section class="help-section" id="intro">
             <h2>🏠 Introducción</h2>
             
-            <p><strong>Panario v2.1.6</strong> es una aplicación PWA (Progressive Web App) diseñada específicamente para la gestión integral de una <strong>panadería artesanal</strong>. Funciona completamente offline y guarda todos tus datos localmente en tu dispositivo.</p>
+            <p><strong>Panario v2.1.12</strong> es una aplicación PWA (Progressive Web App) diseñada específicamente para la gestión integral de una <strong>panadería artesanal</strong>. Funciona completamente offline y guarda todos tus datos localmente en tu dispositivo.</p>
 
             <div class="card-help primary">
                 <div class="card-help-title">✨ ¿Qué puedes hacer con Panario?</div>
@@ -841,13 +841,19 @@
                 </ul>
             </div>
 
+            <div class="card-help info">
+                <div class="card-help-title">🍞 ¿Por qué se llama "Panario"?</div>
+                <p>El nombre es un juego con <strong>"pan"</strong> y <strong>"diario"</strong> (de contabilidad). Es corto, original y describe perfectamente el propósito: llevar el diario contable de una panadería.</p>
+                <p style="margin-top: 8px; font-size: 12px; color: var(--text-light);">Otros nombres considerados: PanConta, HarinaBalance, MasaYCuentas, BakeryLedger.</p>
+            </div>
+
             <h3>📱 Información técnica</h3>
             <table class="help-table">
                 <tr>
                     <th style="width: 40%;">Propiedad</th>
                     <th>Valor</th>
                 </tr>
-                <tr><td>Versión</td><td><strong>2.1.6</strong></td></tr>
+                <tr><td>Versión</td><td><strong>2.1.12</strong></td></tr>
                 <tr><td>Estado</td><td><span class="badge-help badge-success">✅ Producción</span></td></tr>
                 <tr><td>Arquitectura</td><td>Cliente local (SQLite WASM)</td></tr>
                 <tr><td>Tecnología</td><td>HTML5 + CSS3 + JavaScript (ES6+)</td></tr>
@@ -995,7 +1001,7 @@
             <p>Puedes elegir qué secciones ver desde tu <strong>Perfil → Elementos visibles en el Dashboard</strong>:</p>
             <ul>
                 <li>⚡ Horario de corriente hoy</li>
-                <li>📋 Pedidos de hoy</li>
+                <li>📋 Pedidos de hoy / mañana / lista de espera</li>
                 <li>🚀 Ventas liberadas</li>
                 <li>🥇 Mejor / Peor día</li>
                 <li>👥 Ventas por empleado</li>
@@ -1499,7 +1505,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             <ul>
                 <li><strong>🚀 Guía rápida:</strong> 5 pasos para empezar</li>
                 <li><strong>🎯 Tutorial interactivo:</strong> Recorrido guiado</li>
-                <li><strong>❓ Preguntas frecuentes:</strong> FAQ con 80+ preguntas</li>
+                <li><strong>❓ Preguntas frecuentes:</strong> FAQ con 148 preguntas</li>
             </ul>
         </section>
 
@@ -1569,6 +1575,19 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             </details>
 
             <details class="faq-item">
+                <summary>¿Por qué se llama "Panario"?</summary>
+                <div class="faq-answer">El nombre es un juego con "pan" y "diario" (de contabilidad). Es corto, original y describe perfectamente el propósito: llevar el diario contable de una panadería.
+
+Otros nombres considerados fueron:
+• PanConta (fusión directa de "pan" y "contabilidad")
+• HarinaBalance (evoca el ingrediente principal y el equilibrio financiero)
+• MasaYCuentas (rimado y amigable)
+• BakeryLedger (en inglés, pensando en expansión)
+
+Finalmente se eligió "Panario" por ser único, breve y fácil de recordar.</div>
+            </details>
+
+            <details class="faq-item">
                 <summary>¿Funciona sin conexión?</summary>
                 <div class="faq-answer">Sí, Panario funciona completamente offline. Todos tus datos están guardados localmente en tu dispositivo.</div>
             </details>
@@ -1635,6 +1654,64 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <div class="faq-answer">Son ventas sin cliente identificado (tipo "mostrador anónimo"). Se contabilizan en los totales pero se pueden ocultar del listado.</div>
             </details>
 
+            <h3>👥 Multiusuario</h3>
+
+            <details class="faq-item">
+                <summary>¿Puedo tener varios usuarios en el mismo negocio?</summary>
+                <div class="faq-answer">Sí. Al registrarte puedes crear un negocio nuevo o unirte a uno existente con un código de invitación de 8 caracteres.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo comparto el código de invitación?</summary>
+                <div class="faq-answer">En tu Perfil, junto al nombre del negocio, verás el código con un botón "📋 Copiar". Envíalo a quien quieras invitar.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Quién es el administrador del negocio?</summary>
+                <div class="faq-answer">El primer usuario que crea el negocio es el administrador. Los siguientes usuarios que se unan tendrán rol de usuario regular.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Necesito estar en la misma red WiFi para unirme a un negocio con el código de invitación?</summary>
+                <div class="faq-answer">No. El código de invitación NO requiere que estés en la misma red WiFi ni en la misma ubicación física.
+
+💡 ¿Cómo funciona?
+• El código es un identificador único del negocio que se guarda en la base de datos LOCAL del dispositivo donde se creó el negocio.
+• Para unirte, necesitas tener acceso a esa misma base de datos (por ejemplo, mediante una copia de seguridad exportada).
+• NO hay servidor central. Panario es 100% offline y local.
+
+⚠️ Importante: Si quieres que otra persona se una a tu negocio desde otro dispositivo, deben importar tu base de datos completa (copia de seguridad) primero. El código de invitación solo funciona dentro de la misma base de datos.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué información contiene el código de invitación?</summary>
+                <div class="faq-answer">El código de invitación es un identificador de 8 caracteres alfanuméricos (ej: ABC12345) que se asigna automáticamente al crear un negocio.
+
+📋 ¿Qué contiene?
+• NO contiene información personal ni datos del negocio.
+• Solo es una referencia única que apunta al negocio dentro de la base de datos.
+• Se genera aleatoriamente usando mayúsculas y números (sin caracteres confusos como O/0 o I/1).
+
+🔒 Seguridad: El código es seguro porque solo funciona dentro de la base de datos local. Sin acceso a esa BD, el código no sirve de nada.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo se determina el código de invitación desde el entorno del invitado?</summary>
+                <div class="faq-answer">Cuando alguien intenta unirse con un código:
+
+1️⃣ El sistema busca el código en la base de datos LOCAL del dispositivo.
+2️⃣ Si lo encuentra, muestra una vista previa del negocio (nombre, número de usuarios).
+3️⃣ El nuevo usuario se asocia al negocio existente con rol de "usuario regular".
+4️⃣ Todos los datos operativos (insumos, recetas, productos, ventas) se comparten entre los usuarios del mismo negocio.
+
+💡 Caso de uso típico:
+• Ricardo crea el negocio "Panadería La Esquina" en su dispositivo.
+• Exporta la copia de seguridad y la comparte con María.
+• María importa la copia en su dispositivo.
+• María se registra con el código de invitación (o directamente se une al negocio existente).
+• Ambos ven los mismos datos y pueden trabajar en paralelo.</div>
+            </details>
+
             <h3>💰 Ventas</h3>
 
             <details class="faq-item">
@@ -1657,24 +1734,65 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <div class="faq-answer">Sirve para llevar un historial y entender mejor las estadísticas. Sin esta información, un día sin ventas parecería simplemente "un mal día" cuando en realidad no abriste.</div>
             </details>
 
-            <h3>📋 Pedidos</h3>
+            <h3>📱 PWA</h3>
 
             <details class="faq-item">
-                <summary>¿Cuál es la diferencia entre pedido y venta?</summary>
-                <div class="faq-answer">Un pedido es una solicitud de un cliente. Una venta es una transacción completada. Los pedidos no son deudas hasta que se entregan.</div>
+                <summary>¿Por qué la app no funciona offline después de limpiar el caché?</summary>
+                <div class="faq-answer">Si limpias el caché de Chrome, se borran los archivos de la PWA. Abre Panario con conexión a internet una vez para que se vuelvan a cachear. En la versión 2.1.11, el Service Worker detecta esta situación y re-descarga todo automáticamente.</div>
             </details>
 
             <details class="faq-item">
-                <summary>¿Qué es la lista de espera?</summary>
-                <div class="faq-answer">Cuando la demanda supera la oferta, los clientes se ponen en cola. Al haber disponibilidad, se les atiende en orden.</div>
+                <summary>¿Qué hacer si veo "Sin conexión" pero tengo internet?</summary>
+                <div class="faq-answer">Es posible que el Service Worker tenga una versión antigua. Ve a offline.html y pulsa "Limpiar caché y recargar".</div>
             </details>
 
             <details class="faq-item">
-                <summary>¿Cómo funciona la reserva por período?</summary>
-                <div class="faq-answer">Permite crear múltiples pedidos a la vez para el mismo cliente. Elige el patrón: rango completo, días de la semana o días específicos.</div>
+                <summary>¿Cómo ejecuto offline.html desde el móvil?</summary>
+                <div class="faq-answer">Hay varias formas de abrir la página offline.html en el móvil:
+
+1️⃣ Desde el navegador:
+• Abre el navegador (Chrome, Firefox, etc.)
+• En la barra de direcciones escribe: tu-dominio.com/offline.html
+• O si estás en local: file:///ruta/offline.html
+
+2️⃣ Desde la app instalada (PWA):
+• Desconecta el WiFi y los datos móviles
+• Abre Panario: si el caché está corrupto, verás la página offline.html automáticamente
+• Desde ahí puedes pulsar "🧹 Limpiar caché y recargar"
+
+3️⃣ Desde un enlace directo:
+• Si tienes un marcador guardado, ábrelo
+• También puedes crear un acceso directo en la pantalla de inicio
+
+💡 Consejo: Si no puedes acceder a offline.html, simplemente abre Panario con internet. El Service Worker detectará la situación y reparará el caché automáticamente en 5-10 segundos.</div>
             </details>
 
-            <h3>⚡ Corriente</h3>
+            <details class="faq-item">
+                <summary>¿Qué hago si el navegador móvil no me deja abrir offline.html?</summary>
+                <div class="faq-answer">Si tienes problemas para abrir offline.html en el móvil, prueba estas alternativas:
+
+✅ Alternativa 1 (recomendada):
+• Abre Panario con conexión a internet
+• Espera 5-10 segundos
+• El Service Worker repara el caché automáticamente
+
+✅ Alternativa 2:
+• Ve a Ajustes del navegador → Almacenamiento → Borrar caché
+• Recarga Panario con internet
+
+✅ Alternativa 3:
+• Desinstala la PWA
+• Vuelve a instalarla desde el navegador con internet
+
+✅ Alternativa 4 (avanzada):
+• Conecta el móvil al PC por USB
+• Copia el archivo offline.html a la memoria del móvil
+• Ábrelo con un explorador de archivos
+
+⚠️ Importante: La página offline.html está diseñada para abrirse automáticamente cuando no hay conexión. Si no la ves, es porque tienes conexión o porque el caché está OK.</div>
+            </details>
+
+            <h3>🔨 Producción</h3>
 
             <details class="faq-item">
                 <summary>¿Cómo funcionan los horarios de corriente?</summary>
@@ -1682,62 +1800,22 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             </details>
 
             <details class="faq-item">
-                <summary>¿Cómo descargo el reporte de corriente en PDF?</summary>
-                <div class="faq-answer">En el modal de corriente → pestaña 📊 Reporte → selecciona el rango → clic en 📄 Semanal o 📄 Mensual.</div>
-            </details>
+                <summary>¿Puedo producir cantidades que no sean enteras?</summary>
+                <div class="faq-answer">Sí. El campo "Cantidad a producir" acepta decimales. Por ejemplo:
+• 6.5 significa 6 jabas y media
+• 2.25 significa 2 jabas y cuarto
+• 0.5 significa media jaba
 
-            <h3>🏆 Premios</h3>
-
-            <details class="faq-item">
-                <summary>¿Cómo funciona el sistema de premios?</summary>
-                <div class="faq-answer">Premia a tus mejores clientes. Se calcula automáticamente el cliente con mayor total gastado en el mes y en el año.</div>
-            </details>
-
-            <details class="faq-item">
-                <summary>¿Por qué hay tres opciones para calcular el premio anual?</summary>
-                <div class="faq-answer">Cada negocio es diferente. Puedes elegir entregar el premio en Navidad (24 dic), a fin de año (31 dic) o al inicio del siguiente año.</div>
-            </details>
-
-            <h3>🔔 Notificaciones</h3>
-
-            <details class="faq-item">
-                <summary>¿Puedo cambiar el sonido de las notificaciones?</summary>
-                <div class="faq-answer">Sí. Ve a tu Perfil → 🔔 Sonido de notificaciones. Puedes elegir entre 5 sonidos embutidos o desactivarlo.</div>
+Esto es útil cuando produces jabas de diferentes tamaños.</div>
             </details>
 
             <details class="faq-item">
-                <summary>¿Qué hace exactamente "Probar todos"?</summary>
-                <div class="faq-answer">Reproduce en orden todos los sonidos disponibles, con una pausa de 1.5 segundos entre cada uno. Al final reproduce una vez el sonido que tienes configurado actualmente.</div>
+                <summary>¿Cómo se calcula la cantidad disponible si la producción es decimal?</summary>
+                <div class="faq-answer">La fórmula es: disponibles = cantidad_produccion - pedidos_reservados - ventas_directas
+
+Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 = 0.5 disponibles.</div>
             </details>
 
-            <h3>👤 Perfil y multiusuario</h3>
-
-            <details class="faq-item">
-                <summary>¿Puedo tener varios usuarios en el mismo negocio?</summary>
-                <div class="faq-answer">Sí. Al registrarte puedes crear un negocio nuevo o unirte a uno existente con un código de invitación de 8 caracteres.</div>
-            </details>
-
-            <details class="faq-item">
-                <summary>¿Cómo comparto el código de invitación?</summary>
-                <div class="faq-answer">En tu Perfil, junto al nombre del negocio, verás el código con un botón "📋 Copiar". Envíalo a quien quieras invitar.</div>
-            </details>
-
-            <details class="faq-item">
-                <summary>¿Quién es el administrador del negocio?</summary>
-                <div class="faq-answer">El primer usuario que crea el negocio es el administrador. Los siguientes usuarios que se unan tendrán rol de usuario regular.</div>
-            </details>
-
-            <h3>⚙️ Herramientas</h3>
-
-            <details class="faq-item">
-                <summary>¿Qué hace "Reiniciar base de datos"?</summary>
-                <div class="faq-answer">Elimina TODOS los datos excepto usuarios y temas. Se conservan las cuentas de usuario para que puedas volver a entrar. Contraseña: "panario".</div>
-            </details>
-
-            <details class="faq-item">
-                <summary>¿Cómo fusiono dos bases de datos?</summary>
-                <div class="faq-answer">Ve a ⚙️ Herramientas → 📥 Importar → 🔀 Fusionar bases de datos. Los registros nuevos se añaden, los existentes se comparan por UUID (gana el más reciente).</div>
-            </details>
         </section>
 
         <!-- ============================================================
@@ -1782,6 +1860,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
 
         <!-- ============================================================
              CRÉDITOS
+             🆕 v2.1.12: Foto del desarrollador (assets/dev-avatar.png)
              ============================================================ -->
         <section class="help-section" id="creditos">
             <h2>👨‍💻 Créditos</h2>
@@ -1793,7 +1872,18 @@ Costo por unidad = Costo total / rendimiento</code></pre>
 
                 <div style="background: var(--bg-alt); border-radius: var(--radius); padding: 24px; max-width: 400px; margin: 0 auto; text-align: left;">
                     <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
-                        <div style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #0ea5e9, #0284c7); display: flex; align-items: center; justify-content: center; font-size: 40px; flex-shrink: 0;">👨‍💻</div>
+                        <!-- 🆕 v2.1.12: Foto del desarrollador con fallback al emoji -->
+                        <div id="dev-avatar-container" 
+                             style="width: 80px; height: 80px; border-radius: 50%; 
+                                    background: linear-gradient(135deg, #0ea5e9, #0284c7); 
+                                    display: flex; align-items: center; justify-content: center; 
+                                    font-size: 40px; flex-shrink: 0; overflow: hidden; 
+                                    border: 3px solid var(--primary);">
+                            <img src="./assets/dev-avatar.png" 
+                                 alt="Ricardo Castillo Valdés"
+                                 style="width: 100%; height: 100%; object-fit: cover; display: block;"
+                                 onerror="this.style.display='none'; this.parentElement.innerHTML='👨‍💻'; this.parentElement.style.fontSize='40px';">
+                        </div>
                         <div>
                             <div style="font-weight: 700; font-size: 18px;">Ricardo Castillo Valdés</div>
                             <div style="font-size: 13px; color: var(--text-light);">Desarrollador y Diseñador</div>
@@ -1816,7 +1906,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 </div>
 
                 <div style="margin-top: 24px; color: var(--text-light); font-size: 12px; line-height: 1.7;">
-                    <p><strong>Panario v2.1.6</strong></p>
+                    <p><strong>Panario v2.1.12</strong></p>
                     <p>© 2026 Ricardo Castillo Valdés</p>
                     <p>Todos los derechos reservados</p>
                     <p style="margin-top: 12px;">Hecho con ❤️ para panaderos artesanales</p>
@@ -1839,7 +1929,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
      FOOTER
      ============================================================ -->
 <footer class="help-footer">
-    <p>🍞 <strong>Panario v2.1.6</strong> — Ayuda Completa</p>
+    <p>🍞 <strong>Panario v2.1.12</strong> — Ayuda Completa</p>
     <p style="margin-top: 4px;">Desarrollado por Ricardo Castillo Valdés — © 2026</p>
 </footer>
 
@@ -1848,17 +1938,9 @@ Costo por unidad = Costo total / rendimiento</code></pre>
      ============================================================ -->
 <script>
 // ============================================================
-// 🆕 PARSEO DE PARÁMETROS URL
+// PARSEO DE PARÁMETROS URL
 // ============================================================
 
-/**
- * Lee los parámetros de la URL:
- *   ?theme=dark|light     → tema forzado
- *   ?section=<id>         → hace scroll a esa sección
- *   ?embedded=1           → modo embebido (dentro de iframe)
- * 
- * Si no hay parámetros, se comporta como la versión anterior.
- */
 function parseUrlParams() {
     const params = new URLSearchParams(window.location.search);
     return {
@@ -1892,17 +1974,14 @@ function updateThemeIcon(theme) {
 }
 
 function initTheme() {
-    // Prioridad 1: parámetro URL
     if (urlParams.theme === 'dark' || urlParams.theme === 'light') {
         document.documentElement.setAttribute('data-theme', urlParams.theme);
         updateThemeIcon(urlParams.theme);
-        // Guardar para la próxima vez
         localStorage.setItem('ayuda-panario-theme', urlParams.theme);
         console.log('📖 Tema aplicado desde URL:', urlParams.theme);
         return;
     }
     
-    // Prioridad 2: localStorage
     const saved = localStorage.getItem('ayuda-panario-theme');
     if (saved) {
         document.documentElement.setAttribute('data-theme', saved);
@@ -1910,7 +1989,6 @@ function initTheme() {
         return;
     }
     
-    // Prioridad 3: preferencia del sistema
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const theme = prefersDark ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', theme);
@@ -1952,7 +2030,6 @@ function filterSidebar() {
         link.parentElement.style.display = matches || !query ? '' : 'none';
     });
     
-    // Mostrar/ocultar secciones
     sections.forEach(section => {
         let hasVisibleLinks = false;
         let next = section.nextElementSibling;
@@ -2009,7 +2086,6 @@ function initSmoothScroll() {
                 const targetPosition = target.getBoundingClientRect().top + window.scrollY - offset;
                 window.scrollTo({ top: targetPosition, behavior: 'smooth' });
                 
-                // Actualizar el hash de la URL sin hacer scroll nativo
                 if (history.pushState) {
                     history.pushState(null, null, targetId);
                 }
@@ -2019,24 +2095,21 @@ function initSmoothScroll() {
 }
 
 // ============================================================
-// 🆕 SCROLL A SECCIÓN ESPECÍFICA
+// SCROLL A SECCIÓN ESPECÍFICA
 // ============================================================
 
 function scrollToSection(sectionId) {
     if (!sectionId) return;
     
-    // Limpiar el "#" si viene con él
     const cleanId = sectionId.replace('#', '');
     const target = document.getElementById(cleanId);
     
     if (target) {
-        // Delay para asegurar que el layout esté listo
         setTimeout(() => {
             const offset = urlParams.embedded ? 60 : 90;
             const targetPosition = target.getBoundingClientRect().top + window.scrollY - offset;
             window.scrollTo({ top: targetPosition, behavior: 'auto' });
             
-            // Marcar como activa
             document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
             const activeLink = document.querySelector(`.sidebar-nav a[href="#${cleanId}"]`);
             if (activeLink) activeLink.classList.add('active');
@@ -2049,7 +2122,7 @@ function scrollToSection(sectionId) {
 }
 
 // ============================================================
-// 🆕 MODO EMBEDDED
+// MODO EMBEDDED
 // ============================================================
 
 function initEmbeddedMode() {
@@ -2058,10 +2131,8 @@ function initEmbeddedMode() {
     document.body.classList.add('embedded');
     console.log('📖 Modo embedded activado');
     
-    // Mostrar el botón "Abrir en pestaña nueva"
     const btnNewTab = document.getElementById('btn-open-new-tab');
     if (btnNewTab) {
-        // Construir URL sin el parámetro "embedded"
         const url = new URL(window.location.href);
         url.searchParams.delete('embedded');
         btnNewTab.href = url.toString();
@@ -2086,13 +2157,16 @@ document.addEventListener('DOMContentLoaded', function() {
     handleScroll();
     updateActiveNav();
     
-    // 🆕 Scroll a la sección solicitada por URL
     if (urlParams.section) {
         scrollToSection(urlParams.section);
     }
     
-    console.log('📖 Ayuda de Panario cargada correctamente (v2.1.6)');
+    console.log('📖 Ayuda de Panario cargada correctamente (v2.1.12)');
     console.log('   📋 Params:', urlParams);
+    console.log('   🆕 Novedades:');
+    console.log('   ✅ Foto del desarrollador en Créditos');
+    console.log('   ✅ 6 FAQs nuevas (código invitación + offline.html + nombre Panario)');
+    console.log('   ✅ Versión v2.1.12');
 });
 </script>
 

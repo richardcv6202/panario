@@ -351,7 +351,6 @@
                     // ---- CACHE_REPAIRED_START ----
                     if (event.data.type === 'CACHE_REPAIRED_START') {
                         console.log(`🔧 SW: Iniciando reparación de caché (${event.data.total} assets)...`);
-                        // Avisar al usuario con toast
                         if (window.showToast) {
                             window.showToast(
                                 `🔧 Reparando caché (${event.data.total} archivos)...`,

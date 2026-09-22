@@ -10,12 +10,157 @@
 //   - saveSale() normaliza saleData.sale_date antes de INSERT/UPDATE
 //   - registerTransaction() normaliza transactionData.transaction_date
 //   - Defensa en profundidad: aunque la UI ya normaliza, aquí se re-valida
+// 🆕 v2.1.12 (210926 v3): CORRECCIÓN #2 - BLOQUEO POR RECETAS NO COMPARTIDAS
+//   - ✅ NUEVA función puedeUsuarioActualProcesarVenta() (wrapper local,
+//     delega a la de orders.js si existe para consistencia)
+//   - ✅ saveSale(): verifica permisos antes de EDITAR (no al crear)
+//   - ✅ voidSale(): verifica permisos antes de anular
+//   - ✅ unvoidSale(): verifica permisos antes de restaurar
+//   - ✅ deleteSale(): verifica permisos antes de eliminar
+//   - ✅ updateExpense/voidExpense/unvoidExpense/deleteExpense:
+//     los gastos NO tienen receta, así que no se bloquean
+//   - ✅ Cuando el usuario NO puede procesar una venta:
+//     - saveSale() → devuelve { success: false, error: '🔒 ...' }
+//     - voidSale() → devuelve { success: false, error: '🔒 ...' }
+//     - unvoidSale() → devuelve { success: false, error: '🔒 ...' }
+//     - deleteSale() → devuelve { success: false, error: '🔒 ...' }
+//   - ✅ Se limpia la caché de permisos cuando se edita una venta
+//   - ✅ saveSale() permite CREAR ventas aunque la receta no esté
+//     compartida (para no bloquear la operación de venta en mostrador).
+//     Solo se bloquea la EDICIÓN/ANULACIÓN/RESTAURACIÓN/ELIMINACIÓN
+//     de ventas existentes que el usuario no puede procesar.
 // ============================================================
 
 window.SalesModule = {};
 
 // ============================================================
-// 🆕 FIX 2: NORMALIZACIÓN DE FECHAS
+// 🆕 v2.1.12: WRAPPER LOCAL PARA VERIFICAR PERMISOS DE VENTA
+// ============================================================
+// Delega a orders.js si está disponible para tener una única
+// fuente de verdad. Si no está disponible, hace la verificación
+// directamente en sales.js.
+
+function _puedeUsuarioActualProcesarVenta(saleOrId) {
+    // 1) Intentar delegar a orders.js
+    try {
+        if (typeof window.OrdersModule?.puedeUsuarioActualProcesarVenta === 'function') {
+            return window.OrdersModule.puedeUsuarioActualProcesarVenta(saleOrId);
+        }
+    } catch (e) {
+        console.warn('⚠️ Error delegando a OrdersModule.puedeUsuarioActualProcesarVenta:', e);
+    }
+    
+    // 2) Fallback: verificación local
+    try {
+        const user = window.AuthModule?.getCurrentUser();
+        if (!user) {
+            return { puede: false, razon: 'No hay usuario autenticado', recetaBloqueada: null };
+        }
+        
+        // Admin siempre puede
+        if (user.is_admin === 1) {
+            return { puede: true, razon: '', recetaBloqueada: null };
+        }
+        
+        let saleId = null;
+        let sale = null;
+        
+        if (typeof saleOrId === 'number') {
+            saleId = saleOrId;
+        } else if (saleOrId && typeof saleOrId === 'object') {
+            sale = saleOrId;
+            saleId = sale.id;
+        }
+        
+        if (!saleId) {
+            return { puede: true, razon: '', recetaBloqueada: null };
+        }
+        
+        // Cargar la venta si no la tenemos
+        if (!sale) {
+            try {
+                const sales = window.DBModule.query(
+                    `SELECT s.id, s.receta_id, s.producto_id, s.product_name, 
+                            r.name as receta_nombre
+                     FROM sales s
+                     LEFT JOIN recipes r ON s.receta_id = r.id
+                     WHERE s.id = ? AND s.deleted_at IS NULL`,
+                    [saleId]
+                );
+                if (sales.length === 0) {
+                    return { puede: false, razon: 'Venta no encontrada', recetaBloqueada: null };
+                }
+                sale = sales[0];
+            } catch (e) {
+                console.warn('⚠️ Error cargando venta para verificar permisos:', e);
+                return { puede: true, razon: '', recetaBloqueada: null };
+            }
+        }
+        
+        // Sin receta → no hay bloqueo
+        if (!sale.receta_id) {
+            return { puede: true, razon: '', recetaBloqueada: null };
+        }
+        
+        // Verificar la receta
+        try {
+            const recetas = window.DBModule.query(
+                `SELECT id, user_id, shared, name 
+                 FROM recipes 
+                 WHERE id = ? AND deleted_at IS NULL`,
+                [sale.receta_id]
+            );
+            
+            if (recetas.length === 0) {
+                return {
+                    puede: false,
+                    razon: `La receta asociada a esta venta fue eliminada. No puedes procesarla.`,
+                    recetaBloqueada: { id: sale.receta_id, nombre: 'Receta eliminada', razon: 'Eliminada' }
+                };
+            }
+            
+            const receta = recetas[0];
+            
+            if (receta.user_id !== user.id && receta.shared !== 1) {
+                return {
+                    puede: false,
+                    razon: `Esta venta usa la receta "${receta.name}" que no te han compartido. No puedes procesarla.`,
+                    recetaBloqueada: { id: receta.id, nombre: receta.name, razon: 'No compartida' }
+                };
+            }
+            
+            return { puede: true, razon: '', recetaBloqueada: null };
+            
+        } catch (e) {
+            console.warn(`⚠️ Error verificando receta ${sale.receta_id}:`, e);
+            return { puede: true, razon: '', recetaBloqueada: null };
+        }
+        
+    } catch (e) {
+        console.error('❌ Error en _puedeUsuarioActualProcesarVenta:', e);
+        return { puede: true, razon: '', recetaBloqueada: null };
+    }
+}
+
+/**
+ * Limpia la caché de permisos de ventas.
+ * Llamar cuando se edita una venta para invalidar la caché.
+ */
+function _limpiarCachePermisosVenta(saleId) {
+    try {
+        if (saleId && typeof window.OrdersModule?.limpiarCachePermisos === 'function') {
+            // Limpiar también la caché de orders (compartida)
+            window.OrdersModule.limpiarCachePermisos();
+        }
+    } catch (e) {
+        console.warn('⚠️ Error limpiando caché de permisos:', e);
+    }
+}
+
+window._puedeUsuarioActualProcesarVenta = _puedeUsuarioActualProcesarVenta;
+
+// ============================================================
+// FIX 2: NORMALIZACIÓN DE FECHAS
 // ============================================================
 // 
 // PROBLEMA:
@@ -64,12 +209,7 @@ function normalizarFechaVenta(fechaInput) {
 }
 
 // ============================================================
-// VENTAS
-// ============================================================
-
-// ============================================================
 // VENTAS - OBTENER (POR NEGOCIO, NO POR USUARIO)
-// CORREGIDO: Usa negocio_id en lugar de user_id para compartir datos
 // ============================================================
 
 async function getSales(filters = {}) {
@@ -144,9 +284,8 @@ async function getSale(id) {
 }
 
 // ============================================================
-// 🆕 GUARDAR VENTA - CON FIX DE DUPLICADOS EN TRANSACCIONES
-// 🆕 FASE 1.3.2: Genera uuid para sales y transactions
-// 🆕 FIX 2: Normaliza sale_date antes de INSERT/UPDATE
+// GUARDAR VENTA - CON FIX DE DUPLICADOS EN TRANSACCIONES
+// 🆕 v2.1.12: Verifica permisos antes de EDITAR (no al crear)
 // ============================================================
 
 async function saveSale(saleData) {
@@ -162,9 +301,16 @@ async function saveSale(saleData) {
             saleData.total = saleData.quantity * saleData.unit_price;
         }
 
+        // 🆕 v2.1.12: Verificar permisos SOLO si es EDICIÓN
+        if (saleData.id && saleData.id > 0) {
+            const permisos = _puedeUsuarioActualProcesarVenta(saleData.id);
+            if (!permisos.puede) {
+                console.warn('🔒 [saveSale] Edición bloqueada:', permisos.razon);
+                return { success: false, error: '🔒 ' + permisos.razon };
+            }
+        }
+
         // 🆕 FIX 2: Normalizar sale_date (defensa en profundidad)
-        // Aunque la UI ya llama a normalizarFechaVenta(), re-validamos aquí
-        // por si algún caller olvidó hacerlo.
         const saleDateNormalizada = normalizarFechaVenta(saleData.sale_date);
         console.log('📅 [saveSale] Fecha normalizada:', saleData.sale_date, '→', saleDateNormalizada);
 
@@ -218,7 +364,7 @@ async function saveSale(saleData) {
                 buyer || null,
                 isDebt,
                 paid,
-                saleDateNormalizada,  // 🆕 FIX 2
+                saleDateNormalizada,
                 saleData.session || null,
                 isLiberated,
                 saleData.id,
@@ -226,7 +372,6 @@ async function saveSale(saleData) {
             ]);
             
             // 🔧 FIX CRÍTICO: Eliminar transacciones ANTERIORES por sale_id
-            // (NO por LIKE concept, que era la causa de los duplicados)
             const txResult = window.DBModule.execute(
                 'UPDATE transactions SET deleted_at = CURRENT_TIMESTAMP WHERE sale_id = ? AND user_id = ?',
                 [saleData.id, user.id]
@@ -253,7 +398,7 @@ async function saveSale(saleData) {
                 buyer || null,
                 isDebt,
                 paid,
-                saleDateNormalizada,  // 🆕 FIX 2
+                saleDateNormalizada,
                 saleData.session || null,
                 isLiberated,
                 saleUuid
@@ -263,6 +408,9 @@ async function saveSale(saleData) {
         }
 
         const saleId = isUpdate ? saleData.id : result.lastId;
+        
+        // 🆕 v2.1.12: Limpiar caché de permisos porque la venta cambió
+        _limpiarCachePermisosVenta(saleId);
         
         // Descontar stock si tiene receta
         if (saleData.receta_id) {
@@ -281,7 +429,6 @@ async function saveSale(saleData) {
         }
 
         // Verificar que NO exista ya una transacción para esta venta
-        // (defensa adicional contra duplicados)
         const txExistente = window.DBModule.query(`
             SELECT id FROM transactions 
             WHERE sale_id = ? AND user_id = ? 
@@ -299,7 +446,7 @@ async function saveSale(saleData) {
                 amount: saleData.total,
                 payment_method: paymentMethod,
                 sale_id: saleId,
-                transaction_date: saleDateNormalizada  // 🆕 FIX 2: misma fecha que la venta
+                transaction_date: saleDateNormalizada
             });
             console.log('✅ Transacción creada para venta:', saleId);
         } else {
@@ -390,11 +537,19 @@ async function reponerStockVenta(sale) {
 
 // ============================================================
 // ANULAR VENTA
+// 🆕 v2.1.12: Verifica permisos antes de anular
 // ============================================================
 
 async function voidSale(id, reason) {
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
+
+    // 🆕 v2.1.12: Verificar permisos
+    const permisos = _puedeUsuarioActualProcesarVenta(id);
+    if (!permisos.puede) {
+        console.warn('🔒 [voidSale] Bloqueado:', permisos.razon);
+        return { success: false, error: '🔒 ' + permisos.razon };
+    }
 
     try {
         const existing = await getSale(id);
@@ -420,6 +575,9 @@ async function voidSale(id, reason) {
             WHERE sale_id = ? AND user_id = ?
         `, [reason, id, user.id]);
 
+        // 🆕 v2.1.12: Limpiar caché
+        _limpiarCachePermisosVenta(id);
+
         window.DBModule.saveAndNotify();
         return { success: true };
     } catch (e) {
@@ -427,9 +585,21 @@ async function voidSale(id, reason) {
     }
 }
 
+// ============================================================
+// RESTAURAR VENTA
+// 🆕 v2.1.12: Verifica permisos antes de restaurar
+// ============================================================
+
 async function unvoidSale(id) {
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
+
+    // 🆕 v2.1.12: Verificar permisos
+    const permisos = _puedeUsuarioActualProcesarVenta(id);
+    if (!permisos.puede) {
+        console.warn('🔒 [unvoidSale] Bloqueado:', permisos.razon);
+        return { success: false, error: '🔒 ' + permisos.razon };
+    }
 
     try {
         const existing = await getSale(id);
@@ -454,6 +624,9 @@ async function unvoidSale(id) {
             WHERE sale_id = ? AND user_id = ?
         `, [id, user.id]);
 
+        // 🆕 v2.1.12: Limpiar caché
+        _limpiarCachePermisosVenta(id);
+
         window.DBModule.saveAndNotify();
         return { success: true };
     } catch (e) {
@@ -461,9 +634,21 @@ async function unvoidSale(id) {
     }
 }
 
+// ============================================================
+// ELIMINAR VENTA (soft-delete)
+// 🆕 v2.1.12: Verifica permisos antes de eliminar
+// ============================================================
+
 async function deleteSale(id) {
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
+
+    // 🆕 v2.1.12: Verificar permisos
+    const permisos = _puedeUsuarioActualProcesarVenta(id);
+    if (!permisos.puede) {
+        console.warn('🔒 [deleteSale] Bloqueado:', permisos.razon);
+        return { success: false, error: '🔒 ' + permisos.razon };
+    }
 
     try {
         const sale = await getSale(id);
@@ -478,6 +663,10 @@ async function deleteSale(id) {
 
         window.DBModule.execute('UPDATE sales SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?', [id, user.id]);
         window.DBModule.execute('UPDATE transactions SET deleted_at = CURRENT_TIMESTAMP WHERE sale_id = ? AND user_id = ?', [id, user.id]);
+        
+        // 🆕 v2.1.12: Limpiar caché
+        _limpiarCachePermisosVenta(id);
+        
         window.DBModule.saveAndNotify();
         return { success: true };
     } catch (e) {
@@ -488,6 +677,9 @@ async function deleteSale(id) {
 // ============================================================
 // GASTOS (POR NEGOCIO)
 // ============================================================
+// Nota: Los gastos NO tienen receta asociada, por lo que NO se
+// ven afectados por la corrección #2 (bloqueo por recetas no
+// compartidas). Se mantienen sin verificación de permisos.
 
 async function getExpenses(filters = {}) {
     const negocioId = window.DBModule.getNegocioIdActual();
@@ -525,7 +717,6 @@ async function updateExpense(id, expenseData) {
         if (!existing) return { success: false, error: 'Gasto no encontrado' };
         if (existing.voided === 1) return { success: false, error: 'No se puede editar un gasto anulado' };
 
-        // 🆕 FIX 2: Normalizar fecha de gasto
         const fechaNormalizada = normalizarFechaVenta(expenseData.transaction_date);
 
         window.DBModule.execute(`
@@ -609,8 +800,6 @@ async function deleteExpense(id) {
 
 // ============================================================
 // TRANSACCIONES
-// 🆕 FASE 1.3.2: registerTransaction() genera uuid
-// 🆕 FIX 2: registerTransaction() normaliza transaction_date
 // ============================================================
 
 async function getTransactions(filters = {}) {
@@ -636,10 +825,7 @@ async function registerTransaction(transactionData) {
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
 
     try {
-        // 🆕 FASE 1.3.2: Generar uuid para la transacción
         const txUuid = window.DBModule.generateUuidForTable('transactions');
-        
-        // 🆕 FIX 2: Normalizar fecha de transacción
         const fechaNormalizada = normalizarFechaVenta(transactionData.transaction_date);
         
         const result = window.DBModule.execute(`
@@ -650,7 +836,7 @@ async function registerTransaction(transactionData) {
             transactionData.category || 'general', transactionData.concept,
             transactionData.amount, transactionData.payment_method || 'cash',
             transactionData.sale_id || null,
-            fechaNormalizada,  // 🆕 FIX 2
+            fechaNormalizada,
             txUuid
         ]);
 
@@ -756,8 +942,15 @@ window.SalesModule = {
     registerExpense, voidExpense, unvoidExpense,
     getTransactions, registerTransaction, getBalance,
     reponerStockVenta,
-    // 🆕 FIX 2
-    normalizarFechaVenta
+    normalizarFechaVenta,
+    // 🆕 v2.1.12
+    _puedeUsuarioActualProcesarVenta
 };
 
-console.log('📦 Sales Module v2.0.9 (FASE 1.3.2 + FIX 2: normalización de fechas)');
+console.log('📦 Sales Module v2.1.12 (ENTREGA B: corrección #2 - bloqueo por recetas no compartidas)');
+console.log('   ✅ saveSale(): verifica permisos al EDITAR (no al crear)');
+console.log('   ✅ voidSale(): verifica permisos antes de anular');
+console.log('   ✅ unvoidSale(): verifica permisos antes de restaurar');
+console.log('   ✅ deleteSale(): verifica permisos antes de eliminar');
+console.log('   ✅ _puedeUsuarioActualProcesarVenta(): delega a orders.js o fallback local');
+console.log('   ✅ Gastos NO se bloquean (no tienen receta)');

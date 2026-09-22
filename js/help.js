@@ -16,21 +16,22 @@
 // 🆕 FASE 4.1 (Entrega 4 - 210926 v5):
 //   - ✅ CENTRO DE AYUDA CONVERTIDO EN POPOVER
 // 🆕 ENTREGA 3 (230926 v6): AYUDA DETALLADA EN MÓVIL
-//   - ✅ REFUERZO: z-index elevado a 2147483647 (ya estaba)
-//   - ✅ NUEVO: Detección de móvil con isMobileDevice()
-//   - ✅ NUEVO: En móvil, el modal de ayuda detallada usa
+//   - ✅ En móvil, el modal de ayuda detallada usa
 //     "abrir en pestaña nueva" como opción PRIMARIA
-//   - ✅ NUEVO: Fallback automático si el iframe no carga
-//     después de 8 segundos → abre en pestaña nueva
-//   - ✅ NUEVO: Botón "🔗 Abrir en pestaña nueva" SIEMPRE visible
-//     (no solo en modo embedded)
-//   - ✅ NUEVO: Manejo de errores con reintentos automáticos
-//   - ✅ NUEVO: Logs de diagnóstico detallados para móvil
-//   - ✅ NUEVO: La función abrirAyudaDetallada() decide entre modal
-//     y pestaña nueva según el dispositivo
-//   - ✅ NUEVO: El modal se cierra con Escape, clic fuera o botón ✕
-//   - ✅ NUEVO: Si el modal falla en móvil, se abre en pestaña nueva
-//     automáticamente como fallback
+// 🆕 v2.1.12 (210926 v7): CORRECCIONES 210926
+//   - ✅ CORRECCIÓN #1: Popover de ayuda en móvil ahora se ancla
+//     ARRIBA-DERECHA (antes: abajo-izquierda). Se ajusta la posición
+//     para que no tape el botón ❓ y sea más intuitivo.
+//   - ✅ CORRECCIÓN #5: Nuevas FAQs sobre el código de invitación:
+//     * ¿Necesito estar en la misma red WiFi?
+//     * ¿Qué contiene el código de invitación?
+//     * ¿Cómo se determina el código de invitación?
+//   - ✅ CORRECCIÓN #8: Nuevas FAQs sobre cómo ejecutar offline.html
+//     desde el móvil.
+//   - ✅ CORRECCIÓN #11: Nueva FAQ sobre el origen del nombre "Panario"
+//     (juego con "pan" y "diario" de contabilidad).
+//   - ✅ CORRECCIÓN #12: Créditos ahora muestran la foto del
+//     desarrollador (assets/dev-avatar.png) con fallback al emoji.
 // ============================================================
 
 window.HelpModule = {};
@@ -39,8 +40,6 @@ window.HelpModule = {};
 // Z-INDEX MÁXIMO PARA MODALES DE AYUDA
 // ============================================================
 // 2147483647 es el valor máximo para un entero de 32 bits con signo.
-// Algunos navegadores permiten valores mayores, pero este es el
-// máximo seguro y estándar.
 // ============================================================
 
 const HELP_MODAL_Z_INDEX = 2147483647;
@@ -49,6 +48,16 @@ const HELP_POPOVER_Z_INDEX = 2147483646;
 // Tiempo máximo (ms) que esperamos a que el iframe cargue antes
 // de ofrecer el fallback "abrir en pestaña nueva".
 const IFRAME_LOAD_TIMEOUT_MS = 8000;
+
+// ============================================================
+// 🆕 v2.1.12: RUTA DEL AVATAR DEL DESARROLLADOR
+// ============================================================
+// Ruta relativa al archivo HTML de la app (index.html).
+// El usuario debe colocar su foto en assets/dev-avatar.png
+// ============================================================
+
+const DEV_AVATAR_PATH = './assets/dev-avatar.png';
+const DEV_AVATAR_FALLBACK_EMOJI = '👨‍💻';
 
 // ============================================================
 // CONFIGURACIÓN DEL TOUR
@@ -127,15 +136,9 @@ let _ayudaModalState = null;
 // ============================================================
 // 🆕 ENTREGA 3: DETECCIÓN DE MÓVIL
 // ============================================================
-// 
-// Determina si estamos en un dispositivo móvil.
-// Se usa para decidir si la ayuda detallada debe abrirse en
-// modal o directamente en pestaña nueva.
-// ============================================================
 
 function isMobileDevice() {
     try {
-        // Detección por User Agent
         const ua = navigator.userAgent || navigator.vendor || window.opera || '';
         const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i;
         
@@ -143,16 +146,10 @@ function isMobileDevice() {
             return true;
         }
         
-        // Detección por tamaño de pantalla
         const isSmallScreen = window.innerWidth < 768;
-        
-        // Detección por touch
         const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-        
-        // Detección por pointer coarse (dedo)
         const isCoarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
         
-        // Es móvil si: pantalla pequeña + (touch o pointer coarse)
         return isSmallScreen && (isTouchDevice || isCoarsePointer);
         
     } catch (e) {
@@ -171,12 +168,10 @@ function forzarModalAlFrente(modal) {
     if (!modal) return;
     
     try {
-        // 1. Mover al final del body (último hijo = mayor prioridad visual)
         if (modal.parentNode !== document.body || document.body.lastChild !== modal) {
             document.body.appendChild(modal);
         }
         
-        // 2. Aplicar estilos que garantizan estar al frente
         modal.style.setProperty('position', 'fixed', 'important');
         modal.style.setProperty('top', '0', 'important');
         modal.style.setProperty('left', '0', 'important');
@@ -194,34 +189,20 @@ function forzarModalAlFrente(modal) {
 }
 
 // ============================================================
-// 🆕 ENTREGA 3: ABRIR AYUDA DETALLADA (DECIDE MODAL O PESTAÑA)
-// ============================================================
-// 
-// Lógica:
-//   1. Cerrar el popover de ayuda si está abierto.
-//   2. Detectar tema y sección activa.
-//   3. Construir URL con parámetros.
-//   4. Si es móvil → abrir DIRECTAMENTE en pestaña nueva.
-//   5. Si es desktop → abrir en modal con iframe.
-//   6. Si el modal falla en desktop → fallback a pestaña nueva.
+// ABRIR AYUDA DETALLADA
 // ============================================================
 
 function abrirAyudaDetallada() {
     try {
-        // Cerrar popover si está abierto
         cerrarPopoverAyuda();
         
-        // Detectar tema
         const theme = document.documentElement.getAttribute('data-theme') || 'light';
-        
-        // Detectar sección activa
         const activeNav = document.querySelector('.nav-item.active');
         let section = 'intro';
         if (activeNav && activeNav.dataset && activeNav.dataset.section) {
             section = activeNav.dataset.section;
         }
         
-        // Mapeo de secciones de la app a secciones de la ayuda
         const sectionMap = {
             'dashboard':     'dashboard',
             'orders':        'orders',
@@ -237,26 +218,13 @@ function abrirAyudaDetallada() {
         };
         const helpSection = sectionMap[section] || 'intro';
         
-        // Construir URL base (sin embedded, para pestaña nueva)
         const baseUrl = `./ayuda-panario.html?theme=${encodeURIComponent(theme)}&section=${encodeURIComponent(helpSection)}`;
-        
-        // URL con embedded=1 para el iframe
         const embeddedUrl = `${baseUrl}&embedded=1`;
         
         const isMobile = isMobileDevice();
         
-        console.log('📖 Abriendo ayuda detallada:', {
-            theme,
-            section: helpSection,
-            isMobile,
-            baseUrl
-        });
+        console.log('📖 Abriendo ayuda detallada:', { theme, section: helpSection, isMobile, baseUrl });
         
-        // ============================================================
-        // 🆕 ENTREGA 3: EN MÓVIL → PESTAÑA NUEVA DIRECTAMENTE
-        // ============================================================
-        // En móvil, los iframes son problemáticos (tamaño, scroll,
-        // interacción con gestos). Es más fiable abrir en pestaña.
         if (isMobile) {
             console.log('📱 Dispositivo móvil detectado → abriendo en pestaña nueva');
             
@@ -264,7 +232,6 @@ function abrirAyudaDetallada() {
                 const win = window.open(baseUrl, '_blank', 'noopener,noreferrer');
                 
                 if (!win) {
-                    // Popup bloqueado → fallback a misma pestaña
                     console.warn('⚠️ Popup bloqueado, abriendo en misma pestaña');
                     window.location.href = baseUrl;
                 } else {
@@ -277,9 +244,6 @@ function abrirAyudaDetallada() {
             return;
         }
         
-        // ============================================================
-        // DESKTOP → MODAL CON IFRAME (con fallback a pestaña nueva)
-        // ============================================================
         console.log('💻 Desktop detectado → abriendo en modal');
         abrirAyudaEnModal(embeddedUrl, theme, baseUrl);
         
@@ -292,27 +256,19 @@ function abrirAyudaDetallada() {
 }
 
 // ============================================================
-// 🆕 ENTREGA 3: ABRIR AYUDA EN MODAL (CON FALLBACK)
-// ============================================================
-// 
-// @param {string} embeddedUrl - URL con embedded=1 para el iframe
-// @param {string} theme - Tema actual (light/dark)
-// @param {string} baseUrl - URL sin embedded (para pestaña nueva)
+// ABRIR AYUDA EN MODAL
 // ============================================================
 
 function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
-    // Si no se pasa baseUrl, construirla desde embeddedUrl
     if (!baseUrl) {
         baseUrl = embeddedUrl.replace('&embedded=1', '');
     }
     
-    // Cerrar si ya existe uno abierto
     const existing = document.getElementById('ayuda-modal');
     if (existing) {
         existing.remove();
     }
     
-    // Detectar si es móvil para ajustar tamaño
     const isMobile = isMobileDevice();
     
     const modalWidth  = isMobile ? '100vw' : '95vw';
@@ -345,35 +301,13 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
         const style = document.createElement('style');
         style.id = 'ayuda-modal-styles';
         style.textContent = `
-            @keyframes ayudaModalFadeIn {
-                from { opacity: 0; }
-                to   { opacity: 1; }
-            }
-            @keyframes ayudaModalSlideUp {
-                from { opacity: 0; transform: translateY(20px) scale(0.98); }
-                to   { opacity: 1; transform: translateY(0) scale(1); }
-            }
-            @keyframes ayudaModalFadeOut {
-                from { opacity: 1; }
-                to   { opacity: 0; }
-            }
-            @keyframes ayudaSpinner {
-                to { transform: rotate(360deg); }
-            }
-            #ayuda-modal iframe {
-                border: none;
-                display: block;
-                width: 100%;
-                height: 100%;
-                background: #fdf6e3;
-            }
-            [data-theme="dark"] #ayuda-modal iframe {
-                background: #0d0d0d;
-            }
-            #ayuda-modal,
-            #ayuda-modal * {
-                box-sizing: border-box;
-            }
+            @keyframes ayudaModalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes ayudaModalSlideUp { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+            @keyframes ayudaModalFadeOut { from { opacity: 1; } to { opacity: 0; } }
+            @keyframes ayudaSpinner { to { transform: rotate(360deg); } }
+            #ayuda-modal iframe { border: none; display: block; width: 100%; height: 100%; background: #fdf6e3; }
+            [data-theme="dark"] #ayuda-modal iframe { background: #0d0d0d; }
+            #ayuda-modal, #ayuda-modal * { box-sizing: border-box; }
         `;
         document.head.appendChild(style);
     }
@@ -395,28 +329,15 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
             position: relative;
             z-index: 1;
         ">
-            <!-- HEADER -->
-            <div style="
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                padding: 10px 16px;
-                border-bottom: 1px solid var(--border-color, #e0d5c0);
-                background: var(--bg-card, #fff);
-                flex-shrink: 0;
-                flex-wrap: wrap;
-            ">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border-color, #e0d5c0); background: var(--bg-card, #fff); flex-shrink: 0; flex-wrap: wrap;">
                 <span style="font-size: 22px;">📖</span>
                 <div style="flex: 1; min-width: 120px;">
-                    <div style="font-weight: 700; font-size: 15px; color: var(--text, #2d2d2d);">
-                        Ayuda detallada
-                    </div>
+                    <div style="font-weight: 700; font-size: 15px; color: var(--text, #2d2d2d);">Ayuda detallada</div>
                     <div style="font-size: 11px; color: var(--text-light, #666); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                         ${embeddedUrl.split('?')[0]}
                     </div>
                 </div>
                 
-                <!-- 🆕 ENTREGA 3: Botón "Abrir en pestaña nueva" SIEMPRE visible -->
                 <a href="${baseUrl}" target="_blank" rel="noopener noreferrer"
                    class="btn secondary"
                    style="padding: 6px 12px; font-size: 12px; width: auto; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;"
@@ -424,78 +345,25 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
                     🔗 ↗
                 </a>
                 
-                <button onclick="imprimirAyudaIframe()"
-                        class="btn secondary"
-                        style="padding: 6px 12px; font-size: 12px; width: auto;"
-                        title="Imprimir / Guardar PDF">
+                <button onclick="imprimirAyudaIframe()" class="btn secondary" style="padding: 6px 12px; font-size: 12px; width: auto;" title="Imprimir / Guardar PDF">
                     🖨️
                 </button>
                 
-                <button onclick="cerrarAyudaModal()"
-                        style="
-                            background: none;
-                            border: none;
-                            font-size: 24px;
-                            cursor: pointer;
-                            color: var(--text-light, #666);
-                            padding: 4px 8px;
-                            line-height: 1;
-                            border-radius: 6px;
-                            transition: background 0.2s;
-                        "
-                        onmouseover="this.style.background='var(--bg, #fdf6e3)'"
-                        onmouseout="this.style.background='transparent'"
-                        title="Cerrar (Escape)">
+                <button onclick="cerrarAyudaModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light, #666); padding: 4px 8px; line-height: 1; border-radius: 6px; transition: background 0.2s;" onmouseover="this.style.background='var(--bg, #fdf6e3)'" onmouseout="this.style.background='transparent'" title="Cerrar (Escape)">
                     ✕
                 </button>
             </div>
             
             <div style="flex: 1; position: relative; overflow: hidden;">
-                <div id="ayuda-modal-loading" style="
-                    position: absolute;
-                    top: 0; left: 0; right: 0; bottom: 0;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    flex-direction: column;
-                    gap: 12px;
-                    background: var(--bg, #fdf6e3);
-                    z-index: 1;
-                ">
-                    <div style="
-                        width: 40px;
-                        height: 40px;
-                        border: 4px solid var(--primary, #f5a623);
-                        border-top-color: transparent;
-                        border-radius: 50%;
-                        animation: ayudaSpinner 0.8s linear infinite;
-                    "></div>
-                    <div style="font-size: 13px; color: var(--text-light, #666);">
-                        Cargando ayuda...
-                    </div>
-                    <!-- 🆕 ENTREGA 3: Aviso de fallback -->
+                <div id="ayuda-modal-loading" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; background: var(--bg, #fdf6e3); z-index: 1;">
+                    <div style="width: 40px; height: 40px; border: 4px solid var(--primary, #f5a623); border-top-color: transparent; border-radius: 50%; animation: ayudaSpinner 0.8s linear infinite;"></div>
+                    <div style="font-size: 13px; color: var(--text-light, #666);">Cargando ayuda...</div>
                     <div style="font-size: 11px; color: var(--text-light, #666); text-align: center; max-width: 300px; margin-top: 8px;">
                         Si no carga en unos segundos, se abrirá en una pestaña nueva automáticamente.
                     </div>
                 </div>
                 
-                <iframe 
-                    id="ayuda-modal-iframe"
-                    src="${embeddedUrl}"
-                    title="Ayuda detallada de Panario"
-                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
-                    allow="clipboard-read; clipboard-write"
-                    style="
-                        width: 100%;
-                        height: 100%;
-                        border: none;
-                        display: block;
-                        position: relative;
-                        z-index: 2;
-                        opacity: 0;
-                        transition: opacity 0.3s ease;
-                    "
-                ></iframe>
+                <iframe id="ayuda-modal-iframe" src="${embeddedUrl}" title="Ayuda detallada de Panario" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals" allow="clipboard-read; clipboard-write" style="width: 100%; height: 100%; border: none; display: block; position: relative; z-index: 2; opacity: 0; transition: opacity 0.3s ease;"></iframe>
             </div>
         </div>
     `;
@@ -506,15 +374,12 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
     const iframe = document.getElementById('ayuda-modal-iframe');
     const loading = document.getElementById('ayuda-modal-loading');
     
-    // Estado de carga del iframe
     let iframeLoaded = false;
     let fallbackTriggered = false;
     
     if (iframe) {
-        // ---- Evento load del iframe ----
         iframe.addEventListener('load', function() {
             iframeLoaded = true;
-            
             setTimeout(() => {
                 if (loading) loading.style.display = 'none';
                 iframe.style.opacity = '1';
@@ -523,7 +388,6 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
             }, 200);
         });
         
-        // ---- Evento error del iframe ----
         iframe.addEventListener('error', function(e) {
             console.warn('⚠️ Error cargando iframe de ayuda:', e);
             if (!fallbackTriggered) {
@@ -532,15 +396,11 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
             }
         });
         
-        // ---- 🆕 ENTREGA 3: Timeout de seguridad ----
-        // Si después de IFRAME_LOAD_TIMEOUT_MS el iframe no ha cargado,
-        // ofrecer abrirlo en pestaña nueva.
         setTimeout(() => {
             if (!iframeLoaded && !fallbackTriggered) {
                 console.warn(`⚠️ Timeout de iframe (${IFRAME_LOAD_TIMEOUT_MS}ms) — ofreciendo fallback`);
                 fallbackTriggered = true;
                 
-                // Si aún se ve el loading, ocultarlo y mostrar el fallback
                 if (loading && loading.style.display !== 'none') {
                     loading.style.display = 'none';
                     iframe.style.opacity = '1';
@@ -551,7 +411,6 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
         }, IFRAME_LOAD_TIMEOUT_MS);
     }
     
-    // ---- Cerrar con clic fuera ----
     modal.addEventListener('click', function(e) {
         const container = document.getElementById('ayuda-modal-container');
         if (e.target === modal || (container && !container.contains(e.target))) {
@@ -559,7 +418,6 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
         }
     });
     
-    // ---- Cerrar con Escape ----
     const escHandler = function(e) {
         if (e.key === 'Escape') {
             cerrarAyudaModal();
@@ -568,24 +426,16 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
     };
     document.addEventListener('keydown', escHandler);
     
-    // ---- Ocultar scroll del body ----
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     
-    window._ayudaModalState = {
-        prevOverflow,
-        escHandler
-    };
+    window._ayudaModalState = { prevOverflow, escHandler };
     
     console.log('📖 Modal de ayuda abierto con URL:', embeddedUrl);
 }
 
 // ============================================================
-// 🆕 ENTREGA 3: OFRECER FALLBACK A PESTAÑA NUEVA
-// ============================================================
-// 
-// Si el iframe no carga (timeout, error, bloqueo), mostrar un
-// botón destacado para abrir la ayuda en pestaña nueva.
+// OFRECER FALLBACK A PESTAÑA NUEVA
 // ============================================================
 
 function ofrecerFallbackPestanaNueva(baseUrl, mensaje) {
@@ -594,53 +444,31 @@ function ofrecerFallbackPestanaNueva(baseUrl, mensaje) {
     const container = document.getElementById('ayuda-modal-container');
     if (!container) return;
     
-    // Crear banner de fallback
     const fallbackId = 'ayuda-modal-fallback';
     let fallback = document.getElementById(fallbackId);
     
     if (!fallback) {
         fallback = document.createElement('div');
         fallback.id = fallbackId;
-        fallback.style.cssText = `
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: var(--bg-card, #fff);
-            border-radius: 16px;
-            padding: 24px 28px;
-            max-width: 400px;
-            width: calc(100% - 40px);
-            text-align: center;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-            border: 2px solid var(--primary, #f5a623);
-            z-index: 10;
-        `;
+        fallback.style.cssText = `position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-card, #fff); border-radius: 16px; padding: 24px 28px; max-width: 400px; width: calc(100% - 40px); text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 2px solid var(--primary, #f5a623); z-index: 10;`;
         
         fallback.innerHTML = `
             <div style="font-size: 56px; margin-bottom: 12px;">🔗</div>
-            <h3 style="margin: 0 0 8px 0; font-size: 17px; color: var(--text, #2d2d2d);">
-                Abrir en pestaña nueva
-            </h3>
+            <h3 style="margin: 0 0 8px 0; font-size: 17px; color: var(--text, #2d2d2d);">Abrir en pestaña nueva</h3>
             <p style="font-size: 13px; color: var(--text-light, #666); margin-bottom: 16px; line-height: 1.5;">
                 ${mensaje || 'No se pudo cargar la ayuda en modal.'}<br>
                 Ábrela en una pestaña nueva para verla correctamente.
             </p>
             <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
-                <a href="${baseUrl}" target="_blank" rel="noopener noreferrer"
-                   class="btn primary"
-                   style="padding: 10px 20px; font-size: 14px; width: auto; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; background: var(--primary, #f5a623); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                <a href="${baseUrl}" target="_blank" rel="noopener noreferrer" class="btn primary" style="padding: 10px 20px; font-size: 14px; width: auto; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; background: var(--primary, #f5a623); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                     🔗 Abrir ayuda
                 </a>
-                <button onclick="cerrarAyudaModal()"
-                        class="btn secondary"
-                        style="padding: 10px 20px; font-size: 14px; width: auto; background: transparent; color: var(--text, #2d2d2d); border: 2px solid var(--border-color, #e0d5c0); border-radius: 8px; cursor: pointer; font-weight: 600;">
+                <button onclick="cerrarAyudaModal()" class="btn secondary" style="padding: 10px 20px; font-size: 14px; width: auto; background: transparent; color: var(--text, #2d2d2d); border: 2px solid var(--border-color, #e0d5c0); border-radius: 8px; cursor: pointer; font-weight: 600;">
                     ❌ Cerrar
                 </button>
             </div>
         `;
         
-        // Añadir al contenedor principal (no al body, para que quede dentro del modal)
         const iframeWrapper = container.querySelector('div[style*="flex: 1"]');
         if (iframeWrapper) {
             iframeWrapper.style.position = 'relative';
@@ -651,10 +479,6 @@ function ofrecerFallbackPestanaNueva(baseUrl, mensaje) {
     }
 }
 
-// ============================================================
-// CERRAR MODAL DE AYUDA DETALLADA
-// ============================================================
-
 function cerrarAyudaModal() {
     const modal = document.getElementById('ayuda-modal');
     if (!modal) return;
@@ -664,7 +488,6 @@ function cerrarAyudaModal() {
     setTimeout(() => {
         if (modal.parentNode) modal.remove();
         
-        // Restaurar scroll del body
         if (window._ayudaModalState) {
             document.body.style.overflow = window._ayudaModalState.prevOverflow || '';
             if (window._ayudaModalState.escHandler) {
@@ -676,10 +499,6 @@ function cerrarAyudaModal() {
         console.log('📖 Modal de ayuda cerrado');
     }, 200);
 }
-
-// ============================================================
-// IMPRIMIR AYUDA DESDE IFRAME
-// ============================================================
 
 function imprimirAyudaIframe() {
     try {
@@ -709,10 +528,8 @@ window.ofrecerFallbackPestanaNueva = ofrecerFallbackPestanaNueva;
 // ============================================================
 
 function mostrarPopoverAyuda(anchorElement = null) {
-    // Cerrar si ya está abierto
     cerrarPopoverAyuda();
     
-    // Buscar el ancla
     const anchor = anchorElement || document.getElementById('help-button');
     
     if (!anchor) {
@@ -722,13 +539,11 @@ function mostrarPopoverAyuda(anchorElement = null) {
     
     _helpPopoverAnchor = anchor;
     
-    // Crear el popover
     const popover = document.createElement('div');
     popover.id = 'help-popover';
     popover.setAttribute('role', 'menu');
     popover.setAttribute('aria-label', 'Centro de Ayuda');
     
-    // Estilos base del popover
     popover.style.setProperty('position', 'fixed', 'important');
     popover.style.setProperty('z-index', String(HELP_POPOVER_Z_INDEX), 'important');
     popover.style.setProperty('background', 'var(--bg-card, #fff)', 'important');
@@ -743,7 +558,6 @@ function mostrarPopoverAyuda(anchorElement = null) {
     popover.style.setProperty('will-change', 'transform', 'important');
     popover.style.setProperty('animation', 'helpPopoverFadeIn 0.15s ease', 'important');
     
-    // Contenido
     popover.innerHTML = `
         <div style="padding: 10px 14px; border-bottom: 1px solid var(--border-color); background: linear-gradient(135deg, #f59e0b10 0%, #f59e0b05 100%);">
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -756,9 +570,7 @@ function mostrarPopoverAyuda(anchorElement = null) {
         </div>
         
         <div style="padding: 6px; max-height: 70vh; overflow-y: auto;">
-            <!-- Guía rápida -->
-            <button class="help-popover-item" data-action="quickstart" 
-                    style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; text-align: left; font-family: inherit; transition: background 0.15s; color: var(--text);">
+            <button class="help-popover-item" data-action="quickstart" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; text-align: left; font-family: inherit; transition: background 0.15s; color: var(--text);">
                 <span style="font-size: 20px; flex-shrink: 0;">🚀</span>
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-weight: 600; font-size: 13px;">Guía Rápida de Inicio</div>
@@ -767,9 +579,7 @@ function mostrarPopoverAyuda(anchorElement = null) {
                 <span style="font-size: 12px; color: var(--text-light); flex-shrink: 0;">▶</span>
             </button>
             
-            <!-- Tutorial -->
-            <button class="help-popover-item" data-action="tour" 
-                    style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; text-align: left; font-family: inherit; transition: background 0.15s; color: var(--text);">
+            <button class="help-popover-item" data-action="tour" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; text-align: left; font-family: inherit; transition: background 0.15s; color: var(--text);">
                 <span style="font-size: 20px; flex-shrink: 0;">🎯</span>
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-weight: 600; font-size: 13px;">Tutorial Interactivo</div>
@@ -778,9 +588,7 @@ function mostrarPopoverAyuda(anchorElement = null) {
                 <span style="font-size: 12px; color: var(--text-light); flex-shrink: 0;">▶</span>
             </button>
             
-            <!-- FAQs -->
-            <button class="help-popover-item" data-action="faq" 
-                    style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; text-align: left; font-family: inherit; transition: background 0.15s; color: var(--text);">
+            <button class="help-popover-item" data-action="faq" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; text-align: left; font-family: inherit; transition: background 0.15s; color: var(--text);">
                 <span style="font-size: 20px; flex-shrink: 0;">❓</span>
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-weight: 600; font-size: 13px;">Preguntas Frecuentes</div>
@@ -789,9 +597,7 @@ function mostrarPopoverAyuda(anchorElement = null) {
                 <span style="font-size: 12px; color: var(--text-light); flex-shrink: 0;">▶</span>
             </button>
             
-            <!-- Ayuda Detallada -->
-            <button class="help-popover-item" data-action="detailed" 
-                    style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; text-align: left; font-family: inherit; transition: background 0.15s; color: var(--text);">
+            <button class="help-popover-item" data-action="detailed" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; text-align: left; font-family: inherit; transition: background 0.15s; color: var(--text);">
                 <span style="font-size: 20px; flex-shrink: 0;">📖</span>
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-weight: 600; font-size: 13px;">Ayuda Detallada</div>
@@ -802,9 +608,7 @@ function mostrarPopoverAyuda(anchorElement = null) {
             
             <div style="border-top: 1px solid var(--border-color); margin: 4px 8px;"></div>
             
-            <!-- Léeme -->
-            <button class="help-popover-item" data-action="readme" 
-                    style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; text-align: left; font-family: inherit; transition: background 0.15s; color: var(--text);">
+            <button class="help-popover-item" data-action="readme" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; text-align: left; font-family: inherit; transition: background 0.15s; color: var(--text);">
                 <span style="font-size: 20px; flex-shrink: 0;">📘</span>
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-weight: 600; font-size: 13px;">Léeme</div>
@@ -813,9 +617,7 @@ function mostrarPopoverAyuda(anchorElement = null) {
                 <span style="font-size: 12px; color: var(--text-light); flex-shrink: 0;">▶</span>
             </button>
             
-            <!-- Créditos -->
-            <button class="help-popover-item" data-action="credits" 
-                    style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; text-align: left; font-family: inherit; transition: background 0.15s; color: var(--text);">
+            <button class="help-popover-item" data-action="credits" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; text-align: left; font-family: inherit; transition: background 0.15s; color: var(--text);">
                 <span style="font-size: 20px; flex-shrink: 0;">👨‍💻</span>
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-weight: 600; font-size: 13px;">Créditos</div>
@@ -826,7 +628,6 @@ function mostrarPopoverAyuda(anchorElement = null) {
         </div>
     `;
     
-    // Estilos y animación (una sola vez)
     if (!document.getElementById('help-popover-styles')) {
         const style = document.createElement('style');
         style.id = 'help-popover-styles';
@@ -839,42 +640,42 @@ function mostrarPopoverAyuda(anchorElement = null) {
                 from { opacity: 1; transform: translateY(0); }
                 to   { opacity: 0; transform: translateY(-8px); }
             }
-            .help-popover-item:hover {
-                background: var(--bg) !important;
-            }
-            .help-popover-item:active {
-                transform: scale(0.98);
-            }
+            .help-popover-item:hover { background: var(--bg) !important; }
+            .help-popover-item:active { transform: scale(0.98); }
+            
+            /* 🆕 v2.1.12: CORRECCIÓN #1
+               El popover en móvil ahora se ancla ARRIBA-DERECHA
+               (antes se anclaba abajo-izquierda, lo cual no era intuitivo).
+               - top: 60px → debajo del header
+               - right: 10px → pegado al borde derecho
+               - max-height ajustado para no salirse de la pantalla
+            */
             @media (max-width: 600px) {
                 #help-popover {
-                    left: 10px !important;
+                    top: 60px !important;
                     right: 10px !important;
-                    bottom: 10px !important;
-                    top: auto !important;
-                    min-width: auto !important;
-                    max-width: none !important;
+                    left: auto !important;
+                    bottom: auto !important;
+                    min-width: 240px !important;
+                    max-width: calc(100vw - 20px) !important;
+                    max-height: calc(100vh - 80px) !important;
                 }
             }
         `;
         document.head.appendChild(style);
     }
     
-    // Añadir al body
     document.body.appendChild(popover);
     _helpPopover = popover;
     
-    // Posicionar el popover
     _posicionarPopoverAyuda(anchor, popover);
     
-    // Reposicionar si cambia el tamaño de la ventana
     const repositionHandler = () => _posicionarPopoverAyuda(anchor, popover);
     window.addEventListener('resize', repositionHandler);
     window.addEventListener('scroll', repositionHandler, true);
     
-    // Guardar referencias para limpieza
     _helpPopover._repositionHandler = repositionHandler;
     
-    // Registrar handlers de eventos para las opciones
     popover.querySelectorAll('.help-popover-item').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
@@ -883,38 +684,22 @@ function mostrarPopoverAyuda(anchorElement = null) {
             
             setTimeout(() => {
                 switch (action) {
-                    case 'quickstart':
-                        showQuickStartGuide();
-                        break;
-                    case 'tour':
-                        startTour();
-                        break;
-                    case 'faq':
-                        showFAQModal();
-                        break;
-                    case 'detailed':
-                        abrirAyudaDetallada();
-                        break;
-                    case 'readme':
-                        showReadmeModal();
-                        break;
-                    case 'credits':
-                        showCreditsModal();
-                        break;
-                    default:
-                        console.warn('⚠️ Acción de ayuda no reconocida:', action);
+                    case 'quickstart': showQuickStartGuide(); break;
+                    case 'tour': startTour(); break;
+                    case 'faq': showFAQModal(); break;
+                    case 'detailed': abrirAyudaDetallada(); break;
+                    case 'readme': showReadmeModal(); break;
+                    case 'credits': showCreditsModal(); break;
+                    default: console.warn('⚠️ Acción de ayuda no reconocida:', action);
                 }
             }, 100);
         });
     });
     
-    // Handler para cerrar al hacer clic fuera
     _helpPopoverOutsideClickHandler = function(e) {
         if (!_helpPopover) return;
-        
         const isInsidePopover = _helpPopover.contains(e.target);
         const isAnchor = anchor && anchor.contains(e.target);
-        
         if (!isInsidePopover && !isAnchor) {
             cerrarPopoverAyuda();
         }
@@ -924,15 +709,11 @@ function mostrarPopoverAyuda(anchorElement = null) {
         document.addEventListener('click', _helpPopoverOutsideClickHandler, true);
     }, 50);
     
-    // Handler para cerrar con Escape
     _helpPopoverEscHandler = function(e) {
-        if (e.key === 'Escape') {
-            cerrarPopoverAyuda();
-        }
+        if (e.key === 'Escape') cerrarPopoverAyuda();
     };
     document.addEventListener('keydown', _helpPopoverEscHandler);
     
-    // Aplicar color de fondo activo al ancla
     if (anchor) {
         anchor.style.background = 'var(--primary-light)';
         anchor.style.borderRadius = '8px';
@@ -950,6 +731,8 @@ function _posicionarPopoverAyuda(anchor, popover) {
         const isMobile = window.innerWidth < 600;
         
         if (isMobile) {
+            // 🆕 v2.1.12: En móvil, el CSS ya se encarga (top-right).
+            // No sobreescribimos con posicionamiento calculado.
             return;
         }
         
@@ -963,16 +746,11 @@ function _posicionarPopoverAyuda(anchor, popover) {
             top = rect.top - popoverHeight - margin;
         }
         
-        if (top < 10) {
-            top = 10;
-        }
+        if (top < 10) top = 10;
         
         let left = rect.right - popoverWidth;
         
-        if (left < 10) {
-            left = 10;
-        }
-        
+        if (left < 10) left = 10;
         if (left + popoverWidth > window.innerWidth - 10) {
             left = window.innerWidth - popoverWidth - 10;
         }
@@ -1044,14 +822,7 @@ function _mostrarHelpMenuFallback() {
     
     const modal = document.createElement('div');
     modal.id = 'help-menu-modal';
-    modal.style.cssText = `
-        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0,0,0,0.6); backdrop-filter: blur(6px);
-        display: flex; align-items: center; justify-content: center;
-        z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px;
-        animation: modalFadeIn 0.25s ease;
-        isolation: isolate;
-    `;
+    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease; isolation: isolate;`;
     
     modal.innerHTML = `
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 420px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid var(--border-color);">
@@ -1062,9 +833,7 @@ function _mostrarHelpMenuFallback() {
                 </div>
                 <button onclick="document.getElementById('help-menu-modal').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
             </div>
-            <p style="font-size: 13px; color: var(--text-light); margin-bottom: 16px;">
-                El botón de ayuda no está anclado. Abriendo en modo modal...
-            </p>
+            <p style="font-size: 13px; color: var(--text-light); margin-bottom: 16px;">El botón de ayuda no está anclado. Abriendo en modo modal...</p>
             <div style="display: flex; flex-direction: column; gap: 8px;">
                 <button onclick="document.getElementById('help-menu-modal').remove(); showQuickStartGuide();" class="btn primary" style="padding: 10px; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: left;">🚀 Guía Rápida</button>
                 <button onclick="document.getElementById('help-menu-modal').remove(); startTour();" class="btn primary" style="padding: 10px; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: left;">🎯 Tutorial</button>
@@ -1098,14 +867,7 @@ function showReadmeModal() {
 
     const modal = document.createElement('div');
     modal.id = 'readme-modal';
-    modal.style.cssText = `
-        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0,0,0,0.6); backdrop-filter: blur(6px);
-        display: flex; align-items: center; justify-content: center;
-        z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px;
-        animation: modalFadeIn 0.25s ease;
-        isolation: isolate;
-    `;
+    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease; isolation: isolate;`;
 
     modal.innerHTML = `
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
@@ -1205,9 +967,7 @@ function showReadmeModal() {
         const m = document.getElementById('readme-modal');
         if (m) {
             m.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => {
-                if (m.parentNode) m.remove();
-            }, 200);
+            setTimeout(() => { if (m.parentNode) m.remove(); }, 200);
         }
     };
 
@@ -1226,6 +986,7 @@ function showReadmeModal() {
 
 // ============================================================
 // MODAL CRÉDITOS
+// 🆕 v2.1.12: Con foto del desarrollador (assets/dev-avatar.png)
 // ============================================================
 
 function showCreditsModal() {
@@ -1234,14 +995,7 @@ function showCreditsModal() {
 
     const modal = document.createElement('div');
     modal.id = 'credits-modal';
-    modal.style.cssText = `
-        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0,0,0,0.6); backdrop-filter: blur(6px);
-        display: flex; align-items: center; justify-content: center;
-        z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px;
-        animation: modalFadeIn 0.25s ease;
-        isolation: isolate;
-    `;
+    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease; isolation: isolate;`;
 
     modal.innerHTML = `
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 28px 24px; max-width: 420px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color); text-align: center;">
@@ -1254,8 +1008,13 @@ function showCreditsModal() {
             </div>
 
             <div style="margin-bottom: 20px;">
-                <div style="width: 100px; height: 100px; border-radius: 50%; background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); display: inline-flex; align-items: center; justify-content: center; font-size: 48px; margin-bottom: 12px;">
-                    👨‍💻
+                <!-- 🆕 v2.1.12: CORRECCIÓN #12 - Foto del desarrollador con fallback -->
+                <div id="dev-avatar-container" style="width: 100px; height: 100px; border-radius: 50%; background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); display: inline-flex; align-items: center; justify-content: center; font-size: 48px; margin-bottom: 12px; overflow: hidden; border: 3px solid var(--primary);">
+                    <img 
+                        src="${DEV_AVATAR_PATH}" 
+                        alt="Foto del desarrollador"
+                        style="width: 100%; height: 100%; object-fit: cover; display: block;"
+                        onerror="this.style.display='none'; this.parentElement.innerHTML='${DEV_AVATAR_FALLBACK_EMOJI}'; this.parentElement.style.fontSize='48px';">
                 </div>
                 <h3 style="margin: 0; font-size: 20px; color: var(--text);">Ricardo Castillo Valdés</h3>
                 <p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-light);">Desarrollador y Diseñador</p>
@@ -1266,8 +1025,7 @@ function showCreditsModal() {
                     📞 Información de contacto
                 </div>
                 
-                <a href="https://wa.me/5355031725" target="_blank" 
-                   style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-card); border-radius: 8px; text-decoration: none; color: var(--text); margin-bottom: 8px; border: 1px solid var(--border-color); transition: transform 0.2s;">
+                <a href="https://wa.me/5355031725" target="_blank" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-card); border-radius: 8px; text-decoration: none; color: var(--text); margin-bottom: 8px; border: 1px solid var(--border-color); transition: transform 0.2s;">
                     <span style="font-size: 20px;">💬</span>
                     <div style="flex: 1;">
                         <div style="font-size: 11px; color: var(--text-light);">WhatsApp</div>
@@ -1276,8 +1034,7 @@ function showCreditsModal() {
                     <span style="font-size: 14px; color: var(--primary);">→</span>
                 </a>
 
-                <a href="mailto:3sayricardo@gmail.com" 
-                   style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-card); border-radius: 8px; text-decoration: none; color: var(--text); border: 1px solid var(--border-color); transition: transform 0.2s;">
+                <a href="mailto:3sayricardo@gmail.com" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-card); border-radius: 8px; text-decoration: none; color: var(--text); border: 1px solid var(--border-color); transition: transform 0.2s;">
                     <span style="font-size: 20px;">📧</span>
                     <div style="flex: 1;">
                         <div style="font-size: 11px; color: var(--text-light);">Email</div>
@@ -1318,9 +1075,7 @@ function showCreditsModal() {
         const m = document.getElementById('credits-modal');
         if (m) {
             m.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => {
-                if (m.parentNode) m.remove();
-            }, 200);
+            setTimeout(() => { if (m.parentNode) m.remove(); }, 200);
         }
     };
 
@@ -1364,67 +1119,25 @@ async function startTour() {
     showStep(currentStep);
 }
 
-// ============================================================
-// CREAR OVERLAY
-// ============================================================
-
 function createOverlay() {
     removeOverlay();
     
     tourOverlay = document.createElement('div');
     tourOverlay.id = 'tour-overlay';
-    tourOverlay.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0,0,0,0.5);
-        z-index: 2147483640;
-        pointer-events: none;
-        animation: modalFadeIn 0.3s ease;
-        isolation: isolate;
-    `;
+    tourOverlay.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2147483640; pointer-events: none; animation: modalFadeIn 0.3s ease; isolation: isolate;`;
     
     tourHighlight = document.createElement('div');
     tourHighlight.id = 'tour-highlight';
-    tourHighlight.style.cssText = `
-        position: fixed;
-        border: 3px solid #f5a623;
-        border-radius: 12px;
-        box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);
-        z-index: 2147483641;
-        pointer-events: none;
-        transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        background: transparent;
-    `;
+    tourHighlight.style.cssText = `position: fixed; border: 3px solid #f5a623; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5); z-index: 2147483641; pointer-events: none; transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); background: transparent;`;
     
     tourTooltip = document.createElement('div');
     tourTooltip.id = 'tour-tooltip';
-    tourTooltip.style.cssText = `
-        position: fixed;
-        background: var(--bg-card);
-        color: var(--text);
-        border-radius: var(--radius);
-        padding: 20px 24px;
-        max-width: 340px;
-        width: 90%;
-        z-index: 2147483642;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        border: 1px solid var(--border-color);
-        pointer-events: auto;
-        animation: modalSlideUp 0.3s ease;
-        font-size: 14px;
-    `;
+    tourTooltip.style.cssText = `position: fixed; background: var(--bg-card); color: var(--text); border-radius: var(--radius); padding: 20px 24px; max-width: 340px; width: 90%; z-index: 2147483642; box-shadow: 0 20px 60px rgba(0,0,0,0.3); border: 1px solid var(--border-color); pointer-events: auto; animation: modalSlideUp 0.3s ease; font-size: 14px;`;
     
     document.body.appendChild(tourOverlay);
     document.body.appendChild(tourHighlight);
     document.body.appendChild(tourTooltip);
 }
-
-// ============================================================
-// MOSTRAR PASO
-// ============================================================
 
 function showStep(index) {
     if (index >= TOUR_STEPS.length) {
@@ -1453,7 +1166,6 @@ function showStep(index) {
     let tooltipTop, tooltipLeft;
     const tooltipWidth = Math.min(340, window.innerWidth - 40);
     const tooltipHeight = 200;
-    
     const position = step.position || 'bottom';
     
     switch (position) {
@@ -1478,18 +1190,10 @@ function showStep(index) {
             tooltipLeft = rect.left + (rect.width / 2) - (tooltipWidth / 2);
     }
     
-    if (tooltipTop + tooltipHeight > window.innerHeight - 20) {
-        tooltipTop = rect.top - tooltipHeight - 16;
-    }
-    if (tooltipTop < 20) {
-        tooltipTop = 20;
-    }
-    if (tooltipLeft < 20) {
-        tooltipLeft = 20;
-    }
-    if (tooltipLeft + tooltipWidth > window.innerWidth - 20) {
-        tooltipLeft = window.innerWidth - tooltipWidth - 20;
-    }
+    if (tooltipTop + tooltipHeight > window.innerHeight - 20) tooltipTop = rect.top - tooltipHeight - 16;
+    if (tooltipTop < 20) tooltipTop = 20;
+    if (tooltipLeft < 20) tooltipLeft = 20;
+    if (tooltipLeft + tooltipWidth > window.innerWidth - 20) tooltipLeft = window.innerWidth - tooltipWidth - 20;
     
     const isFirst = index === 0;
     const isLast = index === TOUR_STEPS.length - 1;
@@ -1513,10 +1217,6 @@ function showStep(index) {
     
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
-
-// ============================================================
-// NAVEGACIÓN DEL TOUR
-// ============================================================
 
 function tourNext() {
     if (currentStep < TOUR_STEPS.length - 1) {
@@ -1558,10 +1258,6 @@ function tourComplete() {
     window.showToast('✅ ¡Tutorial completado!', 'success', 3000);
 }
 
-// ============================================================
-// ELIMINAR OVERLAY
-// ============================================================
-
 function removeOverlay() {
     const elements = ['tour-overlay', 'tour-highlight', 'tour-tooltip'];
     for (const id of elements) {
@@ -1569,10 +1265,6 @@ function removeOverlay() {
         if (el) el.remove();
     }
 }
-
-// ============================================================
-// MOSTRAR AYUDA CONTEXTUAL
-// ============================================================
 
 function showContextualHelp(section) {
     const helpMessages = {
@@ -1600,14 +1292,7 @@ function showQuickStartGuide() {
 
     const modal = document.createElement('div');
     modal.id = 'quickstart-modal';
-    modal.style.cssText = `
-        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0,0,0,0.6); backdrop-filter: blur(6px);
-        display: flex; align-items: center; justify-content: center;
-        z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px;
-        animation: modalFadeIn 0.25s ease;
-        isolation: isolate;
-    `;
+    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease; isolation: isolate;`;
 
     modal.innerHTML = `
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
@@ -1664,9 +1349,7 @@ function showQuickStartGuide() {
         const m = document.getElementById('quickstart-modal');
         if (m) {
             m.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => {
-                if (m.parentNode) m.remove();
-            }, 200);
+            setTimeout(() => { if (m.parentNode) m.remove(); }, 200);
         }
     };
 
@@ -1674,10 +1357,6 @@ function showQuickStartGuide() {
         if (e.target === this) closeQuickStartGuide();
     });
 }
-
-// ============================================================
-// INICIALIZAR AYUDA EN EL PERFIL
-// ============================================================
 
 function initHelpButton() {
     const profileCard = document.querySelector('#mainContent .card');
@@ -1705,10 +1384,17 @@ function initHelpButton() {
 // ============================================================
 // BASE DE DATOS DE FAQs NUMERADAS
 // ============================================================
+// 🆕 v2.1.12: Se añaden 6 FAQs nuevas (correcciones #5, #8, #11)
+// Total: 142 + 6 = 148 preguntas
+// ============================================================
 
 const FAQS_DB = [
     // ============ GENERALES ============
     { cat: '🏠 Generales', q: '¿Qué es Panario?', a: 'Es una aplicación PWA para la gestión integral de una panadería artesanal. Permite gestionar insumos, recetas, productos, ventas, pedidos y finanzas.' },
+    
+    // 🆕 v2.1.12: CORRECCIÓN #11 - Explicación del nombre
+    { cat: '🏠 Generales', q: '¿Por qué se llama "Panario"?', a: 'El nombre es un juego con "pan" y "diario" (de contabilidad). Es corto, original y describe perfectamente el propósito: llevar el diario contable de una panadería.\n\n📋 Otros nombres que se consideraron fueron:\n• PanConta (fusión directa de "pan" y "contabilidad")\n• HarinaBalance (evoca el ingrediente principal y el equilibrio financiero)\n• MasaYCuentas (rimado y amigable)\n• BakeryLedger (en inglés, pensando en expansión)\n\nFinalmente se eligió "Panario" por ser único, breve y fácil de recordar.' },
+    
     { cat: '🏠 Generales', q: '¿Funciona sin conexión?', a: 'Sí, Panario funciona completamente offline. Todos tus datos están guardados localmente en tu dispositivo.' },
     { cat: '🏠 Generales', q: '¿Dónde se guardan mis datos?', a: 'En SQLite (base de datos local) y localStorage. Todo queda en tu dispositivo. Nada se envía a servidores externos.' },
     { cat: '🏠 Generales', q: '¿Cómo hago una copia de seguridad?', a: 'Ve a ⚙️ Herramientas y haz clic en "📥 Descargar copia de seguridad". Se descarga un archivo .db con todos tus datos.' },
@@ -1731,6 +1417,7 @@ const FAQS_DB = [
     { cat: '📊 Dashboard', q: '¿Qué son las "Ventas liberadas"?', a: 'Son ventas sin cliente identificado (tipo "mostrador anónimo"). Se contabilizan en los totales pero se pueden ocultar del listado.' },
     { cat: '📊 Dashboard', q: '¿Qué es el "Mejor día" y el "Peor día"?', a: 'Son las fechas con mayor y menor facturación histórica de tu negocio. Sirven para identificar patrones de venta.' },
     { cat: '📊 Dashboard', q: '¿Qué son las "Ventas por empleado"?', a: 'Es un ranking de los usuarios de tu negocio según sus ventas registradas. Te permite evaluar el desempeño del equipo.' },
+    { cat: '📊 Dashboard', q: '¿Qué significa "Pedidos mañana" en el Dashboard?', a: 'Es el número total de pedidos activos cuya fecha de entrega es mañana. Excluye cancelados, entregados y los que compraron por lista de espera.' },
 
     // ============ INSUMOS ============
     { cat: '🛒 Insumos', q: '¿Qué es un insumo?', a: 'Es todo lo que compras para producir: harina, levadura, yogur, mantequilla, etc.' },
@@ -1768,6 +1455,7 @@ const FAQS_DB = [
     { cat: '💰 Ventas', q: '¿Qué motivos puedo usar para un día sin ventas?', a: 'Hay 8 predefinidos: ⚡ Apagón, 🛒 Falta de insumos, 🎉 Feriado, 🏖️ Vacaciones, 🏥 Enfermedad, 🔧 Mantenimiento, 🌧️ Mal clima, y 🔄 Otro.' },
     { cat: '💰 Ventas', q: '¿Cómo veo quién hizo cada venta?', a: 'En el detalle de la venta, en la sección de Auditoría, aparece "👤 Creado por: [nombre del vendedor]".' },
     { cat: '💰 Ventas', q: '¿Qué hago si veo ventas duplicadas?', a: 'Ve a ⚙️ Herramientas → 🚨 Eliminación por error. Selecciona las ventas duplicadas y elimínalas permanentemente.' },
+    { cat: '💰 Ventas', q: '¿Puedo filtrar ventas por vendedor?', a: 'Actualmente no hay filtro directo, pero puedes ver el ranking de ventas por empleado en el Dashboard. Está planificado añadir un listbox de vendedores en futuras versiones.' },
 
     // ============ PEDIDOS ============
     { cat: '📋 Pedidos', q: '¿Cuál es la diferencia entre pedido y venta?', a: 'Un pedido es una solicitud de un cliente. Una venta es una transacción completada. Los pedidos no son deudas hasta que se entregan.' },
@@ -1781,7 +1469,6 @@ const FAQS_DB = [
     { cat: '📋 Pedidos', q: '¿Qué es la "cancelación global de pedidos"?', a: 'Es una herramienta de admin que cancela TODOS los pedidos en un rango de fechas. Útil para apagones prolongados, falta de insumos o cierres temporales.' },
     { cat: '📋 Pedidos', q: '¿Por qué cambió el diseño de la lista de espera?', a: 'Se reestructuró para mostrar toda la información en columnas horizontales, haciendo visible el nombre del cliente, producto, cantidad, total y fecha de entrega de un vistazo.' },
     { cat: '📋 Pedidos', q: '¿Qué significa cada botón en la lista de espera?', a: '✅ Procesar → crea la venta. ❌ Cancelar → cancela el pedido y repone stock. 🗑️ Quitar → solo quita al cliente de la lista sin cancelar el pedido.' },
-    { cat: '📋 Pedidos', q: '¿Cómo proceso varios clientes a la vez?', a: 'En la lista de espera, si hay suficiente stock, puedes seleccionar varios clientes con checkboxes y procesarlos juntos.' },
     { cat: '📋 Pedidos', q: '¿Qué diferencia hay entre "Cancelar" y "Quitar"?', a: 'Cancelar → cambia el estado del pedido a "cancelado" y repone stock. Quitar → solo elimina al cliente de la lista, el pedido vuelve a "pendiente".' },
 
     // ============ CORRIENTE ============
@@ -1813,6 +1500,13 @@ const FAQS_DB = [
     { cat: '👥 Multiusuario', q: '¿Quién es el administrador del negocio?', a: 'El primer usuario que crea el negocio es el administrador. Los siguientes usuarios que se unan tendrán rol de usuario regular.' },
     { cat: '👥 Multiusuario', q: '¿Cómo promuevo a un usuario a admin?', a: 'Ve a ⚙️ Herramientas → 👥 Gestionar Usuarios → botón 👑 junto al usuario.' },
     { cat: '👥 Multiusuario', q: '¿Qué puede hacer un admin que un usuario no puede?', a: 'Crear/editar/eliminar insumos, recetas, productos. Gestionar usuarios. Hacer copias completas. Ver costos de recetas. Cancelar/reprogramar pedidos globalmente.' },
+    
+    // 🆕 v2.1.12: CORRECCIÓN #5 - FAQs sobre código de invitación
+    { cat: '👥 Multiusuario', q: '¿Necesito estar en la misma red WiFi para unirme a un negocio con el código de invitación?', a: 'No. El código de invitación NO requiere que estés en la misma red WiFi ni en la misma ubicación física.\n\n💡 ¿Cómo funciona?\n• El código es un identificador único del negocio que se guarda en la base de datos LOCAL del dispositivo donde se creó el negocio.\n• Para unirte, necesitas tener acceso a esa misma base de datos (por ejemplo, mediante una copia de seguridad exportada).\n• NO hay servidor central. Panario es 100% offline y local.\n\n⚠️ Importante: Si quieres que otra persona se una a tu negocio desde otro dispositivo, deben importar tu base de datos completa (copia de seguridad) primero. El código de invitación solo funciona dentro de la misma base de datos.' },
+    
+    { cat: '👥 Multiusuario', q: '¿Qué información contiene el código de invitación?', a: 'El código de invitación es un identificador de 8 caracteres alfanuméricos (ej: ABC12345) que se asigna automáticamente al crear un negocio.\n\n📋 ¿Qué contiene?\n• NO contiene información personal ni datos del negocio.\n• Solo es una referencia única que apunta al negocio dentro de la base de datos.\n• Se genera aleatoriamente usando mayúsculas y números (sin caracteres confusos como O/0 o I/1).\n\n🔒 Seguridad: El código es seguro porque solo funciona dentro de la base de datos local. Sin acceso a esa BD, el código no sirve de nada.' },
+    
+    { cat: '👥 Multiusuario', q: '¿Cómo se determina el código de invitación desde el entorno del invitado?', a: 'Cuando alguien intenta unirse con un código:\n\n1️⃣ El sistema busca el código en la base de datos LOCAL del dispositivo.\n2️⃣ Si lo encuentra, muestra una vista previa del negocio (nombre, número de usuarios).\n3️⃣ El nuevo usuario se asocia al negocio existente con rol de "usuario regular".\n4️⃣ Todos los datos operativos (insumos, recetas, productos, ventas) se comparten entre los usuarios del mismo negocio.\n\n💡 Caso de uso típico:\n• Ricardo crea el negocio "Panadería La Esquina" en su dispositivo.\n• Exporta la copia de seguridad y la comparte con María.\n• María importa la copia en su dispositivo.\n• María se registra con el código de invitación (o directamente se une al negocio existente).\n• Ambos ven los mismos datos y pueden trabajar en paralelo.' },
 
     // ============ HERRAMIENTAS ============
     { cat: '⚙️ Herramientas', q: '¿Qué hace "Reiniciar base de datos"?', a: 'Elimina TODOS los datos excepto usuarios y temas. Se conservan las cuentas de usuario para que puedas volver a entrar. Contraseña: "panario".' },
@@ -1829,6 +1523,8 @@ const FAQS_DB = [
     { cat: '🔨 Producción', q: '¿Las ventas directas afectan el cupo de pedidos?', a: 'Sí. Si vendes directamente sin pedido, esas unidades se descuentan del cupo disponible. El cálculo es: m - pedidos - ventas_directas.' },
     { cat: '🔨 Producción', q: '¿Puedo vender más de la cantidad de producción?', a: 'Sí, las ventas directas no se bloquean. Solo los pedidos respetan el cupo de producción.' },
     { cat: '🔨 Producción', q: '¿Qué pasa si no defino producción para un día?', a: 'No hay límite de pedidos para ese día. La tarjeta no muestra el bloque de producción.' },
+    { cat: '🔨 Producción', q: '¿Puedo producir cantidades que no sean enteras?', a: 'Sí. El campo "Cantidad a producir" acepta decimales. Por ejemplo: 6.5 significa 6 jabas y media, 2.25 significa 2 jabas y cuarto, 0.5 significa media jaba.' },
+    { cat: '🔨 Producción', q: '¿Cómo se calcula la cantidad disponible si la producción es decimal?', a: 'La fórmula es: disponibles = cantidad_produccion - pedidos_reservados - ventas_directas.\n\nEjemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 = 0.5 disponibles.' },
 
     // ============ REPROGRAMACIÓN ============
     { cat: '🔄 Reprogramación', q: '¿Cómo reprogramo pedidos a otra fecha?', a: 'Ve a ⚙️ Herramientas → 🔄 Reprogramar Pedidos por Rango. Selecciona el rango de fechas origen, la fecha destino, la causa y confirma.' },
@@ -1845,6 +1541,11 @@ const FAQS_DB = [
     { cat: '📱 PWA', q: '¿Cómo reinstalo la PWA correctamente?', a: 'Desinstala la PWA, limpia el caché del navegador, abre Panario online, espera a que cargue completamente y vuelve a instalarla.' },
     { cat: '📱 PWA', q: '¿Qué hacer si veo "Sin conexión" pero tengo internet?', a: 'Es posible que el Service Worker tenga una versión antigua. Ve a offline.html y pulsa "Limpiar caché y recargar".' },
     { cat: '📱 PWA', q: '¿Por qué la ayuda no se abre en el móvil?', a: 'En algunos navegadores móviles, los iframes requieren gesto del usuario. En la versión 2.1.11, la ayuda detallada se abre directamente en una pestaña nueva en móvil, evitando este problema.' },
+    
+    // 🆕 v2.1.12: CORRECCIÓN #8 - FAQs sobre offline.html en móvil
+    { cat: '📱 PWA', q: '¿Cómo ejecuto offline.html desde el móvil?', a: 'Hay varias formas de abrir la página offline.html en el móvil:\n\n1️⃣ Desde el navegador:\n• Abre el navegador (Chrome, Firefox, etc.)\n• En la barra de direcciones escribe: tu-dominio.com/offline.html\n• O si estás en local: file:///ruta/offline.html\n\n2️⃣ Desde la app instalada (PWA):\n• Desconecta el WiFi y los datos móviles\n• Abre Panario: si el caché está corrupto, verás la página offline.html automáticamente\n• Desde ahí puedes pulsar "🧹 Limpiar caché y recargar"\n\n3️⃣ Desde un enlace directo:\n• Si tienes un marcador guardado, ábrelo\n• También puedes crear un acceso directo en la pantalla de inicio\n\n💡 Consejo: Si no puedes acceder a offline.html, simplemente abre Panario con internet. El Service Worker detectará la situación y reparará el caché automáticamente en 5-10 segundos.' },
+    
+    { cat: '📱 PWA', q: '¿Qué hago si el navegador móvil no me deja abrir offline.html?', a: 'Si tienes problemas para abrir offline.html en el móvil, prueba estas alternativas:\n\n✅ Alternativa 1 (recomendada):\n• Abre Panario con conexión a internet\n• Espera 5-10 segundos\n• El Service Worker repara el caché automáticamente\n\n✅ Alternativa 2:\n• Ve a Ajustes del navegador → Almacenamiento → Borrar caché\n• Recarga Panario con internet\n\n✅ Alternativa 3:\n• Desinstala la PWA\n• Vuelve a instalarla desde el navegador con internet\n\n✅ Alternativa 4 (avanzada):\n• Conecta el móvil al PC por USB\n• Copia el archivo offline.html a la memoria del móvil\n• Ábrelo con un explorador de archivos\n\n⚠️ Importante: La página offline.html está diseñada para abrirse automáticamente cuando no hay conexión. Si no la ves, es porque tienes conexión o porque el caché está OK.' },
 
     // ============ DUPLICADOS ============
     { cat: '🔀 Duplicados', q: '¿Cómo evito duplicados al importar?', a: 'Usa la opción "🔀 Fusionar bases de datos". El sistema compara por UUID y solo añade registros nuevos, actualizando los existentes solo si son más recientes.' },
@@ -1854,14 +1555,20 @@ const FAQS_DB = [
 
     // ============ VENDEDOR ============
     { cat: '👤 Vendedor', q: '¿Cómo sé quién vendió cada producto?', a: 'En el detalle de cada venta, en la sección de Auditoría, aparece "👤 Creado por: [nombre del vendedor]".' },
-    { cat: '👤 Vendedor', q: '¿Puedo filtrar ventas por vendedor?', a: 'Actualmente no hay filtro directo, pero puedes ver el ranking de ventas por empleado en el Dashboard.' },
+    { cat: '👤 Vendedor', q: '¿Puedo filtrar ventas por vendedor?', a: 'Actualmente no hay filtro directo en la UI, pero puedes ver el ranking de ventas por empleado en el Dashboard.' },
     { cat: '👤 Vendedor', q: '¿Qué pasa si un usuario es eliminado?', a: 'Sus ventas se mantienen, pero el nombre del vendedor aparecerá como "Desconocido" en la auditoría.' },
 
     // ============ SONIDO Y PWA (Entrega 1) ============
     { cat: '🔊 Sonido', q: '¿Por qué no suenan las notificaciones la primera vez?', a: 'Los navegadores bloquean el audio hasta que el usuario interactúa con la página. Desde v2.1.10, el AudioContext se desbloquea con el primer clic, toque o tecla en cualquier parte de la app.' },
     { cat: '🔊 Sonido', q: '¿Tengo que hacer algo especial para activar el sonido?', a: 'No. Simplemente interactúa con la app (clic, toque o tecla). El audio se desbloquea automáticamente. Verás en consola: "🔊 AudioContext desbloqueado correctamente".' },
     { cat: '🔊 Sonido', q: '¿El sonido funciona si no he hecho login?', a: 'Sí. Desde v2.1.10, el audio se desbloquea con cualquier gesto, incluso en la pantalla de login.' },
-    { cat: '🔊 Sonido', q: '¿Qué sonidos hay disponibles?', a: 'Cinco sonidos: 🔔 Beep, 🎵 Chime, 💧 Pop, ⚠️ Alert, ✅ Success. Más la opción 🔇 Silencio.' }
+    { cat: '🔊 Sonido', q: '¿Qué sonidos hay disponibles?', a: 'Cinco sonidos: 🔔 Beep, 🎵 Chime, 💧 Pop, ⚠️ Alert, ✅ Success. Más la opción 🔇 Silencio.' },
+
+    // ============ DIAGNÓSTICO ============
+    { cat: '🔍 Diagnóstico', q: '¿Qué es el "Diagnóstico de Producción"?', a: 'Es una herramienta que verifica si el sistema de producción está correctamente configurado. Ejecuta 6 comprobaciones y muestra el resultado con iconos ✅/⚠️/❌.' },
+    { cat: '🔍 Diagnóstico', q: '¿Cuándo debo usar el diagnóstico?', a: 'Cuando el guardado de producción no funciona, o cuando ves errores inesperados al definir horarios de producción. También sirve para reportar problemas al desarrollador.' },
+    { cat: '🔍 Diagnóstico', q: '¿Cómo accedo al diagnóstico?', a: 'Ve a ⚙️ Herramientas → 🔍 Diagnóstico de Producción → "Ejecutar diagnóstico". También está disponible desde ⚡ Gestionar Horarios → pestaña Config.' },
+    { cat: '🔍 Diagnóstico', q: '¿Qué hace el botón "Copiar reporte"?', a: 'Copia al portapapeles un reporte completo con: info del entorno, resumen (OK/WARN/ERROR), y detalle de cada test. Útil para pegar en WhatsApp o email al desarrollador.' }
 ];
 
 // ============================================================
@@ -1898,7 +1605,7 @@ function showFAQModal() {
                     </span>
                     <span class="faq-arrow" style="font-size: 16px; transition: transform 0.3s; flex-shrink: 0;">▶️</span>
                 </div>
-                <div class="faq-content" style="display: none; margin-top: 8px; font-size: 13px; color: var(--text-light); padding-top: 8px; padding-left: 36px; border-top: 1px solid var(--border-color); line-height: 1.6;">
+                <div class="faq-content" style="display: none; margin-top: 8px; font-size: 13px; color: var(--text-light); padding-top: 8px; padding-left: 36px; border-top: 1px solid var(--border-color); line-height: 1.6; white-space: pre-line;">
                     ${f.a}
                 </div>
             </div>
@@ -1909,14 +1616,7 @@ function showFAQModal() {
 
     const modal = document.createElement('div');
     modal.id = 'faq-modal';
-    modal.style.cssText = `
-        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0,0,0,0.6); backdrop-filter: blur(6px);
-        display: flex; align-items: center; justify-content: center;
-        z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px;
-        animation: modalFadeIn 0.25s ease;
-        isolation: isolate;
-    `;
+    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease; isolation: isolate;`;
 
     modal.innerHTML = `
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
@@ -1932,11 +1632,7 @@ function showFAQModal() {
             </div>
             
             <div style="margin-bottom: 12px; position: relative;">
-                <input type="text" 
-                       id="faq-search-input"
-                       placeholder="🔍 Buscar por número o texto..."
-                       oninput="filtrarFAQs(this.value)"
-                       style="width: 100%; padding: 10px 14px; border: 2px solid var(--border-color); border-radius: 10px; font-size: 14px; background: var(--bg-input); color: var(--text); outline: none;">
+                <input type="text" id="faq-search-input" placeholder="🔍 Buscar por número o texto..." oninput="filtrarFAQs(this.value)" style="width: 100%; padding: 10px 14px; border: 2px solid var(--border-color); border-radius: 10px; font-size: 14px; background: var(--bg-input); color: var(--text); outline: none;">
                 <div id="faq-search-count" style="font-size: 11px; color: var(--text-light); margin-top: 4px; display: none;"></div>
             </div>
             
@@ -1954,15 +1650,9 @@ function showFAQModal() {
             </div>
             
             <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; flex-wrap: wrap;">
-                <button onclick="closeFAQModal()" class="btn secondary" style="padding: 8px 16px; font-size: 13px; width: auto; flex: 1;">
-                    Cerrar
-                </button>
-                <button onclick="closeFAQModal(); abrirAyudaDetallada();" class="btn primary" style="padding: 8px 16px; font-size: 13px; width: auto; flex: 1; background: #10b981; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
-                    📖 Ayuda detallada
-                </button>
-                <button onclick="closeFAQModal(); startTour();" class="btn primary" style="padding: 8px 16px; font-size: 13px; width: auto; flex: 1; background: #f59e0b; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
-                    🎯 Tutorial
-                </button>
+                <button onclick="closeFAQModal()" class="btn secondary" style="padding: 8px 16px; font-size: 13px; width: auto; flex: 1;">Cerrar</button>
+                <button onclick="closeFAQModal(); abrirAyudaDetallada();" class="btn primary" style="padding: 8px 16px; font-size: 13px; width: auto; flex: 1; background: #10b981; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">📖 Ayuda detallada</button>
+                <button onclick="closeFAQModal(); startTour();" class="btn primary" style="padding: 8px 16px; font-size: 13px; width: auto; flex: 1; background: #f59e0b; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">🎯 Tutorial</button>
             </div>
         </div>
     `;
@@ -1973,9 +1663,7 @@ function showFAQModal() {
         const m = document.getElementById('faq-modal');
         if (m) {
             m.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => {
-                if (m.parentNode) m.remove();
-            }, 200);
+            setTimeout(() => { if (m.parentNode) m.remove(); }, 200);
         }
     };
 
@@ -2093,10 +1781,11 @@ window.HelpModule = {
     forzarModalAlFrente: forzarModalAlFrente,
     ofrecerFallbackPestanaNueva: ofrecerFallbackPestanaNueva,
     isMobileDevice: isMobileDevice,
-    FAQS_DB: FAQS_DB
+    FAQS_DB: FAQS_DB,
+    // 🆕 v2.1.12
+    DEV_AVATAR_PATH: DEV_AVATAR_PATH
 };
 
-// Hacerlas globales también para uso directo
 window.showHelpMenu = showHelpMenu;
 window.mostrarPopoverAyuda = mostrarPopoverAyuda;
 window.cerrarPopoverAyuda = cerrarPopoverAyuda;
@@ -2115,5 +1804,11 @@ window.forzarModalAlFrente = forzarModalAlFrente;
 window.ofrecerFallbackPestanaNueva = ofrecerFallbackPestanaNueva;
 window.isMobileDevice = isMobileDevice;
 
-console.log('📦 Help Module cargado correctamente v2.1.11 (ENTREGA 3: ayuda detallada en móvil)');
-console.log('📚 FAQs cargadas:', FAQS_DB.length);
+console.log('📦 Help Module cargado correctamente v2.1.12 (ENTREGA A: correcciones #1, #5, #8, #11, #12)');
+console.log('📚 FAQs cargadas:', FAQS_DB.length, '(antes: 142, ahora:', FAQS_DB.length + ')');
+console.log('🆕 v2.1.12:');
+console.log('   ✅ #1: Popover móvil ahora anclado arriba-derecha');
+console.log('   ✅ #5: 3 FAQs sobre código de invitación');
+console.log('   ✅ #8: 2 FAQs sobre offline.html en móvil');
+console.log('   ✅ #11: 1 FAQ sobre el origen del nombre Panario');
+console.log('   ✅ #12: Créditos con foto desde', DEV_AVATAR_PATH);

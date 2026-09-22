@@ -14,29 +14,318 @@
 //     procesarClienteDeLista(), cancelarPedidoDesdeLista(),
 //     cancelarPedidosGlobalmente()
 // 🆕 ENTREGA 4 (230926 v5): ORDEN ASCENDENTE POR ID
-//   - ✅ getOrders() ahora ordena por:
-//       ORDER BY o.delivery_date ASC, o.id ASC
-//     (antes: ORDER BY o.delivery_date ASC, o.created_at ASC)
-//   - ✅ El primer pedido del día aparece primero en la lista
-//   - ✅ Mantiene agrupación por fecha en la UI
-//   - ✅ Afecta a todas las vistas que usan getOrders():
-//     * renderOrdersView() → loadOrders()
-//     * viewOrder() → getOrder()
-//     * Cualquier consumidor externo
-//   - ✅ También se ordenan los items internos por id ASC
+//   - getOrders() ordena por: ORDER BY o.delivery_date ASC, o.id ASC
 // 🆕 ENTREGA 7 (230926 v6): REPROGRAMAR PEDIDOS POR RANGO
-//   - ✅ NUEVA función reprogramarPedidosPorRango()
-//     * Mueve todos los pedidos de un rango a una fecha destino
-//     * Filtro opcional por cliente
-//     * Añade causa + nota a las notas de cada pedido
-//     * Responde { success, reprogramados, errores }
-//   - ✅ NUEVA función autoEliminarDeListaAlComprar()
-//     * Cuando un cliente de la lista de espera compra directamente,
-//       se elimina automáticamente de la lista
-//   - ✅ Se expone window.OrdersModule.reprogramarPedidosPorRango
+//   - NUEVA función reprogramarPedidosPorRango()
+//   - NUEVA función autoEliminarDeListaAlComprar()
+// 🆕 v2.1.12 (210926 v7): CORRECCIÓN #2 - BLOQUEO POR RECETAS NO COMPARTIDAS
+//   - ✅ NUEVA función puedeUsuarioActualProcesarPedido(orderOrId)
+//     * Determina si el usuario actual puede procesar (ver, editar, entregar,
+//       cancelar, anular, etc.) un pedido.
+//     * Admin siempre puede.
+//     * Usuario no-admin SOLO puede si TODAS las recetas asociadas a los
+//       items del pedido están compartidas (shared=1) o son propias.
+//     * Devuelve { puede: boolean, razon: string, recetasBloqueadas: [] }
+//   - ✅ NUEVA función puedeUsuarioActualProcesarVenta() (por simetría, se usa
+//     desde sales.js)
+//   - ✅ updateOrderStatus() ahora verifica permisos antes de ejecutar
+//   - ✅ registrarVentaDesdePedido() verifica permisos antes de crear la venta
+//   - ✅ cancelarPedidoDesdeLista() verifica permisos
+//   - ✅ procesarClienteDeLista() verifica permisos
+//   - ✅ eliminarDeListaEspera() verifica permisos
+//   - ✅ Los pedidos de la lista de espera también se filtran por permisos
+//   - ✅ Se guarda en la caché interna para evitar queries repetidas
 // ============================================================
 
 window.OrdersModule = {};
+
+// ============================================================
+// 🆕 v2.1.12: CACHÉ DE PERMISOS POR PEDIDO
+// ============================================================
+// Evita hacer queries repetidas para el mismo pedido al renderizar listas.
+
+const _permisosPedidosCache = new Map(); // { orderId: {puede, razon, recetasBloqueadas} }
+const _permisosVentasCache = new Map();
+
+/**
+ * Limpia la caché de permisos. Llamar cuando:
+ *  - Se cambia de usuario
+ *  - Se comparten/descomparten recetas
+ *  - Se editan los items de un pedido o venta
+ */
+function limpiarCachePermisos() {
+    _permisosPedidosCache.clear();
+    _permisosVentasCache.clear();
+    console.log('🔐 Caché de permisos de pedidos/ventas limpiada');
+}
+
+window.limpiarCachePermisos = limpiarCachePermisos;
+
+// ============================================================
+// 🆕 v2.1.12: VERIFICAR PERMISOS DE UN PEDIDO
+// ============================================================
+
+/**
+ * Determina si el usuario actual puede procesar un pedido.
+ * 
+ * Reglas:
+ *   - Si no hay usuario autenticado → NO puede
+ *   - Si es admin → SIEMPRE puede
+ *   - Si es usuario regular:
+ *       * Puede VER el pedido siempre (es su negocio)
+ *       * Puede PROCESAR (entregar, cancelar, editar, etc.) solo si
+ *         TODAS las recetas asociadas a sus items están compartidas
+ *         (shared=1) o son propias (user_id === currentUser.id)
+ * 
+ * @param {Object|number} orderOrId - Pedido completo o su ID
+ * @returns {Object} { puede: boolean, razon: string, recetasBloqueadas: [] }
+ */
+function puedeUsuarioActualProcesarPedido(orderOrId) {
+    try {
+        const user = window.AuthModule?.getCurrentUser();
+        if (!user) {
+            return { puede: false, razon: 'No hay usuario autenticado', recetasBloqueadas: [] };
+        }
+        
+        // Admin siempre puede
+        if (user.is_admin === 1) {
+            return { puede: true, razon: '', recetasBloqueadas: [] };
+        }
+        
+        // Obtener el ID del pedido
+        let orderId = null;
+        let order = null;
+        
+        if (typeof orderOrId === 'number') {
+            orderId = orderOrId;
+        } else if (orderOrId && typeof orderOrId === 'object') {
+            order = orderOrId;
+            orderId = order.id;
+        }
+        
+        if (!orderId) {
+            return { puede: true, razon: '', recetasBloqueadas: [] }; // Fallback conservador
+        }
+        
+        // Revisar caché
+        if (_permisosPedidosCache.has(orderId)) {
+            return _permisosPedidosCache.get(orderId);
+        }
+        
+        // Cargar items si no los tenemos
+        if (!order || !order.items) {
+            try {
+                const items = window.DBModule.query(
+                    `SELECT oi.producto_id, oi.receta_id, oi.product_name, 
+                            p.nombre as producto_nombre, r.name as receta_nombre
+                     FROM order_items oi
+                     LEFT JOIN productos p ON oi.producto_id = p.id
+                     LEFT JOIN recipes r ON oi.receta_id = r.id
+                     WHERE oi.order_id = ? AND oi.deleted_at IS NULL`,
+                    [orderId]
+                );
+                order = { id: orderId, items: items };
+            } catch (e) {
+                console.warn('⚠️ Error cargando items del pedido para verificar permisos:', e);
+                return { puede: true, razon: '', recetasBloqueadas: [] };
+            }
+        }
+        
+        // Si no tiene items, no hay bloqueo
+        if (!order.items || order.items.length === 0) {
+            const result = { puede: true, razon: '', recetasBloqueadas: [] };
+            _permisosPedidosCache.set(orderId, result);
+            return result;
+        }
+        
+        // Verificar cada receta asociada
+        const recetasBloqueadas = [];
+        
+        for (const item of order.items) {
+            if (!item.receta_id) continue; // Sin receta, no hay bloqueo
+            
+            try {
+                const recetas = window.DBModule.query(
+                    `SELECT id, user_id, shared, name 
+                     FROM recipes 
+                     WHERE id = ? AND deleted_at IS NULL`,
+                    [item.receta_id]
+                );
+                
+                if (recetas.length === 0) {
+                    // Receta no existe (fue eliminada)
+                    recetasBloqueadas.push({
+                        id: item.receta_id,
+                        nombre: item.receta_nombre || item.producto_nombre || 'Receta eliminada',
+                        razon: 'Receta eliminada'
+                    });
+                    continue;
+                }
+                
+                const receta = recetas[0];
+                
+                // Bloqueada si:
+                // - NO es del usuario actual Y
+                // - NO está compartida
+                if (receta.user_id !== user.id && receta.shared !== 1) {
+                    recetasBloqueadas.push({
+                        id: receta.id,
+                        nombre: receta.name || 'Receta',
+                        razon: 'No compartida'
+                    });
+                }
+            } catch (e) {
+                console.warn(`⚠️ Error verificando receta ${item.receta_id}:`, e);
+                // En caso de error de query, bloquear por seguridad
+                recetasBloqueadas.push({
+                    id: item.receta_id,
+                    nombre: item.receta_nombre || 'Receta',
+                    razon: 'Error al verificar'
+                });
+            }
+        }
+        
+        let result;
+        if (recetasBloqueadas.length > 0) {
+            result = {
+                puede: false,
+                razon: `Este pedido usa ${recetasBloqueadas.length} receta(s) que no te han compartido. No puedes procesarlo.`,
+                recetasBloqueadas
+            };
+        } else {
+            result = { puede: true, razon: '', recetasBloqueadas: [] };
+        }
+        
+        _permisosPedidosCache.set(orderId, result);
+        return result;
+        
+    } catch (e) {
+        console.error('❌ Error en puedeUsuarioActualProcesarPedido:', e);
+        return { puede: true, razon: '', recetasBloqueadas: [] }; // Fallback conservador
+    }
+}
+
+/**
+ * Igual que puedeUsuarioActualProcesarPedido pero para ventas.
+ * 
+ * Reglas:
+ *   - Si la venta NO tiene receta asociada → siempre puede
+ *   - Si la venta tiene receta_id:
+ *       * Si la receta está compartida o es propia → puede
+ *       * Si NO está compartida y es de otro → NO puede
+ * 
+ * @param {Object|number} saleOrId - Venta completa o su ID
+ * @returns {Object} { puede, razon, recetaBloqueada }
+ */
+function puedeUsuarioActualProcesarVenta(saleOrId) {
+    try {
+        const user = window.AuthModule?.getCurrentUser();
+        if (!user) {
+            return { puede: false, razon: 'No hay usuario autenticado', recetaBloqueada: null };
+        }
+        
+        // Admin siempre puede
+        if (user.is_admin === 1) {
+            return { puede: true, razon: '', recetaBloqueada: null };
+        }
+        
+        let saleId = null;
+        let sale = null;
+        
+        if (typeof saleOrId === 'number') {
+            saleId = saleOrId;
+        } else if (saleOrId && typeof saleOrId === 'object') {
+            sale = saleOrId;
+            saleId = sale.id;
+        }
+        
+        if (!saleId) {
+            return { puede: true, razon: '', recetaBloqueada: null };
+        }
+        
+        // Revisar caché
+        if (_permisosVentasCache.has(saleId)) {
+            return _permisosVentasCache.get(saleId);
+        }
+        
+        // Cargar la venta si no la tenemos
+        if (!sale) {
+            try {
+                const sales = window.DBModule.query(
+                    `SELECT s.id, s.receta_id, s.producto_id, s.product_name, 
+                            r.name as receta_nombre
+                     FROM sales s
+                     LEFT JOIN recipes r ON s.receta_id = r.id
+                     WHERE s.id = ? AND s.deleted_at IS NULL`,
+                    [saleId]
+                );
+                if (sales.length === 0) {
+                    const result = { puede: false, razon: 'Venta no encontrada', recetaBloqueada: null };
+                    _permisosVentasCache.set(saleId, result);
+                    return result;
+                }
+                sale = sales[0];
+            } catch (e) {
+                console.warn('⚠️ Error cargando venta para verificar permisos:', e);
+                return { puede: true, razon: '', recetaBloqueada: null };
+            }
+        }
+        
+        // Sin receta → no hay bloqueo
+        if (!sale.receta_id) {
+            const result = { puede: true, razon: '', recetaBloqueada: null };
+            _permisosVentasCache.set(saleId, result);
+            return result;
+        }
+        
+        // Verificar la receta
+        try {
+            const recetas = window.DBModule.query(
+                `SELECT id, user_id, shared, name 
+                 FROM recipes 
+                 WHERE id = ? AND deleted_at IS NULL`,
+                [sale.receta_id]
+            );
+            
+            if (recetas.length === 0) {
+                const result = {
+                    puede: false,
+                    razon: `La receta asociada a esta venta fue eliminada. No puedes procesarla.`,
+                    recetaBloqueada: { id: sale.receta_id, nombre: 'Receta eliminada', razon: 'Eliminada' }
+                };
+                _permisosVentasCache.set(saleId, result);
+                return result;
+            }
+            
+            const receta = recetas[0];
+            
+            if (receta.user_id !== user.id && receta.shared !== 1) {
+                const result = {
+                    puede: false,
+                    razon: `Esta venta usa la receta "${receta.name}" que no te han compartido. No puedes procesarla.`,
+                    recetaBloqueada: { id: receta.id, nombre: receta.name, razon: 'No compartida' }
+                };
+                _permisosVentasCache.set(saleId, result);
+                return result;
+            }
+            
+            const result = { puede: true, razon: '', recetaBloqueada: null };
+            _permisosVentasCache.set(saleId, result);
+            return result;
+            
+        } catch (e) {
+            console.warn(`⚠️ Error verificando receta ${sale.receta_id}:`, e);
+            return { puede: true, razon: '', recetaBloqueada: null };
+        }
+        
+    } catch (e) {
+        console.error('❌ Error en puedeUsuarioActualProcesarVenta:', e);
+        return { puede: true, razon: '', recetaBloqueada: null };
+    }
+}
+
+window.puedeUsuarioActualProcesarPedido = puedeUsuarioActualProcesarPedido;
+window.puedeUsuarioActualProcesarVenta = puedeUsuarioActualProcesarVenta;
 
 // ============================================================
 // CLIENTES
@@ -134,15 +423,6 @@ async function getProducto(id) {
 // ============================================================
 // PEDIDOS - OBTENER (POR NEGOCIO)
 // ============================================================
-// 🆕 ENTREGA 4: Orden ascendente por ID dentro de la misma fecha.
-// 
-// ANTES:  ORDER BY o.delivery_date ASC, o.created_at ASC
-// AHORA:  ORDER BY o.delivery_date ASC, o.id ASC
-// 
-// Motivo: el usuario quiere ver el primer pedido del día arriba.
-// El ID es incremental y monótono, así que refleja el orden real
-// de creación dentro de la misma fecha de entrega.
-// ============================================================
 
 async function getOrders(filters = {}) {
     const negocioId = window.DBModule.getNegocioIdActual();
@@ -182,7 +462,6 @@ async function getOrders(filters = {}) {
         params.push(searchTerm, searchTerm);
     }
 
-    // 🆕 ENTREGA 4: Orden ascendente por ID dentro del día
     sql += ' GROUP BY o.id ORDER BY o.delivery_date ASC, o.id ASC';
 
     try {
@@ -214,11 +493,11 @@ async function getOrder(id) {
         
         const order = results[0];
         
-        // 🆕 ENTREGA 4: Ordenar items por ID ascendente también
         order.items = window.DBModule.query(`
             SELECT oi.*, p.nombre as producto_nombre, p.precio_venta,
                    p.unidad_venta, p.cantidad_por_unidad, p.receta_id,
-                   r.name as receta_nombre
+                   r.name as receta_nombre, r.shared as receta_shared,
+                   r.user_id as receta_user_id
             FROM order_items oi
             LEFT JOIN productos p ON oi.producto_id = p.id
             LEFT JOIN recipes r ON p.receta_id = r.id
@@ -268,6 +547,12 @@ async function saveOrder(orderData) {
             oldOrder = await getOrder(orderId);
             if (!oldOrder) return { success: false, error: 'Pedido no encontrado o no tienes permiso' };
             isUpdate = true;
+            
+            // 🆕 v2.1.12: Verificar permisos si es edición de pedido
+            const permisos = puedeUsuarioActualProcesarPedido(oldOrder);
+            if (!permisos.puede) {
+                return { success: false, error: '🔒 ' + permisos.razon };
+            }
         }
 
         const clientName = orderData.client_name || 'Cliente sin nombre';
@@ -356,6 +641,9 @@ async function saveOrder(orderData) {
                 }
             }
         }
+
+        // 🆕 v2.1.12: Limpiar caché de permisos porque el pedido cambió
+        _permisosPedidosCache.delete(orderId);
 
         if (status === 'confirmed' || status === 'production') {
             try { await descontarStockPedido(orderId); } catch (e) {}
@@ -580,6 +868,7 @@ async function crearPedidosMultiples(data) {
 
 // ============================================================
 // REGISTRAR VENTA DESDE PEDIDO
+// 🆕 v2.1.12: Verifica permisos antes de crear la venta
 // ============================================================
 
 async function registrarVentaDesdePedido(orderId, cantidadOverride = null) {
@@ -588,6 +877,13 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null) {
     
     const negocioId = window.DBModule.getNegocioIdActual();
     if (!negocioId) return { success: false, error: 'No hay negocio activo' };
+
+    // 🆕 v2.1.12: Verificar permisos
+    const permisos = puedeUsuarioActualProcesarPedido(orderId);
+    if (!permisos.puede) {
+        console.warn('🔒 [registrarVentaDesdePedido] Bloqueado:', permisos.razon);
+        return { success: false, error: '🔒 ' + permisos.razon };
+    }
 
     try {
         const order = await getOrder(orderId);
@@ -729,6 +1025,13 @@ async function procesarListaEsperaAlCancelar(orderId, seleccionados = []) {
                 const waitingOrderId = sel.order_id;
                 const cantidadAtender = sel.cantidadAtender || 0;
                 if (cantidadAtender <= 0) continue;
+
+                // 🆕 v2.1.12: Verificar permisos del pedido en lista de espera
+                const permisos = puedeUsuarioActualProcesarPedido(waitingOrderId);
+                if (!permisos.puede) {
+                    console.warn(`🔒 Pedido #${waitingOrderId} bloqueado por permisos:`, permisos.razon);
+                    continue;
+                }
 
                 const waitingOrder = await getOrder(waitingOrderId);
                 if (!waitingOrder) continue;
@@ -919,6 +1222,7 @@ async function reponerStockPedido(orderId) {
 
 // ============================================================
 // CAMBIAR ESTADO DEL PEDIDO
+// 🆕 v2.1.12: Verifica permisos antes de ejecutar
 // ============================================================
 
 async function updateOrderStatus(orderId, status) {
@@ -927,6 +1231,13 @@ async function updateOrderStatus(orderId, status) {
     
     const negocioId = window.DBModule.getNegocioIdActual();
     if (!negocioId) return { success: false, error: 'No hay negocio activo' };
+
+    // 🆕 v2.1.12: Verificar permisos
+    const permisos = puedeUsuarioActualProcesarPedido(orderId);
+    if (!permisos.puede) {
+        console.warn('🔒 [updateOrderStatus] Bloqueado:', permisos.razon);
+        return { success: false, error: '🔒 ' + permisos.razon };
+    }
 
     try {
         const order = await getOrder(orderId);
@@ -1000,6 +1311,9 @@ async function updateOrderStatus(orderId, status) {
         `, [status, orderId, negocioId]);
 
         if (!result.success) return { success: false, error: result.error || 'Error al actualizar estado' };
+
+        // 🆕 v2.1.12: Limpiar caché de permisos del pedido
+        _permisosPedidosCache.delete(orderId);
 
         window.DBModule.saveAndNotify();
 
@@ -1083,7 +1397,29 @@ async function getWaitingListCount() {
 }
 
 async function getWaitingListWithDetails(excludeOrderId = null) {
-    try { return window.DBModule.getWaitingListWithDetails(excludeOrderId); } catch (e) { return []; }
+    try {
+        const lista = window.DBModule.getWaitingListWithDetails(excludeOrderId);
+        
+        // 🆕 v2.1.12: Filtrar por permisos - solo mostrar los que el usuario puede procesar
+        const user = window.AuthModule?.getCurrentUser();
+        if (!user || user.is_admin === 1) {
+            return lista; // Admin ve todo
+        }
+        
+        const listaFiltrada = lista.filter(item => {
+            const permisos = puedeUsuarioActualProcesarPedido(item.order_id);
+            return permisos.puede;
+        });
+        
+        if (listaFiltrada.length < lista.length) {
+            console.log(`🔒 [getWaitingListWithDetails] ${lista.length - listaFiltrada.length} pedido(s) filtrado(s) por permisos`);
+        }
+        
+        return listaFiltrada;
+    } catch (e) {
+        console.warn('Error obteniendo lista de espera:', e);
+        return [];
+    }
 }
 
 async function addToWaitingList(orderId) {
@@ -1123,9 +1459,18 @@ async function limpiarListaEspera() {
 
         let eliminados = 0;
         let cancelados = 0;
+        let bloqueados = 0;
 
         for (const item of items) {
             try {
+                // 🆕 v2.1.12: Verificar permisos antes de limpiar
+                const permisos = puedeUsuarioActualProcesarPedido(item.order_id);
+                if (!permisos.puede) {
+                    bloqueados++;
+                    console.log(`🔒 Pedido #${item.order_id} bloqueado, se omite de la limpieza`);
+                    continue;
+                }
+                
                 window.DBModule.execute(`
                     UPDATE waiting_list 
                     SET deleted_at = CURRENT_TIMESTAMP, status = 'removed'
@@ -1161,15 +1506,14 @@ async function limpiarListaEspera() {
         window.DBModule.saveAndNotify();
 
         if (window.NotificationsModule) {
-            window.NotificationsModule.addNotification(
-                `🧹 Lista de espera limpiada: ${eliminados} items eliminados, ${cancelados} pedidos cancelados`,
-                'success', 5000
-            );
+            let msg = `🧹 Lista de espera limpiada: ${eliminados} items eliminados, ${cancelados} pedidos cancelados`;
+            if (bloqueados > 0) msg += `, ${bloqueados} omitidos por permisos`;
+            window.NotificationsModule.addNotification(msg, 'success', 5000);
         }
 
-        console.log(`✅ [limpiarListaEspera] Completado: ${eliminados} eliminados, ${cancelados} cancelados`);
+        console.log(`✅ [limpiarListaEspera] Completado: ${eliminados} eliminados, ${cancelados} cancelados, ${bloqueados} bloqueados`);
 
-        return { success: true, eliminados, cancelados };
+        return { success: true, eliminados, cancelados, bloqueados };
     } catch (e) {
         console.error('❌ [limpiarListaEspera] Error:', e);
         return { success: false, error: e.message };
@@ -1182,6 +1526,12 @@ async function eliminarDeListaEspera(orderId) {
     
     const negocioId = window.DBModule.getNegocioIdActual();
     if (!negocioId) return { success: false, error: 'No hay negocio activo' };
+
+    // 🆕 v2.1.12: Verificar permisos
+    const permisos = puedeUsuarioActualProcesarPedido(orderId);
+    if (!permisos.puede) {
+        return { success: false, error: '🔒 ' + permisos.razon };
+    }
 
     try {
         const item = window.DBModule.query(`
@@ -1208,8 +1558,9 @@ async function eliminarDeListaEspera(orderId) {
         `, [orderId, negocioId]);
 
         window.DBModule.reindexWaitingList();
-
         window.DBModule.saveAndNotify();
+
+        _permisosPedidosCache.delete(orderId);
 
         if (window.NotificationsModule) {
             window.NotificationsModule.addNotification(
@@ -1231,6 +1582,12 @@ async function procesarClienteDeLista(orderId, cantidad = null) {
     
     const negocioId = window.DBModule.getNegocioIdActual();
     if (!negocioId) return { success: false, error: 'No hay negocio activo' };
+
+    // 🆕 v2.1.12: Verificar permisos
+    const permisos = puedeUsuarioActualProcesarPedido(orderId);
+    if (!permisos.puede) {
+        return { success: false, error: '🔒 ' + permisos.razon };
+    }
 
     console.log(`✅ [procesarClienteDeLista] Procesando pedido #${orderId}, cantidad: ${cantidad || 'toda'}`);
 
@@ -1282,8 +1639,9 @@ async function procesarClienteDeLista(orderId, cantidad = null) {
         }
 
         window.DBModule.reindexWaitingList();
-
         window.DBModule.saveAndNotify();
+
+        _permisosPedidosCache.delete(orderId);
 
         if (window.NotificationsModule) {
             window.NotificationsModule.addNotification(
@@ -1315,6 +1673,12 @@ async function cancelarPedidoDesdeLista(orderId, causa = '', nota = '') {
     const negocioId = window.DBModule.getNegocioIdActual();
     if (!negocioId) return { success: false, error: 'No hay negocio activo' };
 
+    // 🆕 v2.1.12: Verificar permisos
+    const permisos = puedeUsuarioActualProcesarPedido(orderId);
+    if (!permisos.puede) {
+        return { success: false, error: '🔒 ' + permisos.razon };
+    }
+
     try {
         const order = await getOrder(orderId);
         if (!order) return { success: false, error: 'Pedido no encontrado' };
@@ -1345,8 +1709,9 @@ async function cancelarPedidoDesdeLista(orderId, causa = '', nota = '') {
         `, [notaFinal, orderId, negocioId]);
 
         window.DBModule.reindexWaitingList();
-
         window.DBModule.saveAndNotify();
+
+        _permisosPedidosCache.delete(orderId);
 
         if (window.NotificationsModule) {
             window.NotificationsModule.addNotification(
@@ -1382,7 +1747,6 @@ async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', no
     }
 
     console.log(`🚨 [cancelarPedidosGlobalmente] Rango: ${fechaDesde} → ${fechaHasta}`);
-    console.log(`   Causa: ${causa}, Nota: ${nota}`);
 
     try {
         const pedidos = window.DBModule.query(`
@@ -1421,6 +1785,7 @@ async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', no
                     WHERE id = ?
                 `, [`🚨 CANCELACIÓN GLOBAL: ${notaFinal}`, pedido.id]);
 
+                _permisosPedidosCache.delete(pedido.id);
                 cancelados++;
             } catch (e) {
                 errores.push(`Pedido #${pedido.id}: ${e.message}`);
@@ -1459,9 +1824,6 @@ async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', no
         }
 
         window.DBModule.reindexWaitingList();
-
-        console.log(`🚨 [cancelarPedidosGlobalmente] Reinicio: ${itemsPreservar.length} items preservados, ${itemsEliminar.length} eliminados`);
-
         window.DBModule.saveAndNotify();
 
         if (window.NotificationsModule) {
@@ -1486,20 +1848,7 @@ async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', no
 }
 
 // ============================================================
-// 🆕 ENTREGA 7: REPROGRAMAR PEDIDOS POR RANGO
-// ============================================================
-// 
-// Mueve todos los pedidos de un rango de fechas a una fecha destino.
-// Filtro opcional por cliente.
-// Añade causa + nota a las notas de cada pedido.
-// 
-// @param {string} fechaDesde - YYYY-MM-DD (inclusive)
-// @param {string} fechaHasta - YYYY-MM-DD (inclusive)
-// @param {string} fechaDestino - YYYY-MM-DD (nueva fecha)
-// @param {string} causa - Motivo de la reprogramación
-// @param {string} nota - Nota adicional
-// @param {string} clienteFiltro - Cliente opcional (búsqueda parcial)
-// @returns {Object} { success, reprogramados, errores, fechaDestino }
+// REPROGRAMAR PEDIDOS POR RANGO
 // ============================================================
 
 async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, causa = '', nota = '', clienteFiltro = '') {
@@ -1510,7 +1859,6 @@ async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, 
     const negocioId = window.DBModule.getNegocioIdActual();
     if (!negocioId) return { success: false, error: 'No hay negocio activo' };
 
-    // Validaciones
     if (!fechaDesde || !fechaHasta || !fechaDestino) {
         return { success: false, error: 'Debes especificar fecha desde, hasta y destino' };
     }
@@ -1522,10 +1870,8 @@ async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, 
     }
 
     console.log(`🔄 [reprogramarPedidosPorRango] Rango: ${fechaDesde} → ${fechaHasta} ⇒ ${fechaDestino}`);
-    console.log(`   Causa: ${causa}, Nota: ${nota}, Cliente: ${clienteFiltro || 'todos'}`);
 
     try {
-        // 1. Construir consulta de pedidos a reprogramar
         let sql = `
             SELECT id, client_name, status, delivery_date, total
             FROM orders 
@@ -1537,7 +1883,6 @@ async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, 
         `;
         let params = [negocioId, fechaDesde, fechaHasta];
 
-        // Filtro opcional por cliente
         if (clienteFiltro && clienteFiltro.trim()) {
             sql += ' AND LOWER(client_name) LIKE LOWER(?)';
             params.push('%' + clienteFiltro.trim() + '%');
@@ -1559,7 +1904,6 @@ async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, 
 
         console.log(`🔄 [reprogramarPedidosPorRango] ${pedidos.length} pedidos a reprogramar`);
 
-        // 2. Construir la nota final que se añadirá a cada pedido
         const notaReprogramacion = [];
         if (causa) notaReprogramacion.push(`🔄 ${causa}`);
         if (nota) notaReprogramacion.push(nota);
@@ -1570,14 +1914,11 @@ async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, 
         let reprogramados = 0;
         const errores = [];
 
-        // 3. Reprogramar cada pedido
         for (const pedido of pedidos) {
             try {
-                // Conservar la hora de entrega original si existe, y cambiar solo la fecha
                 const horaOriginal = (pedido.delivery_date || 'T10:00:00').split('T')[1] || '10:00:00';
                 const nuevaFechaHora = `${fechaDestino}T${horaOriginal}`;
 
-                // Actualizar el pedido: nueva fecha + añadir nota a las notas existentes
                 window.DBModule.execute(`
                     UPDATE orders 
                     SET delivery_date = ?,
@@ -1586,6 +1927,7 @@ async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, 
                     WHERE id = ? AND negocio_id = ?
                 `, [nuevaFechaHora, notaFinal, pedido.id, negocioId]);
 
+                _permisosPedidosCache.delete(pedido.id);
                 reprogramados++;
             } catch (e) {
                 console.error(`❌ Error reprogramando pedido #${pedido.id}:`, e);
@@ -1593,7 +1935,6 @@ async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, 
             }
         }
 
-        // 4. Guardar y notificar
         window.DBModule.saveAndNotify();
 
         if (window.NotificationsModule && reprogramados > 0) {
@@ -1620,18 +1961,7 @@ async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, 
 }
 
 // ============================================================
-// 🆕 ENTREGA 7: AUTO-ELIMINAR DE LISTA AL COMPRAR
-// ============================================================
-// 
-// Cuando un cliente de la lista de espera compra directamente
-// (por ejemplo, por una venta directa), se elimina automáticamente
-// de la lista de espera si ya no tiene pedidos pendientes.
-// 
-// Esta función se llama desde otros módulos (sales, ui-orders)
-// cuando se detecta que un cliente de la lista compró.
-// 
-// @param {string} clientName - Nombre del cliente
-// @returns {Object} { success, eliminados }
+// AUTO-ELIMINAR DE LISTA AL COMPRAR
 // ============================================================
 
 async function autoEliminarDeListaAlComprar(clientName) {
@@ -1643,7 +1973,6 @@ async function autoEliminarDeListaAlComprar(clientName) {
     if (!negocioId) return { success: false, error: 'No hay negocio activo' };
 
     try {
-        // Buscar items de la lista de espera de este cliente
         const items = window.DBModule.query(`
             SELECT w.id, w.order_id, w.client_name, w.status
             FROM waiting_list w
@@ -1663,14 +1992,12 @@ async function autoEliminarDeListaAlComprar(clientName) {
 
         for (const item of items) {
             try {
-                // Marcar como removido de la lista
                 window.DBModule.execute(`
                     UPDATE waiting_list 
                     SET deleted_at = CURRENT_TIMESTAMP, status = 'removed'
                     WHERE id = ?
                 `, [item.id]);
 
-                // Marcar el pedido asociado como cancelado si sigue pendiente
                 const orderCheck = window.DBModule.query(
                     'SELECT id, status FROM orders WHERE id = ? AND negocio_id = ?',
                     [item.order_id, negocioId]
@@ -1701,7 +2028,7 @@ async function autoEliminarDeListaAlComprar(clientName) {
 
             if (window.NotificationsModule) {
                 window.NotificationsModule.addNotification(
-                    `✅ ${eliminados} entrada${eliminados > 1 ? 's' : ''} de "${clientName}" eliminada${eliminados > 1 ? 's' : ''} de la lista de espera`,
+                    `✅ ${eliminados} entrada${eliminados > 1 ? 'es' : ''} de "${clientName}" eliminada${eliminados > 1 ? 's' : ''} de la lista de espera`,
                     'info', 4000
                 );
             }
@@ -1740,9 +2067,16 @@ window.OrdersModule = {
     procesarClienteDeLista,
     cancelarPedidoDesdeLista,
     cancelarPedidosGlobalmente,
-    // 🆕 ENTREGA 7: Reprogramación + auto-eliminar
     reprogramarPedidosPorRango,
-    autoEliminarDeListaAlComprar
+    autoEliminarDeListaAlComprar,
+    // 🆕 v2.1.12: Permisos
+    puedeUsuarioActualProcesarPedido,
+    puedeUsuarioActualProcesarVenta,
+    limpiarCachePermisos
 };
 
-console.log('📦 Orders Module v2.1.10 (ENTREGA 4: orden ascendente por ID + ENTREGA 7: reprogramación)');
+console.log('📦 Orders Module v2.1.12 (ENTREGA B: corrección #2 - bloqueo por recetas no compartidas)');
+console.log('   ✅ Nueva función: puedeUsuarioActualProcesarPedido()');
+console.log('   ✅ Nueva función: puedeUsuarioActualProcesarVenta()');
+console.log('   ✅ Verificaciones en: updateOrderStatus, registrarVentaDesdePedido, procesarClienteDeLista, cancelarPedidoDesdeLista, eliminarDeListaEspera, saveOrder (edición)');
+console.log('   ✅ Caché de permisos para evitar queries repetidas');

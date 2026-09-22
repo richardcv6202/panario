@@ -7,66 +7,56 @@
 // ACTUALIZADO: Módulo de Usuarios (solo admin)
 // CORREGIDO FASE 1 (160926):
 //   - Exportar/Importar BD ahora usa reload(true) con ?refresh=
-//   - Salva Diferencial verifica existencia de funciones en DBModule
-//   - Tras importar salva, se refresca la vista actual
 // CORREGIDO FASE 2 (160926):
-//   - Modal de reporte de gastos unificado con el de pedidos (Problema #6)
+//   - Modal de reporte de gastos unificado con el de pedidos
 // CORREGIDO FASE 4B (170926):
-//   - deleteUser() cierra el modal de usuarios ANTES del confirm (Problema #6)
-//   - regenerarCodigoAction() mismo tratamiento
-//   - showDeleteSelectorModal() cierra todos los modales antes de abrirse
-//   - Todos los close*Modal() con timeout de seguridad
-//   - showCorrienteModal() y showExpensesReportModal() cierran otros modales
+//   - deleteUser() cierra el modal de usuarios ANTES del confirm
 // CORREGIDO FASE A.3 (170926 v2):
 //   - TODOS los flujos de export/import envueltos en try/catch/finally
-//   - closeProgressModal() garantizado en finally
-//   - Verificación explícita de result.success antes de usar result.counts
-//   - Timeout de seguridad en readSalvaFile
 // AÑADIDO FASE B (170926 v3):
-//   - showCreateUserModal(): admin crea usuario directamente
-//   - showEditUserModal(): admin edita datos del usuario
-//   - showChangePasswordModal(): admin cambia contraseña
-//   - handleToggleAdmin(): promover/degradar admin
-//   - Botones nuevos en showUsersModal() para todas las acciones
+//   - showCreateUserModal(), showEditUserModal(), showChangePasswordModal(),
+//     handleToggleAdmin()
 // AÑADIDO FASE E (180926):
 //   - showHorarioDetalle() muestra el día de la semana completo
 // AÑADIDO (180926 v2):
 //   - showDeleteSelectorModal() ahora muestra en las ventas:
-//     - #ID, nombre del producto, total, método de pago
-//     - 👤 Cliente (buyer)
-//     - 📅 Fecha
-//     - Estado: 💳 Deuda / 🚀 Liberada / ✅ Pagada
-//   - Colores de borde según estado de la venta
+//     #ID, nombre del producto, total, método de pago, cliente, fecha, estado
 // AÑADIDO FASE 1.3.4 (190926):
-//   - Bloque "Importar copia de seguridad" ahora tiene 3 botones:
-//     * Importar copia (reemplaza todo)
-//     * Importar solo datos (reemplaza datos)
-//     * Fusionar bases de datos (NUEVO - merge por uuid)
 //   - importDatabaseFusionAction(): wrapper para la fusión
-//   - Modal de resultado con resumen detallado por tabla
 // 🆕 FASE 2.3 (200926 v4):
 //   - NUEVA sección "⏰ Lista de espera" en Herramientas
 //   - NUEVA sección "🚨 Cancelación global de pedidos" (solo admin)
 // 🆕 FASE 6 (#11) (200926 v5):
-//   - El bloque "ℹ️ Información" ahora LEE la versión desde
-//     <meta name="app-version"> del index.html
+//   - El bloque "ℹ️ Información" LEE la versión desde meta tag
 // 🆕 FASE 7 (Entrega 5 - 200926 v6):
 //   - NUEVA sección "🔄 Reprogramar pedidos por rango" (solo admin)
 // 🆕 FASE 7.1 (210926 v7): FIX CRÍTICO - PRODUCCIÓN
-//   - guardarProduccion() ahora usa window.DBModule.saveProduccion()
-//   - eliminarProduccion() ahora usa window.DBModule.deleteProduccion()
+//   - guardarProduccion() usa window.DBModule.saveProduccion()
+//   - eliminarProduccion() usa window.DBModule.deleteProduccion()
 //   - getProduccionConfig() usa window.DBModule.getProduccionByFecha()
-//   - Se muestran errores claramente si falla el guardado
-//   - Se valida que las funciones del DBModule existan
-//   - Logs de diagnóstico detallados
-//   - Recarga correcta del modal tras guardar
 // 🆕 FASE 7.2 (210926 v8): CANTIDAD DE PRODUCCIÓN CON DECIMALES
 //   - formatearCantidadProduccion() nueva función helper
-//   - Input de cantidad con step="0.1" (acepta decimales)
-//   - guardarProduccion() usa parseFloat() en lugar de parseInt()
-//   - Texto informativo "6.5 = 6 jabas y media"
-//   - Los cálculos de disponibles usan decimales
-//   - Toast y modal muestran cantidad formateada (6.5, 2.25, 0.5)
+//   - Input de cantidad con step="0.1"
+//   - guardarProduccion() usa parseFloat()
+// 🆕 ENTREGA 6 (230926 v9): DIAGNÓSTICO DE PRODUCCIÓN
+//   - ✅ NUEVO: showProductionDiagnosticModal()
+//     * Botón discreto "🔍 Diagnóstico" en la sección de producción
+//     * Ejecuta 6 tests de diagnóstico:
+//       1. DBModule disponible
+//       2. saveProduccion existe
+//       3. getProduccionByFecha existe
+//       4. Tabla calendario_produccion existe
+//       5. Estructura de columnas correcta
+//       6. Insert de prueba (con rollback)
+//     * Muestra resultado visual (✅/❌/⚠️) por test
+//     * Botón "📋 Copiar reporte" para pegar en el chat
+//     * Botón "🧹 Limpiar caché y recargar"
+//     * Muestra versión del meta tag, navegador, etc.
+//   - ✅ NUEVO: runProductionDiagnostics() → ejecuta los tests
+//   - ✅ NUEVO: renderDiagnosticResults() → muestra los resultados
+//   - ✅ NUEVO: copyDiagnosticReport() → copia al portapapeles
+//   - ✅ Logs detallados de cada paso en consola
+//   - ✅ El modal es autosuficiente (no depende de otros módulos)
 // ============================================================
 
 // ============================================================
@@ -86,7 +76,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.1.8';
+    return '2.1.11';
 }
 
 window.getAppVersion = getAppVersion;
@@ -137,7 +127,6 @@ function convertirA24Horas(hora12) {
 
 /**
  * Obtiene la configuración de producción para una fecha.
- * Usa window.DBModule.getProduccionByFecha() que ya maneja errores.
  */
 function getProduccionConfig(fechaISO) {
     try {
@@ -159,7 +148,7 @@ function getProduccionConfig(fechaISO) {
 }
 
 /**
- * 🆕 FASE 7.2: Cuenta pedidos y ventas con soporte para decimales.
+ * Cuenta pedidos y ventas con soporte para decimales.
  */
 function contarPedidosYVentasFecha(fechaISO) {
     try {
@@ -188,13 +177,11 @@ function contarPedidosYVentasFecha(fechaISO) {
         const ventas = ventasResult[0]?.count || 0;
         
         const config = getProduccionConfig(fechaISO);
-        // 🆕 FASE 7.2: parseFloat para aceptar decimales
         const cantidadProduccion = parseFloat(config?.cantidad_produccion) || 0;
         
-        // 🆕 FASE 7.2: Calcular disponibles como decimal
         const disponibles = cantidadProduccion > 0 
             ? Math.max(0, cantidadProduccion - pedidos - ventas)
-            : null; // null = sin límite
+            : null;
         
         return { pedidos, ventas, disponibles, cantidadProduccion };
     } catch (e) {
@@ -204,22 +191,696 @@ function contarPedidosYVentasFecha(fechaISO) {
 }
 
 /**
- * 🆕 FASE 7.2: Formatea una cantidad de producción para mostrarla al usuario.
- * Ej: 6.5 → "6.5", 6.0 → "6", 2.25 → "2.25", 0.5 → "0.5"
+ * Formatea una cantidad de producción para mostrarla al usuario.
  */
 function formatearCantidadProduccion(cantidad) {
     if (cantidad === null || cantidad === undefined) return '—';
     const num = parseFloat(cantidad);
     if (isNaN(num)) return '—';
-    // Si es entero, mostrar sin decimales
     if (num === Math.floor(num)) return String(Math.floor(num));
-    // Si tiene decimales, mostrar hasta 2 decimales sin ceros a la derecha
     return num.toFixed(2).replace(/\.?0+$/, '');
 }
 
 window.getProduccionConfig = getProduccionConfig;
 window.contarPedidosYVentasFecha = contarPedidosYVentasFecha;
 window.formatearCantidadProduccion = formatearCantidadProduccion;
+
+// ============================================================
+// 🆕 ENTREGA 6: DIAGNÓSTICO DE PRODUCCIÓN
+// ============================================================
+// 
+// Modal de diagnóstico temporal para identificar por qué el
+// guardado de producción puede fallar en algunos dispositivos.
+// 
+// Ejecuta 6 tests y muestra el resultado visual:
+//   1. DBModule está cargado
+//   2. saveProduccion() existe
+//   3. getProduccionByFecha() existe
+//   4. La tabla calendario_produccion existe
+//   5. La estructura de columnas es correcta
+//   6. Se puede hacer un INSERT de prueba
+// ============================================================
+
+async function runProductionDiagnostics() {
+    const results = [];
+    
+    console.log('🔍 ============================================');
+    console.log('🔍 DIAGNÓSTICO DE PRODUCCIÓN - Iniciando...');
+    console.log('🔍 ============================================');
+    
+    // ============================================================
+    // TEST 1: DBModule disponible
+    // ============================================================
+    try {
+        if (typeof window.DBModule === 'undefined') {
+            results.push({
+                name: '1. DBModule disponible',
+                status: 'error',
+                message: 'window.DBModule NO está definido',
+                detail: 'El módulo db.js no se cargó correctamente.'
+            });
+        } else if (typeof window.DBModule.getDB !== 'function') {
+            results.push({
+                name: '1. DBModule disponible',
+                status: 'error',
+                message: 'window.DBModule existe pero no tiene getDB()',
+                detail: 'El módulo db.js está incompleto o corrupto.'
+            });
+        } else {
+            let dbOk = false;
+            let dbState = '';
+            try {
+                const db = window.DBModule.getDB();
+                dbOk = !!db;
+                dbState = dbOk ? 'instancia válida' : 'null';
+            } catch (e) {
+                dbState = 'error: ' + e.message;
+            }
+            
+            results.push({
+                name: '1. DBModule disponible',
+                status: dbOk ? 'ok' : 'error',
+                message: dbOk ? 'DBModule OK y getDB() devuelve instancia' : 'getDB() falla',
+                detail: 'Estado: ' + dbState
+            });
+        }
+    } catch (e) {
+        results.push({
+            name: '1. DBModule disponible',
+            status: 'error',
+            message: 'Excepción: ' + e.message,
+            detail: ''
+        });
+    }
+    
+    // ============================================================
+    // TEST 2: saveProduccion existe
+    // ============================================================
+    try {
+        if (typeof window.DBModule?.saveProduccion !== 'function') {
+            results.push({
+                name: '2. saveProduccion() existe',
+                status: 'error',
+                message: 'window.DBModule.saveProduccion NO es una función',
+                detail: 'El método no está exportado desde db.js. Es posible que tengas una versión antigua.'
+            });
+        } else {
+            results.push({
+                name: '2. saveProduccion() existe',
+                status: 'ok',
+                message: 'window.DBModule.saveProduccion está disponible',
+                detail: ''
+            });
+        }
+    } catch (e) {
+        results.push({
+            name: '2. saveProduccion() existe',
+            status: 'error',
+            message: 'Excepción: ' + e.message,
+            detail: ''
+        });
+    }
+    
+    // ============================================================
+    // TEST 3: getProduccionByFecha existe
+    // ============================================================
+    try {
+        if (typeof window.DBModule?.getProduccionByFecha !== 'function') {
+            results.push({
+                name: '3. getProduccionByFecha() existe',
+                status: 'error',
+                message: 'window.DBModule.getProduccionByFecha NO es una función',
+                detail: 'El método no está exportado desde db.js.'
+            });
+        } else {
+            results.push({
+                name: '3. getProduccionByFecha() existe',
+                status: 'ok',
+                message: 'window.DBModule.getProduccionByFecha está disponible',
+                detail: ''
+            });
+        }
+    } catch (e) {
+        results.push({
+            name: '3. getProduccionByFecha() existe',
+            status: 'error',
+            message: 'Excepción: ' + e.message,
+            detail: ''
+        });
+    }
+    
+    // ============================================================
+    // TEST 4: Tabla calendario_produccion existe
+    // ============================================================
+    try {
+        const db = window.DBModule.getDB();
+        const check = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='calendario_produccion'`);
+        
+        if (check.length === 0 || check[0].values.length === 0) {
+            results.push({
+                name: '4. Tabla calendario_produccion existe',
+                status: 'error',
+                message: 'La tabla NO existe en la base de datos',
+                detail: 'Posible causa: la migración falló. Revisa la consola al inicio.'
+            });
+        } else {
+            results.push({
+                name: '4. Tabla calendario_produccion existe',
+                status: 'ok',
+                message: 'La tabla existe',
+                detail: ''
+            });
+        }
+    } catch (e) {
+        results.push({
+            name: '4. Tabla calendario_produccion existe',
+            status: 'error',
+            message: 'Excepción: ' + e.message,
+            detail: ''
+        });
+    }
+    
+    // ============================================================
+    // TEST 5: Estructura de columnas correcta
+    // ============================================================
+    try {
+        const db = window.DBModule.getDB();
+        const pragma = db.exec('PRAGMA table_info(calendario_produccion)');
+        
+        if (pragma.length === 0 || !pragma[0].values) {
+            results.push({
+                name: '5. Estructura de columnas',
+                status: 'error',
+                message: 'No se pudo leer PRAGMA table_info',
+                detail: ''
+            });
+        } else {
+            const columnas = pragma[0].values.map(row => row[1]);
+            const requeridas = ['id', 'negocio_id', 'fecha', 'hora_inicio', 'hora_fin', 
+                                'bloque_index', 'cantidad_produccion', 'notas',
+                                'created_by', 'modified_by', 'created_at', 'updated_at',
+                                'deleted_at', 'uuid'];
+            
+            const faltantes = requeridas.filter(c => !columnas.includes(c));
+            
+            // Verificar el tipo de cantidad_produccion
+            const cantidadCol = pragma[0].values.find(row => row[1] === 'cantidad_produccion');
+            const tipoCantidad = cantidadCol ? String(cantidadCol[2]).toUpperCase() : 'desconocido';
+            const esReal = tipoCantidad.includes('REAL') || tipoCantidad.includes('FLOAT') || 
+                          tipoCantidad.includes('DOUBLE') || tipoCantidad.includes('NUMERIC');
+            
+            if (faltantes.length > 0) {
+                results.push({
+                    name: '5. Estructura de columnas',
+                    status: 'error',
+                    message: `Faltan ${faltantes.length} columnas: ${faltantes.join(', ')}`,
+                    detail: `Columnas actuales: ${columnas.join(', ')}`
+                });
+            } else if (!esReal) {
+                results.push({
+                    name: '5. Estructura de columnas',
+                    status: 'warning',
+                    message: `cantidad_produccion es ${tipoCantidad}, no REAL`,
+                    detail: 'No aceptará decimales. Actualiza a la versión 2.1.8+ para tener la migración automática.'
+                });
+            } else {
+                results.push({
+                    name: '5. Estructura de columnas',
+                    status: 'ok',
+                    message: `Todas las columnas presentes (${columnas.length}). cantidad_produccion = ${tipoCantidad}`,
+                    detail: ''
+                });
+            }
+        }
+    } catch (e) {
+        results.push({
+            name: '5. Estructura de columnas',
+            status: 'error',
+            message: 'Excepción: ' + e.message,
+            detail: ''
+        });
+    }
+    
+    // ============================================================
+    // TEST 6: INSERT de prueba (con rollback)
+    // ============================================================
+    try {
+        const fechaTest = '1900-01-01'; // Fecha muy antigua para no chocar
+        const negocioId = window.DBModule.getNegocioIdActual();
+        
+        if (!negocioId) {
+            results.push({
+                name: '6. INSERT de prueba',
+                status: 'warning',
+                message: 'No hay negocioId para probar',
+                detail: 'Inicia sesión y vuelve a intentar.'
+            });
+        } else {
+            // Primero: intentar borrar si existe
+            try {
+                window.DBModule.execute(
+                    `DELETE FROM calendario_produccion WHERE negocio_id = ? AND fecha = ?`,
+                    [negocioId, fechaTest]
+                );
+            } catch (e) {}
+            
+            // Segundo: intentar insertar
+            const uuid = 'test_' + Date.now();
+            
+            try {
+                window.DBModule.execute(`
+                    INSERT INTO calendario_produccion 
+                    (negocio_id, fecha, hora_inicio, hora_fin, bloque_index, 
+                     cantidad_produccion, notas, created_by, modified_by, uuid)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `, [
+                    negocioId, fechaTest, '10:00', '13:00', 1,
+                    6.5, 'TEST DIAGNÓSTICO', null, null, uuid
+                ]);
+                
+                // Verificar que se guardó
+                const verif = window.DBModule.query(
+                    `SELECT * FROM calendario_produccion WHERE uuid = ?`,
+                    [uuid]
+                );
+                
+                if (verif.length > 0 && parseFloat(verif[0].cantidad_produccion) === 6.5) {
+                    results.push({
+                        name: '6. INSERT de prueba',
+                        status: 'ok',
+                        message: 'INSERT funciona correctamente (con decimales)',
+                        detail: 'Se guardó cantidad 6.5 y se leyó de vuelta correctamente.'
+                    });
+                } else if (verif.length > 0) {
+                    results.push({
+                        name: '6. INSERT de prueba',
+                        status: 'warning',
+                        message: 'INSERT funcionó pero la lectura no coincide',
+                        detail: `Leído: ${verif[0].cantidad_produccion}, esperado: 6.5`
+                    });
+                } else {
+                    results.push({
+                        name: '6. INSERT de prueba',
+                        status: 'warning',
+                        message: 'INSERT sin error pero no se encontró al leer',
+                        detail: 'Puede ser un problema de persistencia.'
+                    });
+                }
+                
+                // Limpiar el registro de prueba
+                try {
+                    window.DBModule.execute(
+                        `DELETE FROM calendario_produccion WHERE uuid = ?`,
+                        [uuid]
+                    );
+                } catch (e) {}
+                
+            } catch (insertErr) {
+                results.push({
+                    name: '6. INSERT de prueba',
+                    status: 'error',
+                    message: 'INSERT falló: ' + insertErr.message,
+                    detail: 'Este es el error real que ves al guardar producción.'
+                });
+            }
+        }
+    } catch (e) {
+        results.push({
+            name: '6. INSERT de prueba',
+            status: 'error',
+            message: 'Excepción: ' + e.message,
+            detail: ''
+        });
+    }
+    
+    // ============================================================
+    // RESUMEN FINAL
+    // ============================================================
+    const okCount = results.filter(r => r.status === 'ok').length;
+    const warnCount = results.filter(r => r.status === 'warning').length;
+    const errorCount = results.filter(r => r.status === 'error').length;
+    
+    console.log('🔍 ============================================');
+    console.log(`🔍 RESULTADO: ${okCount} OK, ${warnCount} WARN, ${errorCount} ERROR`);
+    console.log('🔍 ============================================');
+    results.forEach(r => {
+        const icon = r.status === 'ok' ? '✅' : r.status === 'warning' ? '⚠️' : '❌';
+        console.log(`${icon} ${r.name}: ${r.message}`);
+        if (r.detail) console.log(`   → ${r.detail}`);
+    });
+    console.log('🔍 ============================================');
+    
+    return {
+        results,
+        summary: { ok: okCount, warning: warnCount, error: errorCount, total: results.length }
+    };
+}
+
+window.runProductionDiagnostics = runProductionDiagnostics;
+
+// ============================================================
+// 🆕 ENTREGA 6: MODAL DE DIAGNÓSTICO
+// ============================================================
+
+async function showProductionDiagnosticModal() {
+    const existingModal = document.getElementById('production-diagnostic-modal');
+    if (existingModal) existingModal.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'production-diagnostic-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 999999999; padding: 15px;
+        animation: modalFadeIn 0.25s ease;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 640px; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #8b5cf6;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 28px;">🔍</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 18px; color: #8b5cf6;">Diagnóstico de Producción</h2>
+                        <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">Verifica por qué puede fallar el guardado</p>
+                    </div>
+                </div>
+                <button onclick="closeProductionDiagnosticModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+            </div>
+            
+            <div style="background: #f0f9ff; border: 1px solid #3b82f6; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: #1e40af;">
+                💡 <strong>¿Qué hace esto?</strong><br>
+                Ejecuta 6 comprobaciones técnicas sobre el sistema de producción. Si algo falla, podrás copiar el reporte y enviarlo al desarrollador.
+            </div>
+            
+            <!-- INFO DEL ENTORNO -->
+            <div style="background: var(--bg); border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; font-size: 11px;">
+                <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                    <span style="color: var(--text-light);">📱 Versión app:</span>
+                    <strong id="diag-app-version">${getAppVersion()}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                    <span style="color: var(--text-light);">🌐 Navegador:</span>
+                    <strong id="diag-browser">${navigator.userAgent.includes('Chrome') ? 'Chrome' : navigator.userAgent.includes('Firefox') ? 'Firefox' : navigator.userAgent.includes('Safari') ? 'Safari' : 'Otro'}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                    <span style="color: var(--text-light);">🔗 Online:</span>
+                    <strong id="diag-online">${navigator.onLine ? '✅ Sí' : '❌ No'}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                    <span style="color: var(--text-light);">📅 Fecha:</span>
+                    <strong>${new Date().toLocaleString('es-ES')}</strong>
+                </div>
+            </div>
+            
+            <!-- RESULTADOS -->
+            <div id="diag-results-container">
+                <div style="text-align: center; padding: 30px 20px;">
+                    <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid #8b5cf6; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                    <p style="margin-top: 12px; font-size: 14px; color: var(--text-light);">Ejecutando diagnóstico...</p>
+                </div>
+            </div>
+            
+            <!-- BOTONES -->
+            <div id="diag-buttons" style="display: none; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-color); flex-wrap: wrap;">
+                <button onclick="copyDiagnosticReport()" 
+                        class="btn primary"
+                        style="flex: 1; min-width: 140px; padding: 10px 16px; font-size: 13px; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    📋 Copiar reporte
+                </button>
+                <button onclick="clearCacheAndReload()" 
+                        class="btn"
+                        style="flex: 1; min-width: 140px; padding: 10px 16px; font-size: 13px; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    🧹 Limpiar caché y recargar
+                </button>
+                <button onclick="rerunDiagnostics()" 
+                        class="btn secondary"
+                        style="flex: 1; min-width: 100px; padding: 10px 16px; font-size: 13px;">
+                    🔄 Re-ejecutar
+                </button>
+                <button onclick="closeProductionDiagnosticModal()" 
+                        class="btn secondary"
+                        style="flex: 1; min-width: 100px; padding: 10px 16px; font-size: 13px;">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Añadir animación de spin si no existe
+    if (!document.getElementById('diag-spin-style')) {
+        const style = document.createElement('style');
+        style.id = 'diag-spin-style';
+        style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(modal);
+    
+    window._lastDiagnosticResult = null;
+    
+    // Ejecutar diagnóstico tras breve delay
+    setTimeout(async () => {
+        const result = await runProductionDiagnostics();
+        window._lastDiagnosticResult = result;
+        renderDiagnosticResults(result);
+    }, 300);
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeProductionDiagnosticModal();
+    });
+    
+    const escHandler = function(e) {
+        if (e.key === 'Escape') {
+            closeProductionDiagnosticModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+}
+
+function renderDiagnosticResults(result) {
+    const container = document.getElementById('diag-results-container');
+    const buttons = document.getElementById('diag-buttons');
+    
+    if (!container) return;
+    
+    const { results, summary } = result;
+    
+    // Colores y iconos por estado
+    const statusConfig = {
+        ok: { icon: '✅', color: '#10b981', bg: '#10b98115', border: '#10b981' },
+        warning: { icon: '⚠️', color: '#f59e0b', bg: '#f59e0b15', border: '#f59e0b' },
+        error: { icon: '❌', color: '#ef4444', bg: '#ef444415', border: '#ef4444' }
+    };
+    
+    // Determinar color del resumen general
+    let summaryColor = '#10b981';
+    let summaryIcon = '✅';
+    let summaryText = 'Todo funciona correctamente';
+    
+    if (summary.error > 0) {
+        summaryColor = '#ef4444';
+        summaryIcon = '❌';
+        summaryText = `${summary.error} error(es) detectado(s)`;
+    } else if (summary.warning > 0) {
+        summaryColor = '#f59e0b';
+        summaryIcon = '⚠️';
+        summaryText = `${summary.warning} advertencia(s)`;
+    }
+    
+    container.innerHTML = `
+        <!-- RESUMEN -->
+        <div style="background: ${summaryColor}15; border: 2px solid ${summaryColor}; border-radius: 10px; padding: 14px; margin-bottom: 14px; text-align: center;">
+            <div style="font-size: 32px; margin-bottom: 4px;">${summaryIcon}</div>
+            <div style="font-size: 16px; font-weight: 700; color: ${summaryColor}; margin-bottom: 4px;">
+                ${summaryText}
+            </div>
+            <div style="font-size: 12px; color: var(--text-light);">
+                ${summary.ok} OK · ${summary.warning} advertencias · ${summary.error} errores
+            </div>
+        </div>
+        
+        <!-- DETALLE POR TEST -->
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            ${results.map(r => {
+                const cfg = statusConfig[r.status] || statusConfig.error;
+                return `
+                    <div style="background: ${cfg.bg}; border-left: 4px solid ${cfg.border}; border-radius: 8px; padding: 10px 12px;">
+                        <div style="display: flex; align-items: flex-start; gap: 8px;">
+                            <span style="font-size: 18px; flex-shrink: 0;">${cfg.icon}</span>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px;">
+                                    ${r.name}
+                                </div>
+                                <div style="font-size: 12px; color: ${cfg.color};">
+                                    ${r.message}
+                                </div>
+                                ${r.detail ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 4px; word-break: break-word;">${r.detail}</div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+    
+    if (buttons) buttons.style.display = 'flex';
+}
+
+async function rerunDiagnostics() {
+    const container = document.getElementById('diag-results-container');
+    const buttons = document.getElementById('diag-buttons');
+    
+    if (container) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 30px 20px;">
+                <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid #8b5cf6; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                <p style="margin-top: 12px; font-size: 14px; color: var(--text-light);">Re-ejecutando diagnóstico...</p>
+            </div>
+        `;
+    }
+    if (buttons) buttons.style.display = 'none';
+    
+    const result = await runProductionDiagnostics();
+    window._lastDiagnosticResult = result;
+    renderDiagnosticResults(result);
+}
+
+async function copyDiagnosticReport() {
+    try {
+        const result = window._lastDiagnosticResult;
+        if (!result) {
+            window.showToast('⚠️ No hay diagnóstico para copiar', 'warning');
+            return;
+        }
+        
+        const { results, summary } = result;
+        
+        const browser = navigator.userAgent.includes('Chrome') ? 'Chrome' :
+                        navigator.userAgent.includes('Firefox') ? 'Firefox' :
+                        navigator.userAgent.includes('Safari') ? 'Safari' : 'Otro';
+        
+        let report = '';
+        report += '=========================================\n';
+        report += '  🔍 DIAGNÓSTICO DE PRODUCCIÓN - PANARIO\n';
+        report += '=========================================\n\n';
+        report += `📱 Versión app: ${getAppVersion()}\n`;
+        report += `🌐 Navegador: ${browser}\n`;
+        report += `🔗 Online: ${navigator.onLine ? 'Sí' : 'No'}\n`;
+        report += `📅 Fecha: ${new Date().toLocaleString('es-ES')}\n`;
+        report += `🖥️ User-Agent: ${navigator.userAgent}\n\n`;
+        report += '📊 RESUMEN\n';
+        report += `   ${summary.ok} OK · ${summary.warning} advertencias · ${summary.error} errores\n\n`;
+        report += '📋 DETALLE POR TEST\n';
+        report += '-----------------------------------------\n';
+        
+        results.forEach(r => {
+            const icon = r.status === 'ok' ? '✅' : r.status === 'warning' ? '⚠️' : '❌';
+            report += `${icon} ${r.name}\n`;
+            report += `   ${r.message}\n`;
+            if (r.detail) report += `   → ${r.detail}\n`;
+            report += '\n';
+        });
+        
+        report += '=========================================\n';
+        report += 'Fin del diagnóstico\n';
+        report += '=========================================\n';
+        
+        // Copiar al portapapeles
+        try {
+            await navigator.clipboard.writeText(report);
+            window.showToast('✅ Reporte copiado al portapapeles', 'success', 3000);
+        } catch (e) {
+            // Fallback para navegadores antiguos
+            const textarea = document.createElement('textarea');
+            textarea.value = report;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            window.showToast('✅ Reporte copiado al portapapeles', 'success', 3000);
+        }
+        
+        console.log('📋 Reporte de diagnóstico:\n', report);
+        
+    } catch (e) {
+        console.error('Error copiando reporte:', e);
+        window.showToast('❌ Error al copiar el reporte', 'error', 4000);
+    }
+}
+
+async function clearCacheAndReload() {
+    const confirm = await window.ModalModule.showConfirm({
+        title: '🧹 Limpiar caché y recargar',
+        message: 'Se eliminarán:\n\n✅ Service Workers registrados\n✅ Cachés de la PWA\n❌ NO se borrarán tus datos\n\nLa app se recargará automáticamente.\n\n¿Continuar?',
+        confirmText: '🧹 Sí, limpiar',
+        cancelText: 'Cancelar',
+        icon: '🧹',
+        confirmColor: '#f59e0b'
+    });
+    
+    if (!confirm) return;
+    
+    window.showToast('🧹 Limpiando caché...', 'info', 2000);
+    
+    try {
+        // 1. Desregistrar SWs
+        if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (const reg of regs) {
+                try { await reg.unregister(); } catch (e) {}
+            }
+            console.log(`🗑️ ${regs.length} Service Worker(s) desregistrados`);
+        }
+        
+        // 2. Eliminar cachés
+        if ('caches' in window) {
+            const names = await caches.keys();
+            for (const name of names) {
+                try { await caches.delete(name); } catch (e) {}
+            }
+            console.log(`🗑️ ${names.length} caché(s) eliminadas`);
+        }
+        
+        window.showToast('✅ Caché limpiada. Recargando...', 'success', 2000);
+        
+        setTimeout(() => {
+            const url = new URL(window.location.href);
+            url.searchParams.set('_reload', Date.now());
+            window.location.replace(url.toString());
+        }, 800);
+        
+    } catch (e) {
+        console.error('Error limpiando caché:', e);
+        window.showToast('❌ Error: ' + e.message, 'error', 4000);
+    }
+}
+
+function closeProductionDiagnosticModal() {
+    const modal = document.getElementById('production-diagnostic-modal');
+    if (modal) {
+        modal.style.animation = 'modalFadeOut 0.2s ease forwards';
+        setTimeout(() => {
+            if (modal.parentNode) modal.remove();
+        }, 200);
+        setTimeout(() => {
+            const still = document.getElementById('production-diagnostic-modal');
+            if (still && still.parentNode) still.remove();
+        }, 500);
+    }
+}
+
+window.showProductionDiagnosticModal = showProductionDiagnosticModal;
+window.closeProductionDiagnosticModal = closeProductionDiagnosticModal;
+window.renderDiagnosticResults = renderDiagnosticResults;
+window.rerunDiagnostics = rerunDiagnostics;
+window.copyDiagnosticReport = copyDiagnosticReport;
+window.clearCacheAndReload = clearCacheAndReload;
 
 // ============================================================
 // FUNCIONES DEL MÓDULO DE CORRIENTE
@@ -393,6 +1054,18 @@ function showCorrienteModal() {
                     <button onclick="setCorrienteReference()" class="btn primary" style="margin-top: 8px; padding: 4px 14px; font-size: 12px; width: auto;">📌 Guardar referencia</button>
                     <div id="config-ref-status" style="margin-top: 6px; font-size: 12px; color: var(--text-light);"></div>
                 </div>
+                
+                <!-- 🆕 ENTREGA 6: Botón de diagnóstico -->
+                <div style="margin-top: 12px; padding: 10px 12px; background: #8b5cf610; border: 1px dashed #8b5cf6; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 11px; color: #8b5cf6; margin-bottom: 6px;">
+                        🔍 ¿Tienes problemas para guardar producción?
+                    </div>
+                    <button onclick="showProductionDiagnosticModal()" 
+                            class="btn"
+                            style="padding: 6px 14px; font-size: 12px; width: auto; background: #8b5cf6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                        🔍 Ejecutar diagnóstico
+                    </button>
+                </div>
             </div>
 
             <div id="corriente-calendario-content" style="flex: 1; overflow-y: auto; display: none;">
@@ -535,7 +1208,7 @@ function irAHoyCorriente() {
 }
 
 // ============================================================
-// RENDER CALENDARIO (CON DECIMALES)
+// RENDER CALENDARIO
 // ============================================================
 
 function renderCorrienteCalendario() {
@@ -612,7 +1285,6 @@ function renderCorrienteCalendario() {
             ? `<span style="font-size: 9px; display: block; margin-top: 1px;">🔨</span>` 
             : '';
         
-        // 🆕 FASE 7.2: Formatear la cantidad para el tooltip
         const cantidadTooltip = tieneProduccion 
             ? formatearCantidadProduccion(prodConfig.cantidad_produccion) 
             : '';
@@ -637,8 +1309,7 @@ function changeCorrienteMonth(delta) {
 }
 
 // ============================================================
-// SHOW HORARIO DETALLE (CON PRODUCCIÓN DECIMAL)
-// 🆕 FASE 7.2: Input con step="0.1" y formateo decimal
+// SHOW HORARIO DETALLE
 // ============================================================
 
 function showHorarioDetalle(dateStr) {
@@ -678,7 +1349,6 @@ function showHorarioDetalle(dateStr) {
             return `<option value="${i + 1}" ${selected ? 'selected' : ''}>Bloque ${i + 1}: ${b.inicioStr} - ${b.finStr}</option>`;
         }).join('');
         
-        // 🆕 FASE 7.2: Formatear la cantidad guardada
         const cantidadGuardada = prodConfig?.cantidad_produccion 
             ? formatearCantidadProduccion(prodConfig.cantidad_produccion) 
             : '';
@@ -704,7 +1374,6 @@ function showHorarioDetalle(dateStr) {
                     </div>
                     <div>
                         <label style="font-size: 11px; font-weight: 600; color: var(--text-label); display: block; margin-bottom: 2px;">📦 Cantidad a producir</label>
-                        <!-- 🆕 FASE 7.2: step="0.1" permite decimales -->
                         <input type="number" id="produccion-cantidad" 
                                value="${cantidadGuardada}" 
                                placeholder="Ej: 6.5"
@@ -851,13 +1520,12 @@ function showHorarioDetalle(dateStr) {
 }
 
 // ============================================================
-// 🆕 FASE 7.2: GUARDAR PRODUCCIÓN CON DECIMALES
+// GUARDAR PRODUCCIÓN CON DECIMALES
 // ============================================================
 
 function guardarProduccion(fechaISO) {
     console.log('💾 guardarProduccion() llamado para fecha:', fechaISO);
     
-    // Verificar que DBModule.saveProduccion existe
     if (!window.DBModule || typeof window.DBModule.saveProduccion !== 'function') {
         console.error('❌ DBModule.saveProduccion no está disponible');
         window.showToast('❌ Error crítico: función de guardado no disponible. Recarga la página.', 'error', 6000);
@@ -865,7 +1533,6 @@ function guardarProduccion(fechaISO) {
     }
     
     const bloqueIndex = parseInt(document.getElementById('produccion-bloque')?.value) || null;
-    // 🆕 FASE 7.2: parseFloat en lugar de parseInt
     const cantidadRaw = document.getElementById('produccion-cantidad')?.value;
     const cantidad = parseFloat(cantidadRaw);
     const notas = document.getElementById('produccion-notas')?.value?.trim() || null;
@@ -907,11 +1574,9 @@ function guardarProduccion(fechaISO) {
     console.log('   → Resultado:', result);
     
     if (result.success) {
-        // 🆕 FASE 7.2: Mostrar la cantidad formateada
         const cantidadFormateada = formatearCantidadProduccion(cantidad);
         window.showToast(`✅ Producción guardada: ${cantidadFormateada} unidades en bloque ${bloqueIndex}`, 'success', 4000);
         
-        // Refrescar el modal y el calendario
         closeHorarioDetalleModal();
         setTimeout(() => {
             renderCorrienteCalendario();
@@ -956,7 +1621,7 @@ window.guardarProduccion = guardarProduccion;
 window.eliminarProduccion = eliminarProduccion;
 
 // ============================================================
-// CONSULTAR HORARIOS (CON DECIMALES)
+// CONSULTAR HORARIOS
 // ============================================================
 
 function consultarHorariosFecha() {
@@ -1041,7 +1706,7 @@ function consultarHorariosFecha() {
 }
 
 // ============================================================
-// GENERAR REPORTE PDF DE CORRIENTE (CON PRODUCCIÓN DECIMAL)
+// GENERAR REPORTE PDF DE CORRIENTE
 // ============================================================
 
 function generarReportePDF(tipo) {
@@ -1328,7 +1993,7 @@ function generateExpensesReportFromForm() {
     if (filters.category) { sql += ' AND category = ?'; params.push(filters.category); }
     if (filters.payment_method) { sql += ' AND payment_method = ?'; params.push(filters.payment_method); }
     if (filters.search) { sql += ' AND concept LIKE ?'; params.push('%' + filters.search + '%'); }
-    sql += ' ORDER BY transaction_date DESC';
+    sql += ' ORDER BY transaction_date DESC, id ASC';
 
     const expenses = window.DBModule.query(sql, params);
 
@@ -2041,7 +2706,7 @@ function actualizarPreviewReprogramacion() {
         params.push('%' + cliente + '%');
     }
     
-    sql += ' ORDER BY delivery_date ASC';
+    sql += ' ORDER BY delivery_date ASC, id ASC';
     
     const pedidos = window.DBModule.query(sql, params);
     
@@ -2300,6 +2965,18 @@ function renderSettingsView() {
             </button>
         </div>
         
+        <!-- 🆕 ENTREGA 6: Botón de diagnóstico destacado -->
+        <div class="card" style="border-left: 4px solid #8b5cf6; border: 2px dashed #8b5cf6; background: linear-gradient(135deg, #8b5cf608 0%, #8b5cf604 100%);">
+            <h3 style="margin: 0 0 8px 0; color: #8b5cf6;">🔍 Diagnóstico de Producción</h3>
+            <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
+                ¿El guardado de producción no funciona? Ejecuta un diagnóstico técnico para identificar el problema.
+                <br>Muestra 6 comprobaciones y permite copiar el reporte.
+            </p>
+            <button onclick="showProductionDiagnosticModal()" class="btn" style="padding: 8px 16px; font-size: 14px; width: auto; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                🔍 Ejecutar diagnóstico
+            </button>
+        </div>
+        
         <div class="card" style="border-left: 4px solid #ef4444; border: 2px solid #ef4444;">
             <h3 style="margin: 0 0 8px 0; color: #ef4444;">📊 Reporte de Gastos</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
@@ -2336,7 +3013,7 @@ function renderSettingsView() {
                 Elige cómo quieres importar el archivo <code>.db</code> de otro dispositivo:
                 <br>• <strong>Importar copia:</strong> reemplaza TODOS los datos (incluye usuarios si eres admin).
                 <br>• <strong>Importar solo datos:</strong> reemplaza los datos operativos, conserva usuarios.
-                <br>• <strong>🔀 Fusionar:</strong> <span style="color: #8b5cf6; font-weight: 600;">combina</span> los datos del backup con los actuales. Los registros nuevos se añaden, los existentes se comparan por uuid (gana el más reciente).
+                <br>• <strong>🔀 Fusionar:</strong> <span style="color: #8b5cf6; font-weight: 600;">combina</span> los datos del backup con los actuales.
             </p>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <button onclick="importDatabaseSmartAction()" class="btn primary" style="padding: 10px 16px; font-size: 14px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
@@ -2367,9 +3044,6 @@ function renderSettingsView() {
                     📥 Importar recetas y productos
                 </button>
             </div>
-            <p style="font-size: 12px; color: var(--text-light); margin-top: 8px;">
-                💡 La exportación genera un archivo <strong>.json</strong> con nombre <code>panario_salva_recetas_productos_YYYY-MM-DD.json</code>
-            </p>
         </div>
         
         <div class="card">
@@ -2983,11 +3657,6 @@ async function showChangePasswordModal(userId, username) {
             if (result.success) {
                 window.showToast(`✅ Contraseña actualizada para @${username}`, 'success', 4000);
                 closeChangePasswordModal();
-                if (document.getElementById('users-modal')) {
-                    // Modal de usuarios sigue abierto
-                } else {
-                    setTimeout(() => showUsersModal(), 500);
-                }
             } else {
                 errorEl.textContent = '❌ ' + result.error;
                 errorEl.style.display = 'block';
@@ -3643,7 +4312,6 @@ async function importDatabaseFusionAction() {
         }
         
         mensaje += `\n\n💡 Tus datos locales se han enriquecido con los del backup.`;
-        mensaje += `\n📤 Si quieres compartir el resultado, exporta una nueva copia desde "Exportar copia de seguridad".`;
         
         await window.ModalModule.showAlert({
             title: '🔀 Fusión completada',
@@ -4202,5 +4870,13 @@ window.guardarProduccion = guardarProduccion;
 window.eliminarProduccion = eliminarProduccion;
 window.MOTIVOS_REPROGRAMACION = MOTIVOS_REPROGRAMACION;
 window.getAppVersion = getAppVersion;
+// 🆕 ENTREGA 6
+window.showProductionDiagnosticModal = showProductionDiagnosticModal;
+window.closeProductionDiagnosticModal = closeProductionDiagnosticModal;
+window.runProductionDiagnostics = runProductionDiagnostics;
+window.renderDiagnosticResults = renderDiagnosticResults;
+window.rerunDiagnostics = rerunDiagnostics;
+window.copyDiagnosticReport = copyDiagnosticReport;
+window.clearCacheAndReload = clearCacheAndReload;
 
-console.log('📦 UI Settings Module cargado correctamente v2.1.8 (FASE 7.2: producción con decimales)');
+console.log('📦 UI Settings Module cargado correctamente v2.1.9 (ENTREGA 6: diagnóstico de producción)');
