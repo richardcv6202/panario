@@ -15,6 +15,19 @@
 //     window.limpiarEstilosResiduales()
 //   - ✅ Eliminada la manipulación directa de body.style.overflow
 //   - ✅ Compatible con modal.js v2.0.9+
+// 🆕 v2.2.3 (230926): FASE A - Fix modal de ayuda bloqueante y responsive
+//   - ✅ NUEVO: Overlay bloqueante con pointer-events: auto que cubre el
+//     100% de la pantalla y captura TODOS los clicks.
+//   - ✅ NUEVO: Se oculta el header de la app (#appScreen header) con
+//     visibility: hidden mientras el modal está abierto.
+//   - ✅ NUEVO: Se oculta el bottom-nav también (por si acaso).
+//   - ✅ NUEVO: Se añade `inert` al #appScreen (soporte moderno) para que
+//     nada de la app reciba eventos.
+//   - ✅ NUEVO: stopPropagation() en todos los botones del modal
+//     (✕, Volver, tema, imprimir).
+//   - ✅ NUEVO: Restaurar el header y el bottom-nav al cerrar el modal.
+//   - ✅ NUEVO: Detección robusta de móvil para el modal.
+//   - ✅ Sin cambios en otras funciones (popover, FAQ, tour, etc.)
 // ============================================================
 
 window.HelpModule = {};
@@ -26,6 +39,14 @@ window.HelpModule = {};
 const HELP_MODAL_Z_INDEX = 2147483647;
 const HELP_POPOVER_Z_INDEX = 2147483646;
 const IFRAME_LOAD_TIMEOUT_MS = 8000;
+
+// ============================================================
+// 🆕 v2.2.3: ESTADO GLOBAL DEL BLOQUEO DE LA APP
+// ============================================================
+// Guarda el estado original del #appScreen y del header/bottom-nav
+// para poder restaurarlo al cerrar el modal de ayuda.
+
+let _helpAppBlockState = null;
 
 // ============================================================
 // RUTA DEL AVATAR DEL DESARROLLADOR
@@ -134,6 +155,107 @@ function isMobileDevice() {
 window.isMobileDevice = isMobileDevice;
 
 // ============================================================
+// 🆕 v2.2.3: BLOQUEAR LA APP (ocultar header + bottom-nav + inert)
+// ============================================================
+// 
+// Mientras el modal de ayuda está abierto, ocultamos la app para:
+//   1. Evitar que el header de la app capture clicks del modal (bug).
+//   2. Mejorar el rendimiento visual (no hay doble capa).
+//   3. Evitar scroll de la app detrás del modal.
+// 
+// Guardamos el estado original para restaurarlo al cerrar.
+
+function _bloquearAppMientrasAyuda() {
+    try {
+        if (_helpAppBlockState) {
+            console.log('⚠️ [help] _bloquearAppMientrasAyuda: ya estaba bloqueado');
+            return;
+        }
+        
+        const appScreen = document.getElementById('appScreen');
+        const header = appScreen ? appScreen.querySelector('header') : document.querySelector('#appScreen > header');
+        const bottomNav = document.querySelector('.bottom-nav');
+        
+        // Guardar estado original
+        _helpAppBlockState = {
+            appScreen: appScreen,
+            appScreenOriginalVisibility: appScreen ? appScreen.style.visibility : '',
+            header: header,
+            headerOriginalVisibility: header ? header.style.visibility : '',
+            bottomNav: bottomNav,
+            bottomNavOriginalVisibility: bottomNav ? bottomNav.style.visibility : ''
+        };
+        
+        // Ocultar header de la app
+        if (header) {
+            header.style.setProperty('visibility', 'hidden', 'important');
+        }
+        
+        // Ocultar bottom-nav
+        if (bottomNav) {
+            bottomNav.style.setProperty('visibility', 'hidden', 'important');
+        }
+        
+        // 🆕 Añadir `inert` al appScreen si el navegador lo soporta.
+        // Esto hace que TODO el subárbol del appScreen ignore eventos.
+        if (appScreen && typeof appScreen.inert !== 'undefined') {
+            try {
+                appScreen.inert = true;
+            } catch (e) {}
+        }
+        
+        console.log('🔒 [help] App bloqueada visualmente (header + bottom-nav ocultos, inert activado)');
+    } catch (e) {
+        console.warn('⚠️ [help] Error en _bloquearAppMientrasAyuda:', e);
+    }
+}
+
+function _restaurarAppTrasAyuda() {
+    try {
+        if (!_helpAppBlockState) return;
+        
+        const { appScreen, appScreenOriginalVisibility, header, headerOriginalVisibility, bottomNav, bottomNavOriginalVisibility } = _helpAppBlockState;
+        
+        // Restaurar header
+        if (header) {
+            if (headerOriginalVisibility) {
+                header.style.visibility = headerOriginalVisibility;
+            } else {
+                header.style.removeProperty('visibility');
+            }
+        }
+        
+        // Restaurar bottom-nav
+        if (bottomNav) {
+            if (bottomNavOriginalVisibility) {
+                bottomNav.style.visibility = bottomNavOriginalVisibility;
+            } else {
+                bottomNav.style.removeProperty('visibility');
+            }
+        }
+        
+        // 🆕 Quitar `inert`
+        if (appScreen) {
+            try {
+                appScreen.inert = false;
+            } catch (e) {}
+            
+            if (appScreenOriginalVisibility) {
+                appScreen.style.visibility = appScreenOriginalVisibility;
+            } else {
+                appScreen.style.removeProperty('visibility');
+            }
+        }
+        
+        _helpAppBlockState = null;
+        
+        console.log('🔓 [help] App restaurada tras cerrar el modal de ayuda');
+    } catch (e) {
+        console.warn('⚠️ [help] Error en _restaurarAppTrasAyuda:', e);
+    }
+}
+
+// ============================================================
 // HELPER PARA FORZAR MODALES AL FRENTE
 // ============================================================
 
@@ -228,7 +350,7 @@ function abrirAyudaDetallada() {
 }
 
 // ============================================================
-// ABRIR AYUDA EN MODAL
+// 🆕 v2.2.3: ABRIR AYUDA EN MODAL (CON BLOQUEO TOTAL DE LA APP)
 // ============================================================
 
 function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
@@ -250,11 +372,14 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
     const modal = document.createElement('div');
     modal.id = 'ayuda-modal';
     
+    // 🆕 v2.2.3: overlay bloqueante - cubre el 100% y captura TODOS los eventos
     modal.style.setProperty('position', 'fixed', 'important');
     modal.style.setProperty('top', '0', 'important');
     modal.style.setProperty('left', '0', 'important');
     modal.style.setProperty('right', '0', 'important');
     modal.style.setProperty('bottom', '0', 'important');
+    modal.style.setProperty('width', '100vw', 'important');
+    modal.style.setProperty('height', '100vh', 'important');
     modal.style.setProperty('background', 'rgba(0,0,0,0.85)', 'important');
     modal.style.setProperty('backdrop-filter', 'blur(8px)', 'important');
     modal.style.setProperty('-webkit-backdrop-filter', 'blur(8px)', 'important');
@@ -265,6 +390,11 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
     modal.style.setProperty('padding', isMobile ? '0' : '20px', 'important');
     modal.style.setProperty('animation', 'ayudaModalFadeIn 0.25s ease', 'important');
     modal.style.setProperty('overflow', 'hidden', 'important');
+    // 🆕 v2.2.3: Garantizar que el overlay capture TODOS los eventos
+    modal.style.setProperty('pointer-events', 'auto', 'important');
+    modal.style.setProperty('isolation', 'isolate', 'important');
+    // 🆕 v2.2.3: Evitar scroll del body detrás
+    modal.style.setProperty('overscroll-behavior', 'contain', 'important');
     
     if (!document.getElementById('ayuda-modal-styles')) {
         const style = document.createElement('style');
@@ -282,7 +412,9 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
     }
     
     modal.innerHTML = `
-        <div id="ayuda-modal-container" style="
+        <div id="ayuda-modal-container" 
+             onclick="event.stopPropagation();"
+             style="
             background: var(--bg-card, #fff);
             border-radius: ${modalRadius};
             width: ${modalWidth};
@@ -297,8 +429,10 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
             border: 1px solid var(--border-color, #e0d5c0);
             position: relative;
             z-index: 1;
+            pointer-events: auto;
         ">
-            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border-color, #e0d5c0); background: var(--bg-card, #fff); flex-shrink: 0; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border-color, #e0d5c0); background: var(--bg-card, #fff); flex-shrink: 0; flex-wrap: wrap;"
+                 onclick="event.stopPropagation();">
                 <span style="font-size: 22px;">📖</span>
                 <div style="flex: 1; min-width: 120px;">
                     <div style="font-weight: 700; font-size: 15px; color: var(--text, #2d2d2d);">Ayuda detallada</div>
@@ -309,16 +443,24 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
                 
                 <a href="${baseUrl}" target="_blank" rel="noopener noreferrer"
                    class="btn secondary"
+                   onclick="event.stopPropagation();"
                    style="padding: 6px 12px; font-size: 12px; width: auto; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;"
                    title="Abrir en pestaña nueva">
                     🔗 ↗
                 </a>
                 
-                <button onclick="imprimirAyudaIframe()" class="btn secondary" style="padding: 6px 12px; font-size: 12px; width: auto;" title="Imprimir / Guardar PDF">
+                <button onclick="event.stopPropagation(); imprimirAyudaIframe();" 
+                        class="btn secondary" 
+                        style="padding: 6px 12px; font-size: 12px; width: auto;" 
+                        title="Imprimir / Guardar PDF">
                     🖨️
                 </button>
                 
-                <button onclick="cerrarAyudaModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light, #666); padding: 4px 8px; line-height: 1; border-radius: 6px; transition: background 0.2s;" onmouseover="this.style.background='var(--bg, #fdf6e3)'" onmouseout="this.style.background='transparent'" title="Cerrar (Escape)">
+                <button onclick="event.stopPropagation(); cerrarAyudaModal();" 
+                        style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light, #666); padding: 4px 8px; line-height: 1; border-radius: 6px; transition: background 0.2s;" 
+                        onmouseover="this.style.background='var(--bg, #fdf6e3)'" 
+                        onmouseout="this.style.background='transparent'" 
+                        title="Cerrar (Escape)">
                     ✕
                 </button>
             </div>
@@ -332,7 +474,13 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
                     </div>
                 </div>
                 
-                <iframe id="ayuda-modal-iframe" src="${embeddedUrl}" title="Ayuda detallada de Panario" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals" allow="clipboard-read; clipboard-write" style="width: 100%; height: 100%; border: none; display: block; position: relative; z-index: 2; opacity: 0; transition: opacity 0.3s ease;"></iframe>
+                <iframe id="ayuda-modal-iframe" 
+                        src="${embeddedUrl}" 
+                        title="Ayuda detallada de Panario" 
+                        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals" 
+                        allow="clipboard-read; clipboard-write" 
+                        style="width: 100%; height: 100%; border: none; display: block; position: relative; z-index: 2; opacity: 0; transition: opacity 0.3s ease;">
+                </iframe>
             </div>
         </div>
     `;
@@ -340,11 +488,13 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
     document.body.appendChild(modal);
     forzarModalAlFrente(modal);
     
-    // 🆕 v2.2.2: Usar lockBodyScroll() en lugar de manipular overflow directamente
+    // 🆕 v2.2.3: Bloquear la app visualmente mientras el modal está abierto
+    _bloquearAppMientrasAyuda();
+    
+    // Bloquear scroll del body (compatible con modal.js v2.0.9+)
     if (typeof window.lockBodyScroll === 'function') {
         window.lockBodyScroll();
     } else {
-        // Fallback si modal.js antiguo
         const prevOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         window._ayudaModalPrevOverflow = prevOverflow;
@@ -390,15 +540,28 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
         }, IFRAME_LOAD_TIMEOUT_MS);
     }
     
+    // 🆕 v2.2.3: Click sobre el overlay (fuera del container) → cerrar
     modal.addEventListener('click', function(e) {
-        const container = document.getElementById('ayuda-modal-container');
-        if (e.target === modal || (container && !container.contains(e.target))) {
+        // Solo cerrar si el click fue directamente en el overlay
+        // (no en el container ni en sus hijos)
+        if (e.target === modal) {
+            e.stopPropagation();
             cerrarAyudaModal();
         }
     });
     
+    // 🆕 v2.2.3: Prevenir que eventos se propaguen al body/appScreen
+    modal.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+    modal.addEventListener('mouseup', function(e) { e.stopPropagation(); });
+    modal.addEventListener('touchstart', function(e) { e.stopPropagation(); }, { passive: true });
+    modal.addEventListener('touchend', function(e) { e.stopPropagation(); }, { passive: true });
+    modal.addEventListener('pointerdown', function(e) { e.stopPropagation(); });
+    modal.addEventListener('wheel', function(e) { e.stopPropagation(); }, { passive: true });
+    
+    // Escape cierra el modal
     const escHandler = function(e) {
         if (e.key === 'Escape') {
+            e.stopPropagation();
             cerrarAyudaModal();
             document.removeEventListener('keydown', escHandler);
         }
@@ -408,6 +571,7 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
     window._ayudaModalState = { escHandler };
     
     console.log('📖 Modal de ayuda abierto con URL:', embeddedUrl);
+    console.log('🔒 App bloqueada visualmente (header + bottom-nav ocultos)');
 }
 
 // ============================================================
@@ -439,7 +603,7 @@ function ofrecerFallbackPestanaNueva(baseUrl, mensaje) {
                 <a href="${baseUrl}" target="_blank" rel="noopener noreferrer" class="btn primary" style="padding: 10px 20px; font-size: 14px; width: auto; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; background: var(--primary, #f5a623); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                     🔗 Abrir ayuda
                 </a>
-                <button onclick="cerrarAyudaModal()" class="btn secondary" style="padding: 10px 20px; font-size: 14px; width: auto; background: transparent; color: var(--text, #2d2d2d); border: 2px solid var(--border-color, #e0d5c0); border-radius: 8px; cursor: pointer; font-weight: 600;">
+                <button onclick="event.stopPropagation(); cerrarAyudaModal()" class="btn secondary" style="padding: 10px 20px; font-size: 14px; width: auto; background: transparent; color: var(--text, #2d2d2d); border: 2px solid var(--border-color, #e0d5c0); border-radius: 8px; cursor: pointer; font-weight: 600;">
                     ❌ Cerrar
                 </button>
             </div>
@@ -456,7 +620,7 @@ function ofrecerFallbackPestanaNueva(baseUrl, mensaje) {
 }
 
 // ============================================================
-// 🆕 v2.2.2: CERRAR AYUDA MODAL CON LIMPIEZA DE ESTILOS
+// 🆕 v2.2.3: CERRAR AYUDA MODAL CON LIMPIEZA DE ESTILOS Y RESTAURACIÓN
 // ============================================================
 
 function cerrarAyudaModal() {
@@ -475,7 +639,10 @@ function cerrarAyudaModal() {
             window._ayudaModalState = null;
         }
         
-        // 🆕 v2.2.2: Usar unlockBodyScroll() + limpiarEstilosResiduales()
+        // 🆕 v2.2.3: Restaurar la app (header + bottom-nav + inert)
+        _restaurarAppTrasAyuda();
+        
+        // Restaurar scroll del body
         if (typeof window.unlockBodyScroll === 'function') {
             window.unlockBodyScroll();
         } else if (window._ayudaModalPrevOverflow !== undefined) {
@@ -483,14 +650,14 @@ function cerrarAyudaModal() {
             delete window._ayudaModalPrevOverflow;
         }
         
-        // 🆕 v2.2.2: Limpiar estilos residuales que rompen el sticky header
+        // Limpiar estilos residuales
         if (typeof window.limpiarEstilosResiduales === 'function') {
             setTimeout(() => {
                 window.limpiarEstilosResiduales();
             }, 50);
         }
         
-        console.log('📖 Modal de ayuda cerrado + estilos residuales limpiados');
+        console.log('📖 Modal de ayuda cerrado + app restaurada + estilos residuales limpiados');
     }, 200);
 }
 
@@ -516,6 +683,8 @@ window.cerrarAyudaModal = cerrarAyudaModal;
 window.imprimirAyudaIframe = imprimirAyudaIframe;
 window.forzarModalAlFrente = forzarModalAlFrente;
 window.ofrecerFallbackPestanaNueva = ofrecerFallbackPestanaNueva;
+window._bloquearAppMientrasAyuda = _bloquearAppMientrasAyuda;
+window._restaurarAppTrasAyuda = _restaurarAppTrasAyuda;
 
 // ============================================================
 // POPOVER DEL CENTRO DE AYUDA
@@ -1849,7 +2018,10 @@ window.HelpModule = {
     ofrecerFallbackPestanaNueva: ofrecerFallbackPestanaNueva,
     isMobileDevice: isMobileDevice,
     FAQS_DB: FAQS_DB,
-    DEV_AVATAR_PATH: DEV_AVATAR_PATH
+    DEV_AVATAR_PATH: DEV_AVATAR_PATH,
+    // 🆕 v2.2.3: Helpers de bloqueo
+    _bloquearAppMientrasAyuda: _bloquearAppMientrasAyuda,
+    _restaurarAppTrasAyuda: _restaurarAppTrasAyuda
 };
 
 window.showHelpMenu = showHelpMenu;
@@ -1869,11 +2041,16 @@ window.filtrarFAQs = filtrarFAQs;
 window.forzarModalAlFrente = forzarModalAlFrente;
 window.ofrecerFallbackPestanaNueva = ofrecerFallbackPestanaNueva;
 window.isMobileDevice = isMobileDevice;
+window._bloquearAppMientrasAyuda = _bloquearAppMientrasAyuda;
+window._restaurarAppTrasAyuda = _restaurarAppTrasAyuda;
 window.closeHelpMenuFallback = window.closeHelpMenuFallback || (() => {});
 
-console.log('📦 Help Module cargado correctamente v2.2.2 (FIX BUG #2 - usa lockBodyScroll + limpiarEstilosResiduales)');
+console.log('📦 Help Module cargado correctamente v2.2.3 (FASE A - Fix modal bloqueante y responsive)');
 console.log('📚 FAQs cargadas:', FAQS_DB.length);
-console.log('🆕 v2.2.2:');
-console.log('   ✅ abrirAyudaEnModal() usa window.lockBodyScroll()');
-console.log('   ✅ cerrarAyudaModal() usa window.unlockBodyScroll() + limpiarEstilosResiduales()');
-console.log('   ✅ Compatible con modal.js v2.0.9+');
+console.log('🆕 v2.2.3 (Fase A):');
+console.log('   ✅ Overlay bloqueante cubre 100% y captura TODOS los clicks');
+console.log('   ✅ Ocultar header de la app + bottom-nav (visibility: hidden)');
+console.log('   ✅ inert en #appScreen (bloqueo moderno de eventos)');
+console.log('   ✅ stopPropagation en todos los botones del modal (✕, Volver, imprimir)');
+console.log('   ✅ Restauración completa al cerrar');
+console.log('   ✅ Detección robusta de móvil');
