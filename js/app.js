@@ -55,8 +55,12 @@
 //   - ✅ Click en cada columna navega a Pedidos con filtro apropiado
 //   - ✅ Iconos grandes y legibles
 //   - ✅ Compatibilidad total con el resto del Dashboard
-// 🆕 v2.2.1 (230926 v11): FALLBACK DE VERSIÓN ACTUALIZADO
-//   - ✅ getAppVersion() fallback cambiado de '2.1.11' a '2.2.1'
+// 🆕 v2.2.2 (230926 v11): FALLBACK DE VERSIÓN ACTUALIZADO + LIMPIEZA DE ESTILOS
+//   - ✅ getAppVersion() fallback cambiado de '2.1.11' a '2.2.2'
+//   - ✅ navigate() ahora llama a limpiarEstilosResiduales() al cambiar de módulo
+//   - ✅ Se añade listener de 'visibilitychange' que llama a limpiarEstilosResiduales()
+//   - ✅ Se llama a limpiarEstilosResiduales() al inicio de showApp()
+//   - ✅ Se llama a limpiarEstilosResiduales() después de renderizar el dashboard
 //   - ✅ Sin cambios funcionales adicionales
 // ============================================================
 
@@ -146,7 +150,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.2.1'; // 🆕 Fallback actualizado a 2.2.1
+    return '2.2.2'; // 🆕 Fallback actualizado a 2.2.2
 }
 
 window.getAppVersion = getAppVersion;
@@ -396,6 +400,11 @@ async function initApp() {
         const version = getAppVersion();
         console.log(`🚀 Iniciando Panario v${version}...`);
         
+        // 🆕 v2.2.2: Limpiar estilos residuales al arrancar
+        if (typeof window.limpiarEstilosResiduales === 'function') {
+            window.limpiarEstilosResiduales();
+        }
+        
         const urlParams = new URLSearchParams(window.location.search);
         const refreshParam = urlParams.get('refresh');
         
@@ -488,6 +497,16 @@ async function initApp() {
         setupEventListeners();
         createScrollButtons();
         setupDbSavedListener();
+        
+        // 🆕 v2.2.2: Listener de visibilitychange para limpiar estilos residuales
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                console.log('👁️ [app] App vuelve a primer plano → limpiando estilos');
+                if (typeof window.limpiarEstilosResiduales === 'function') {
+                    window.limpiarEstilosResiduales();
+                }
+            }
+        });
         
         setTimeout(adjustForSafeArea, 500);
 
@@ -938,6 +957,11 @@ function updateTopBarAvatar(photoData) {
 function showApp(user) {
     console.log('👤 Mostrando app para:', user.username);
     
+    // 🆕 v2.2.2: Limpiar estilos residuales al mostrar la app
+    if (typeof window.limpiarEstilosResiduales === 'function') {
+        window.limpiarEstilosResiduales();
+    }
+    
     const authScreen = document.getElementById('authScreen');
     const appScreen = document.getElementById('appScreen');
     const userDisplay = document.getElementById('userDisplay');
@@ -977,6 +1001,13 @@ function showApp(user) {
     document.dispatchEvent(new CustomEvent('panario:logged-in'));
     
     navigate('dashboard');
+    
+    // 🆕 v2.2.2: Limpiar estilos residuales después de renderizar
+    setTimeout(() => {
+        if (typeof window.limpiarEstilosResiduales === 'function') {
+            window.limpiarEstilosResiduales();
+        }
+    }, 200);
 }
 
 function updateDocumentTitle() {
@@ -1026,6 +1057,11 @@ window.updateAppHeader = updateAppHeader;
 
 function navigate(section) {
     console.log('🧭 Navegando a:', section);
+    
+    // 🆕 v2.2.2: Limpiar estilos residuales al navegar entre módulos
+    if (typeof window.limpiarEstilosResiduales === 'function') {
+        window.limpiarEstilosResiduales();
+    }
     
     // Cerrar el popover de ayuda si está abierto
     if (window.HelpModule && window.HelpModule.cerrarPopoverAyuda) {
@@ -1146,6 +1182,13 @@ function navigate(section) {
     }
     
     setTimeout(adjustForSafeArea, 300);
+    
+    // 🆕 v2.2.2: Limpiar estilos residuales después de renderizar la nueva vista
+    setTimeout(() => {
+        if (typeof window.limpiarEstilosResiduales === 'function') {
+            window.limpiarEstilosResiduales();
+        }
+    }, 400);
 }
 
 // ============================================================
@@ -1721,6 +1764,13 @@ function renderDashboardView() {
     
     loadDashboardData();
     setTimeout(adjustForSafeArea, 300);
+    
+    // 🆕 v2.2.2: Limpiar estilos residuales después de renderizar
+    setTimeout(() => {
+        if (typeof window.limpiarEstilosResiduales === 'function') {
+            window.limpiarEstilosResiduales();
+        }
+    }, 400);
 }
 
 // ============================================================
@@ -2347,7 +2397,6 @@ function renderPieChartCanvas(container, chartData) {
 
 // ============================================================
 // CARGAR DATOS DEL DASHBOARD
-// 🆕 ENTREGA 5: Se usa ordersTomorrowCount para la nueva columna
 // ============================================================
 
 async function loadDashboardData() {
@@ -2431,7 +2480,6 @@ async function loadDashboardData() {
         if (dashConfig.show_orders_today) {
             const ordersTodayContainer = document.getElementById('dashboard-orders-today-container');
             if (ordersTodayContainer) {
-                // 🆕 ENTREGA 5: renderTarjetaPedidosHoy() ahora usa ordersTomorrowCount
                 ordersTodayContainer.innerHTML = renderTarjetaPedidosHoy(stats);
             }
         }
@@ -3197,7 +3245,7 @@ window.renderSalesByEmployee = renderSalesByEmployee;
 window.openDetailedHelp = openDetailedHelp;
 window.getAppVersion = getAppVersion;
 
-console.log('📦 App Controller v' + getAppVersion() + ' (ENTREGA 5: pedidos mañana en dashboard + fallback 2.2.1)');
+console.log('📦 App Controller v' + getAppVersion() + ' (v2.2.2: Corrección #1 - limpieza de estilos en navegación + fallback 2.2.2)');
 
 // ============================================================
 // INICIALIZACIÓN AUTOMÁTICA

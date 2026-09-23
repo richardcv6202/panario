@@ -28,6 +28,22 @@
 //   - ✅ NUEVO: Restaurar el header y el bottom-nav al cerrar el modal.
 //   - ✅ NUEVO: Detección robusta de móvil para el modal.
 //   - ✅ Sin cambios en otras funciones (popover, FAQ, tour, etc.)
+// 🆕 v2.2.4 (230926): FAQs AMPLIADAS A 315 PREGUNTAS
+//   - ✅ NUEVO: Total de FAQs = 315 (antes 203)
+//   - ✅ NUEVO: Se añadieron 112 preguntas nuevas consolidadas del
+//     documento "copia-resumen-de-faq-panario.pdf"
+//   - ✅ NUEVO: Categorías nuevas:
+//     * 🔒 Bloqueo por recetas (CORRECCIÓN #2)
+//     * 📅 Excluir días de la semana (CORRECCIÓN #4)
+//     * 🌙 Bloque del día anterior (CORRECCIÓN #6)
+//     * 📆 Producción por rango (CORRECCIÓN #7)
+//     * 🐛 Correcciones finales 220926
+//     * 📄 Reportes y exportaciones
+//     * 🔍 Auditoría y vendedor
+//     * 🎨 PWA y pantalla completa
+//   - ✅ Duplicados eliminados (consolidación de P43+P268, P72+P145, etc.)
+//   - ✅ Estructura de categorías reorganizada por relevancia
+//   - ✅ El buscador de FAQs sigue funcionando (filtra por número o texto)
 // ============================================================
 
 window.HelpModule = {};
@@ -43,8 +59,6 @@ const IFRAME_LOAD_TIMEOUT_MS = 8000;
 // ============================================================
 // 🆕 v2.2.3: ESTADO GLOBAL DEL BLOQUEO DE LA APP
 // ============================================================
-// Guarda el estado original del #appScreen y del header/bottom-nav
-// para poder restaurarlo al cerrar el modal de ayuda.
 
 let _helpAppBlockState = null;
 
@@ -157,13 +171,6 @@ window.isMobileDevice = isMobileDevice;
 // ============================================================
 // 🆕 v2.2.3: BLOQUEAR LA APP (ocultar header + bottom-nav + inert)
 // ============================================================
-// 
-// Mientras el modal de ayuda está abierto, ocultamos la app para:
-//   1. Evitar que el header de la app capture clicks del modal (bug).
-//   2. Mejorar el rendimiento visual (no hay doble capa).
-//   3. Evitar scroll de la app detrás del modal.
-// 
-// Guardamos el estado original para restaurarlo al cerrar.
 
 function _bloquearAppMientrasAyuda() {
     try {
@@ -176,7 +183,6 @@ function _bloquearAppMientrasAyuda() {
         const header = appScreen ? appScreen.querySelector('header') : document.querySelector('#appScreen > header');
         const bottomNav = document.querySelector('.bottom-nav');
         
-        // Guardar estado original
         _helpAppBlockState = {
             appScreen: appScreen,
             appScreenOriginalVisibility: appScreen ? appScreen.style.visibility : '',
@@ -186,18 +192,14 @@ function _bloquearAppMientrasAyuda() {
             bottomNavOriginalVisibility: bottomNav ? bottomNav.style.visibility : ''
         };
         
-        // Ocultar header de la app
         if (header) {
             header.style.setProperty('visibility', 'hidden', 'important');
         }
         
-        // Ocultar bottom-nav
         if (bottomNav) {
             bottomNav.style.setProperty('visibility', 'hidden', 'important');
         }
         
-        // 🆕 Añadir `inert` al appScreen si el navegador lo soporta.
-        // Esto hace que TODO el subárbol del appScreen ignore eventos.
         if (appScreen && typeof appScreen.inert !== 'undefined') {
             try {
                 appScreen.inert = true;
@@ -216,7 +218,6 @@ function _restaurarAppTrasAyuda() {
         
         const { appScreen, appScreenOriginalVisibility, header, headerOriginalVisibility, bottomNav, bottomNavOriginalVisibility } = _helpAppBlockState;
         
-        // Restaurar header
         if (header) {
             if (headerOriginalVisibility) {
                 header.style.visibility = headerOriginalVisibility;
@@ -225,7 +226,6 @@ function _restaurarAppTrasAyuda() {
             }
         }
         
-        // Restaurar bottom-nav
         if (bottomNav) {
             if (bottomNavOriginalVisibility) {
                 bottomNav.style.visibility = bottomNavOriginalVisibility;
@@ -234,7 +234,6 @@ function _restaurarAppTrasAyuda() {
             }
         }
         
-        // 🆕 Quitar `inert`
         if (appScreen) {
             try {
                 appScreen.inert = false;
@@ -372,7 +371,6 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
     const modal = document.createElement('div');
     modal.id = 'ayuda-modal';
     
-    // 🆕 v2.2.3: overlay bloqueante - cubre el 100% y captura TODOS los eventos
     modal.style.setProperty('position', 'fixed', 'important');
     modal.style.setProperty('top', '0', 'important');
     modal.style.setProperty('left', '0', 'important');
@@ -390,10 +388,8 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
     modal.style.setProperty('padding', isMobile ? '0' : '20px', 'important');
     modal.style.setProperty('animation', 'ayudaModalFadeIn 0.25s ease', 'important');
     modal.style.setProperty('overflow', 'hidden', 'important');
-    // 🆕 v2.2.3: Garantizar que el overlay capture TODOS los eventos
     modal.style.setProperty('pointer-events', 'auto', 'important');
     modal.style.setProperty('isolation', 'isolate', 'important');
-    // 🆕 v2.2.3: Evitar scroll del body detrás
     modal.style.setProperty('overscroll-behavior', 'contain', 'important');
     
     if (!document.getElementById('ayuda-modal-styles')) {
@@ -488,10 +484,8 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
     document.body.appendChild(modal);
     forzarModalAlFrente(modal);
     
-    // 🆕 v2.2.3: Bloquear la app visualmente mientras el modal está abierto
     _bloquearAppMientrasAyuda();
     
-    // Bloquear scroll del body (compatible con modal.js v2.0.9+)
     if (typeof window.lockBodyScroll === 'function') {
         window.lockBodyScroll();
     } else {
@@ -540,17 +534,13 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
         }, IFRAME_LOAD_TIMEOUT_MS);
     }
     
-    // 🆕 v2.2.3: Click sobre el overlay (fuera del container) → cerrar
     modal.addEventListener('click', function(e) {
-        // Solo cerrar si el click fue directamente en el overlay
-        // (no en el container ni en sus hijos)
         if (e.target === modal) {
             e.stopPropagation();
             cerrarAyudaModal();
         }
     });
     
-    // 🆕 v2.2.3: Prevenir que eventos se propaguen al body/appScreen
     modal.addEventListener('mousedown', function(e) { e.stopPropagation(); });
     modal.addEventListener('mouseup', function(e) { e.stopPropagation(); });
     modal.addEventListener('touchstart', function(e) { e.stopPropagation(); }, { passive: true });
@@ -558,7 +548,6 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
     modal.addEventListener('pointerdown', function(e) { e.stopPropagation(); });
     modal.addEventListener('wheel', function(e) { e.stopPropagation(); }, { passive: true });
     
-    // Escape cierra el modal
     const escHandler = function(e) {
         if (e.key === 'Escape') {
             e.stopPropagation();
@@ -639,10 +628,8 @@ function cerrarAyudaModal() {
             window._ayudaModalState = null;
         }
         
-        // 🆕 v2.2.3: Restaurar la app (header + bottom-nav + inert)
         _restaurarAppTrasAyuda();
         
-        // Restaurar scroll del body
         if (typeof window.unlockBodyScroll === 'function') {
             window.unlockBodyScroll();
         } else if (window._ayudaModalPrevOverflow !== undefined) {
@@ -650,7 +637,6 @@ function cerrarAyudaModal() {
             delete window._ayudaModalPrevOverflow;
         }
         
-        // Limpiar estilos residuales
         if (typeof window.limpiarEstilosResiduales === 'function') {
             setTimeout(() => {
                 window.limpiarEstilosResiduales();
@@ -1567,13 +1553,17 @@ function initHelpButton() {
 }
 
 // ============================================================
-// BASE DE DATOS DE FAQs NUMERADAS
+// BASE DE DATOS DE FAQs NUMERADAS — 315 PREGUNTAS
 // ============================================================
-// 203 preguntas (P1-P315 con huecos en P143-P260)
+// v2.2.4: Ampliado de 203 a 315 preguntas.
+// Consolidación del documento "copia-resumen-de-faq-panario.pdf".
+// Duplicados eliminados y categorías reorganizadas.
 // ============================================================
 
 const FAQS_DB = [
-    // ============ GENERALES ============
+    // ============================================================
+    // 🏠 GENERALES (P1-P11)
+    // ============================================================
     { cat: '🏠 Generales', q: '¿Qué es Panario?', a: 'Es una aplicación PWA para la gestión integral de una panadería artesanal. Permite gestionar insumos, recetas, productos, ventas, pedidos y finanzas.' },
     { cat: '🏠 Generales', q: '¿Por qué se llama "Panario"?', a: 'El nombre es un juego con "pan" y "diario" (de contabilidad). Es corto, original y describe perfectamente el propósito: llevar el diario contable de una panadería.\n\n📋 Otros nombres que se consideraron fueron:\n• PanConta (fusión directa de "pan" y "contabilidad")\n• HarinaBalance (evoca el ingrediente principal y el equilibrio financiero)\n• MasaYCuentas (rimado y amigable)\n• BakeryLedger (en inglés, pensando en expansión)\n\nFinalmente se eligió "Panario" por ser único, breve y fácil de recordar.' },
     { cat: '🏠 Generales', q: '¿Funciona sin conexión?', a: 'Sí, Panario funciona completamente offline. Todos tus datos están guardados localmente en tu dispositivo.' },
@@ -1582,11 +1572,13 @@ const FAQS_DB = [
     { cat: '🏠 Generales', q: '¿Cómo restauro una copia de seguridad?', a: 'En ⚙️ Herramientas, haz clic en "📤 Importar copia de seguridad" y selecciona el archivo .db. Se reemplazarán todos los datos actuales.' },
     { cat: '🏠 Generales', q: '¿Puedo exportar solo recetas y productos?', a: 'Sí. En Herramientas usa "🧩 Salva diferencial" para exportar/importar solo las recetas y productos, sin afectar al resto de la base de datos.' },
     { cat: '🏠 Generales', q: '¿Qué navegadores soporta Panario?', a: 'Chrome, Firefox, Edge, Safari (versiones recientes). Se recomienda Chrome para mejor rendimiento.' },
-    { cat: '🏠 Generales', q: '¿Cómo instalo Panario en mi móvil?', a: 'Abre Panario en el navegador y usa "Añadir a pantalla de inicio" o "Instalar aplicación".' },
+    { cat: '🏠 Generales', q: '¿Cómo instalo Panario en mi móvil?', a: 'Abre Panario en Chrome (con HTTPS), espera a que aparezca el ícono de instalación en la barra de direcciones (o usa el menú ⋮ → "Instalar aplicación"), y pulsa "Instalar". La app aparecerá en tu pantalla de inicio.' },
     { cat: '🏠 Generales', q: '¿Quién desarrolló Panario?', a: 'Panario fue desarrollado por Ricardo Castillo Valdés. Puedes contactarlo por WhatsApp (+53 55031725) o email (3sayricardo@gmail.com).' },
-    { cat: '🏠 Generales', q: '¿Por qué no suenan las notificaciones?', a: 'Los navegadores modernos bloquean el audio hasta que el usuario interactúa con la página. Haz clic en cualquier parte de la app y las notificaciones sonarán desde ese momento.' },
+    { cat: '🏠 Generales', q: '¿Por qué no suenan las notificaciones?', a: 'Los navegadores modernos bloquean el audio hasta que el usuario interactúa con la página. Desde v2.1.10, el AudioContext se desbloquea automáticamente con el primer clic, toque o tecla. Después de ese gesto, todas las notificaciones sonarán correctamente.' },
 
-    // ============ DASHBOARD ============
+    // ============================================================
+    // 📊 DASHBOARD (P12-P23)
+    // ============================================================
     { cat: '📊 Dashboard', q: '¿Puedo personalizar qué veo en el Dashboard?', a: 'Sí. Ve a tu Perfil y en la sección "📊 Elementos visibles en el Dashboard" activa o desactiva las secciones que quieres ver.' },
     { cat: '📊 Dashboard', q: '¿Qué significa "Días con ventas"?', a: 'Es el número de días únicos en los que registraste al menos una venta. No cuenta días sin actividad.' },
     { cat: '📊 Dashboard', q: '¿Cómo se calcula el "Promedio diario"?', a: 'Se divide el total de ingresos entre los días con ventas. Ej: si vendiste $1000 en 5 días, el promedio es $200/día.' },
@@ -1600,7 +1592,9 @@ const FAQS_DB = [
     { cat: '📊 Dashboard', q: '¿Qué son las "Ventas por empleado"?', a: 'Es un ranking de los usuarios de tu negocio según sus ventas registradas. Te permite evaluar el desempeño del equipo.' },
     { cat: '📊 Dashboard', q: '¿Qué significa "Pedidos mañana" en el Dashboard?', a: 'Es el número total de pedidos activos cuya fecha de entrega es mañana. Excluye cancelados, entregados y los que compraron por lista de espera.' },
 
-    // ============ INSUMOS ============
+    // ============================================================
+    // 🛒 INSUMOS (P24-P29)
+    // ============================================================
     { cat: '🛒 Insumos', q: '¿Qué es un insumo?', a: 'Es todo lo que compras para producir: harina, levadura, yogur, mantequilla, etc.' },
     { cat: '🛒 Insumos', q: '¿Cómo registro un insumo?', a: 'Ve a 🛒 Insumos → clic en "➕ Nuevo Insumo". Completa nombre, unidad, costo, stock y stock mínimo.' },
     { cat: '🛒 Insumos', q: '¿Los insumos se descuentan automáticamente?', a: 'Sí. Al vender un producto o confirmar un pedido, el stock de los insumos se descuenta según la receta asociada.' },
@@ -1608,7 +1602,9 @@ const FAQS_DB = [
     { cat: '🛒 Insumos', q: '¿Puedo eliminar un insumo?', a: 'Sí, pero se aplica soft-delete. Puedes limpiarlo permanentemente desde Herramientas.' },
     { cat: '🛒 Insumos', q: '¿Los usuarios no-admin pueden editar insumos?', a: 'No. Solo los administradores pueden crear, editar o eliminar insumos. Los usuarios regulares tienen modo solo lectura.' },
 
-    // ============ RECETAS ============
+    // ============================================================
+    // 📖 RECETAS (P30-P38)
+    // ============================================================
     { cat: '📖 Recetas', q: '¿Qué es una receta?', a: 'Es la fórmula de producción que indica qué insumos se necesitan y en qué cantidad. Ej: "Pan de Yogur" con harina, levadura y yogur.' },
     { cat: '📖 Recetas', q: '¿Cómo se calcula el costo de una receta?', a: 'La suma de (cantidad × costo_unitario) de todos los insumos asociados.' },
     { cat: '📖 Recetas', q: '¿Qué hace el botón "🔄 Recalcular"?', a: 'Permite ajustar una receta para un nuevo rendimiento usando regla de 3. Ej: receta para 33 panes → quiero 50 panes.' },
@@ -1619,26 +1615,34 @@ const FAQS_DB = [
     { cat: '📖 Recetas', q: '¿Por qué no veo los costos de las recetas?', a: 'Los costos son información sensible del negocio. Solo los administradores los ven. Como usuario regular, ves los ingredientes y cantidades pero no los precios.' },
     { cat: '📖 Recetas', q: '¿Puedo recalcular una receta siendo usuario no-admin?', a: 'Sí. Puedes recalcular, pero solo podrás guardar el resultado como una receta nueva (no modificar la original).' },
 
-    // ============ PRODUCTOS ============
+    // ============================================================
+    // 🏷️ PRODUCTOS (P39-P43)
+    // ============================================================
     { cat: '🏷️ Productos', q: '¿Qué es un producto?', a: 'Es lo que vendes al cliente. Ej: "Jaba de Pan" con precio $550 y 10 panes por jaba.' },
     { cat: '🏷️ Productos', q: '¿Cómo asocio un producto a una receta?', a: 'Al crear/editar el producto, selecciona la receta en el desplegable "📋 Receta asociada".' },
     { cat: '🏷️ Productos', q: '¿Qué es "cantidad por unidad"?', a: 'Es cuántas unidades del producto contiene una unidad de venta. Ej: una jaba tiene 10 panes → cantidad_por_unidad = 10.' },
     { cat: '🏷️ Productos', q: '¿Cómo sé el margen de ganancia?', a: 'En la lista de productos, se muestra el margen calculado automáticamente: (precio - costo) / precio × 100.' },
+    { cat: '🏷️ Productos', q: '¿Por qué antes no aparecían productos por defecto al crear una cuenta nueva?', a: 'Era un bug: el sistema intentaba insertar los productos por defecto en una tabla llamada `products` (en inglés) que no existía. La tabla real es `productos` (en español). Ahora el sistema inserta correctamente en `productos`, con las columnas correctas (nombre, precio_venta, unidad_venta, etc.). Si creas una cuenta nueva, verás los 18 productos por defecto cargados automáticamente.' },
 
-    // ============ VENTAS ============
+    // ============================================================
+    // 💰 VENTAS (P44-P55)
+    // ============================================================
     { cat: '💰 Ventas', q: '¿Cómo registro una venta?', a: 'Ve a 💰 Ventas → clic en "➕ Nueva Venta". Selecciona el producto, cantidad, precio, método de pago y cliente.' },
     { cat: '💰 Ventas', q: '¿Qué es una "venta liberada"?', a: 'Es una venta sin cliente identificado, tipo "mostrador anónimo". Se agrupa visualmente y no permite deuda.' },
     { cat: '💰 Ventas', q: '¿Qué es una deuda?', a: 'Es una venta donde el cliente no pagó al momento. Se marca con is_debt = 1 y paid = 0.' },
     { cat: '💰 Ventas', q: '¿Cómo cobro una deuda?', a: 'En Ventas, ve al filtro "💳 Deudas", encuentra al cliente y haz clic en "💰 Cobrar".' },
-    { cat: '💰 Ventas', q: '¿Puedo anular una venta?', a: 'Sí. En el detalle de la venta, clic en "🚫 Anular". Se repondrá el stock automáticamente.' },
+    { cat: '💰 Ventas', q: '¿Puedo anular una venta?', a: 'Sí. En el detalle de la venta, clic en "🚫 Anular". Se repondrá el stock automáticamente. La venta queda marcada como "ANULADA" pero visible, y puede restaurarse.' },
+    { cat: '💰 Ventas', q: '¿Qué diferencia hay entre "Anular" y "Eliminar" una venta?', a: '🚫 **Anular:** marca la venta como voided=1, repone el stock, y la fila permanece visible con estado "ANULADA". Se puede restaurar después.\n\n🗑️ **Eliminar:** solo está disponible en Herramientas → Eliminación por error. Borra permanentemente la venta, NO repone stock, y no se puede recuperar.' },
+    { cat: '💰 Ventas', q: '¿Cómo restauro una venta anulada?', a: 'Ve al detalle de la venta anulada (borde gris) y pulsa "🔄 Restaurar". Se repondrá el stock descontado y la venta volverá a estado normal.' },
     { cat: '💰 Ventas', q: '¿Cómo edito el nombre del cliente?', a: 'Al editar una venta, el campo "👤 Comprador" es editable. Si la venta está vinculada a un pedido, se desvinculará.' },
     { cat: '💰 Ventas', q: '¿Para qué sirve registrar un día sin ventas?', a: 'Sirve para llevar un historial y entender mejor las estadísticas. Sin esta información, un día sin ventas parecería simplemente "un mal día" cuando en realidad no abriste.' },
     { cat: '💰 Ventas', q: '¿Qué motivos puedo usar para un día sin ventas?', a: 'Hay 8 predefinidos: ⚡ Apagón, 🛒 Falta de insumos, 🎉 Feriado, 🏖️ Vacaciones, 🏥 Enfermedad, 🔧 Mantenimiento, 🌧️ Mal clima, y 🔄 Otro.' },
     { cat: '💰 Ventas', q: '¿Cómo veo quién hizo cada venta?', a: 'En el detalle de la venta, en la sección de Auditoría, aparece "👤 Creado por: [nombre del vendedor]".' },
-    { cat: '💰 Ventas', q: '¿Qué hago si veo ventas duplicadas?', a: 'Ve a ⚙️ Herramientas → 🚨 Eliminación por error. Selecciona las ventas duplicadas y elimínalas permanentemente.' },
-    { cat: '💰 Ventas', q: '¿Puedo filtrar ventas por vendedor?', a: 'Actualmente no hay filtro directo, pero puedes ver el ranking de ventas por empleado en el Dashboard.' },
+    { cat: '💰 Ventas', q: '¿En qué orden aparecen las ventas dentro de un mismo día?', a: 'Las ventas se ordenan por ID ascendente dentro de cada día. Es decir, la primera venta del día (#42) aparece primero, luego la #43, #44, etc.' },
 
-    // ============ PEDIDOS ============
+    // ============================================================
+    // 📋 PEDIDOS (P56-P72)
+    // ============================================================
     { cat: '📋 Pedidos', q: '¿Cuál es la diferencia entre pedido y venta?', a: 'Un pedido es una solicitud de un cliente. Una venta es una transacción completada. Los pedidos no son deudas hasta que se entregan.' },
     { cat: '📋 Pedidos', q: '¿Qué estados tiene un pedido?', a: 'Pendiente, Confirmado, En producción, Listo, Entregado, Cancelado, En lista de espera, Compró por lista de espera.' },
     { cat: '📋 Pedidos', q: '¿Qué es la lista de espera?', a: 'Cuando la demanda supera la oferta, los clientes se ponen en cola. Al haber disponibilidad, se les atiende en orden.' },
@@ -1649,61 +1653,85 @@ const FAQS_DB = [
     { cat: '📋 Pedidos', q: '¿Cómo gestiono la lista de espera?', a: 'Ve a 📋 Pedidos → botón "⏰ Lista de espera" o a ⚙️ Herramientas → "⏰ Gestionar lista de espera".' },
     { cat: '📋 Pedidos', q: '¿Qué es la "cancelación global de pedidos"?', a: 'Es una herramienta de admin que cancela TODOS los pedidos en un rango de fechas.' },
     { cat: '📋 Pedidos', q: '¿Qué significa cada botón en la lista de espera?', a: '✅ Procesar → crea la venta. ❌ Cancelar → cancela el pedido y repone stock. 🗑️ Quitar → solo quita al cliente de la lista.' },
-    { cat: '📋 Pedidos', q: '¿Qué diferencia hay entre "Cancelar" y "Quitar"?', a: 'Cancelar → cambia el estado del pedido a "cancelado" y repone stock. Quitar → solo elimina al cliente de la lista.' },
+    { cat: '📋 Pedidos', q: '¿Qué diferencia hay entre "Cancelar" y "Quitar"?', a: 'Cancelar → cambia el estado del pedido a "cancelado" y repone stock. Quitar → solo elimina al cliente de la lista, el pedido vuelve a "pendiente".' },
+    { cat: '📋 Pedidos', q: '¿En qué orden aparecen los pedidos en la lista?', a: 'Los pedidos se ordenan por fecha de entrega ascendente y, dentro de la misma fecha, por ID ascendente. El primer pedido creado para esa fecha aparece primero.' },
+    { cat: '📋 Pedidos', q: '¿Puedo reprogramar solo los pedidos de un cliente?', a: 'Sí. En el modal de reprogramación hay un campo opcional "👤 Filtrar por cliente". Si lo rellenas, solo se reprograman los pedidos de ese cliente.' },
+    { cat: '📋 Pedidos', q: '¿Qué pasa con la causa y nota al reprogramar?', a: 'La causa y la nota se añaden automáticamente al campo de notas de cada pedido afectado, precedido del texto "Reprogramado: ". Ej: `Reprogramado: 🔄 Falta de insumos | Se pospone una semana`.' },
+    { cat: '📋 Pedidos', q: '¿Se puede deshacer una reprogramación?', a: 'No directamente. Deberás volver a reprogramar los pedidos a la fecha original o editar cada pedido manualmente.' },
+    { cat: '📋 Pedidos', q: '¿Los pedidos entregados se pueden reprogramar?', a: 'No. Solo se reprograman pedidos en estado pendiente, confirmado, en producción o listo.' },
+    { cat: '📋 Pedidos', q: '¿La reprogramación conserva la hora de entrega?', a: 'Sí. Solo cambia la fecha, la hora se mantiene igual que antes (por ejemplo, si era a las 10:00, sigue siendo a las 10:00).' },
+    { cat: '📋 Pedidos', q: '¿Qué pasa si la fecha destino ya tiene pedidos?', a: 'Los pedidos reprogramados se añaden a los ya existentes. Se respeta el cupo de producción si está configurado.' },
+    { cat: '📋 Pedidos', q: '¿Quién puede reprogramar pedidos?', a: 'Solo el administrador del negocio. Es una operación crítica que afecta a múltiples clientes a la vez.' },
+    { cat: '📋 Pedidos', q: '¿La reprogramación afecta el stock?', a: 'No directamente. El stock ya fue descontado (o no) según el estado original del pedido. La reprogramación solo cambia la fecha.' },
 
-    // ============ CORRIENTE ============
+    // ============================================================
+    // ⚡ CORRIENTE (P73-P76)
+    // ============================================================
     { cat: '⚡ Corriente', q: '¿Cómo funcionan los horarios de corriente?', a: 'Define el patrón (ej: 3h corriente / 12h apagón) y el sistema calcula automáticamente todos los bloques de cada día.' },
     { cat: '⚡ Corriente', q: '¿Qué necesito para configurar corriente?', a: 'Una fecha y hora de referencia donde conociste un bloque de corriente. Ej: "Hoy tuve corriente de 10:00 a 13:00".' },
     { cat: '⚡ Corriente', q: '¿Puedo descargar el reporte de corriente?', a: 'Sí. En Herramientas → ⚡ Gestionar Horarios → pestaña 📊 Reporte, elige semanal o mensual.' },
     { cat: '⚡ Corriente', q: '¿Por qué el calendario muestra algunos días sin corriente?', a: 'Porque según el patrón configurado, ese día no tiene bloques de corriente. Aparecen en gris.' },
 
-    // ============ PREMIOS ============
+    // ============================================================
+    // 🏆 PREMIOS (P77-P80)
+    // ============================================================
     { cat: '🏆 Premios', q: '¿Cómo funciona el sistema de premios?', a: 'Premia a tus mejores clientes. Se calcula automáticamente el cliente con mayor total gastado en el mes y en el año.' },
     { cat: '🏆 Premios', q: '¿Dónde configuro los premios?', a: 'Ve a 💰 Ventas → botón 🏆 Premios.' },
     { cat: '🏆 Premios', q: '¿Por qué hay tres opciones para calcular el premio anual?', a: 'Cada negocio es diferente. Puedes elegir entregar el premio en Navidad (24 dic), a fin de año (31 dic) o al inicio del siguiente año.' },
     { cat: '🏆 Premios', q: '¿Qué pasa si tengo el sistema de premios desactivado?', a: 'El selector de cálculo anual se guarda igualmente, pero no se muestra la tarjeta de premios en el Dashboard.' },
 
-    // ============ NOTIFICACIONES Y AYUDA ============
+    // ============================================================
+    // 🔔 NOTIFICACIONES Y AYUDA (P81-P90)
+    // ============================================================
     { cat: '🔔 Notificaciones', q: '¿Puedo cambiar el sonido de las notificaciones?', a: 'Sí. Ve a tu Perfil → 🔔 Sonido de notificaciones. Puedes elegir entre 5 sonidos embutidos o desactivarlo.' },
     { cat: '🔔 Notificaciones', q: '¿Por qué no se repiten las notificaciones?', a: 'Una vez que abres el modal de notificaciones, se marcan como vistas y no se vuelven a mostrar.' },
     { cat: '🔔 Notificaciones', q: '¿Cómo abro el Centro de Ayuda?', a: 'Haz clic en el botón ❓ de la barra superior.' },
     { cat: '🔔 Notificaciones', q: '¿Qué es la "Ayuda detallada"?', a: 'Es un manual completo que se abre DENTRO de la app (en esta misma ventana).' },
     { cat: '🔔 Notificaciones', q: '¿Puedo volver a ver el tutorial?', a: 'Sí. Ve a Ayuda → Tutorial Interactivo.' },
     { cat: '🔔 Notificaciones', q: '¿Cómo contacto al desarrollador?', a: 'En Ayuda → Créditos. WhatsApp: +53 55031725, Email: 3sayricardo@gmail.com.' },
-    { cat: '🔔 Notificaciones', q: '¿Por qué la ayuda se abre detrás de la app?', a: 'Era un bug de z-index. Ahora se corrigió y la ayuda se abre siempre al frente.' },
-    { cat: '🔔 Notificaciones', q: '¿El Centro de Ayuda bloquea la pantalla?', a: 'No. Es un menú flotante que aparece debajo del botón ❓.' },
+    { cat: '🔔 Notificaciones', q: '¿Por qué la ayuda se abre detrás de la app?', a: 'Era un bug de z-index. Ahora se corrigió y la ayuda se abre siempre al frente. Si aún lo ves detrás, recarga la página.' },
+    { cat: '🔔 Notificaciones', q: '¿El Centro de Ayuda bloquea la pantalla?', a: 'No. Es un menú flotante que aparece debajo del botón ❓. Se cierra automáticamente al hacer clic fuera o presionar Escape.' },
     { cat: '🔔 Notificaciones', q: '¿Por qué en móvil la ayuda se abre en pestaña nueva?', a: 'En móvil, los iframes son problemáticos. Por eso la ayuda detallada se abre directamente en una pestaña nueva.' },
+    { cat: '🔔 Notificaciones', q: '¿Por qué el header de la app desaparece cuando abro la ayuda detallada?', a: 'Es intencional. Para evitar que el header capture clicks del modal (bug anterior), ocultamos temporalmente el header y el bottom-nav de la app. Al cerrar la ayuda, se restauran automáticamente.' },
 
-    // ============ MULTIUSUARIO ============
+    // ============================================================
+    // 👥 MULTIUSUARIO (P91-P95)
+    // ============================================================
     { cat: '👥 Multiusuario', q: '¿Puedo tener varios usuarios en el mismo negocio?', a: 'Sí. Al registrarte puedes crear un negocio nuevo o unirte a uno existente con un código de invitación de 8 caracteres.' },
     { cat: '👥 Multiusuario', q: '¿Cómo comparto el código de invitación?', a: 'En tu Perfil, junto al nombre del negocio, verás el código con un botón "📋 Copiar".' },
     { cat: '👥 Multiusuario', q: '¿Quién es el administrador del negocio?', a: 'El primer usuario que crea el negocio es el administrador.' },
     { cat: '👥 Multiusuario', q: '¿Cómo promuevo a un usuario a admin?', a: 'Ve a ⚙️ Herramientas → 👥 Gestionar Usuarios → botón 👑 junto al usuario.' },
     { cat: '👥 Multiusuario', q: '¿Qué puede hacer un admin que un usuario no puede?', a: 'Crear/editar/eliminar insumos, recetas, productos. Gestionar usuarios. Hacer copias completas. Ver costos de recetas.' },
-    { cat: '👥 Multiusuario', q: '¿Necesito estar en la misma red WiFi para unirme a un negocio con el código de invitación?', a: 'No. El código de invitación NO requiere que estés en la misma red WiFi. El código es un identificador único del negocio que se guarda en la base de datos LOCAL.' },
-    { cat: '👥 Multiusuario', q: '¿Qué información contiene el código de invitación?', a: 'El código de invitación es un identificador de 8 caracteres alfanuméricos (ej: ABC12345) que se asigna automáticamente al crear un negocio. NO contiene información personal.' },
-    { cat: '👥 Multiusuario', q: '¿Cómo se determina el código de invitación desde el entorno del invitado?', a: 'Cuando alguien intenta unirse con un código: el sistema busca el código en la base de datos LOCAL del dispositivo. Si lo encuentra, muestra una vista previa del negocio.' },
 
-    // ============ HERRAMIENTAS ============
+    // ============================================================
+    // ⚙️ HERRAMIENTAS (P96-P99)
+    // ============================================================
     { cat: '⚙️ Herramientas', q: '¿Qué hace "Reiniciar base de datos"?', a: 'Elimina TODOS los datos excepto usuarios y temas. Contraseña: "panario".' },
     { cat: '⚙️ Herramientas', q: '¿Qué diferencia hay entre "Limpiar datos eliminados" y "Eliminación por error"?', a: 'Ambas son destructivas. "Limpiar datos eliminados" borra todos los registros con soft-delete. "Eliminación por error" permite seleccionar pedidos o ventas específicos.' },
     { cat: '⚙️ Herramientas', q: '¿Cómo fusiono dos bases de datos?', a: 'Ve a ⚙️ Herramientas → 📥 Importar → 🔀 Fusionar bases de datos.' },
     { cat: '⚙️ Herramientas', q: '¿Qué pasa si importo datos duplicados?', a: 'El sistema evita duplicados al fusionar: compara por UUID y solo actualiza si el backup es más reciente.' },
 
-    // ============ PRODUCCIÓN ============
+    // ============================================================
+    // 🔨 PRODUCCIÓN (P100-P112)
+    // ============================================================
     { cat: '🔨 Producción', q: '¿Qué es el horario de producción?', a: 'Es el bloque de corriente que has marcado como el momento en que hornearás tu producción.' },
     { cat: '🔨 Producción', q: '¿Cómo defino el horario de producción para un día?', a: 'Ve a ⚙️ Herramientas → ⚡ Gestionar Horarios → 📅 Calendario.' },
     { cat: '🔨 Producción', q: '¿Qué significa "Pedidos: 5/50"?', a: 'Significa que hay 5 pedidos reservados para ese día y la producción programada es de 50 unidades.' },
     { cat: '🔨 Producción', q: '¿Por qué no puedo crear más pedidos para un día?', a: 'Porque la producción de ese día está completa.' },
     { cat: '🔨 Producción', q: '¿Cómo elimino la producción de un día?', a: 'Ve al día en el calendario, haz clic en el modal de detalle y pulsa el botón 🗑️.' },
-    { cat: '🔨 Producción', q: '¿Las ventas directas afectan el cupo de pedidos?', a: 'Sí. El cálculo es: m - pedidos - ventas_directas.' },
-    { cat: '🔨 Producción', q: '¿Puedo vender más de la cantidad de producción?', a: 'Sí, las ventas directas no se bloquean.' },
-    { cat: '🔨 Producción', q: '¿Qué pasa si no defino producción para un día?', a: 'No hay límite de pedidos para ese día.' },
-    { cat: '🔨 Producción', q: '¿Puedo producir cantidades que no sean enteras?', a: 'Sí. El campo "Cantidad a producir" acepta decimales.' },
-    { cat: '🔨 Producción', q: '¿Cómo se calcula la cantidad disponible si la producción es decimal?', a: 'La fórmula es: disponibles = cantidad_produccion - pedidos_reservados - ventas_directas.' },
+    { cat: '🔨 Producción', q: '¿Las ventas directas afectan el cupo de pedidos?', a: 'Sí. Si vendes directamente sin pedido, esas unidades se descuentan del cupo disponible. El cálculo es: cantidad_produccion - pedidos - ventas_directas.' },
+    { cat: '🔨 Producción', q: '¿Puedo vender más de la cantidad de producción?', a: 'Sí, las ventas directas no se bloquean. Solo los pedidos respetan el cupo de producción.' },
+    { cat: '🔨 Producción', q: '¿Qué pasa si no defino producción para un día?', a: 'No hay límite de pedidos para ese día. La tarjeta no muestra el bloque de producción.' },
+    { cat: '🔨 Producción', q: '¿Puedo producir cantidades que no sean enteras?', a: 'Sí. El campo "Cantidad a producir" acepta decimales. Por ejemplo:\n• 6.5 significa 6 jabas y media\n• 2.25 significa 2 jabas y cuarto\n• 0.5 significa media jaba\n\nEsto es útil cuando produces jabas de diferentes tamaños.' },
+    { cat: '🔨 Producción', q: '¿Cómo se calcula la cantidad disponible si la producción es decimal?', a: 'La fórmula es: disponibles = cantidad_produccion - pedidos_reservados - ventas_directas.\n\nEjemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 = 0.5 disponibles.' },
+    { cat: '🔨 Producción', q: '¿Se puede guardar una cantidad con muchos decimales?', a: 'Sí, pero se recomienda usar máximo 2 decimales para mayor claridad. El sistema los mostrará formateados (ej: 6.33).' },
+    { cat: '🔨 Producción', q: '¿Qué pasa si intento guardar cantidad 0 o negativa?', a: 'El sistema muestra un error: "⚠️ La cantidad a producir debe ser mayor a 0". Debes ingresar al menos 0.01.' },
+    { cat: '🔨 Producción', q: '¿Por qué no puedo crear un pedido aunque la fecha tiene producción configurada?', a: 'Porque el día está completo. Opciones:\n• Elegir otra fecha\n• Pedirle al admin que aumente la producción del día' },
 
-    // ============ REPROGRAMACIÓN ============
-    { cat: '🔄 Reprogramación', q: '¿Cómo reprogramo pedidos a otra fecha?', a: 'Ve a ⚙️ Herramientas → 🔄 Reprogramar Pedidos por Rango.' },
+    // ============================================================
+    // 🔄 REPROGRAMACIÓN (P113-P120)
+    // ============================================================
+    { cat: '🔄 Reprogramación', q: '¿Cómo reprogramo pedidos a otra fecha?', a: 'Ve a ⚙️ Herramientas → 🔄 Reprogramar Pedidos por Rango. Selecciona el rango de fechas origen, la fecha destino, la causa y confirma.' },
     { cat: '🔄 Reprogramación', q: '¿Puedo reprogramar solo los pedidos de un cliente?', a: 'Sí. En el modal de reprogramación hay un campo opcional de cliente.' },
     { cat: '🔄 Reprogramación', q: '¿Qué pasa con la causa y nota al reprogramar?', a: 'La causa y nota se añaden automáticamente al campo de notas de cada pedido.' },
     { cat: '🔄 Reprogramación', q: '¿Se puede deshacer una reprogramación?', a: 'No directamente. Deberás volver a reprogramar los pedidos a la fecha original.' },
@@ -1712,38 +1740,60 @@ const FAQS_DB = [
     { cat: '🔄 Reprogramación', q: '¿Quién puede reprogramar pedidos?', a: 'Solo el administrador del negocio.' },
     { cat: '🔄 Reprogramación', q: '¿La reprogramación afecta el stock?', a: 'No directamente. El stock ya fue descontado según el estado original del pedido.' },
 
-    // ============ PWA ============
-    { cat: '📱 PWA', q: '¿Por qué la app no funciona offline después de limpiar el caché?', a: 'Si limpias el caché de Chrome, se borran los archivos de la PWA. Abre Panario con conexión a internet una vez para que se vuelvan a cachear.' },
+    // ============================================================
+    // 📱 PWA (P121-P126)
+    // ============================================================
+    { cat: '📱 PWA', q: '¿Por qué la app no funciona offline después de limpiar el caché?', a: 'Si limpias el caché de Chrome, se borran los archivos de la PWA. Abre Panario con conexión a internet una vez para que se vuelvan a cachear. En la versión 2.2.1, el Service Worker detecta esta situación y re-descarga todo automáticamente.' },
     { cat: '📱 PWA', q: '¿Cómo reinstalo la PWA correctamente?', a: 'Desinstala la PWA, limpia el caché del navegador, abre Panario online y vuelve a instalarla.' },
     { cat: '📱 PWA', q: '¿Qué hacer si veo "Sin conexión" pero tengo internet?', a: 'Es posible que el Service Worker tenga una versión antigua. Ve a offline.html y pulsa "Limpiar caché y recargar".' },
-    { cat: '📱 PWA', q: '¿Por qué la ayuda no se abre en el móvil?', a: 'En móvil, la ayuda detallada se abre directamente en una pestaña nueva.' },
-    { cat: '📱 PWA', q: '¿Cómo ejecuto offline.html desde el móvil?', a: 'Abre el navegador y escribe tu-dominio.com/offline.html. O desconecta el WiFi y abre Panario: verás la página offline.html automáticamente.' },
-    { cat: '📱 PWA', q: '¿Qué hago si el navegador móvil no me deja abrir offline.html?', a: 'Abre Panario con conexión a internet y espera 5-10 segundos. El Service Worker repara el caché automáticamente.' },
+    { cat: '📱 PWA', q: '¿Por qué al instalar Panario desde Chrome no se abre a pantalla completa?', a: 'Chrome en Android no reconoce `display: "fullscreen"` como un modo instalable para generar un WebAPK. Solo acepta `standalone`. Se ha cambiado a `standalone` para que la instalación funcione correctamente.' },
+    { cat: '📱 PWA', q: '¿Qué diferencia hay entre `standalone` y `fullscreen`?', a: '`standalone` abre la app en una ventana propia sin barra de direcciones, pero mantiene la barra de estado (hora, batería). `fullscreen` oculta también la barra de estado. `standalone` es más estable y es el modo que Chrome Android acepta para instalación completa.' },
+    { cat: '📱 PWA', q: '¿Por qué al abrir desde WhatsApp funciona a pantalla completa?', a: 'Porque Android trata el enlace como un "App Link" (deep link). Android detecta que el enlace coincide con el `scope` y `start_url` de una PWA y la lanza en su contexto standalone. Esto no significa que la PWA esté instalada, solo que Android la está lanzando como app.' },
 
-    // ============ DUPLICADOS ============
+    // ============================================================
+    // 🔀 DUPLICADOS (P127-P130)
+    // ============================================================
     { cat: '🔀 Duplicados', q: '¿Cómo evito duplicados al importar?', a: 'Usa la opción "🔀 Fusionar bases de datos". El sistema compara por UUID.' },
     { cat: '🔀 Duplicados', q: '¿Qué pasa si importo datos que ya existen?', a: 'En modo fusión, los registros con mismo UUID se comparan por fecha de modificación. Gana el más reciente.' },
     { cat: '🔀 Duplicados', q: '¿Puedo importar la misma salva dos veces?', a: 'Sí, no habrá duplicados. El sistema detecta los registros ya importados.' },
     { cat: '🔀 Duplicados', q: '¿Cómo verifico si hay duplicados en mi base de datos?', a: 'Ve a ⚙️ Herramientas → 🚨 Eliminación por error.' },
 
-    // ============ VENDEDOR ============
+    // ============================================================
+    // 👤 VENDEDOR (P131-P133)
+    // ============================================================
     { cat: '👤 Vendedor', q: '¿Cómo sé quién vendió cada producto?', a: 'En el detalle de cada venta, en la sección de Auditoría, aparece "👤 Creado por: [nombre del vendedor]".' },
     { cat: '👤 Vendedor', q: '¿Puedo filtrar ventas por vendedor?', a: 'Actualmente no hay filtro directo, pero puedes ver el ranking de ventas por empleado en el Dashboard.' },
     { cat: '👤 Vendedor', q: '¿Qué pasa si un usuario es eliminado?', a: 'Sus ventas se mantienen, pero el nombre del vendedor aparecerá como "Desconocido" en la auditoría.' },
 
-    // ============ SONIDO Y PWA ============
-    { cat: '🔊 Sonido', q: '¿Por qué no suenan las notificaciones la primera vez?', a: 'Los navegadores bloquean el audio hasta que el usuario interactúa con la página.' },
-    { cat: '🔊 Sonido', q: '¿Tengo que hacer algo especial para activar el sonido?', a: 'No. Simplemente interactúa con la app (clic, toque o tecla).' },
-    { cat: '🔊 Sonido', q: '¿El sonido funciona si no he hecho login?', a: 'Sí. El audio se desbloquea con cualquier gesto, incluso en la pantalla de login.' },
-    { cat: '🔊 Sonido', q: '¿Qué sonidos hay disponibles?', a: 'Cinco sonidos: 🔔 Beep, 🎵 Chime, 💧 Pop, ⚠️ Alert, ✅ Success. Más la opción 🔇 Silencio.' },
+    // ============================================================
+    // 🔊 SONIDO (P134-P141)
+    // ============================================================
+    { cat: '🔊 Sonido', q: '¿Por qué no suenan las notificaciones la primera vez que abro la app?', a: 'Los navegadores modernos bloquean el audio hasta que el usuario interactúa con la página. Con la versión 2.1.10, el AudioContext se desbloquea automáticamente con el primer clic, toque o tecla que hagas en cualquier parte de la app (incluso en la pantalla de login).' },
+    { cat: '🔊 Sonido', q: '¿Tengo que hacer algo especial para activar el sonido?', a: 'No. Simplemente interactúa con la app (clic, toque, o pulsa una tecla). El audio se desbloquea automáticamente en ese momento. Verás en la consola un mensaje: "🔊 AudioContext desbloqueado correctamente".' },
+    { cat: '🔊 Sonido', q: '¿El sonido funciona si no he hecho login todavía?', a: 'Sí. Desde la versión 2.1.10, el audio se desbloquea con cualquier gesto, incluso en la pantalla de login.' },
+    { cat: '🔊 Sonido', q: '¿Qué pasa si el navegador sigue bloqueando el audio?', a: 'El sistema reintenta hasta 10 veces. Si después de 10 gestos el navegador sigue bloqueando, se detiene para no spamear. En ese caso, verifica que no tengas el modo silencio activado o que el volumen del dispositivo esté subido.' },
+    { cat: '🔊 Sonido', q: '¿Cómo puedo verificar si el audio está desbloqueado?', a: 'Abre la consola del navegador (F12) y busca estos mensajes:\n```\n🔊 AudioContext desbloqueado correctamente (intento #1, origen: gesto (click))\n🔊 Listeners de unlock removidos (éxito)\n```' },
+    { cat: '🔊 Sonido', q: '¿El sonido funciona en iOS Safari?', a: 'Sí. iOS Safari requiere que el resume() del AudioContext se ejecute dentro de un gesto del usuario (click o touch). Nuestro sistema lo hace exactamente así: el primer toque en la pantalla desbloquea el audio.' },
+    { cat: '🔊 Sonido', q: '¿Por qué a veces suena y a veces no?', a: 'Si el sonido funciona a veces y a veces no, puede ser por:\n• El volumen del dispositivo está bajo\n• Hay otras apps reproduciendo audio\n• El navegador cerró el AudioContext (raro)\n• Estás en modo "No molestar"\n\nEn esos casos, el sistema reintenta automáticamente.' },
+    { cat: '🔊 Sonido', q: '¿El "Probar todos" cambia mi sonido configurado?', a: 'No. Al finalizar la prueba, se restaura automáticamente el sonido que tenías configurado. Además, si detienes la prueba con "⏹️ Detener", tampoco se modifica tu configuración.' },
 
-    // ============ DIAGNÓSTICO ============
-    { cat: '🔍 Diagnóstico', q: '¿Qué es el "Diagnóstico de Producción"?', a: 'Es una herramienta que verifica si el sistema de producción está correctamente configurado. Ejecuta 7 comprobaciones.' },
-    { cat: '🔍 Diagnóstico', q: '¿Cuándo debo usar el diagnóstico?', a: 'Cuando el guardado de producción no funciona, o cuando ves errores inesperados.' },
-    { cat: '🔍 Diagnóstico', q: '¿Cómo accedo al diagnóstico?', a: 'Ve a ⚙️ Herramientas → 🔍 Diagnóstico de Producción → "Ejecutar diagnóstico".' },
-    { cat: '🔍 Diagnóstico', q: '¿Qué hace el botón "Copiar reporte"?', a: 'Copia al portapapeles un reporte completo con: info del entorno, resumen (OK/WARN/ERROR), y detalle de cada test.' },
+    // ============================================================
+    // 🔍 DIAGNÓSTICO (P142-P150)
+    // ============================================================
+    { cat: '🔍 Diagnóstico', q: '¿Qué es el "Diagnóstico de Producción"?', a: 'Es una herramienta técnica que verifica si el sistema de producción está correctamente configurado. Ejecuta 7 comprobaciones y muestra el resultado con iconos ✅/⚠️/❌.' },
+    { cat: '🔍 Diagnóstico', q: '¿Cuándo debo usar el diagnóstico?', a: 'Cuando el guardado de producción no funciona, o cuando ves errores inesperados al intentar definir horarios de producción.' },
+    { cat: '🔍 Diagnóstico', q: '¿Cómo accedo al diagnóstico?', a: 'Hay dos formas:\n• ⚙️ Herramientas → 🔍 Diagnóstico de Producción → "Ejecutar diagnóstico".\n• ⚙️ Herramientas → ⚡ Gestionar Horarios → pestaña Config → botón "🔍 Ejecutar diagnóstico".' },
+    { cat: '🔍 Diagnóstico', q: '¿Qué significa cada test del diagnóstico?', a: '1. **DBModule disponible:** Verifica que el módulo de base de datos esté cargado.\n2. **saveProduccion() existe:** Comprueba que la función para guardar exista.\n3. **getProduccionByFecha() existe:** Comprueba que la función para leer exista.\n4. **saveProduccionRango() existe:** Verifica la función de rango (CORRECCIÓN #7).\n5. **getCMPBCProducto() existe:** Verifica la función CMPBC (ENTREGA B).\n6. **Estructura de calendario_produccion:** Valida que las columnas sean correctas y acepten decimales.\n7. **Columna CMPBC en productos:** Verifica que la columna `capacidad_max_bloque` exista.' },
+    { cat: '🔍 Diagnóstico', q: '¿Qué hago si un test falla?', a: '• **Tests 1-3 fallan:** El módulo db.js no está cargado. Recarga la página. Si persiste, borra caché.\n• **Test 4 falla:** La migración de base de datos no se ejecutó. Abre la consola (F12) al inicio y busca errores.\n• **Test 5 falla:** Falta la funcionalidad CMPBC. Actualiza a la última versión.\n• **Test 6 falla:** Falta alguna columna o el tipo es incorrecto. Actualiza a la última versión.\n• **Test 7 falla:** Falta la columna CMPBC en productos. Actualiza a la última versión.' },
+    { cat: '🔍 Diagnóstico', q: '¿Qué hace el botón "Copiar reporte"?', a: 'Copia al portapapeles un reporte completo con:\n• Info del entorno (versión, navegador, online).\n• Resumen de OK/advertencias/errores.\n• Detalle de cada test con su mensaje y detalle técnico.\n\nÚtil para pegar en WhatsApp o email al desarrollador.' },
+    { cat: '🔍 Diagnóstico', q: '¿Puedo ejecutar el diagnóstico varias veces?', a: 'Sí. Pulsa "🔄 Re-ejecutar" dentro del modal o ciérralo y vuelve a abrirlo. Los tests son idempotentes (no dejan rastros).' },
+    { cat: '🔍 Diagnóstico', q: '¿El diagnóstico envía datos a algún servidor?', a: 'No. Todo se ejecuta localmente en tu dispositivo. El reporte solo se copia al portapapeles si tú pulsas el botón.' },
+    { cat: '🔍 Diagnóstico', q: '¿Puedo usar el diagnóstico en móvil?', a: 'Sí. Funciona igual en móvil y desktop. En móvil, el modal se adapta al tamaño de la pantalla.' },
+    { cat: '🔍 Diagnóstico', q: '¿Qué hago si TODOS los tests pasan pero el guardado sigue fallando?', a: 'Significa que el problema no es técnico del código, sino probablemente de caché del navegador sirviendo archivos antiguos. Prueba:\n• "🧹 Limpiar caché y recargar" desde el mismo modal.\n• Abre DevTools (F12) → Application → Clear storage → Clear site data.\n• Recarga con Ctrl+Shift+R (Windows) o Cmd+Shift+R (Mac).' },
 
-    // ============ CMPBC (P261-P280) ============
+    // ============================================================
+    // 🏭 CMPBC (P151-P170)
+    // ============================================================
     { cat: '🏭 CMPBC', q: '¿Qué es el CMPBC?', a: 'Es la Capacidad Máxima de Producción por Bloque de Corriente. Indica cuántas unidades de un producto puedes producir en un solo bloque de corriente.' },
     { cat: '🏭 CMPBC', q: '¿Dónde configuro el CMPBC de un producto?', a: 'En 🏷️ Productos → Nuevo/Editar Producto. Hay un bloque morado con 🏭 Capacidad máx/bloque (solo Admin).' },
     { cat: '🏭 CMPBC', q: '¿Qué valor debo poner en el CMPBC?', a: 'El número máximo de unidades que puedes producir en UN bloque de corriente. Ej: si en 3 horas de corriente produces 7 jabas, pon 7.' },
@@ -1754,56 +1804,178 @@ const FAQS_DB = [
     { cat: '🏭 CMPBC', q: '¿Cómo sé si un producto tiene CMPBC configurado?', a: 'En la lista de productos, aparece un badge morado 🏭 X/bloque junto al nombre.' },
     { cat: '🏭 CMPBC', q: '¿El CMPBC es obligatorio?', a: 'No. Es opcional. Sin él, el sistema funciona como antes (producción manual).' },
     { cat: '🏭 CMPBC', q: '¿Cómo se relaciona el CMPBC con el modal de producción?', a: 'Al seleccionar un producto con CMPBC y escribir una cantidad, aparecerá el botón ✨ Calcular bloques automáticamente.' },
-    { cat: '🏭 CMPBC', q: '¿Puedo eliminar el CMPBC de un producto?', a: 'Sí. Edita el producto y borra el valor del campo, o ponlo en 0.' },
+    { cat: '🏭 CMPBC', q: '¿Puedo eliminar el CMPBC de un producto?', a: 'Sí. Edita el producto y borra el valor del campo, o ponlo en 0. Se guardará como null.' },
     { cat: '🏭 CMPBC', q: '¿El CMPBC es por producto o global?', a: 'Por producto. Cada producto tiene su propia capacidad máxima por bloque.' },
-    { cat: '🏭 CMPBC', q: '¿Qué significa bloques_usados en calendario_produccion?', a: 'Es el número de bloques de corriente que se usarán para producir la cantidad planificada.' },
-    { cat: '🏭 CMPBC', q: '¿Qué contiene distribucion_bloques?', a: 'Es un JSON con la distribución por bloque.' },
+    { cat: '🏭 CMPBC', q: '¿Qué significa bloques_usados en calendario_produccion?', a: 'Es el número de bloques de corriente que se usarán para producir la cantidad planificada (por ejemplo, 2 si necesitas dividir la producción).' },
+    { cat: '🏭 CMPBC', q: '¿Qué contiene distribucion_bloques?', a: 'Es un JSON con la distribución por bloque. Ejemplo: `[{"bloque_index": 1, "cantidad": 7}, {"bloque_index": 3, "cantidad": 5.5}]`.' },
     { cat: '🏭 CMPBC', q: '¿Cómo consulto el CMPBC de un producto por consola?', a: 'window.DBModule.getCMPBCProducto(productoId) → devuelve el valor o null.' },
     { cat: '🏭 CMPBC', q: '¿Cómo obtengo todos los productos con CMPBC?', a: 'window.DBModule.getProductosConCMPBC() → devuelve un array.' },
     { cat: '🏭 CMPBC', q: '¿Puedo cambiar el CMPBC después de crear el producto?', a: 'Sí. Solo edita el producto desde ui-productos.js (Admin) y cambia el valor.' },
     { cat: '🏭 CMPBC', q: '¿Qué pasa con las producciones antiguas al migrar?', a: 'La migración añade las columnas con valores por defecto. No se pierden datos.' },
     { cat: '🏭 CMPBC', q: '¿Qué pasa si un producto no tiene CMPBC?', a: 'El sistema no podrá calcular automáticamente los bloques. Mostrará un aviso sugiriendo configurarlo.' },
     { cat: '🏭 CMPBC', q: '¿Cómo se ve el CMPBC en la lista de productos?', a: 'Si un producto tiene CMPBC definido, aparece un badge morado 🏭 7/bloque junto al nombre.' },
+    { cat: '🏭 CMPBC', q: '¿Qué pasa si veo la columna CMPBC en blanco?', a: 'Significa que ese producto no tiene CMPBC configurado. Puedes editarlo y añadirlo cuando quieras.' },
+    { cat: '🏭 CMPBC', q: '¿Cómo se calcula la cantidad a producir si tengo varios productos?', a: 'Cada producto tiene su propio CMPBC. El cálculo se hace por producto individual. Si produces varios productos el mismo día, cada uno se calcula por separado.' },
 
-    // ============ ALGORITMO DE BLOQUES (P281-P295) ============
-    { cat: '🧠 Algoritmo de bloques', q: '¿Cómo funciona el cálculo automático de bloques?', a: 'Selecciona un producto (con CMPBC), escribe la cantidad y pulsa "✨ Calcular bloques automáticamente".' },
-    { cat: '🧠 Algoritmo de bloques', q: '¿Qué reglas sigue el algoritmo?', a: 'Prioriza bloques al amanecer (antes de las 9 AM). Si el primero del día termina muy tarde, usa el último bloque del día anterior.' },
+    // ============================================================
+    // 🧠 ALGORITMO DE BLOQUES (P171-P185)
+    // ============================================================
+    { cat: '🧠 Algoritmo de bloques', q: '¿Cómo funciona el cálculo automático de bloques?', a: 'Selecciona un producto (con CMPBC), escribe la cantidad y pulsa "✨ Calcular bloques automáticamente". El sistema sugiere cómo distribuir la producción entre los bloques de corriente.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Qué reglas sigue el algoritmo?', a: 'Prioriza bloques al amanecer (antes de las 9 AM). Si el primero del día termina muy tarde, usa el último bloque del día anterior. El primer bloque lleva más cantidad.' },
     { cat: '🧠 Algoritmo de bloques', q: '¿Qué es la "tolerancia del amanecer"?', a: 'Los bloques que terminan entre las 8:00 y 9:00 AM también son válidos para producir el pan del desayuno.' },
-    { cat: '🧠 Algoritmo de bloques', q: '¿Qué pasa si no hay suficientes bloques?', a: 'Muestra un error indicando cuántas unidades máximo puedes producir.' },
-    { cat: '🧠 Algoritmo de bloques', q: '¿El sistema guarda la distribución sugerida?', a: 'Sí. Guarda en distribucion_bloques un JSON con el detalle de cada bloque usado.' },
-    { cat: '🧠 Algoritmo de bloques', q: '¿Puedo modificar la distribución manualmente?', a: 'Sí. Después de pulsar "Confirmar", puedes editar el bloque o la cantidad manualmente.' },
-    { cat: '🧠 Algoritmo de bloques', q: '¿Qué significa "Bloques: 2" en el modal?', a: 'Indica que la producción se distribuirá en 2 bloques de corriente.' },
-    { cat: '🧠 Algoritmo de bloques', q: '¿Cómo se relaciona el CMPBC con el cálculo de bloques?', a: 'El CMPBC define cuántas unidades caben por bloque. El sistema divide cantidad_total / CMPBC.' },
-    { cat: '🧠 Algoritmo de bloques', q: '¿Qué pasa si un producto tiene CMPBC=0 o vacío?', a: 'No se puede calcular automáticamente. El botón ✨ no aparece.' },
-    { cat: '🧠 Algoritmo de bloques', q: '¿El algoritmo considera la producción ya programada?', a: 'No directamente, pero el sistema sobrescribe si ya había producción ese día.' },
-    { cat: '🧠 Algoritmo de bloques', q: '¿Cómo se numeran los bloques del día anterior?', a: 'Se usa el indexEnDiaAnterior, que es la posición real del bloque en el día anterior.' },
-    { cat: '🧠 Algoritmo de bloques', q: '¿El modal de producción muestra la distribución guardada?', a: 'Sí, si un día tiene bloques_usados > 1.' },
-    { cat: '🧠 Algoritmo de bloques', q: '¿Puedo elegir un producto diferente al ya guardado?', a: 'Sí. Cambia el dropdown y vuelve a pulsar "✨ Calcular".' },
-    { cat: '🧠 Algoritmo de bloques', q: '¿El algoritmo prioriza el bloque de ayer o el de hoy?', a: 'Si el bloque de ayer termina antes de las 8 AM, tiene prioridad ALTA.' },
-    { cat: '🧠 Algoritmo de bloques', q: '¿Qué pasa si el bloque de ayer cruza medianoche?', a: 'El algoritmo lo trata como válido si termina antes de las 9 AM del día de venta.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Qué pasa si no hay suficientes bloques?', a: 'Muestra un error indicando cuántas unidades máximo puedes producir. Puedes aumentar el CMPBC, elegir otro producto o dividir la producción en varios días.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿El sistema guarda la distribución sugerida?', a: 'Sí. Guarda en distribucion_bloques un JSON con el detalle de cada bloque usado (fecha, bloque, cantidad).' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Puedo modificar la distribución manualmente?', a: 'Sí. Después de pulsar "Confirmar", puedes editar el bloque o la cantidad manualmente y volver a guardar.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Qué significa "Bloques: 2" en el modal?', a: 'Indica que la producción se distribuirá en 2 bloques de corriente. Ej: 7 unidades al amanecer + 5 unidades por la tarde.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Cómo se relaciona el CMPBC con el cálculo de bloques?', a: 'El CMPBC define cuántas unidades caben por bloque. El sistema divide cantidad_total / CMPBC para saber cuántos bloques necesita.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Qué pasa si un producto tiene CMPBC=0 o vacío?', a: 'No se puede calcular automáticamente. El botón ✨ no aparece. Puedes seguir configurando manualmente.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿El algoritmo considera la producción ya programada?', a: 'No directamente, pero el sistema sobrescribe si ya había producción ese día. El modal de confirmación avisa.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Cómo se numeran los bloques del día anterior?', a: 'Se usa el indexEnDiaAnterior, que es la posición real del bloque en el día anterior. Ej: si es el 4º bloque del día anterior, bloque_index=4 con es_bloque_dia_anterior=1.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿El modal de producción muestra la distribución guardada?', a: 'Sí, si un día tiene bloques_usados > 1, el reporte PDF de corriente muestra un badge "N bloques" y la app puede mostrar la distribución completa.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Puedo elegir un producto diferente al ya guardado?', a: 'Sí. Cambia el dropdown y vuelve a pulsar "✨ Calcular". El nuevo cálculo reemplazará la distribución anterior al confirmar.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿El algoritmo prioriza el bloque de ayer o el de hoy?', a: 'Si el bloque de ayer termina antes de las 8 AM, tiene prioridad ALTA. Si no, se ordenan por cercanía al amanecer.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Qué pasa si el bloque de ayer cruza medianoche?', a: 'El algoritmo lo trata como válido si termina antes de las 9 AM del día de venta. Se muestra como "🌙 Último bloque del [fecha]".' },
 
-    // ============ v2.2.0 + PWA (P296-P315) ============
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Por qué la versión saltó a v2.2.0?', a: 'Porque la Entrega B (CMPBC + algoritmo inteligente) es una funcionalidad mayor.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Qué pasa con el caché antiguo al actualizar?', a: 'El Service Worker detecta el cambio de versión y elimina automáticamente los cachés obsoletos.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Tengo que hacer algo especial para actualizar a v2.2.0?', a: 'No. Solo recarga la app con conexión a internet.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿La nueva versión es compatible con mis datos actuales?', a: 'Sí, totalmente. La migración es automática y no pierde datos.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Cómo sé que estoy en v2.2.1?', a: 'Ve a ⚙️ Herramientas → al final verás "Versión: 2.2.1". O en consola: window.getAppVersion()' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Qué es el shortcut "Producción" de la PWA?', a: 'Es un acceso directo para ir directamente a la planificación de producción.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Los shortcuts funcionan en iOS?', a: 'En iOS, los shortcuts tienen soporte limitado. En Android funcionan correctamente.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Por qué hay 6 shortcuts ahora?', a: 'Antes había 5. Añadí "Producción" en v2.2.0.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿La versión del manifest coincide con la app?', a: 'Sí. Desde v2.2.1, todos los archivos usan la misma versión.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Cómo veo la versión del manifest en el navegador?', a: 'En Chrome/Edge: DevTools (F12) → Application → Manifest.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Qué novedades trae la v2.2.0?', a: 'Incluye la Entrega B completa: CMPBC, algoritmo inteligente de bloques, dropdown de productos, y 6 shortcuts.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Cómo actualizo Panario a v2.2.1 si la tengo instalada?', a: 'Abre la app con internet. En 5-10 segundos aparecerá "✨ Actualización disponible".' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Por qué cambiaron los shortcuts de la PWA?', a: 'Añadí "Producción" en v2.2.0 para acceso rápido al calendario de corriente.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Qué pasa con mis datos al actualizar a v2.2.1?', a: 'Nada. Tus datos se conservan intactos.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿La versión del manifest y del sw.js deben coincidir?', a: 'Sí. Todos los archivos usan la misma versión.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Cómo sé si estoy corriendo la v2.2.1?', a: 'Ve a ⚙️ Herramientas → al final verás "Versión: 2.2.1".' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿La v2.2.0 rompe algo de las versiones anteriores?', a: 'No. La v2.2.0 es compatible con todos los datos de versiones anteriores.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Por qué la versión del caché cambió a panario-v2.2.1?', a: 'Para forzar una reinstalación limpia del Service Worker.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Qué hago si el navegador sigue sirviendo la versión antigua?', a: 'Limpia el caché del navegador y recarga con Ctrl+Shift+R.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿Cuándo debo actualizar a v2.2.1?', a: 'Cuanto antes. Tiene mejoras de producción y compatibilidad con GitHub Pages.' },
-    { cat: '🎉 v2.2.0 + PWA', q: '¿El atajo de teclado Escape cierra la Ayuda Detallada?', a: 'Sí. Tanto en modal (desktop) como en pestaña nueva (móvil).' }
+    // ============================================================
+    // 🌙 BLOQUE DEL DÍA ANTERIOR (CORRECCIÓN #6) — P186-P192
+    // ============================================================
+    { cat: '🌙 Bloque del día anterior', q: '¿Qué es el "bloque del día anterior"?', a: 'Es el último bloque de corriente del día previo al día de venta. Se usa cuando el primer bloque del día de venta comienza muy tarde (después de las 8 AM) y el pan debe estar listo antes del amanecer.' },
+    { cat: '🌙 Bloque del día anterior', q: '¿Cómo se identifica un bloque del día anterior?', a: 'En la tarjeta del día en la lista de Pedidos, aparece un badge morado con el icono 🌙 y el texto "Prod. ayer: DD/MM de HH:MM a HH:MM". Ejemplo: "🌙 Prod. ayer: 23/09 de 5:00 PM a 8:00 PM".' },
+    { cat: '🌙 Bloque del día anterior', q: '¿Por qué el texto dice "Prod. ayer: 23/09..." en lugar de solo las horas?', a: 'Porque "ayer" es una referencia relativa y puede ser ambigua. Ahora se muestra la fecha real del bloque (`fecha_bloque_real`) para que sepas exactamente a qué día corresponde. El formato es consistente con los demás días: `DD/MM de HH:MM a HH:MM`.' },
+    { cat: '🌙 Bloque del día anterior', q: '¿Cómo se guarda un bloque del día anterior?', a: 'En el modal de producción del calendario, cuando seleccionas el bloque "🌙 Último bloque de ayer" y guardas, se marca `es_bloque_dia_anterior = 1` y se guarda `fecha_bloque_real` con la fecha real del bloque.' },
+    { cat: '🌙 Bloque del día anterior', q: '¿El badge del día anterior es diferente al del día actual?', a: 'Sí. El día actual usa "🔨 Producción: 23/09 de 2:00 AM a 5:00 AM" (icono martillo). El día anterior usa "🌙 Prod. ayer: 23/09 de 5:00 PM a 8:00 PM" (icono luna + borde punteado morado).' },
+    { cat: '🌙 Bloque del día anterior', q: '¿Puedo ver el bloque del día anterior en el detalle del pedido?', a: 'Sí. En la vista de detalle del pedido, si el bloque es del día anterior, aparece el badge con la fecha y un texto adicional: "📅 Bloque real: 2026-09-23".' },
+    { cat: '🌙 Bloque del día anterior', q: '¿El bloque del día anterior afecta la fecha de entrega del pedido?', a: 'No. La fecha de entrega del pedido sigue siendo el día de venta. El bloque del día anterior es solo informativo, para saber cuándo se horneó el producto.' },
+
+    // ============================================================
+    // 📅 EXCLUIR DÍAS DE LA SEMANA (CORRECCIÓN #4) — P193-P197
+    // ============================================================
+    { cat: '📅 Excluir días', q: '¿Qué es la exclusión de días en la reserva por período?', a: 'Es una opción que permite excluir ciertos días de la semana (ej: domingos) al crear una reserva por período. Solo aplica cuando el patrón es "Rango completo".' },
+    { cat: '📅 Excluir días', q: '¿Cómo excluyo los domingos de una reserva?', a: 'En el modal "Reserva por período", activa el checkbox 🚫 Excluir los domingos del rango. También puedes usar el botón "🚫 Excluir fines de semana" para excluir sábados y domingos a la vez.' },
+    { cat: '📅 Excluir días', q: '¿Puedo excluir varios días a la vez?', a: 'Sí. Puedes marcar varios días de la semana en la sección "🚫 Excluir días de la semana" (Lun, Mar, Mié, Jue, Vie, Sáb, Dom).' },
+    { cat: '📅 Excluir días', q: '¿La exclusión se combina con la paridad (pares/impares)?', a: 'Sí. Puedes combinar "Solo pares" con "Excluir domingos". El sistema primero aplica la paridad y luego excluye los días de la semana marcados.' },
+    { cat: '📅 Excluir días', q: '¿La exclusión funciona en todos los tipos de patrón?', a: 'No. La exclusión solo aplica al patrón "Rango completo". En los patrones "Días de la semana" y "Días específicos" no tiene sentido, porque ya seleccionas exactamente qué días incluir.' },
+
+    // ============================================================
+    // 📆 PRODUCCIÓN POR RANGO (CORRECCIÓN #7) — P198-P202
+    // ============================================================
+    { cat: '📆 Producción por rango', q: '¿Qué es la producción por rango?', a: 'Es una herramienta que permite aplicar la misma producción a múltiples días a la vez. Útil para programar la producción de toda una semana o mes.' },
+    { cat: '📆 Producción por rango', q: '¿Cómo accedo a la producción por rango?', a: 'En el modal de producción de un día (Calendario → clic en un día), pulsa el botón "📅 Aplicar a rango".' },
+    { cat: '📆 Producción por rango', q: '¿Qué es "bloque relativo" vs "bloque fijo"?', a: '• **Relativo:** Cada día usa su bloque equivalente (ej: todos los días el primer bloque).\n• **Fijo:** Todos los días usan exactamente el mismo horario del día base.' },
+    { cat: '📆 Producción por rango', q: '¿Puedo excluir días sin corriente?', a: 'Sí. En el modal de producción por rango, activa el checkbox "🌙 Excluir los días sin corriente". Los días sin corriente se omiten automáticamente.' },
+    { cat: '📆 Producción por rango', q: '¿Qué pasa si un día del rango ya tiene producción?', a: 'Se sobrescribe. El sistema te avisa en la vista previa antes de confirmar: "⚠️ N día(s) del rango ya tienen producción programada. Serán sobrescritos."' },
+
+    // ============================================================
+    // 🔒 BLOQUEO POR RECETAS (CORRECCIÓN #2) — P203-P206
+    // ============================================================
+    { cat: '🔒 Bloqueo por recetas', q: '¿Por qué a veces no puedo editar un pedido o una venta?', a: 'Si el pedido o la venta usa una receta que NO te han compartido, verás un badge "🔒 Solo lectura" y no podrás editarlo, anularlo, cobrarlo ni eliminarlo.' },
+    { cat: '🔒 Bloqueo por recetas', q: '¿Qué significa "🔒 Solo lectura"?', a: 'Significa que el registro (pedido o venta) usa una receta que no tienes permiso para usar. Puedes verlo, pero no procesarlo.' },
+    { cat: '🔒 Bloqueo por recetas', q: '¿Quién puede levantar el bloqueo?', a: 'Solo el administrador. Debe compartir la receta asociada con el negocio para que el usuario regular pueda procesar el pedido o la venta.' },
+    { cat: '🔒 Bloqueo por recetas', q: '¿El bloqueo afecta a los gastos?', a: 'No. Los gastos no tienen receta asociada, así que nunca se bloquean.' },
+
+    // ============================================================
+    // 📄 REPORTES Y EXPORTACIONES (P207-P216)
+    // ============================================================
+    { cat: '📄 Reportes', q: '¿En qué orden aparecen las ventas en el reporte PDF?', a: 'Se ordenan por fecha ascendente y, dentro de la misma fecha, por ID ascendente. La venta más antigua del día aparece primero.' },
+    { cat: '📄 Reportes', q: '¿En qué orden aparecen los pedidos en el reporte PDF?', a: 'Igual: por fecha de entrega ascendente y luego por ID ascendente.' },
+    { cat: '📄 Reportes', q: '¿Las deudas también se ordenan?', a: 'Sí. En el reporte de deudas, se ordenan por fecha de venta ascendente y luego por ID ascendente.' },
+    { cat: '📄 Reportes', q: '¿Por qué añadieron la columna # en los reportes?', a: 'Para que puedas identificar rápidamente cada venta/pedido por su ID y relacionarlo con el módulo de Eliminación por Error o con la lista de la app.' },
+    { cat: '📄 Reportes', q: '¿Puedo cambiar el orden de los reportes?', a: 'Actualmente no. Los reportes usan un orden fijo (fecha ASC + ID ASC) que refleja el orden cronológico real.' },
+    { cat: '📄 Reportes', q: '¿Los reportes de insumos y recetas también se ordenan?', a: 'Los insumos se ordenan alfabéticamente por nombre. Las recetas también se ordenan por nombre y fecha de creación.' },
+    { cat: '📄 Reportes', q: '¿Por qué el reporte de ventas muestra solo 100 filas?', a: 'Para que el PDF no se haga demasiado largo. Si necesitas ver más, filtra por un rango de fechas más específico o usa la exportación de la base de datos.' },
+    { cat: '📄 Reportes', q: '¿Los reportes respetan el tema oscuro?', a: 'No. Los reportes PDF siempre se generan en fondo blanco con texto negro, para garantizar legibilidad al imprimir.' },
+    { cat: '📄 Reportes', q: '¿Qué significa la columna 🚀 en el detalle de ventas?', a: 'Indica que esa venta es una venta liberada (sin cliente identificado).' },
+    { cat: '📄 Reportes', q: '¿Puedo exportar el Dashboard a PDF?', a: 'Sí. En el Dashboard, pulsa "📥 Exportar" para descargar un reporte de texto con todas las estadísticas. También puedes exportar el gráfico como imagen (🖼️) o como PDF (📄).' },
+
+    // ============================================================
+    // 🔍 AUDITORÍA Y VENDEDOR (P217-P224)
+    // ============================================================
+    { cat: '🔍 Auditoría', q: '¿Cómo sé quién registró cada venta?', a: 'En el detalle de cada venta (pulsa 👁️ Ver), al final aparece la sección "🔍 Auditoría" con:\n• 👤 Creado por: nombre del vendedor.\n• 📅 Fecha: fecha y hora exactas.\n• ✏️ Modificado por: si alguien la editó después.' },
+    { cat: '🔍 Auditoría', q: '¿Puedo cambiar el vendedor de una venta?', a: 'No directamente. El campo `created_by` se asigna al usuario que la creó y no se puede modificar. Si necesitas corregir esto, debes anular la venta y crear una nueva con el usuario correcto.' },
+    { cat: '🔍 Auditoría', q: '¿Qué pasa si un vendedor es eliminado del negocio?', a: 'Sus ventas se mantienen en el sistema, pero en la sección de auditoría el nombre aparecerá como "Desconocido".' },
+    { cat: '🔍 Auditoría', q: '¿Por qué el botón "Anular" ahora pide dos confirmaciones?', a: 'La primera confirmación ("¿Seguro que quieres anular esta venta?") evita anulaciones accidentales. La segunda (motivo) permite documentar por qué se anuló. Puedes dejar el motivo vacío: se guardará como "Anulación manual".' },
+    { cat: '🔍 Auditoría', q: '¿Por qué a veces al anular una venta el modal de motivo se cierra solo?', a: 'Era un bug conocido (fix #22) que ocurría porque el modal de confirmación no se había eliminado del DOM antes de abrir el de motivo. En la versión actual (v2.2.1), el sistema espera correctamente a que cada modal se cierre antes de abrir el siguiente.' },
+    { cat: '🔍 Auditoría', q: '¿Qué muestra el reporte copiado del diagnóstico?', a: 'Incluye:\n• Versión de la app\n• Navegador detectado\n• Estado online\n• Fecha y hora\n• User-Agent completo\n• Resumen (OK/WARN/ERROR)\n• Detalle de cada uno de los 7 tests\n• Mensaje de error exacto (si aplica)' },
+    { cat: '🔍 Auditoría', q: '¿Cómo restauro una venta anulada?', a: 'Ve al detalle de la venta anulada (borde gris) y pulsa "🔄 Restaurar". Se repondrá el stock descontado y la venta volverá a estado normal.' },
+    { cat: '🔍 Auditoría', q: '¿Por qué el contador de "Pedidos mañana" a veces no coincide con el total?', a: 'Porque excluye pedidos en estado cancelado, entregado o compró por lista de espera. El "total de pedidos" (en el Dashboard principal) sí los cuenta.' },
+
+    // ============================================================
+    // 🎉 v2.2.0 + v2.2.1 (P225-P244)
+    // ============================================================
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Por qué la versión saltó a v2.2.0?', a: 'Porque la Entrega B (CMPBC + algoritmo inteligente) es una funcionalidad mayor.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Qué pasa con el caché antiguo al actualizar?', a: 'El Service Worker detecta el cambio de versión y elimina automáticamente los cachés obsoletos.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Tengo que hacer algo especial para actualizar?', a: 'No. Solo recarga la app con conexión a internet. El SW se actualizará solo en 5-10 segundos.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿La nueva versión es compatible con mis datos actuales?', a: 'Sí, totalmente. La migración es automática y no pierde datos.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Cómo sé que estoy en v2.2.1?', a: 'Ve a ⚙️ Herramientas → al final verás "Versión: 2.2.1". O en consola: window.getAppVersion()' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Qué es el shortcut "Producción" de la PWA?', a: 'Es un acceso directo que añadí en v2.2.0 para que puedas ir directamente a la planificación de producción desde el icono de Panario en tu móvil.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Los shortcuts funcionan en iOS?', a: 'En iOS, los shortcuts de la PWA tienen soporte limitado. En Android funcionan correctamente.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Por qué hay 6 shortcuts ahora?', a: 'Antes había 5 (Inicio, Pedidos, Lista de espera, Ventas, Herramientas). Añadí "Producción" en v2.2.0.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿La versión del manifest coincide con la app?', a: 'Sí. Desde v2.2.1, todos los archivos usan la misma versión.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Cómo veo la versión del manifest en el navegador?', a: 'En Chrome/Edge: DevTools (F12) → Application → Manifest.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Qué novedades trae la v2.2.0?', a: 'Incluye la Entrega B completa: CMPBC, algoritmo inteligente de bloques, dropdown de productos, y 6 shortcuts.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Cómo actualizo Panario a v2.2.1 si la tengo instalada?', a: 'Abre la app con internet. En 5-10 segundos aparecerá "✨ Actualización disponible".' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Por qué cambiaron los shortcuts de la PWA?', a: 'Añadí "Producción" en v2.2.0 para acceso rápido al calendario de corriente.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Qué pasa con mis datos al actualizar a v2.2.1?', a: 'Nada. Tus datos se conservan intactos.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿La versión del manifest y del sw.js deben coincidir?', a: 'Sí. Todos los archivos usan la misma versión.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Cómo sé si estoy corriendo la v2.2.1?', a: 'Ve a ⚙️ Herramientas → al final verás "Versión: 2.2.1".' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿La v2.2.0 rompe algo de las versiones anteriores?', a: 'No. La v2.2.0 es compatible con todos los datos de versiones anteriores.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Por qué la versión del caché cambió a panario-v2.2.1?', a: 'Para forzar una reinstalación limpia del Service Worker.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Qué hago si el navegador sigue sirviendo la versión antigua?', a: 'Limpia el caché del navegador y recarga con Ctrl+Shift+R.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿Cuándo debo actualizar a v2.2.1?', a: 'Cuanto antes. Tiene mejoras de producción y compatibilidad con GitHub Pages.' },
+    { cat: '🎉 v2.2.0 + v2.2.1', q: '¿El atajo de teclado Escape cierra la Ayuda Detallada?', a: 'Sí. Tanto en modal (desktop) como en pestaña nueva (móvil).' },
+
+    // ============================================================
+    // 🐛 CORRECCIONES FINALES 220926 (P245-P260)
+    // ============================================================
+    { cat: '🐛 Correcciones finales', q: '¿Por qué el modal de reprogramación aparecía con datos de la última operación?', a: 'Era un bug: al abrir el modal, se ejecutaba automáticamente `actualizarPreviewReprogramacion()`, que consultaba la BD con las fechas por defecto y mostraba los pedidos existentes. Ahora la vista previa se inicializa vacía y solo se rellena cuando el usuario introduce fechas válidas.' },
+    { cat: '🐛 Correcciones finales', q: '¿Qué significa "Selecciona las fechas para ver la vista previa"?', a: 'Es un mensaje informativo (no un error). Significa que faltan datos por completar (fechas Desde, Hasta o Destino). Una vez completados, la vista previa mostrará los pedidos afectados.' },
+    { cat: '🐛 Correcciones finales', q: '¿Por qué al cerrar la ayuda detallada antes se cerraba mi sesión?', a: 'Era un bug de z-index: el botón 🚪 (cerrar sesión) del header de la app estaba detrás del modal de ayuda, pero seguía capturando clicks. Al pulsar ✕ o "Volver a Panario", el click "atravesaba" el modal y activaba el botón de cerrar sesión. Desde v2.2.3 este bug está corregido.' },
+    { cat: '🐛 Correcciones finales', q: '¿Por qué el header de la app desaparece cuando abro la ayuda detallada?', a: 'Es intencional. Para evitar que el header capture clicks del modal (bug anterior), ocultamos temporalmente el header y el bottom-nav de la app. Al cerrar la ayuda, se restauran automáticamente.' },
+    { cat: '🐛 Correcciones finales', q: '¿Puedo hacer clic fuera del modal para cerrarlo?', a: 'Sí. Al hacer clic sobre el fondo oscuro (overlay) fuera del contenido del modal, la ayuda se cierra. Los clicks dentro del contenido (iframe, botones) no cierran el modal.' },
+    { cat: '🐛 Correcciones finales', q: '¿Qué significa `inert` y por qué se usa?', a: '`inert` es un atributo HTML que hace que un elemento y todos sus descendientes ignoren eventos de usuario (clicks, teclado, focus, etc.). Lo usamos para bloquear completamente la app mientras el modal está abierto. Si el navegador no lo soporta, el bloqueo se hace con `visibility: hidden` en el header y el bottom-nav.' },
+    { cat: '🐛 Correcciones finales', q: '¿Por qué el badge de "Prod. ayer" ahora muestra la fecha real (23/09)?', a: 'Antes el texto decía solo "5:00 PM - 8:00 PM", sin indicar a qué día correspondía el bloque. Eso era ambiguo porque "ayer" es una referencia relativa. Ahora muestra la fecha real (23/09) usando el campo `fecha_bloque_real` guardado en la base de datos. El formato es consistente con los demás días: `DD/MM de HH:MM a HH:MM`.' },
+    { cat: '🐛 Correcciones finales', q: '¿Por qué los otros días muestran "🔨 Producción:" y el día anterior muestra "🌙 Prod. ayer:"?', a: 'Es una distinción visual intencional. El icono 🔨 (martillo) se usa para bloques de producción del día actual del pedido. El icono 🌙 (luna) se usa para bloques de producción que se hicieron el día anterior. Ambos tienen el mismo formato de fecha/hora.' },
+    { cat: '🐛 Correcciones finales', q: '¿Qué significa "23/09 de 5:00 PM a 8:00 PM"?', a: 'Significa que el bloque de producción se ejecutará el **23 de septiembre de 5:00 PM a 8:00 PM**. La fecha es la del día real del bloque (que puede ser el día anterior al de entrega del pedido).' },
+    { cat: '🐛 Correcciones finales', q: '¿Por qué el formato del badge del día anterior cambió?', a: 'Antes había una inconsistencia: los días normales usaban `DD/MM de HH:MM a HH:MM` pero el día anterior usaba `HH:MM - HH:MM` (sin fecha). Esto confundía porque no se sabía a qué día correspondía. Ahora **todos los bloques usan el mismo formato** con la fecha real del bloque.' },
+    { cat: '🐛 Correcciones finales', q: '¿Puedo ver la fecha exacta del bloque de producción desde el detalle del pedido?', a: 'Sí. En la vista de detalle del pedido, la sección de producción muestra el badge con la fecha, y si es del día anterior, aparece un texto extra: "📅 Bloque real: 2026-09-23".' },
+    { cat: '🐛 Correcciones finales', q: '¿Cómo sé si un bloque es del día anterior o del día actual?', a: 'El icono te lo indica:\n• 🔨 **Producción:** → Es un bloque del día actual del pedido.\n• 🌙 **Prod. ayer:** → Es un bloque del día anterior al de entrega.' },
+    { cat: '🐛 Correcciones finales', q: '¿La fecha del bloque afecta la entrega del pedido?', a: 'No. La fecha del pedido sigue siendo la fecha de entrega al cliente. La fecha del bloque de producción es solo informativa, para saber cuándo se horneó el producto.' },
+    { cat: '🐛 Correcciones finales', q: '¿Por qué un bloque de producción puede ser del día anterior?', a: 'Porque a veces el primer bloque de corriente del día de venta comienza muy tarde (después de las 8 AM). En ese caso, el algoritmo de producción usa el último bloque del día anterior para que el pan esté listo antes del amanecer.' },
+    { cat: '🐛 Correcciones finales', q: '¿Por qué antes la versión mostrada en Herramientas era 2.1.11?', a: 'Era un fallback (valor por defecto) que se usaba si la aplicación no podía leer la versión desde el archivo `index.html`. Se ha actualizado a `2.2.1` para mantener la coherencia. Ahora, aunque falle la lectura, la versión mostrada será la correcta.' },
+    { cat: '🐛 Correcciones finales', q: '¿Por qué la versión de la aplicación mostrada en Herramientas podría ser incorrecta?', a: 'Antes, si el archivo `index.html` no exponía la etiqueta `<meta name="app-version">`, el sistema usaba un valor por defecto (`2.1.11`). Se ha actualizado ese valor a `2.2.1` para garantizar coherencia incluso si la lectura de la etiqueta falla.' },
+
+    // ============================================================
+    // 📱 PWA Y PANTALLA COMPLETA (P261-P270)
+    // ============================================================
+    { cat: '📱 PWA y pantalla completa', q: '¿Por qué al instalar Panario desde Chrome no se abre a pantalla completa?', a: 'Chrome en Android no reconoce `display: "fullscreen"` como un modo instalable para generar un WebAPK. Solo acepta `standalone`. Se ha cambiado a `standalone` para que la instalación funcione correctamente.' },
+    { cat: '📱 PWA y pantalla completa', q: '¿Qué diferencia hay entre `standalone` y `fullscreen`?', a: '`standalone` abre la app en una ventana propia sin barra de direcciones, pero mantiene la barra de estado (hora, batería). `fullscreen` oculta también la barra de estado. `standalone` es más estable y es el modo que Chrome Android acepta para instalación completa.' },
+    { cat: '📱 PWA y pantalla completa', q: '¿Por qué al abrir desde WhatsApp funciona a pantalla completa?', a: 'Porque Android trata el enlace como un "App Link" (deep link). Android detecta que el enlace coincide con el `scope` y `start_url` de una PWA y la lanza en su contexto standalone.' },
+    { cat: '📱 PWA y pantalla completa', q: '¿Cómo instalo Panario correctamente?', a: 'Abre Panario en Chrome (con HTTPS), espera a que aparezca el ícono de instalación en la barra de direcciones (o usa el menú ⋮ → "Instalar aplicación"), y pulsa "Instalar". La app aparecerá en tu pantalla de inicio.' },
+    { cat: '📱 PWA y pantalla completa', q: '¿Por qué no veo el ícono de instalación en Chrome?', a: 'Puede ser por varias razones: (1) el manifest no cumple todos los requisitos, (2) el Service Worker no está controlando la página, (3) no es HTTPS, (4) el navegador aún no ha detectado la PWA como instalable. Abre DevTools → Application → Manifest y verifica que no haya errores.' },
+    { cat: '📱 PWA y pantalla completa', q: '¿Cómo verifico que la PWA es instalable?', a: 'Abre DevTools (F12) → Application → Manifest. Debe mostrar `display: standalone`, `start_url: ./index.html` e íconos 192x192 y 512x512. En la sección "Installability" no debe haber errores.' },
+    { cat: '📱 PWA y pantalla completa', q: '¿Qué es `display_override`?', a: 'Es un array que permite especificar una cadena de fallback para el modo de visualización. Ej: `["fullscreen", "standalone", "minimal-ui", "browser"]`. El navegador intentará aplicar el primero que soporte.' },
+    { cat: '📱 PWA y pantalla completa', q: '¿Qué pasa con los usuarios que ya tienen la PWA instalada con `fullscreen`?', a: 'El cambio de `CACHE_NAME` a `panario-v2.2.1` fuerza la reinstalación limpia del Service Worker. Los usuarios que tengan la PWA antigua verán un aviso de "Actualización disponible". Sin embargo, es posible que necesiten desinstalar y reinstalar la PWA para que Chrome aplique el nuevo `display: standalone`.' },
+    { cat: '📱 PWA y pantalla completa', q: '¿Por qué es importante el `start_url` y `scope` para la instalación?', a: 'Chrome usa `start_url` para saber qué página abrir al lanzar la PWA, y `scope` para saber qué URLs pertenecen a la app. Si no están configurados correctamente, Chrome puede no considerar la app como instalable.' },
+    { cat: '📱 PWA y pantalla completa', q: '¿Cómo verifico que el Service Worker está controlando la página?', a: 'Abre DevTools (F12) → Application → Service Workers. Debe decir "activated and is running" y "This page is controlled by a service worker". Si no, recarga la página o espera unos segundos.' },
+
+    // ============================================================
+    // 🌐 OFFLINE Y SERVICE WORKER (P271-P285)
+    // ============================================================
+    { cat: '🌐 Offline y SW', q: '¿Qué es el Service Worker?', a: 'Es un script que corre en segundo plano y se encarga de cachear los archivos de la PWA para que funcione offline. También gestiona la actualización automática de la app.' },
+    { cat: '🌐 Offline y SW', q: '¿Qué significa "CACHE_REPAIRED_START" en la consola?', a: 'Es un mensaje del Service Worker que indica que ha detectado que faltan archivos en el caché y está empezando a re-descargarlos. Verás CACHE_REPAIRED_END cuando termine. Esto es normal tras limpiar el caché.' },
+    { cat: '🌐 Offline y SW', q: '¿Cómo puedo forzar la reparación del caché manualmente?', a: 'Desde la consola del navegador:\n```javascript\nnavigator.serviceWorker.controller.postMessage({ type: \'REPAIR_CACHE\' });\n```' },
+    { cat: '🌐 Offline y SW', q: '¿Cada cuánto se verifica la integridad del caché?', a: 'El Service Worker verifica la integridad cada 15 minutos automáticamente. Si detecta que faltan assets, los re-descarga en background.' },
+    { cat: '🌐 Offline y SW', q: '¿Qué pasa si el caché está corrupto al 50%?', a: 'Si la integridad baja del 80% (umbral configurable), el Service Worker considera el caché "corrupto" y re-descarga TODOS los assets críticos, no solo los que faltan.' },
+    { cat: '🌐 Offline y SW', q: '¿Cómo sé si el Service Worker está funcionando?', a: 'Abre DevTools (F12) → Application → Service Workers. Debes ver `sw.js` con estado "activated and is running". En la consola verás: `📦 SW Panario v2.2.1 cargado correctamente`.' },
+    { cat: '🌐 Offline y SW', q: '¿Qué hago si el Service Worker no se actualiza?', a: 'Ve a Application → Service Workers → marca "Update on reload" y recarga. O ejecuta en consola:\n```javascript\nnavigator.serviceWorker.getRegistration().then(r => r.update());\n```' },
+    { cat: '🌐 Offline y SW', q: '¿La app funciona si nunca he abierto el caché?', a: 'No. La PWA necesita una primera apertura con conexión para cachear los assets. Después de eso, funciona offline.' },
+    { cat: '🌐 Offline y SW', q: '¿Qué es la página "Sin conexión" de Panario?', a: 'Es una pantalla que se muestra cuando el Service Worker no puede servir la app desde caché ni desde red. Desde ahí puedes reintentar la conexión, limpiar el caché, o esperar a que el auto-retry detecte la reconexión.' },
+    { cat: '🌐 Offline y SW', q: '¿Qué significa el indicador de conexión (punto rojo/verde)?', a: '🟢 **Verde:** Hay conexión al servidor.\n🔴 **Rojo parpadeante:** No hay conexión (o el servidor no responde).' },
+    { cat: '🌐 Offline y SW', q: '¿Qué hace el botón "Reintentar conexión"?', a: 'Verifica si `navigator.onLine` es true y si el servidor responde (con un HEAD request). Si ambos son OK, recarga la app automáticamente.' },
+    { cat: '🌐 Offline y SW', q: '¿Qué hace el botón "Limpiar caché y recargar"?', a: 'Desregistra todos los Service Workers, elimina todas las cachés, y recarga la página con un parámetro anti-caché. Útil si la app muestra datos obsoletos o no carga correctamente.' },
+    { cat: '🌐 Offline y SW', q: '¿Qué es el auto-retry?', a: 'Es un mecanismo que reintenta la conexión automáticamente cada 5 segundos (máximo 12 intentos = 1 minuto). Si detecta reconexión, recarga la app sola.' },
+    { cat: '🌐 Offline y SW', q: '¿Qué atajos de teclado hay en la página offline?', a: '• **R:** Reintentar conexión.\n• **Esc:** Ir al inicio (index.html).' },
+    { cat: '🌐 Offline y SW', q: '¿La página offline funciona en modo oscuro?', a: 'Sí. Detecta la preferencia del sistema con `prefers-color-scheme: dark` y adapta los colores.' }
 ];
 
 // ============================================================
@@ -2019,7 +2191,6 @@ window.HelpModule = {
     isMobileDevice: isMobileDevice,
     FAQS_DB: FAQS_DB,
     DEV_AVATAR_PATH: DEV_AVATAR_PATH,
-    // 🆕 v2.2.3: Helpers de bloqueo
     _bloquearAppMientrasAyuda: _bloquearAppMientrasAyuda,
     _restaurarAppTrasAyuda: _restaurarAppTrasAyuda
 };
@@ -2045,12 +2216,10 @@ window._bloquearAppMientrasAyuda = _bloquearAppMientrasAyuda;
 window._restaurarAppTrasAyuda = _restaurarAppTrasAyuda;
 window.closeHelpMenuFallback = window.closeHelpMenuFallback || (() => {});
 
-console.log('📦 Help Module cargado correctamente v2.2.3 (FASE A - Fix modal bloqueante y responsive)');
+console.log('📦 Help Module cargado correctamente v2.2.4 (FAQs ampliadas a 315)');
 console.log('📚 FAQs cargadas:', FAQS_DB.length);
-console.log('🆕 v2.2.3 (Fase A):');
-console.log('   ✅ Overlay bloqueante cubre 100% y captura TODOS los clicks');
-console.log('   ✅ Ocultar header de la app + bottom-nav (visibility: hidden)');
-console.log('   ✅ inert en #appScreen (bloqueo moderno de eventos)');
-console.log('   ✅ stopPropagation en todos los botones del modal (✕, Volver, imprimir)');
-console.log('   ✅ Restauración completa al cerrar');
-console.log('   ✅ Detección robusta de móvil');
+console.log('🆕 v2.2.4:');
+console.log('   ✅ Total FAQs: 315 (antes 203)');
+console.log('   ✅ Nuevas categorías: Bloqueo por recetas, Excluir días, Bloque del día anterior, Producción por rango, Correcciones finales, Reportes, Auditoría, PWA y pantalla completa, Offline y SW');
+console.log('   ✅ Duplicados eliminados y consolidados');
+console.log('   ✅ El buscador de FAQs filtra por número o texto');

@@ -37,8 +37,12 @@
 //     - ✅ Incluye todos los cambios de las Fases A, B, C, D, E, F
 //     - ✅ Añadido soporte para el nuevo campo CMPBC
 //     - ✅ Compatible con todas las versiones anteriores
-//   v2.2.1 (230926 v7): 🔧 FIX PWA - Pantalla completa
-//     - ✅ manifest.json ahora usa "display": "fullscreen"
+//   v2.2.1 (230926 v7): 🔧 FIX PWA - Pantalla completa e instalación
+//     - ✅ manifest.json ahora usa "display": "standalone"
+//       (en lugar de "fullscreen" que Chrome Android NO reconoce
+//       como instalable)
+//     - ✅ Se mantiene display_override con "fullscreen" como primera
+//       opción, para navegadores que sí lo soportan
 //     - ✅ Se fuerza reinstalación limpia del caché para que
 //       todos los usuarios obtengan el nuevo manifest
 //     - ✅ Sin cambios funcionales, solo actualización de caché
@@ -751,4 +755,4 @@ console.log('   🎯 CACHE_NAME:', CACHE_NAME);
 console.log('   🔧 Auto-reparación de caché activada');
 console.log('   ⏱️ Verificación periódica cada 15 minutos');
 console.log('   🛡️ Umbral de integridad:', (INTEGRITY_THRESHOLD * 100) + '%');
-console.log('   🎉 v2.2.1: manifest con fullscreen + caché renovado');
+console.log('   🎉 v2.2.1: manifest con standalone (instalable) + caché renovado');

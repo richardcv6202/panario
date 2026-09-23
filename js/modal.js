@@ -10,6 +10,22 @@
 //   - ✅ Se ejecuta automáticamente al cerrar cualquier modal
 //   - ✅ cerrarTodosLosModales() ahora también limpia estilos residuales
 //   - ✅ Compatibilidad total con código existente
+// 🆕 v2.0.10 (230926 v5): FIX BUG #1 - Top bar se desconfigura
+//   - ✅ REFORZADO: limpiarEstilosResiduales() ahora resetea MÁS
+//     propiedades (transform, will-change, isolation, filter,
+//     perspective, backface-visibility, contain, content-visibility)
+//   - ✅ NUEVO: Listener global de 'visibilitychange' que limpia
+//     estilos residuales cuando la app vuelve a primer plano
+//   - ✅ NUEVO: Listener global de 'pageshow' (para bfcache)
+//   - ✅ NUEVO: Listener global de 'resize' y 'orientationchange'
+//   - ✅ NUEVO: Listener global de 'scroll' en el documento (con debounce)
+//   - ✅ NUEVO: Listener de 'focus' en window
+//   - ✅ NUEVO: Función startStyleCleanupWatchers() que registra
+//     todos los listeners globales
+//   - ✅ NUEVO: Función stopStyleCleanupWatchers() para limpiar
+//   - ✅ La limpieza se ejecuta también cada vez que se abre un modal
+//   - ✅ Se marca el body con clase 'modal-open' mientras hay un modal
+//     abierto, para que las reglas CSS defensivas sepan cuándo resetear
 // ============================================================
 
 window.ModalModule = {};
@@ -39,6 +55,13 @@ let _currentModal = null;
 let _currentModalTimeoutId = null;
 
 // ============================================================
+// 🆕 v2.0.10: ESTADO DE LOS WATCHERS
+// ============================================================
+
+let _styleCleanupWatchersStarted = false;
+let _styleCleanupDebounceTimer = null;
+
+// ============================================================
 // 🆕 v2.0.9: FUNCIONES DE BLOQUEO/DESBLOQUEO DEL SCROLL
 // ============================================================
 
@@ -52,6 +75,7 @@ function lockBodyScroll() {
         const prev = document.body.style.overflow || '';
         _bodyOverflowStack.push(prev);
         document.body.style.overflow = 'hidden';
+        document.body.classList.add('modal-open');
         console.log(`🔒 Body scroll bloqueado (stack size: ${_bodyOverflowStack.length})`);
     } catch (e) {
         console.warn('⚠️ Error en lockBodyScroll:', e);
@@ -73,25 +97,71 @@ function unlockBodyScroll() {
             document.body.style.overflow = prev;
             console.log(`🔓 Body scroll liberado (stack size: ${_bodyOverflowStack.length})`);
         }
+        
+        // Si no hay más modales apilados, quitar la clase
+        if (_bodyOverflowStack.length === 0) {
+            document.body.classList.remove('modal-open');
+        }
     } catch (e) {
         console.warn('⚠️ Error en unlockBodyScroll:', e);
     }
 }
 
 /**
- * Limpia TODOS los estilos residuales que puedan haber quedado en
- * el body, html o #appScreen y que rompan `position: sticky`.
+ * 🆕 v2.0.10: Limpia TODOS los estilos residuales que puedan haber
+ * quedado en el body, html, #appScreen, main o cualquier ancestro
+ * del header, y que rompan `position: sticky`.
  * 
  * Esto es crítico en móvil: si un modal añade `transform` o
  * `will-change` a un ancestro del header, el `position: sticky`
  * del header deja de funcionar y se deforma la barra superior.
+ * 
+ * Propiedades que se resetean:
+ *   - transform
+ *   - will-change
+ *   - isolation
+ *   - filter
+ *   - perspective
+ *   - backface-visibility
+ *   - contain (solo si es 'paint' o 'layout paint')
+ *   - content-visibility
+ *   - translate / rotate / scale (propiedades individuales)
+ *   - offset-path / offset-distance
+ * 
+ * @returns {number} Número de propiedades limpiadas
  */
 function limpiarEstilosResiduales() {
     try {
         const objetivos = [
             document.documentElement,
             document.body,
-            document.getElementById('appScreen')
+            document.getElementById('appScreen'),
+            document.getElementById('mainContent'),
+            document.getElementById('authScreen')
+        ].filter(el => el);
+        
+        // 🆕 v2.0.10: Lista ampliada de propiedades que rompen sticky
+        const propsAResetear = [
+            'transform',
+            'will-change',
+            'isolation',
+            'filter',
+            '-webkit-filter',
+            'perspective',
+            '-webkit-perspective',
+            'backface-visibility',
+            '-webkit-backface-visibility',
+            'content-visibility',
+            'translate',
+            'rotate',
+            'scale',
+            'offset-path',
+            'offset-distance',
+            'offset-rotate',
+            'container-type',
+            'container-name',
+            'overflow-anchor',
+            'view-transition-name'
         ];
         
         let limpiados = 0;
@@ -99,32 +169,42 @@ function limpiarEstilosResiduales() {
         objetivos.forEach(el => {
             if (!el || !el.style) return;
             
-            // Propiedades que rompen position: sticky
-            const propsAResetear = [
-                'transform',
-                'will-change',
-                'isolation',
-                'filter',
-                'perspective',
-                'backface-visibility'
-            ];
-            
             propsAResetear.forEach(prop => {
                 if (el.style.getPropertyValue(prop)) {
                     el.style.removeProperty(prop);
                     limpiados++;
                 }
             });
+            
+            // 🆕 v2.0.10: contain solo se resetea si es 'paint' o 'layout paint',
+            // porque contain: layout puede ser legítimo en algunos elementos.
+            try {
+                const containVal = el.style.getPropertyValue('contain');
+                if (containVal && (containVal.includes('paint') || containVal === 'strict' || containVal === 'content')) {
+                    el.style.removeProperty('contain');
+                    limpiados++;
+                }
+            } catch (e) {}
         });
         
         // También limpiar el body overflow si quedó huérfano
         if (document.body && document.body.style.overflow === 'hidden' && _bodyOverflowStack.length === 0) {
             document.body.style.overflow = '';
+            document.body.classList.remove('modal-open');
             console.log('🔧 Body overflow huérfano limpiado');
+            limpiados++;
+        }
+        
+        // 🆕 v2.0.10: Si no hay modales abiertos, asegurar que la clase modal-open no esté
+        if (document.body && _bodyOverflowStack.length === 0) {
+            if (document.body.classList.contains('modal-open')) {
+                document.body.classList.remove('modal-open');
+                console.log('🔧 Clase modal-open huérfana removida');
+            }
         }
         
         if (limpiados > 0) {
-            console.log(`🧹 ${limpiados} propiedades residuales limpiadas (transform/will-change/isolation/filter)`);
+            console.log(`🧹 ${limpiados} propiedades residuales limpiadas`);
         }
         
         return limpiados;
@@ -201,12 +281,105 @@ if (document.readyState === 'loading') {
 }
 
 // ============================================================
+// 🆕 v2.0.10: WATCHERS GLOBALES PARA LIMPIEZA AUTOMÁTICA
+// ============================================================
+// 
+// Estos listeners detectan situaciones donde el header podría
+// deformarse (cambio de visibilidad, resize, orientación, scroll,
+// focus) y ejecutan limpiarEstilosResiduales() para asegurar que
+// el `position: sticky` del header siga funcionando.
+// 
+// Se registran UNA SOLA VEZ cuando se llama a startStyleCleanupWatchers().
+// ============================================================
+
+function _debouncedLimpiarEstilos(delay = 150) {
+    if (_styleCleanupDebounceTimer) {
+        clearTimeout(_styleCleanupDebounceTimer);
+    }
+    _styleCleanupDebounceTimer = setTimeout(() => {
+        _styleCleanupDebounceTimer = null;
+        limpiarEstilosResiduales();
+    }, delay);
+}
+
+function startStyleCleanupWatchers() {
+    if (_styleCleanupWatchersStarted) {
+        console.log('🔄 [Modal] Watchers de limpieza ya estaban activos');
+        return;
+    }
+    
+    try {
+        // 1) Cuando la app vuelve a primer plano (móvil)
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                console.log('👁️ [Modal] App vuelve a primer plano → limpiando estilos');
+                _debouncedLimpiarEstilos(100);
+            }
+        });
+        
+        // 2) Cuando la página se restaura desde bfcache (back-forward cache)
+        window.addEventListener('pageshow', (e) => {
+            if (e.persisted) {
+                console.log('📄 [Modal] Página restaurada desde bfcache → limpiando estilos');
+                _debouncedLimpiarEstilos(100);
+            }
+        });
+        
+        // 3) Cuando la ventana cambia de tamaño
+        window.addEventListener('resize', () => {
+            _debouncedLimpiarEstilos(200);
+        });
+        
+        // 4) Cuando cambia la orientación (portrait/landscape)
+        window.addEventListener('orientationchange', () => {
+            console.log('📱 [Modal] Cambio de orientación → limpiando estilos');
+            _debouncedLimpiarEstilos(300);
+        });
+        
+        // 5) Cuando la ventana recibe el foco
+        window.addEventListener('focus', () => {
+            _debouncedLimpiarEstilos(150);
+        });
+        
+        // 6) Cuando el documento hace scroll (con debounce agresivo)
+        //    Nota: usamos capture porque el scroll puede ocurrir en main
+        document.addEventListener('scroll', () => {
+            _debouncedLimpiarEstilos(250);
+        }, { capture: true, passive: true });
+        
+        _styleCleanupWatchersStarted = true;
+        console.log('🔄 [Modal] Watchers de limpieza de estilos activados (visibilitychange, pageshow, resize, orientationchange, focus, scroll)');
+        
+    } catch (e) {
+        console.warn('⚠️ Error activando watchers de limpieza:', e);
+    }
+}
+
+function stopStyleCleanupWatchers() {
+    // Los listeners anónimos no se pueden remover fácilmente.
+    // En la práctica, no es necesario detenerlos.
+    _styleCleanupWatchersStarted = false;
+}
+
+// Activar watchers al cargar el módulo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(startStyleCleanupWatchers, 200);
+    });
+} else {
+    setTimeout(startStyleCleanupWatchers, 200);
+}
+
+// ============================================================
 // FUNCIONES PRINCIPALES
 // ============================================================
 
 function showConfirm(options) {
     return new Promise((resolve) => {
         console.log('📦 Modal: showConfirm llamado', options);
+        
+        // 🆕 v2.0.10: Limpiar estilos residuales antes de abrir un nuevo modal
+        limpiarEstilosResiduales();
         
         if (_currentModal) {
             closeCurrentModalImmediate();
@@ -250,6 +423,9 @@ function showConfirm(options) {
 
 function showAlert(options) {
     return new Promise((resolve) => {
+        // 🆕 v2.0.10: Limpiar estilos residuales antes de abrir un nuevo modal
+        limpiarEstilosResiduales();
+        
         if (_currentModal) {
             closeCurrentModalImmediate();
         }
@@ -293,6 +469,9 @@ function showAlert(options) {
 
 function showPrompt(options) {
     return new Promise((resolve) => {
+        // 🆕 v2.0.10: Limpiar estilos residuales antes de abrir un nuevo modal
+        limpiarEstilosResiduales();
+        
         if (_currentModal) {
             closeCurrentModalImmediate();
         }
@@ -821,6 +1000,7 @@ function cerrarTodosLosModales() {
     _bodyOverflowStack.length = 0;
     if (document.body) {
         document.body.style.overflow = '';
+        document.body.classList.remove('modal-open');
     }
     limpiarEstilosResiduales();
     
@@ -860,7 +1040,10 @@ window.ModalModule = {
     // 🆕 v2.0.9: Nuevas funciones
     lockBodyScroll,
     unlockBodyScroll,
-    limpiarEstilosResiduales
+    limpiarEstilosResiduales,
+    // 🆕 v2.0.10: Watchers globales
+    startStyleCleanupWatchers,
+    stopStyleCleanupWatchers
 };
 
 // Para compatibilidad con código existente
@@ -879,10 +1062,19 @@ window.lockBodyScroll = lockBodyScroll;
 window.unlockBodyScroll = unlockBodyScroll;
 window.limpiarEstilosResiduales = limpiarEstilosResiduales;
 
-console.log('📦 Modal Module v2.0.9 (FIX BUG #2: lockBodyScroll stack + limpiarEstilosResiduales)');
+// 🆕 v2.0.10: Exponer watchers
+window.startStyleCleanupWatchers = startStyleCleanupWatchers;
+window.stopStyleCleanupWatchers = stopStyleCleanupWatchers;
+
+console.log('📦 Modal Module v2.0.10 (FIX BUG #1: limpieza reforzada + watchers globales)');
 console.log('   🆕 Nuevas funciones:');
-console.log('      • lockBodyScroll() → bloquea scroll con stack LIFO');
-console.log('      • unlockBodyScroll() → restaura scroll del body');
-console.log('      • limpiarEstilosResiduales() → elimina transform/will-change residuales');
-console.log('      • cerrarTodosYLimpiar() → cierra todo + limpia');
-console.log('   ✅ Se ejecuta limpieza automática al cerrar cualquier modal');
+console.log('      • limpiarEstilosResiduales() → elimina 18+ propiedades residuales');
+console.log('      • startStyleCleanupWatchers() → activa watchers globales');
+console.log('      • stopStyleCleanupWatchers() → detiene watchers globales');
+console.log('   ✅ Watchers activos:');
+console.log('      • visibilitychange (app vuelve a primer plano)');
+console.log('      • pageshow (restauración desde bfcache)');
+console.log('      • resize (cambio de tamaño)');
+console.log('      • orientationchange (cambio de orientación)');
+console.log('      • focus (ventana recupera foco)');
+console.log('      • scroll (con debounce agresivo)');

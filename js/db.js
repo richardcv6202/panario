@@ -31,28 +31,18 @@
 // 🆕 v2.1.14 (210926 v10): CORRECCIÓN #6 - BLOQUE DEL DÍA ANTERIOR
 // 🆕 CORRECCIÓN #7 (211026 v11): PRODUCCIÓN POR RANGO DE FECHAS
 // 🆕 ENTREGA B (221026 v12): CAPACIDAD MÁXIMA DE PRODUCCIÓN
-//   - ✅ NUEVA columna en productos: capacidad_max_bloque REAL DEFAULT NULL
-//   - ✅ Migración automática idempotente
-//   - ✅ saveProducto() guarda capacidad_max_bloque
-//   - ✅ getProductos() y getProducto() devuelven capacidad_max_bloque
-//   - ✅ NUEVAS funciones auxiliares:
-//     * getCMPBCProducto(productoId) → devuelve el CMPBC o null
-//     * getProductosConCMPBC() → solo productos con CMPBC > 0
-//   - ✅ NUEVAS columnas en calendario_produccion:
-//     * bloques_usados INTEGER DEFAULT 1
-//     * distribucion_bloques TEXT (JSON)
-//   - ✅ saveProduccion() acepta los nuevos campos (opcionales)
-//   - ✅ Compatibilidad total: si no se pasan los campos, se comportan
-//     como antes (0/null)
 // 🆕 v2.2.1 (230926 v13): CORRECCIONES FINALES 220926
-//   - ✅ CORRECCIÓN P2.3: seedDefaultProducts() ahora inserta en la
-//     tabla `productos` (español) en lugar de `products` (inglés).
-//     Antes, los productos por defecto NO se cargaban nunca.
-//     Ahora se insertan correctamente con las columnas reales:
-//     nombre, precio_venta, unidad_venta, cantidad_por_unidad.
-//   - ✅ getPrefijoBackup() y writeBackupMeta() actualizados a v2.2.1
-//   - ✅ exportRecetasProductosSalva() actualizado a v2.2.1
-//   - ✅ Fallback de versión en console.log actualizado a 2.2.1
+// 🆕 v2.2.2 (230926 v14): CORRECCIÓN #9 - CONTEO PEDIDOS VS VENTAS
+// 🆕 v2.2.3 (230926 v15): CORRECCIÓN #11 - GUARDAR PRODUCTO EN PRODUCCIÓN
+//   - ✅ NUEVA columna en calendario_produccion: producto_id INTEGER
+//   - ✅ NUEVA función: ensureProductoIdColumn(db)
+//     * Migración idempotente: añade la columna si no existe
+//   - ✅ saveProduccion() ahora acepta y guarda producto_id
+//   - ✅ getProduccionByFecha() devuelve producto_id
+//   - ✅ getProduccionRango() devuelve producto_id
+//   - ✅ saveProduccionRango() ahora acepta y guarda producto_id
+//   - ✅ Compatibilidad total: si producto_id es null/undefined,
+//     se guarda como NULL sin romper nada
 // ============================================================
 
 let db = null;
@@ -162,6 +152,9 @@ const TABLAS_FK_MAP = {
     ],
     'notifications': [
         { col: 'order_id', target: 'orders' }
+    ],
+    'calendario_produccion': [
+        { col: 'producto_id', target: 'productos' }
     ]
 };
 
@@ -305,9 +298,9 @@ async function initDB() {
         await ensureDiasSinVentasTable(db);
         await ensureCalendarioProduccionTable(db);
         await migrateCantidadProduccionToReal(db);
-        // 🆕 ENTREGA B: migración CMPBC + columnas de bloques
         await ensureCapacidadMaxBloqueColumn(db);
         await ensureBloquesDistribucionColumns(db);
+        await ensureProductoIdColumn(db);  // 🆕 CORRECCIÓN #11
         await ensureNegociosTable(db);
         await ensureNegocioIdColumn(db);
         await migrateToMultiUser(db);
@@ -336,32 +329,115 @@ async function initDB() {
 }
 
 // ============================================================
+// 🆕 CORRECCIÓN #9: CONTEO UNIFICADO DE PEDIDOS Y VENTAS
+// ============================================================
+
+function contarPedidosYVentasFecha(fechaISO) {
+    const LOG_PREFIX = '📊 [contarPedidosYVentasFecha]';
+    
+    try {
+        const negocioId = getNegocioIdActual();
+        if (!negocioId || !fechaISO) {
+            return { pedidos: 0, ventas: 0, disponibles: 0, cantidadProduccion: 0 };
+        }
+        
+        console.log(`${LOG_PREFIX} Contando para fecha=${fechaISO}, negocio=${negocioId}`);
+        
+        const pedidosResult = query(
+            `SELECT COUNT(*) as count FROM orders 
+             WHERE negocio_id = ? 
+               AND DATE(delivery_date) = DATE(?)
+               AND deleted_at IS NULL
+               AND status NOT IN ('cancelled')`,
+            [negocioId, fechaISO]
+        );
+        const pedidos = pedidosResult[0]?.count || 0;
+        
+        const ventasResult = query(
+            `SELECT COUNT(*) as count FROM sales 
+             WHERE negocio_id = ? 
+               AND DATE(sale_date) = DATE(?)
+               AND deleted_at IS NULL 
+               AND voided = 0
+               AND (order_id IS NULL OR order_id = 0)`,
+            [negocioId, fechaISO]
+        );
+        const ventas = ventasResult[0]?.count || 0;
+        
+        const prodConfig = getProduccionByFecha(fechaISO);
+        const cantidadProduccion = parseFloat(prodConfig?.cantidad_produccion) || 0;
+        
+        const disponibles = cantidadProduccion > 0 
+            ? Math.max(0, cantidadProduccion - pedidos - ventas)
+            : null;
+        
+        console.log(`${LOG_PREFIX} Resultado: pedidos=${pedidos}, ventasDirectas=${ventas}, cantidadProd=${cantidadProduccion}, disponibles=${disponibles}`);
+        
+        return { 
+            pedidos, 
+            ventas, 
+            disponibles, 
+            cantidadProduccion 
+        };
+        
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} ⚠️ Error:`, e);
+        return { pedidos: 0, ventas: 0, disponibles: 0, cantidadProduccion: 0 };
+    }
+}
+
+// ============================================================
+// 🆕 CORRECCIÓN #11: MIGRACIÓN PRODUCTO_ID EN CALENDARIO_PRODUCCION
+// ============================================================
+
+async function ensureProductoIdColumn(db) {
+    const LOG_PREFIX = '🔧 [ensureProductoIdColumn]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='calendario_produccion'`);
+        if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ Tabla calendario_produccion no existe, se omite.`);
+            return;
+        }
+        
+        const columns = db.exec('PRAGMA table_info(calendario_produccion)');
+        const columnNames = columns[0]?.values?.map(row => row[1]) || [];
+        
+        if (!columnNames.includes('producto_id')) {
+            try {
+                db.run('ALTER TABLE calendario_produccion ADD COLUMN producto_id INTEGER');
+                console.log(`${LOG_PREFIX} ✅ Columna producto_id añadida`);
+            } catch (e) {
+                console.warn(`${LOG_PREFIX} ⚠️ Error añadiendo columna:`, e.message);
+            }
+        } else {
+            console.log(`${LOG_PREFIX} ✓ Columna producto_id ya existe`);
+        }
+        
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+// ============================================================
 // 🆕 ENTREGA B: MIGRACIÓN CMPBC
 // ============================================================
 
-/**
- * 🆕 ENTREGA B: Asegura que exista la columna `capacidad_max_bloque`
- * en la tabla `productos`.
- * 
- * Semántica:
- *   - NULL  → sin límite definido (comportamiento anterior)
- *   - > 0   → capacidad máxima por bloque de corriente
- *   - 0     → sin límite (equivalente a NULL)
- */
 async function ensureCapacidadMaxBloqueColumn(db) {
     const LOG_PREFIX = '🔧 [ensureCapacidadMaxBloqueColumn]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
         
-        // Verificar que la tabla productos existe
         const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='productos'`);
         if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
-            console.log(`${LOG_PREFIX} ℹ️ La tabla productos no existe todavía. Se creará con la migración.`);
+            console.log(`${LOG_PREFIX} ℹ️ La tabla productos no existe todavía.`);
             return;
         }
         
-        // Verificar columnas
         const columns = db.exec('PRAGMA table_info(productos)');
         const columnNames = columns[0]?.values?.map(row => row[1]) || [];
         
@@ -382,10 +458,6 @@ async function ensureCapacidadMaxBloqueColumn(db) {
     }
 }
 
-/**
- * 🆕 ENTREGA B: Asegura que existan las columnas `bloques_usados` y
- * `distribucion_bloques` en la tabla `calendario_produccion`.
- */
 async function ensureBloquesDistribucionColumns(db) {
     const LOG_PREFIX = '🔧 [ensureBloquesDistribucionColumns]';
     
@@ -437,7 +509,6 @@ async function ensureCalendarioProduccionTable(db) {
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
-        
         console.log(`${LOG_PREFIX} PASO 1: CREATE TABLE IF NOT EXISTS...`);
         
         db.run(`
@@ -454,13 +525,15 @@ async function ensureCalendarioProduccionTable(db) {
                 fecha_bloque_real TEXT,
                 bloques_usados INTEGER DEFAULT 1,
                 distribucion_bloques TEXT,
+                producto_id INTEGER,
                 created_by INTEGER,
                 modified_by INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 deleted_at DATETIME DEFAULT NULL,
                 uuid TEXT,
-                FOREIGN KEY (negocio_id) REFERENCES negocios(id)
+                FOREIGN KEY (negocio_id) REFERENCES negocios(id),
+                FOREIGN KEY (producto_id) REFERENCES productos(id)
             )
         `);
         console.log(`${LOG_PREFIX} ✅ Tabla creada o ya existía`);
@@ -468,13 +541,13 @@ async function ensureCalendarioProduccionTable(db) {
         try {
             db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_negocio ON calendario_produccion(negocio_id)');
             db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_fecha ON calendario_produccion(fecha)');
+            db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_producto ON calendario_produccion(producto_id)');
             db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_calendario_produccion_unique ON calendario_produccion(negocio_id, fecha) WHERE deleted_at IS NULL');
             console.log(`${LOG_PREFIX} ✅ Índices OK`);
         } catch (e) {
             console.warn(`${LOG_PREFIX} ⚠️ Error creando índices:`, e.message);
         }
         
-        // Verificar/añadir columnas
         const columns = db.exec('PRAGMA table_info(calendario_produccion)');
         const columnNames = columns[0]?.values?.map(row => row[1]) || [];
         
@@ -486,6 +559,7 @@ async function ensureCalendarioProduccionTable(db) {
             { name: 'fecha_bloque_real', type: 'TEXT' },
             { name: 'bloques_usados', type: 'INTEGER DEFAULT 1' },
             { name: 'distribucion_bloques', type: 'TEXT' },
+            { name: 'producto_id', type: 'INTEGER' },
             { name: 'created_by', type: 'INTEGER' },
             { name: 'modified_by', type: 'INTEGER' },
             { name: 'uuid', type: 'TEXT' },
@@ -565,6 +639,7 @@ async function migrateCantidadProduccionToReal(db) {
                 fecha_bloque_real TEXT,
                 bloques_usados INTEGER DEFAULT 1,
                 distribucion_bloques TEXT,
+                producto_id INTEGER,
                 created_by INTEGER,
                 modified_by INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -579,21 +654,23 @@ async function migrateCantidadProduccionToReal(db) {
         const tieneFechaBloqueReal = columnasOriginales.includes('fecha_bloque_real');
         const tieneBloquesUsados = columnasOriginales.includes('bloques_usados');
         const tieneDistribucion = columnasOriginales.includes('distribucion_bloques');
+        const tieneProductoId = columnasOriginales.includes('producto_id');
         
         const esBloqueAyerSelect = tieneEsBloqueAyer ? 'es_bloque_dia_anterior' : '0';
         const fechaBloqueRealSelect = tieneFechaBloqueReal ? 'fecha_bloque_real' : 'NULL';
         const bloquesUsadosSelect = tieneBloquesUsados ? 'bloques_usados' : '1';
         const distribucionSelect = tieneDistribucion ? 'distribucion_bloques' : 'NULL';
+        const productoIdSelect = tieneProductoId ? 'producto_id' : 'NULL';
         
         db.run(`
             INSERT INTO calendario_produccion_new 
             (id, negocio_id, fecha, hora_inicio, hora_fin, bloque_index, 
              cantidad_produccion, notas, es_bloque_dia_anterior, fecha_bloque_real,
-             bloques_usados, distribucion_bloques,
+             bloques_usados, distribucion_bloques, producto_id,
              created_by, modified_by, created_at, updated_at, deleted_at, uuid)
             SELECT id, negocio_id, fecha, hora_inicio, hora_fin, bloque_index, 
                    cantidad_produccion, notas, ${esBloqueAyerSelect}, ${fechaBloqueRealSelect},
-                   ${bloquesUsadosSelect}, ${distribucionSelect},
+                   ${bloquesUsadosSelect}, ${distribucionSelect}, ${productoIdSelect},
                    created_by, modified_by, created_at, updated_at, deleted_at, uuid
             FROM calendario_produccion
         `);
@@ -604,6 +681,7 @@ async function migrateCantidadProduccionToReal(db) {
         try {
             db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_negocio ON calendario_produccion(negocio_id)');
             db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_fecha ON calendario_produccion(fecha)');
+            db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_producto ON calendario_produccion(producto_id)');
             db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_calendario_produccion_unique ON calendario_produccion(negocio_id, fecha) WHERE deleted_at IS NULL');
         } catch (e) {}
         
@@ -1169,19 +1247,8 @@ function updateUserDashboardConfig(userId, config) {
 // SEMILLAS
 // ============================================================
 
-/**
- * 🆕 v2.2.1: Semilla de productos por defecto.
- * 
- * CORRECCIÓN P2.3:
- *   - Antes insertaba en la tabla `products` (inglés), que NO EXISTE.
- *   - Ahora inserta en la tabla `productos` (español), con las columnas
- *     reales: nombre, descripcion, precio_venta, unidad_venta,
- *     cantidad_por_unidad.
- *   - Los productos por defecto ahora SÍ se cargan correctamente.
- */
 async function seedDefaultProducts(db) {
     try {
-        // Verificar cuántos productos hay en la tabla `productos`
         const count = db.exec('SELECT COUNT(*) as count FROM productos WHERE deleted_at IS NULL');
         const existing = count[0]?.values?.[0]?.[0] || 0;
         
@@ -1209,11 +1276,9 @@ async function seedDefaultProducts(db) {
                 { nombre: 'Pan de Molde', precio_venta: 2.80, unidad_venta: 'unidad', cantidad_por_unidad: 1 }
             ];
             
-            // Obtener el primer usuario (o 1 por defecto) para user_id
             const userResult = db.exec('SELECT id FROM users WHERE deleted_at IS NULL LIMIT 1');
             const userId = userResult[0]?.values?.[0]?.[0] || 1;
             
-            // Obtener el negocio actual (o 1 por defecto)
             const negocioResult = db.exec('SELECT id FROM negocios WHERE deleted_at IS NULL LIMIT 1');
             const negocioId = negocioResult[0]?.values?.[0]?.[0] || 1;
             
@@ -1494,13 +1559,15 @@ async function createAllTables(db) {
             fecha_bloque_real TEXT,
             bloques_usados INTEGER DEFAULT 1,
             distribucion_bloques TEXT,
+            producto_id INTEGER,
             created_by INTEGER,
             modified_by INTEGER,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             deleted_at DATETIME DEFAULT NULL,
             uuid TEXT,
-            FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
+            FOREIGN KEY (negocio_id) REFERENCES negocios(id),
+            FOREIGN KEY (producto_id) REFERENCES productos(id))`);
 
         console.log('✅ Todas las tablas creadas/verificadas');
     } catch (error) {
@@ -1676,13 +1743,6 @@ function execute(sql, params = []) {
 // 🆕 ENTREGA B: FUNCIONES CMPBC
 // ============================================================
 
-/**
- * 🆕 ENTREGA B: Obtiene el CMPBC (Capacidad Máxima de Producción
- * por Bloque de Corriente) de un producto.
- * 
- * @param {number} productoId - ID del producto
- * @returns {number|null} - El valor o null si no está definido o es 0
- */
 function getCMPBCProducto(productoId) {
     try {
         if (!productoId) return null;
@@ -1700,12 +1760,6 @@ function getCMPBCProducto(productoId) {
     }
 }
 
-/**
- * 🆕 ENTREGA B: Devuelve todos los productos que tienen un CMPBC definido
- * (mayor que 0).
- * 
- * @returns {Array} - Array de productos con CMPBC
- */
 function getProductosConCMPBC() {
     try {
         const negocioId = getNegocioIdActual();
@@ -1732,9 +1786,6 @@ window.getProductosConCMPBC = getProductosConCMPBC;
 // CALENDARIO_PRODUCCION
 // ============================================================
 
-/**
- * Obtiene la configuración de producción para una fecha.
- */
 function getProduccionByFecha(fecha) {
     const LOG_PREFIX = '🔍 [getProduccionByFecha]';
     
@@ -1762,7 +1813,7 @@ function getProduccionByFecha(fecha) {
         
         if (result.length > 0) {
             const reg = result[0];
-            console.log(`${LOG_PREFIX} ✅ Encontrado: id=${reg.id}, cantidad=${reg.cantidad_produccion}, bloque=${reg.bloque_index}, es_dia_ant=${reg.es_bloque_dia_anterior}`);
+            console.log(`${LOG_PREFIX} ✅ Encontrado: id=${reg.id}, cantidad=${reg.cantidad_produccion}, bloque=${reg.bloque_index}, producto_id=${reg.producto_id}, es_dia_ant=${reg.es_bloque_dia_anterior}`);
             return reg;
         }
         
@@ -1775,20 +1826,6 @@ function getProduccionByFecha(fecha) {
     }
 }
 
-/**
- * Guarda la producción con cantidad DECIMAL y soporte para bloque del día anterior.
- * 
- * 🆕 ENTREGA B: Acepta también los campos `bloques_usados` y
- * `distribucion_bloques` (JSON string) — opcionales.
- * 
- * @param {Object} data - { 
- *     fecha, hora_inicio, hora_fin, bloque_index, cantidad_produccion, notas,
- *     es_bloque_dia_anterior (0|1, opcional),
- *     fecha_bloque_real (YYYY-MM-DD, opcional),
- *     bloques_usados (number, opcional, default 1),
- *     distribucion_bloques (string JSON, opcional)
- * }
- */
 function saveProduccion(data) {
     const LOG_PREFIX = '💾 [saveProduccion]';
     
@@ -1830,8 +1867,18 @@ function saveProduccion(data) {
         const bloquesUsados = parseInt(data.bloques_usados) || 1;
         const distribucionBloques = data.distribucion_bloques || null;
         
+        // 🆕 CORRECCIÓN #11: producto_id
+        let productoId = null;
+        if (data.producto_id !== undefined && data.producto_id !== null && data.producto_id !== '') {
+            const parsed = parseInt(data.producto_id);
+            if (!isNaN(parsed) && parsed > 0) {
+                productoId = parsed;
+            }
+        }
+        
         console.log(`${LOG_PREFIX}   ✅ Validaciones OK`);
         console.log(`${LOG_PREFIX}   📊 Cantidad parseada: ${cantidad}`);
+        console.log(`${LOG_PREFIX}   🏷️ Producto ID: ${productoId}`);
         console.log(`${LOG_PREFIX}   🔨 Es bloque día anterior: ${esBloqueDiaAnterior}`);
         console.log(`${LOG_PREFIX}   📅 Fecha bloque real: ${fechaBloqueReal || '(ninguna)'}`);
         console.log(`${LOG_PREFIX}   🔢 Bloques usados: ${bloquesUsados}`);
@@ -1858,6 +1905,7 @@ function saveProduccion(data) {
                     cantidad_produccion = ?, notas = ?, 
                     es_bloque_dia_anterior = ?, fecha_bloque_real = ?,
                     bloques_usados = ?, distribucion_bloques = ?,
+                    producto_id = ?,
                     modified_by = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ? AND negocio_id = ?
             `, [
@@ -1870,6 +1918,7 @@ function saveProduccion(data) {
                 fechaBloqueReal,
                 bloquesUsados,
                 distribucionBloques,
+                productoId,
                 currentUserId,
                 existing.id,
                 negocioId
@@ -1889,9 +1938,9 @@ function saveProduccion(data) {
                 INSERT INTO calendario_produccion 
                 (negocio_id, fecha, hora_inicio, hora_fin, bloque_index, 
                  cantidad_produccion, notas, es_bloque_dia_anterior, fecha_bloque_real,
-                 bloques_usados, distribucion_bloques,
+                 bloques_usados, distribucion_bloques, producto_id,
                  created_by, modified_by, uuid)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `, [
                 negocioId,
                 data.fecha,
@@ -1904,6 +1953,7 @@ function saveProduccion(data) {
                 fechaBloqueReal,
                 bloquesUsados,
                 distribucionBloques,
+                productoId,
                 currentUserId,
                 currentUserId,
                 uuid
@@ -1983,25 +2033,9 @@ function getProduccionRango(desde, hasta) {
 }
 
 // ============================================================
-// CORRECCIÓN #7: PRODUCCIÓN POR RANGO DE FECHAS
+// CORRECCIÓN #7 + #11: PRODUCCIÓN POR RANGO DE FECHAS
 // ============================================================
 
-/**
- * Guarda la MISMA configuración de producción para múltiples fechas
- * en una sola transacción.
- * 
- * @param {Object} data - {
- *     fechas: string[],
- *     hora_inicio: 'HH:MM',
- *     hora_fin: 'HH:MM',
- *     bloque_index: number,
- *     cantidad_produccion: number,
- *     notas: string|null,
- *     es_bloque_dia_anterior: 0|1,
- *     fecha_bloque_real: string|null
- * }
- * @returns {Object} { success, creados, actualizados, total, fallidos }
- */
 function saveProduccionRango(data) {
     const LOG_PREFIX = '💾💾 [saveProduccionRango]';
     
@@ -2035,7 +2069,17 @@ function saveProduccionRango(data) {
         const esBloqueDiaAnterior = data.es_bloque_dia_anterior ? 1 : 0;
         const fechaBloqueReal = data.fecha_bloque_real || null;
         
+        // 🆕 CORRECCIÓN #11: producto_id
+        let productoId = null;
+        if (data.producto_id !== undefined && data.producto_id !== null && data.producto_id !== '') {
+            const parsed = parseInt(data.producto_id);
+            if (!isNaN(parsed) && parsed > 0) {
+                productoId = parsed;
+            }
+        }
+        
         console.log(`${LOG_PREFIX} Procesando ${data.fechas.length} fechas...`);
+        console.log(`${LOG_PREFIX} Producto ID: ${productoId}`);
         
         const db = getDB();
         const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='calendario_produccion'`);
@@ -2065,12 +2109,14 @@ function saveProduccionRango(data) {
                             SET hora_inicio = ?, hora_fin = ?, bloque_index = ?, 
                                 cantidad_produccion = ?, notas = ?, 
                                 es_bloque_dia_anterior = ?, fecha_bloque_real = ?,
+                                producto_id = ?,
                                 modified_by = ?, updated_at = CURRENT_TIMESTAMP
                             WHERE id = ? AND negocio_id = ?
                         `, [
                             data.hora_inicio, data.hora_fin, data.bloque_index,
                             cantidad, data.notas || null,
                             esBloqueDiaAnterior, fechaBloqueReal,
+                            productoId,
                             currentUserId, existing[0].id, negocioId
                         ]);
                         actualizados++;
@@ -2080,12 +2126,14 @@ function saveProduccionRango(data) {
                             INSERT INTO calendario_produccion 
                             (negocio_id, fecha, hora_inicio, hora_fin, bloque_index, 
                              cantidad_produccion, notas, es_bloque_dia_anterior, fecha_bloque_real,
+                             producto_id,
                              created_by, modified_by, uuid)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         `, [
                             negocioId, fecha, data.hora_inicio, data.hora_fin, data.bloque_index,
                             cantidad, data.notas || null,
                             esBloqueDiaAnterior, fechaBloqueReal,
+                            productoId,
                             currentUserId, currentUserId, uuid
                         ]);
                         creados++;
@@ -2183,7 +2231,8 @@ function getProduccionRangoFechas(desde, hasta) {
                 cantidad: parseFloat(reg.cantidad_produccion) || 0,
                 bloque_index: reg.bloque_index,
                 es_bloque_dia_anterior: reg.es_bloque_dia_anterior === 1,
-                fecha_bloque_real: reg.fecha_bloque_real
+                fecha_bloque_real: reg.fecha_bloque_real,
+                producto_id: reg.producto_id
             };
         }
         return mapa;
@@ -2212,7 +2261,7 @@ function writeBackupMeta(db, backupType) {
         db.run(`INSERT INTO ${BACKUP_META_TABLE} 
             (backup_type, backup_date, backup_version, backup_negocio_id, backup_negocio_nombre, backup_user, backup_user_role)
             VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-            backupType, new Date().toISOString(), '2.2.1', negocioId,
+            backupType, new Date().toISOString(), '2.2.3', negocioId,
             negocio?.nombre || 'Desconocido', user?.username || 'Desconocido',
             user?.is_admin === 1 ? 'admin' : 'user'
         ]);
@@ -2334,7 +2383,7 @@ function exportRecetasProductosSalva() {
 
         const salva = {
             _meta: {
-                app: 'Panario', version: '2.2.1', type: 'salva_recetas_productos',
+                app: 'Panario', version: '2.2.3', type: 'salva_recetas_productos',
                 exportDate: new Date().toISOString(), negocio_id: negocioId,
                 negocio_nombre: getNombreNegocioDB(),
                 counts: {
@@ -2519,7 +2568,6 @@ function saveProducto(productoData) {
     const currentUserId = getCurrentUserId();
 
     try {
-        // 🆕 ENTREGA B: Normalizar capacidad_max_bloque
         let capacidadMax = null;
         if (productoData.capacidad_max_bloque !== undefined && productoData.capacidad_max_bloque !== null && productoData.capacidad_max_bloque !== '') {
             const parsed = parseFloat(productoData.capacidad_max_bloque);
@@ -3694,6 +3742,10 @@ window.DBModule = {
     ensureBloquesDistribucionColumns,
     getCMPBCProducto,
     getProductosConCMPBC,
+    // 🆕 CORRECCIÓN #9
+    contarPedidosYVentasFecha,
+    // 🆕 CORRECCIÓN #11
+    ensureProductoIdColumn,
     // Generales
     generateUuid, generateUuidForTable, ensureUuidColumns, migrateUuids,
     UUID_PREFIXES,
@@ -3734,8 +3786,12 @@ window.DBModule = {
     BACKUP_TYPE_COMPLETE, BACKUP_TYPE_DATA_ONLY
 };
 
-console.log('📦 DB Module cargado correctamente v2.2.1 (CORRECCIONES FINALES 220926)');
-console.log('   🆕 Novedades v2.2.1:');
-console.log('      • CORRECCIÓN P2.3: seedDefaultProducts() ahora inserta en la tabla "productos" (español)');
-console.log('      • Los productos por defecto SÍ se cargan al iniciar la app por primera vez');
-console.log('      • getPrefijoBackup() y writeBackupMeta() reportan versión 2.2.1');
+console.log('📦 DB Module cargado correctamente v2.2.3 (CORRECCIÓN #11: producto_id en producción)');
+console.log('   🆕 Novedades v2.2.3:');
+console.log('      • NUEVA columna: calendario_produccion.producto_id');
+console.log('      • NUEVA función: ensureProductoIdColumn(db)');
+console.log('      • saveProduccion() guarda producto_id');
+console.log('      • getProduccionByFecha() devuelve producto_id');
+console.log('      • saveProduccionRango() guarda producto_id');
+console.log('      • getProduccionRangoFechas() devuelve producto_id');
+console.log('      • Compatibilidad total con versiones anteriores');

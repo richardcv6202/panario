@@ -35,6 +35,7 @@
     <!-- ============================================================ -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#f5a623">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Panario">
@@ -571,8 +572,12 @@
         }
         
         // ============================================================
-        // 🆕 v2.2.1: DETECTAR MODO FULLSCREEN (pantalla completa)
+        // 🆕 v2.2.1: DETECTAR MODO FULLSCREEN
         // ============================================================
+        // NOTA: En Android Chrome, matchMedia('(display-mode: fullscreen)')
+        // devuelve false incluso si la PWA está en fullscreen. Esto es un
+        // bug conocido de Chrome Android. Se mantiene la detección por
+        // compatibilidad con navegadores que sí lo soportan.
         if (window.matchMedia('(display-mode: fullscreen)').matches) {
             console.log('📱 PWA: Ejecutándose en modo FULLSCREEN');
             document.documentElement.setAttribute('data-pwa-fullscreen', 'true');

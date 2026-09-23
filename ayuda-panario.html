@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Panario v2.2.0 — Ayuda Completa</title>
+    <title>Panario v2.2.1 — Ayuda Completa</title>
     <style>
         /* ============================================================
            RESET Y VARIABLES
@@ -62,6 +62,10 @@
 
         html {
             scroll-behavior: smooth;
+            /* 🆕 v2.2.1: evitar scroll horizontal global */
+            overflow-x: hidden;
+            width: 100%;
+            max-width: 100%;
         }
 
         body {
@@ -71,10 +75,14 @@
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            /* 🆕 v2.2.1: evitar scroll horizontal global */
+            overflow-x: hidden;
+            width: 100%;
+            max-width: 100%;
         }
 
         /* ============================================================
-           HEADER
+           HEADER - 🆕 v2.2.1: Ajustado al 100% sin desbordar
            ============================================================ */
         header.help-header {
             position: sticky;
@@ -85,14 +93,19 @@
             padding: 12px 20px;
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 12px;
             box-shadow: var(--shadow);
             flex-wrap: wrap;
+            /* 🆕 v2.2.1: Asegurar ancho completo sin desbordar */
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         }
 
         .help-logo {
             font-size: 32px;
             line-height: 1;
+            flex-shrink: 0;
         }
 
         .help-title {
@@ -100,6 +113,7 @@
             font-weight: 700;
             color: var(--primary);
             margin: 0;
+            word-break: break-word;
         }
 
         .help-subtitle {
@@ -115,6 +129,8 @@
             padding: 2px 10px;
             border-radius: 12px;
             font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .help-controls {
@@ -122,6 +138,8 @@
             gap: 8px;
             align-items: center;
             margin-left: auto;
+            flex-shrink: 0;
+            flex-wrap: wrap;
         }
 
         .help-btn {
@@ -138,6 +156,7 @@
             align-items: center;
             gap: 6px;
             text-decoration: none;
+            white-space: nowrap;
         }
 
         .help-btn:hover {
@@ -222,7 +241,7 @@
         }
 
         /* ============================================================
-           LAYOUT PRINCIPAL
+           LAYOUT PRINCIPAL - 🆕 v2.2.1: Sin desbordar
            ============================================================ */
         .help-layout {
             display: flex;
@@ -233,23 +252,29 @@
             padding: 20px;
             gap: 20px;
             align-items: flex-start;
+            /* 🆕 v2.2.1: Prevenir desbordamiento */
+            box-sizing: border-box;
+            overflow-x: hidden;
         }
 
         /* ============================================================
-           SIDEBAR / ÍNDICE
+           SIDEBAR / ÍNDICE - 🆕 v2.2.1: Sin desbordar
            ============================================================ */
         aside.help-sidebar {
             width: var(--sidebar-width);
+            max-width: 100%;
             flex-shrink: 0;
             position: sticky;
             top: calc(var(--header-height) + 20px);
             max-height: calc(100vh - var(--header-height) - 40px);
             overflow-y: auto;
+            overflow-x: hidden;
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: var(--radius);
             padding: 16px;
             box-shadow: var(--shadow);
+            box-sizing: border-box;
         }
 
         .sidebar-title {
@@ -273,6 +298,7 @@
             font-size: 13px;
             margin-bottom: 12px;
             transition: border-color 0.2s;
+            box-sizing: border-box;
         }
 
         .sidebar-search:focus {
@@ -298,6 +324,7 @@
             font-size: 13px;
             transition: all 0.15s;
             border-left: 3px solid transparent;
+            word-break: break-word;
         }
 
         .sidebar-nav li a:hover {
@@ -330,14 +357,17 @@
         }
 
         /* ============================================================
-           CONTENIDO PRINCIPAL
+           CONTENIDO PRINCIPAL - 🆕 v2.2.1: Sin desbordar
            ============================================================ */
         main.help-content {
             flex: 1;
             min-width: 0;
+            max-width: 100%;
             display: flex;
             flex-direction: column;
             gap: 20px;
+            box-sizing: border-box;
+            overflow-x: hidden;
         }
 
         section.help-section {
@@ -347,6 +377,11 @@
             padding: 28px 32px;
             box-shadow: var(--shadow);
             scroll-margin-top: calc(var(--header-height) + 20px);
+            /* 🆕 v2.2.1: Sin desbordar */
+            max-width: 100%;
+            box-sizing: border-box;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
         }
 
         section.help-section h2 {
@@ -358,6 +393,8 @@
             gap: 10px;
             padding-bottom: 12px;
             border-bottom: 3px solid var(--primary);
+            flex-wrap: wrap;
+            word-break: break-word;
         }
 
         section.help-section h3 {
@@ -367,6 +404,8 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            flex-wrap: wrap;
+            word-break: break-word;
         }
 
         section.help-section h4 {
@@ -378,6 +417,7 @@
         section.help-section p {
             margin: 8px 0;
             color: var(--text);
+            word-break: break-word;
         }
 
         section.help-section ul,
@@ -388,12 +428,14 @@
 
         section.help-section li {
             margin: 4px 0;
+            word-break: break-word;
         }
 
         section.help-section a {
             color: var(--primary);
             text-decoration: none;
             border-bottom: 1px dashed var(--primary);
+            word-break: break-all;
         }
 
         section.help-section a:hover {
@@ -408,6 +450,7 @@
             font-size: 13px;
             border: 1px solid var(--border);
             color: var(--danger);
+            word-break: break-word;
         }
 
         section.help-section pre {
@@ -420,6 +463,9 @@
             font-size: 12px;
             line-height: 1.5;
             margin: 12px 0;
+            max-width: 100%;
+            box-sizing: border-box;
+            -webkit-overflow-scrolling: touch;
         }
 
         section.help-section pre code {
@@ -438,6 +484,9 @@
             border-radius: var(--radius-sm);
             padding: 16px 18px;
             margin: 12px 0;
+            max-width: 100%;
+            box-sizing: border-box;
+            word-break: break-word;
         }
 
         .card-help.info { border-left: 4px solid var(--info); }
@@ -454,19 +503,29 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            flex-wrap: wrap;
         }
 
         /* ============================================================
-           TABLAS
+           TABLAS - 🆕 v2.2.1: Scroll horizontal PROPIO (no de la página)
            ============================================================ */
+        .help-table-wrapper {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 12px 0;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            box-sizing: border-box;
+        }
+
         table.help-table {
             width: 100%;
             border-collapse: collapse;
-            margin: 12px 0;
             font-size: 13px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            overflow: hidden;
+            min-width: 400px;
+            box-sizing: border-box;
         }
 
         table.help-table th {
@@ -476,12 +535,14 @@
             text-align: left;
             font-size: 12px;
             font-weight: 700;
+            white-space: nowrap;
         }
 
         table.help-table td {
             padding: 8px 12px;
             border-bottom: 1px solid var(--border);
             vertical-align: top;
+            word-break: break-word;
         }
 
         table.help-table tr:nth-child(even) td {
@@ -520,6 +581,8 @@
             padding: 12px 16px;
             margin-bottom: 8px;
             transition: all 0.2s;
+            max-width: 100%;
+            box-sizing: border-box;
         }
 
         details.faq-item[open] {
@@ -535,6 +598,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            word-break: break-word;
         }
 
         details.faq-item summary::-webkit-details-marker {
@@ -547,6 +611,7 @@
             color: var(--primary);
             transition: transform 0.2s;
             display: inline-block;
+            flex-shrink: 0;
         }
 
         details.faq-item[open] summary::before {
@@ -561,10 +626,11 @@
             color: var(--text-light);
             line-height: 1.7;
             white-space: pre-line;
+            word-break: break-word;
         }
 
         /* ============================================================
-           BOTONES DE NAVEGACIÓN RÁPIDA
+           BOTONES DE NAVEGACIÓN RÁPIDA - 🆕 v2.2.1: Responsive
            ============================================================ */
         .quick-nav {
             display: grid;
@@ -583,6 +649,7 @@
             color: var(--text);
             transition: all 0.2s;
             cursor: pointer;
+            box-sizing: border-box;
         }
 
         .quick-nav-card:hover {
@@ -601,11 +668,13 @@
             font-weight: 600;
             font-size: 14px;
             margin-bottom: 4px;
+            word-break: break-word;
         }
 
         .quick-nav-card .qnc-desc {
             font-size: 11px;
             color: var(--text-light);
+            word-break: break-word;
         }
 
         /* ============================================================
@@ -650,6 +719,8 @@
             font-size: 12px;
             border-top: 1px solid var(--border);
             margin-top: 20px;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         /* ============================================================
@@ -711,18 +782,21 @@
         }
 
         /* ============================================================
-           RESPONSIVE
+           RESPONSIVE - 🆕 v2.2.1: Mejorado para móvil
            ============================================================ */
         @media (max-width: 900px) {
             .help-layout {
                 flex-direction: column;
                 padding: 12px;
+                gap: 12px;
             }
 
             aside.help-sidebar {
                 width: 100%;
+                max-width: 100%;
                 position: static;
                 max-height: 300px;
+                padding: 12px;
             }
 
             section.help-section {
@@ -738,35 +812,40 @@
             }
         }
 
-        @media (max-width: 500px) {
+        @media (max-width: 600px) {
             header.help-header {
                 padding: 10px 12px;
+                gap: 8px;
+            }
+
+            .help-logo {
+                font-size: 24px;
             }
 
             .help-title {
                 font-size: 16px;
             }
 
-            .help-version {
-                font-size: 10px;
-                padding: 1px 8px;
-            }
-
-            section.help-section {
-                padding: 16px;
-                border-radius: 10px;
-            }
-
-            table.help-table {
+            .help-subtitle {
                 font-size: 11px;
             }
 
-            table.help-table th,
-            table.help-table td {
-                padding: 6px 8px;
+            .help-controls {
+                gap: 6px;
+                width: 100%;
+                justify-content: flex-end;
             }
 
-            /* Botón flotante más pequeño en móvil */
+            .help-btn {
+                padding: 5px 10px;
+                font-size: 12px;
+            }
+
+            .help-btn.back-btn {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+
             .help-close-fab {
                 width: 40px;
                 height: 40px;
@@ -775,10 +854,142 @@
                 right: 12px;
             }
 
-            /* Botón "Volver a Panario" más compacto */
-            .help-btn.back-btn {
-                padding: 6px 12px;
+            section.help-section {
+                padding: 16px;
+                border-radius: 10px;
+            }
+
+            section.help-section h2 {
+                font-size: 18px;
+                gap: 6px;
+            }
+
+            section.help-section h3 {
+                font-size: 15px;
+            }
+
+            section.help-section ul,
+            section.help-section ol {
+                margin-left: 18px;
+            }
+
+            details.faq-item {
+                padding: 10px 12px;
+            }
+
+            details.faq-item summary {
+                font-size: 13px;
+            }
+
+            .quick-nav {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+
+            .quick-nav-card {
+                padding: 12px 8px;
+            }
+
+            .quick-nav-card .qnc-icon {
+                font-size: 24px;
+            }
+
+            .quick-nav-card .qnc-title {
                 font-size: 12px;
+            }
+
+            .quick-nav-card .qnc-desc {
+                font-size: 10px;
+            }
+
+            .back-to-top {
+                width: 42px;
+                height: 42px;
+                font-size: 18px;
+                bottom: 16px;
+                right: 16px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            header.help-header {
+                padding: 8px 10px;
+                gap: 6px;
+            }
+
+            .help-logo {
+                font-size: 22px;
+            }
+
+            .help-title {
+                font-size: 14px;
+            }
+
+            .help-subtitle {
+                display: none;
+            }
+
+            .help-version {
+                font-size: 10px;
+                padding: 1px 8px;
+            }
+
+            .help-btn {
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+
+            .help-btn.back-btn {
+                padding: 5px 10px;
+                font-size: 11px;
+            }
+
+            section.help-section {
+                padding: 14px;
+            }
+
+            section.help-section h2 {
+                font-size: 16px;
+            }
+
+            section.help-section h3 {
+                font-size: 14px;
+            }
+
+            section.help-section h4 {
+                font-size: 13px;
+            }
+
+            section.help-section p,
+            section.help-section li,
+            details.faq-item .faq-answer {
+                font-size: 13px;
+            }
+
+            table.help-table {
+                font-size: 11px;
+                min-width: 350px;
+            }
+
+            table.help-table th,
+            table.help-table td {
+                padding: 6px 8px;
+            }
+
+            .quick-nav {
+                grid-template-columns: 1fr;
+            }
+
+            .quick-nav-card {
+                padding: 10px 8px;
+            }
+
+            .card-help {
+                padding: 12px 14px;
+            }
+
+            .card-help-title {
+                font-size: 13px;
             }
         }
 
@@ -847,7 +1058,7 @@
         <h1 class="help-title">Panario — Ayuda Completa</h1>
         <p class="help-subtitle">Guía de uso de todos los módulos</p>
     </div>
-    <span class="help-version">v2.2.0</span>
+    <span class="help-version">v2.2.1</span>
     <div class="help-controls">
         <!-- 🆕 Botón "Volver a Panario" (oculto en modo embedded) -->
         <button class="help-btn back-btn" id="btn-volver-panario" onclick="cerrarAyuda()" title="Volver a la aplicación Panario (Esc)">
@@ -915,7 +1126,7 @@
         <section class="help-section" id="intro">
             <h2>🏠 Introducción</h2>
             
-            <p><strong>Panario v2.2.0</strong> es una aplicación PWA (Progressive Web App) diseñada específicamente para la gestión integral de una <strong>panadería artesanal</strong>. Funciona completamente offline y guarda todos tus datos localmente en tu dispositivo.</p>
+            <p><strong>Panario v2.2.1</strong> es una aplicación PWA (Progressive Web App) diseñada específicamente para la gestión integral de una <strong>panadería artesanal</strong>. Funciona completamente offline y guarda todos tus datos localmente en tu dispositivo.</p>
 
             <div class="card-help primary">
                 <div class="card-help-title">✨ ¿Qué puedes hacer con Panario?</div>
@@ -943,19 +1154,21 @@
             </div>
 
             <h3>📱 Información técnica</h3>
-            <table class="help-table">
-                <tr>
-                    <th style="width: 40%;">Propiedad</th>
-                    <th>Valor</th>
-                </tr>
-                <tr><td>Versión</td><td><strong>2.2.0</strong></td></tr>
-                <tr><td>Estado</td><td><span class="badge-help badge-success">✅ Producción</span></td></tr>
-                <tr><td>Arquitectura</td><td>Cliente local (SQLite WASM)</td></tr>
-                <tr><td>Tecnología</td><td>HTML5 + CSS3 + JavaScript (ES6+)</td></tr>
-                <tr><td>Persistencia</td><td>SQLite (sql.js) + localStorage</td></tr>
-                <tr><td>Modo offline</td><td>✅ 100% funcional</td></tr>
-                <tr><td>Instalable</td><td>✅ Como app nativa</td></tr>
-            </table>
+            <div class="help-table-wrapper">
+                <table class="help-table">
+                    <tr>
+                        <th style="width: 40%;">Propiedad</th>
+                        <th>Valor</th>
+                    </tr>
+                    <tr><td>Versión</td><td><strong>2.2.1</strong></td></tr>
+                    <tr><td>Estado</td><td><span class="badge-help badge-success">✅ Producción</span></td></tr>
+                    <tr><td>Arquitectura</td><td>Cliente local (SQLite WASM)</td></tr>
+                    <tr><td>Tecnología</td><td>HTML5 + CSS3 + JavaScript (ES6+)</td></tr>
+                    <tr><td>Persistencia</td><td>SQLite (sql.js) + localStorage</td></tr>
+                    <tr><td>Modo offline</td><td>✅ 100% funcional</td></tr>
+                    <tr><td>Instalable</td><td>✅ Como app nativa</td></tr>
+                </table>
+            </div>
 
             <div class="card-help success">
                 <div class="card-help-title">💾 Privacidad y seguridad</div>
@@ -1041,37 +1254,41 @@
             <p>El <strong>Dashboard</strong> es la pantalla principal. Muestra un resumen completo de tu negocio en tiempo real.</p>
 
             <h3>🎯 Tarjetas de estadísticas</h3>
-            <table class="help-table">
-                <tr>
-                    <th style="width: 35%;">Tarjeta</th>
-                    <th>Descripción</th>
-                </tr>
-                <tr><td>🛒 Ventas totales</td><td>Cantidad total de ventas registradas</td></tr>
-                <tr><td>💰 Ingresos</td><td>Suma total de todos los ingresos</td></tr>
-                <tr><td>📤 Gastos</td><td>Suma total de gastos registrados</td></tr>
-                <tr><td>📈 Ganancia</td><td>Ingresos - Gastos</td></tr>
-                <tr><td>📋 Pedidos pendientes</td><td>Pedidos aún no entregados</td></tr>
-                <tr><td>💳 Deudas</td><td>Ventas pendientes de cobro</td></tr>
-                <tr><td>📈 Ventas hoy</td><td>Total vendido en el día actual</td></tr>
-                <tr><td>💵 Fondo en caja</td><td>Saldo en efectivo</td></tr>
-                <tr><td>🏦 Fondo en banco</td><td>Saldo por transferencia</td></tr>
-            </table>
+            <div class="help-table-wrapper">
+                <table class="help-table">
+                    <tr>
+                        <th style="width: 35%;">Tarjeta</th>
+                        <th>Descripción</th>
+                    </tr>
+                    <tr><td>🛒 Ventas totales</td><td>Cantidad total de ventas registradas</td></tr>
+                    <tr><td>💰 Ingresos</td><td>Suma total de todos los ingresos</td></tr>
+                    <tr><td>📤 Gastos</td><td>Suma total de gastos registrados</td></tr>
+                    <tr><td>📈 Ganancia</td><td>Ingresos - Gastos</td></tr>
+                    <tr><td>📋 Pedidos pendientes</td><td>Pedidos aún no entregados</td></tr>
+                    <tr><td>💳 Deudas</td><td>Ventas pendientes de cobro</td></tr>
+                    <tr><td>📈 Ventas hoy</td><td>Total vendido en el día actual</td></tr>
+                    <tr><td>💵 Fondo en caja</td><td>Saldo en efectivo</td></tr>
+                    <tr><td>🏦 Fondo en banco</td><td>Saldo por transferencia</td></tr>
+                </table>
+            </div>
 
             <h3>🆕 Estadísticas avanzadas</h3>
-            <table class="help-table">
-                <tr>
-                    <th style="width: 35%;">Estadística</th>
-                    <th>Descripción</th>
-                </tr>
-                <tr><td>📅 Días con ventas</td><td>Número de días únicos con al menos una venta</td></tr>
-                <tr><td>📊 Promedio diario</td><td>Ingresos totales / días con ventas</td></tr>
-                <tr><td>🎂 Primer día venta</td><td>Fecha de la primera venta registrada</td></tr>
-                <tr><td>👥 Clientes diferentes</td><td>Cantidad de clientes únicos</td></tr>
-                <tr><td>🚀 Ventas liberadas</td><td>Cantidad e importe de ventas sin cliente</td></tr>
-                <tr><td>🥇 Mejor día</td><td>Día con mayor facturación histórica</td></tr>
-                <tr><td>📉 Peor día</td><td>Día con menor facturación histórica</td></tr>
-                <tr><td>👥 Ventas por empleado</td><td>Ranking de ventas por usuario del negocio</td></tr>
-            </table>
+            <div class="help-table-wrapper">
+                <table class="help-table">
+                    <tr>
+                        <th style="width: 35%;">Estadística</th>
+                        <th>Descripción</th>
+                    </tr>
+                    <tr><td>📅 Días con ventas</td><td>Número de días únicos con al menos una venta</td></tr>
+                    <tr><td>📊 Promedio diario</td><td>Ingresos totales / días con ventas</td></tr>
+                    <tr><td>🎂 Primer día venta</td><td>Fecha de la primera venta registrada</td></tr>
+                    <tr><td>👥 Clientes diferentes</td><td>Cantidad de clientes únicos</td></tr>
+                    <tr><td>🚀 Ventas liberadas</td><td>Cantidad e importe de ventas sin cliente</td></tr>
+                    <tr><td>🥇 Mejor día</td><td>Día con mayor facturación histórica</td></tr>
+                    <tr><td>📉 Peor día</td><td>Día con menor facturación histórica</td></tr>
+                    <tr><td>👥 Ventas por empleado</td><td>Ranking de ventas por usuario del negocio</td></tr>
+                </table>
+            </div>
 
             <h3>📈 Gráfico de ventas diarias</h3>
             <p>Muestra las ventas con los siguientes controles:</p>
@@ -1120,20 +1337,22 @@
             <p>El módulo de <strong>Pedidos</strong> gestiona todas las reservas y solicitudes de clientes. Los pedidos <strong>no son deudas</strong> hasta que se entregan.</p>
 
             <h3>📌 Estados de un pedido</h3>
-            <table class="help-table">
-                <tr>
-                    <th style="width: 35%;">Estado</th>
-                    <th>Descripción</th>
-                </tr>
-                <tr><td>⏳ Pendiente</td><td>Recién creado, sin confirmar</td></tr>
-                <tr><td>✅ Confirmado</td><td>Cliente confirmó el pedido</td></tr>
-                <tr><td>🔨 En producción</td><td>Se está elaborando</td></tr>
-                <tr><td>📦 Listo</td><td>Listo para entregar</td></tr>
-                <tr><td>🚚 Entregado</td><td>Ya entregado (crea venta)</td></tr>
-                <tr><td>❌ Cancelado</td><td>Cancelado (repone stock)</td></tr>
-                <tr><td>⏰ En lista de espera</td><td>Cliente en cola</td></tr>
-                <tr><td>🔄 Compró por lista</td><td>Atendido desde lista</td></tr>
-            </table>
+            <div class="help-table-wrapper">
+                <table class="help-table">
+                    <tr>
+                        <th style="width: 35%;">Estado</th>
+                        <th>Descripción</th>
+                    </tr>
+                    <tr><td>⏳ Pendiente</td><td>Recién creado, sin confirmar</td></tr>
+                    <tr><td>✅ Confirmado</td><td>Cliente confirmó el pedido</td></tr>
+                    <tr><td>🔨 En producción</td><td>Se está elaborando</td></tr>
+                    <tr><td>📦 Listo</td><td>Listo para entregar</td></tr>
+                    <tr><td>🚚 Entregado</td><td>Ya entregado (crea venta)</td></tr>
+                    <tr><td>❌ Cancelado</td><td>Cancelado (repone stock)</td></tr>
+                    <tr><td>⏰ En lista de espera</td><td>Cliente en cola</td></tr>
+                    <tr><td>🔄 Compró por lista</td><td>Atendido desde lista</td></tr>
+                </table>
+            </div>
 
             <h3>🆕 Crear pedidos</h3>
 
@@ -1202,17 +1421,19 @@
             <p>Los <strong>insumos</strong> son todo lo que compras para producir: harina, levadura, yogur, mantequilla, etc.</p>
 
             <h3>📋 Campos de un insumo</h3>
-            <table class="help-table">
-                <tr>
-                    <th style="width: 30%;">Campo</th>
-                    <th>Descripción</th>
-                </tr>
-                <tr><td>📛 Nombre</td><td>Nombre del insumo (Ej: Harina de trigo)</td></tr>
-                <tr><td>📏 Unidad</td><td>Unidad de medida (kg, g, L, unid)</td></tr>
-                <tr><td>💰 Costo unitario</td><td>Precio por unidad</td></tr>
-                <tr><td>📦 Stock</td><td>Cantidad actual disponible</td></tr>
-                <tr><td>📉 Stock mínimo</td><td>Nivel para alerta de reposición</td></tr>
-            </table>
+            <div class="help-table-wrapper">
+                <table class="help-table">
+                    <tr>
+                        <th style="width: 30%;">Campo</th>
+                        <th>Descripción</th>
+                    </tr>
+                    <tr><td>📛 Nombre</td><td>Nombre del insumo (Ej: Harina de trigo)</td></tr>
+                    <tr><td>📏 Unidad</td><td>Unidad de medida (kg, g, L, unid)</td></tr>
+                    <tr><td>💰 Costo unitario</td><td>Precio por unidad</td></tr>
+                    <tr><td>📦 Stock</td><td>Cantidad actual disponible</td></tr>
+                    <tr><td>📉 Stock mínimo</td><td>Nivel para alerta de reposición</td></tr>
+                </table>
+            </div>
 
             <h3>📊 Indicadores visuales</h3>
             <ul>
@@ -1225,16 +1446,18 @@
             <p>Al vender un producto o confirmar un pedido, el stock se descuenta automáticamente según la receta asociada.</p>
 
             <h3>🔒 Permisos por rol</h3>
-            <table class="help-table">
-                <tr>
-                    <th>Acción</th>
-                    <th style="text-align: center;">Admin</th>
-                    <th style="text-align: center;">Usuario</th>
-                </tr>
-                <tr><td>Ver insumos</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
-                <tr><td>Ver costos</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
-                <tr><td>Crear / Editar / Eliminar</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
-            </table>
+            <div class="help-table-wrapper">
+                <table class="help-table">
+                    <tr>
+                        <th>Acción</th>
+                        <th style="text-align: center;">Admin</th>
+                        <th style="text-align: center;">Usuario</th>
+                    </tr>
+                    <tr><td>Ver insumos</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+                    <tr><td>Ver costos</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+                    <tr><td>Crear / Editar / Eliminar</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
+                </table>
+            </div>
         </section>
 
         <!-- ============================================================
@@ -1289,20 +1512,22 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             </div>
 
             <h3>🔒 Permisos por rol</h3>
-            <table class="help-table">
-                <tr>
-                    <th>Acción</th>
-                    <th style="text-align: center;">Admin</th>
-                    <th style="text-align: center;">Usuario</th>
-                </tr>
-                <tr><td>Ver recetas</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
-                <tr><td>Ver costos</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
-                <tr><td>Crear / Editar / Eliminar</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
-                <tr><td>Recalcular (crear nueva)</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
-                <tr><td>Usar como plantilla</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
-                <tr><td>Compartir (WhatsApp, etc.)</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
-                <tr><td>Exportar PDF</td><td style="text-align: center;">✅ (con costos)</td><td style="text-align: center;">✅ (sin costos)</td></tr>
-            </table>
+            <div class="help-table-wrapper">
+                <table class="help-table">
+                    <tr>
+                        <th>Acción</th>
+                        <th style="text-align: center;">Admin</th>
+                        <th style="text-align: center;">Usuario</th>
+                    </tr>
+                    <tr><td>Ver recetas</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+                    <tr><td>Ver costos</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
+                    <tr><td>Crear / Editar / Eliminar</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
+                    <tr><td>Recalcular (crear nueva)</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+                    <tr><td>Usar como plantilla</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+                    <tr><td>Compartir (WhatsApp, etc.)</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
+                    <tr><td>Exportar PDF</td><td style="text-align: center;">✅ (con costos)</td><td style="text-align: center;">✅ (sin costos)</td></tr>
+                </table>
+            </div>
         </section>
 
         <!-- ============================================================
@@ -1314,19 +1539,21 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             <p>Los <strong>productos</strong> son los artículos que vendes al cliente.</p>
 
             <h3>📋 Campos de un producto</h3>
-            <table class="help-table">
-                <tr>
-                    <th style="width: 30%;">Campo</th>
-                    <th>Descripción</th>
-                </tr>
-                <tr><td>📛 Nombre</td><td>Ej: "Jaba de Pan"</td></tr>
-                <tr><td>📝 Descripción</td><td>Breve descripción (opcional)</td></tr>
-                <tr><td>💰 Precio de venta</td><td>Precio al público</td></tr>
-                <tr><td>📦 Unidad de venta</td><td>unidad, jaba, docena, etc.</td></tr>
-                <tr><td>📊 Cantidad por unidad</td><td>Cuántas unidades contiene</td></tr>
-                <tr><td>📋 Receta asociada</td><td>Receta que usa este producto</td></tr>
-                <tr><td>🆕 🏭 CMPBC</td><td>Capacidad Máxima de Producción por Bloque</td></tr>
-            </table>
+            <div class="help-table-wrapper">
+                <table class="help-table">
+                    <tr>
+                        <th style="width: 30%;">Campo</th>
+                        <th>Descripción</th>
+                    </tr>
+                    <tr><td>📛 Nombre</td><td>Ej: "Jaba de Pan"</td></tr>
+                    <tr><td>📝 Descripción</td><td>Breve descripción (opcional)</td></tr>
+                    <tr><td>💰 Precio de venta</td><td>Precio al público</td></tr>
+                    <tr><td>📦 Unidad de venta</td><td>unidad, jaba, docena, etc.</td></tr>
+                    <tr><td>📊 Cantidad por unidad</td><td>Cuántas unidades contiene</td></tr>
+                    <tr><td>📋 Receta asociada</td><td>Receta que usa este producto</td></tr>
+                    <tr><td>🆕 🏭 CMPBC</td><td>Capacidad Máxima de Producción por Bloque</td></tr>
+                </table>
+            </div>
 
             <h3>💡 Ejemplo práctico</h3>
             <div class="card-help primary">
@@ -1353,15 +1580,17 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             <p>Se calcula automáticamente: <code>(precio - costo) / precio × 100</code></p>
 
             <h3>🔒 Permisos por rol</h3>
-            <table class="help-table">
-                <tr>
-                    <th>Acción</th>
-                    <th style="text-align: center;">Admin</th>
-                    <th style="text-align: center;">Usuario</th>
-                </tr>
-                <tr><td>Ver productos</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
-                <tr><td>Crear / Editar / Eliminar</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
-            </table>
+            <div class="help-table-wrapper">
+                <table class="help-table">
+                    <tr>
+                        <th>Acción</th>
+                        <th style="text-align: center;">Admin</th>
+                        <th style="text-align: center;">Usuario</th>
+                    </tr>
+                    <tr><td>Ver productos</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+                    <tr><td>Crear / Editar / Eliminar</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
+                </table>
+            </div>
         </section>
 
         <!-- ============================================================
@@ -1373,17 +1602,19 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             <p>El módulo de <strong>Ventas</strong> gestiona todas las transacciones y finanzas del negocio.</p>
 
             <h3>📌 Tipos de venta</h3>
-            <table class="help-table">
-                <tr>
-                    <th style="width: 35%;">Tipo</th>
-                    <th>Descripción</th>
-                </tr>
-                <tr><td>💰 Venta normal</td><td>Con cliente identificado</td></tr>
-                <tr><td>🚀 Venta liberada</td><td>Sin cliente (mostrador anónimo)</td></tr>
-                <tr><td>💳 Venta a deuda</td><td>Cliente paga después</td></tr>
-                <tr><td>📋 Venta desde pedido</td><td>Al entregar un pedido</td></tr>
-                <tr><td>🔄 Venta desde lista</td><td>Cliente de lista de espera</td></tr>
-            </table>
+            <div class="help-table-wrapper">
+                <table class="help-table">
+                    <tr>
+                        <th style="width: 35%;">Tipo</th>
+                        <th>Descripción</th>
+                    </tr>
+                    <tr><td>💰 Venta normal</td><td>Con cliente identificado</td></tr>
+                    <tr><td>🚀 Venta liberada</td><td>Sin cliente (mostrador anónimo)</td></tr>
+                    <tr><td>💳 Venta a deuda</td><td>Cliente paga después</td></tr>
+                    <tr><td>📋 Venta desde pedido</td><td>Al entregar un pedido</td></tr>
+                    <tr><td>🔄 Venta desde lista</td><td>Cliente de lista de espera</td></tr>
+                </table>
+            </div>
 
             <h3>💳 Métodos de pago</h3>
             <ul>
@@ -1459,7 +1690,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
         </section>
 
         <!-- ============================================================
-             PRODUCCIÓN (NUEVA SECCIÓN)
+             PRODUCCIÓN
              ============================================================ -->
         <section class="help-section" id="produccion">
             <h2>🔨 Producción</h2>
@@ -1467,16 +1698,18 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             <p>El módulo de <strong>Producción</strong> permite programar qué se va a producir cada día, en qué bloque de corriente y con un algoritmo inteligente que sugiere la distribución óptima.</p>
 
             <h3>🎯 Conceptos clave</h3>
-            <table class="help-table">
-                <tr>
-                    <th style="width: 30%;">Concepto</th>
-                    <th>Descripción</th>
-                </tr>
-                <tr><td>🔨 Bloque de producción</td><td>Bloque de corriente donde se horneará</td></tr>
-                <tr><td>📦 CPD</td><td>Cantidad de Producción Diaria</td></tr>
-                <tr><td>🏭 CMPBC</td><td>Capacidad Máxima por Bloque</td></tr>
-                <tr><td>✨ Algoritmo</td><td>Calcula automáticamente los bloques</td></tr>
-            </table>
+            <div class="help-table-wrapper">
+                <table class="help-table">
+                    <tr>
+                        <th style="width: 30%;">Concepto</th>
+                        <th>Descripción</th>
+                    </tr>
+                    <tr><td>🔨 Bloque de producción</td><td>Bloque de corriente donde se horneará</td></tr>
+                    <tr><td>📦 CPD</td><td>Cantidad de Producción Diaria</td></tr>
+                    <tr><td>🏭 CMPBC</td><td>Capacidad Máxima por Bloque</td></tr>
+                    <tr><td>✨ Algoritmo</td><td>Calcula automáticamente los bloques</td></tr>
+                </table>
+            </div>
 
             <h3>📅 Programar producción para un día</h3>
             <ol>
@@ -1594,19 +1827,21 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             <p>El sistema de <strong>Notificaciones</strong> te mantiene informado de todo lo importante.</p>
 
             <h3>📌 Tipos de notificación</h3>
-            <table class="help-table">
-                <tr>
-                    <th style="width: 20%;">Tipo</th>
-                    <th>Descripción</th>
-                </tr>
-                <tr><td>✅ Éxito</td><td>Operaciones completadas</td></tr>
-                <tr><td>❌ Error</td><td>Problemas que requieren atención</td></tr>
-                <tr><td>⚠️ Advertencia</td><td>Alertas importantes</td></tr>
-                <tr><td>ℹ️ Información</td><td>Datos relevantes</td></tr>
-                <tr><td>📋 Pedido</td><td>Pedidos para hoy/mañana</td></tr>
-                <tr><td>💰 Deuda</td><td>Deudas pendientes de cobro</td></tr>
-                <tr><td>🛒 Stock</td><td>Insumos con stock bajo</td></tr>
-            </table>
+            <div class="help-table-wrapper">
+                <table class="help-table">
+                    <tr>
+                        <th style="width: 20%;">Tipo</th>
+                        <th>Descripción</th>
+                    </tr>
+                    <tr><td>✅ Éxito</td><td>Operaciones completadas</td></tr>
+                    <tr><td>❌ Error</td><td>Problemas que requieren atención</td></tr>
+                    <tr><td>⚠️ Advertencia</td><td>Alertas importantes</td></tr>
+                    <tr><td>ℹ️ Información</td><td>Datos relevantes</td></tr>
+                    <tr><td>📋 Pedido</td><td>Pedidos para hoy/mañana</td></tr>
+                    <tr><td>💰 Deuda</td><td>Deudas pendientes de cobro</td></tr>
+                    <tr><td>🛒 Stock</td><td>Insumos con stock bajo</td></tr>
+                </table>
+            </div>
 
             <h3>🔔 Campanita</h3>
             <p>El icono 🔔 en la barra superior muestra:</p>
@@ -1941,7 +2176,7 @@ Finalmente se eligió "Panario" por ser único, breve y fácil de recordar.</div
 
             <details class="faq-item">
                 <summary>¿Por qué la app no funciona offline después de limpiar el caché?</summary>
-                <div class="faq-answer">Si limpias el caché de Chrome, se borran los archivos de la PWA. Abre Panario con conexión a internet una vez para que se vuelvan a cachear. En la versión 2.2.0, el Service Worker detecta esta situación y re-descarga todo automáticamente.</div>
+                <div class="faq-answer">Si limpias el caché de Chrome, se borran los archivos de la PWA. Abre Panario con conexión a internet una vez para que se vuelvan a cachear. En la versión 2.2.1, el Service Worker detecta esta situación y re-descarga todo automáticamente.</div>
             </details>
 
             <details class="faq-item">
@@ -2045,21 +2280,6 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
             </details>
 
             <details class="faq-item">
-                <summary>¿Por qué el campo CMPBC está en color morado?</summary>
-                <div class="faq-answer">Es el color distintivo de la función de producción automática. El morado se usa también en el modal de producción y en los badges de la lista.</div>
-            </details>
-
-            <details class="faq-item">
-                <summary>¿Puedo poner decimales en el CMPBC?</summary>
-                <div class="faq-answer">Sí. Acepta cualquier número real: 6, 6.5, 7.25, 0.5, etc.</div>
-            </details>
-
-            <details class="faq-item">
-                <summary>¿Qué pasa si cambio el CMPBC de un producto ya usado?</summary>
-                <div class="faq-answer">Los cálculos futuros usarán el nuevo valor. Las producciones ya guardadas conservan su distribución.</div>
-            </details>
-
-            <details class="faq-item">
                 <summary>¿Cómo sé si un producto tiene CMPBC configurado?</summary>
                 <div class="faq-answer">En la lista de productos, aparece un badge morado 🏭 X/bloque junto al nombre.</div>
             </details>
@@ -2072,16 +2292,6 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
             <details class="faq-item">
                 <summary>¿Cómo se relaciona el CMPBC con el modal de producción?</summary>
                 <div class="faq-answer">En el modal de producción, al seleccionar un producto con CMPBC y escribir una cantidad, aparecerá el botón ✨ Calcular bloques automáticamente.</div>
-            </details>
-
-            <details class="faq-item">
-                <summary>¿Puedo eliminar el CMPBC de un producto?</summary>
-                <div class="faq-answer">Sí. Edita el producto y borra el valor del campo, o ponlo en 0. Se guardará como null.</div>
-            </details>
-
-            <details class="faq-item">
-                <summary>¿Dónde configuro el CMPBC de un producto? (repetida)</summary>
-                <div class="faq-answer">En 🏷️ Productos → Nuevo/Editar Producto. Campo 🏭 Capacidad máx/bloque.</div>
             </details>
 
             <details class="faq-item">
@@ -2122,6 +2332,31 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
             <details class="faq-item">
                 <summary>¿Qué pasa si un producto no tiene CMPBC?</summary>
                 <div class="faq-answer">El sistema no podrá calcular automáticamente los bloques. Mostrará un aviso sugiriendo configurarlo, pero seguirás pudiendo crear producción manualmente.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo se ve el CMPBC en la lista de productos?</summary>
+                <div class="faq-answer">Si un producto tiene CMPBC definido, aparece un badge morado 🏭 7/bloque junto al nombre.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Puedo poner decimales en el CMPBC?</summary>
+                <div class="faq-answer">Sí. Acepta cualquier número real: 6, 6.5, 7.25, 0.5, etc.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué pasa si cambio el CMPBC de un producto ya usado?</summary>
+                <div class="faq-answer">Los cálculos futuros usarán el nuevo valor. Las producciones ya guardadas conservan su distribución.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Por qué el campo CMPBC está en color morado?</summary>
+                <div class="faq-answer">Es el color distintivo de la función de producción automática. El morado se usa también en el modal de producción y en los badges de la lista.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Dónde configuro el CMPBC de un producto? (repetida)</summary>
+                <div class="faq-answer">En 🏷️ Productos → Nuevo/Editar Producto. Campo 🏭 Capacidad máx/bloque.</div>
             </details>
 
             <!-- ============================================================ -->
@@ -2220,7 +2455,7 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
             </details>
 
             <details class="faq-item">
-                <summary>¿Tengo que hacer algo especial para actualizar a v2.2.0?</summary>
+                <summary>¿Tengo que hacer algo especial para actualizar a v2.2.1?</summary>
                 <div class="faq-answer">No. Solo recarga la app con conexión a internet. El SW se actualizará solo en 5-10 segundos. Si no ves los cambios, limpia el caché y recarga con Ctrl+Shift+R.</div>
             </details>
 
@@ -2230,8 +2465,8 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
             </details>
 
             <details class="faq-item">
-                <summary>¿Cómo sé que estoy en v2.2.0?</summary>
-                <div class="faq-answer">Ve a ⚙️ Herramientas → al final verás "Versión: 2.2.0". También puedes verificar en la consola: window.getAppVersion()</div>
+                <summary>¿Cómo sé que estoy en v2.2.1?</summary>
+                <div class="faq-answer">Ve a ⚙️ Herramientas → al final verás "Versión: 2.2.1". También puedes verificar en la consola: window.getAppVersion()</div>
             </details>
 
             <details class="faq-item">
@@ -2251,7 +2486,7 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
 
             <details class="faq-item">
                 <summary>¿La versión del manifest coincide con la app?</summary>
-                <div class="faq-answer">Sí. Desde v2.2.0, el manifest.json, el sw.js, el index.html y todos los archivos usan la misma versión: 2.2.0. Esto facilita el mantenimiento.</div>
+                <div class="faq-answer">Sí. Desde v2.2.1, el manifest.json, el sw.js, el index.html y todos los archivos usan la misma versión: 2.2.1. Esto facilita el mantenimiento.</div>
             </details>
 
             <details class="faq-item">
@@ -2265,7 +2500,7 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
             </details>
 
             <details class="faq-item">
-                <summary>¿Cómo actualizo Panario a v2.2.0 si la tengo instalada?</summary>
+                <summary>¿Cómo actualizo Panario a v2.2.1 si la tengo instalada?</summary>
                 <div class="faq-answer">Abre la app con internet. En 5-10 segundos aparecerá un diálogo "✨ Actualización disponible". Pulsa "🔄 Sí, actualizar" y la app se recargará con la nueva versión.</div>
             </details>
 
@@ -2275,27 +2510,27 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
             </details>
 
             <details class="faq-item">
-                <summary>¿Qué pasa con mis datos al actualizar a v2.2.0?</summary>
+                <summary>¿Qué pasa con mis datos al actualizar a v2.2.1?</summary>
                 <div class="faq-answer">Nada. Tus datos (SQLite + localStorage) se conservan intactos. La migración de BD es automática e idempotente.</div>
             </details>
 
             <details class="faq-item">
                 <summary>¿La versión del manifest y del sw.js deben coincidir?</summary>
-                <div class="faq-answer">Sí. En v2.2.0, el manifest.json, el sw.js, el index.html, el offline.html y los fallbacks de getAppVersion() usan todos 2.2.0. Esto garantiza coherencia.</div>
+                <div class="faq-answer">Sí. En v2.2.1, el manifest.json, el sw.js, el index.html, el offline.html y los fallbacks de getAppVersion() usan todos 2.2.1. Esto garantiza coherencia.</div>
             </details>
 
             <details class="faq-item">
-                <summary>¿Cómo sé si estoy corriendo la v2.2.0?</summary>
-                <div class="faq-answer">Ve a ⚙️ Herramientas → al final verás "Versión: 2.2.0". También puedes verificar en la consola: window.getAppVersion().</div>
+                <summary>¿Cómo sé si estoy corriendo la v2.2.1?</summary>
+                <div class="faq-answer">Ve a ⚙️ Herramientas → al final verás "Versión: 2.2.1". También puedes verificar en la consola: window.getAppVersion().</div>
             </details>
 
             <details class="faq-item">
-                <summary>¿La v2.2.0 rompe algo de las versiones anteriores?</summary>
-                <div class="faq-answer">No. La v2.2.0 es compatible con todos los datos de versiones anteriores (v2.0.x, v2.1.x). Solo añade funcionalidad nueva.</div>
+                <summary>¿La v2.2.1 rompe algo de las versiones anteriores?</summary>
+                <div class="faq-answer">No. La v2.2.1 es compatible con todos los datos de versiones anteriores (v2.0.x, v2.1.x, v2.2.0). Solo añade funcionalidad nueva y correcciones.</div>
             </details>
 
             <details class="faq-item">
-                <summary>¿Por qué la versión del caché cambió a panario-v2.2.0?</summary>
+                <summary>¿Por qué la versión del caché cambió a panario-v2.2.1?</summary>
                 <div class="faq-answer">Para forzar una reinstalación limpia del Service Worker y garantizar que todos los assets actualizados se re-cachean correctamente.</div>
             </details>
 
@@ -2305,8 +2540,8 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
             </details>
 
             <details class="faq-item">
-                <summary>¿Cuándo debo actualizar a v2.2.0?</summary>
-                <div class="faq-answer">Cuanto antes. La v2.2.0 tiene mejoras significativas de producción (CMPBC + algoritmo de bloques) y mejoras de compatibilidad con GitHub Pages.</div>
+                <summary>¿Cuándo debo actualizar a v2.2.1?</summary>
+                <div class="faq-answer">Cuanto antes. La v2.2.1 tiene mejoras significativas: pantalla completa corregida, fallback de versión coherente, y correcciones importantes en producción y fechas.</div>
             </details>
 
         </section>
@@ -2318,19 +2553,21 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
             <h2>⌨️ Atajos y consejos</h2>
 
             <h3>🖱️ Navegación rápida</h3>
-            <table class="help-table">
-                <tr>
-                    <th style="width: 30%;">Acción</th>
-                    <th>Cómo hacerlo</th>
-                </tr>
-                <tr><td>Ir al inicio</td><td>Clic en el logo 🍞 o botón ⬆️</td></tr>
-                <tr><td>Ir al final</td><td>Botón ⬇️ flotante</td></tr>
-                <tr><td>Abrir ayuda</td><td>Clic en ❓ de la barra superior</td></tr>
-                <tr><td>Abrir notificaciones</td><td>Clic en 🔔 de la barra superior</td></tr>
-                <tr><td>Menú de usuario</td><td>Clic en tu nombre o avatar</td></tr>
-                <tr><td>Cerrar modal</td><td>Tecla Escape o clic fuera</td></tr>
-                <tr><td>Cerrar ayuda</td><td>Tecla Escape o botón "← Volver a Panario"</td></tr>
-            </table>
+            <div class="help-table-wrapper">
+                <table class="help-table">
+                    <tr>
+                        <th style="width: 30%;">Acción</th>
+                        <th>Cómo hacerlo</th>
+                    </tr>
+                    <tr><td>Ir al inicio</td><td>Clic en el logo 🍞 o botón ⬆️</td></tr>
+                    <tr><td>Ir al final</td><td>Botón ⬇️ flotante</td></tr>
+                    <tr><td>Abrir ayuda</td><td>Clic en ❓ de la barra superior</td></tr>
+                    <tr><td>Abrir notificaciones</td><td>Clic en 🔔 de la barra superior</td></tr>
+                    <tr><td>Menú de usuario</td><td>Clic en tu nombre o avatar</td></tr>
+                    <tr><td>Cerrar modal</td><td>Tecla Escape o clic fuera</td></tr>
+                    <tr><td>Cerrar ayuda</td><td>Tecla Escape o botón "← Volver a Panario"</td></tr>
+                </table>
+            </div>
 
             <h3>💡 Consejos de uso</h3>
             <ul>
@@ -2399,7 +2636,7 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
                 </div>
 
                 <div style="margin-top: 24px; color: var(--text-light); font-size: 12px; line-height: 1.7;">
-                    <p><strong>Panario v2.2.0</strong></p>
+                    <p><strong>Panario v2.2.1</strong></p>
                     <p>© 2026 Ricardo Castillo Valdés</p>
                     <p>Todos los derechos reservados</p>
                     <p style="margin-top: 12px;">Hecho con ❤️ para panaderos artesanales</p>
@@ -2422,7 +2659,7 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
      FOOTER
      ============================================================ -->
 <footer class="help-footer">
-    <p>🍞 <strong>Panario v2.2.0</strong> — Ayuda Completa</p>
+    <p>🍞 <strong>Panario v2.2.1</strong> — Ayuda Completa</p>
     <p style="margin-top: 4px;">Desarrollado por Ricardo Castillo Valdés — © 2026</p>
 </footer>
 
@@ -2783,15 +3020,17 @@ document.addEventListener('DOMContentLoaded', function() {
         scrollToSection(urlParams.section);
     }
     
-    console.log('📖 Ayuda de Panario cargada correctamente (v2.2.0)');
+    console.log('📖 Ayuda de Panario cargada correctamente (v2.2.1)');
     console.log('   📋 Params:', urlParams);
-    console.log('   🆕 Novedades:');
-    console.log('   ✅ Botón "← Volver a Panario" en el header');
-    console.log('   ✅ Botón flotante "✕" para cerrar (NO en embedded)');
-    console.log('   ✅ Atajo Escape para cerrar');
-    console.log('   ✅ Versión v2.2.0');
-    console.log('   ✅ 55 FAQs nuevas (CMPBC, Algoritmo, v2.2.0)');
-    console.log('   ✅ Total: 203 FAQs');
+    console.log('   🆕 Novedades v2.2.1:');
+    console.log('   ✅ Fase B: responsive mejorado');
+    console.log('   ✅ Header ajustado al 100% sin desbordar');
+    console.log('   ✅ Sidebar responsive (bloque completo en móvil)');
+    console.log('   ✅ Tablas con scroll horizontal propio');
+    console.log('   ✅ Padding consistente en móvil');
+    console.log('   ✅ Sin scroll horizontal global');
+    console.log('   ✅ Quick-nav en 2 columnas en móvil');
+    console.log('   ✅ FAQ items más compactos');
 });
 </script>
 

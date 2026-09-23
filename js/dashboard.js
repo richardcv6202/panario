@@ -26,6 +26,15 @@
 //     fecha de entrega, y se agrupan por día en JS
 //   - ✅ Compatibilidad: si la tabla orders no existe o falla,
 //     devuelve 0 sin romper el dashboard
+// 🆕 v2.2.2 (230926 v5): CORRECCIÓN #2 - CONTEO UNIFICADO EN DASHBOARD
+//   - ✅ ordersTodayCount y ordersTomorrowCount ahora usan la
+//     función unificada window.DBModule.contarPedidosYVentasFecha()
+//   - ✅ Esto garantiza que el Dashboard muestre exactamente el
+//     mismo número que la tarjeta de fecha en el módulo de Pedidos.
+//   - ✅ Se eliminó la lógica de conteo duplicada que causaba la
+//     discrepancia (el bug original).
+//   - ✅ Se mantiene la optimización de traer todos los pedidos
+//     en una sola query y agruparlos en JS.
 // ============================================================
 
 window.DashboardModule = {};
@@ -170,6 +179,7 @@ function calcularRangoGrafico(weekOffset, chartMode) {
 // ============================================================
 // 📊 ESTADÍSTICAS DEL DASHBOARD
 // 🆕 ENTREGA 5: Añadido ordersTomorrowCount
+// 🆕 v2.2.2: Conteo unificado para ordersTodayCount y ordersTomorrowCount
 // ============================================================
 
 async function getDashboardStats(options = {}) {
@@ -601,7 +611,7 @@ async function getDashboardStats(options = {}) {
 
         // ============================================================
         // PEDIDOS HOY, MAÑANA Y LISTA DE ESPERA
-        // 🆕 ENTREGA 5: Añadido ordersTomorrowCount
+        // 🆕 v2.2.2: Conteo unificado con DBModule.contarPedidosYVentasFecha()
         // ============================================================
         let ordersTodayCount = 0;
         let ordersTomorrowCount = 0;
@@ -610,34 +620,17 @@ async function getDashboardStats(options = {}) {
             const hoyStr = hoyYYYYMMDD();
             const mananaStr = mananaYYYYMMDD();
             
-            console.log(`📅 [ENTREGA 5] Contando pedidos para HOY (${hoyStr}) y MAÑANA (${mananaStr})...`);
+            console.log(`📅 [v2.2.2] Contando pedidos para HOY (${hoyStr}) y MAÑANA (${mananaStr})...`);
             
-            // 🆕 ENTREGA 5: Una sola query trae TODOS los pedidos con fecha de entrega
-            // y se agrupan por día en JS usando fechaLocalYYYYMMDD()
-            const todosLosPedidos = window.DBModule.query(
-                `SELECT id, delivery_date, status 
-                 FROM orders 
-                 WHERE negocio_id = ? 
-                 AND deleted_at IS NULL
-                 AND status NOT IN ('cancelled', 'delivered', 'waiting_bought')`,
-                [negocioId]
-            );
+            // 🆕 v2.2.2: Usar la función unificada para el conteo
+            const conteoHoy = window.DBModule.contarPedidosYVentasFecha(hoyStr);
+            ordersTodayCount = conteoHoy.pedidos;
             
-            console.log(`   📋 Total pedidos activos: ${todosLosPedidos.length}`);
+            const conteoManana = window.DBModule.contarPedidosYVentasFecha(mananaStr);
+            ordersTomorrowCount = conteoManana.pedidos;
             
-            for (const pedido of todosLosPedidos) {
-                const fechaLocal = fechaLocalYYYYMMDD(pedido.delivery_date);
-                if (!fechaLocal) continue;
-                
-                if (fechaLocal === hoyStr) {
-                    ordersTodayCount++;
-                } else if (fechaLocal === mananaStr) {
-                    ordersTomorrowCount++;
-                }
-            }
-            
-            console.log(`   📅 Pedidos HOY: ${ordersTodayCount}`);
-            console.log(`   📅 Pedidos MAÑANA: ${ordersTomorrowCount}`);
+            console.log(`   📅 Pedidos HOY (unificado): ${ordersTodayCount}`);
+            console.log(`   📅 Pedidos MAÑANA (unificado): ${ordersTomorrowCount}`);
             
             const waitingCount = window.DBModule.query(
                 `SELECT COUNT(*) as count FROM waiting_list 
@@ -789,11 +782,11 @@ async function getDashboardStats(options = {}) {
         // ============================================================
         // RETORNAR OBJETO COMPLETO
         // 🆕 ENTREGA 5: Incluye ordersTomorrowCount
+        // 🆕 v2.2.2: ordersTodayCount y ordersTomorrowCount usan conteo unificado
         // ============================================================
         return {
             totalSales, totalRevenue, todaySalesCount, todayRevenue,
             pendingOrdersCount, 
-            // 🆕 ENTREGA 5: Pedidos hoy + mañana + lista de espera
             ordersTodayCount, 
             ordersTomorrowCount,
             waitingListCount,
@@ -840,4 +833,4 @@ window.DashboardModule = {
     calcularRangoGrafico
 };
 
-console.log('📦 Dashboard Module cargado correctamente v2.1.2 (ENTREGA 5: pedidos mañana en dashboard)');
+console.log('📦 Dashboard Module cargado correctamente v2.2.2 (CORRECCIÓN #2: conteo unificado en Dashboard)');
