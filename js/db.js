@@ -44,6 +44,15 @@
 //   - ✅ saveProduccion() acepta los nuevos campos (opcionales)
 //   - ✅ Compatibilidad total: si no se pasan los campos, se comportan
 //     como antes (0/null)
+// 🆕 v2.2.1 (230926 v13): CORRECCIONES FINALES 220926
+//   - ✅ CORRECCIÓN P2.3: seedDefaultProducts() ahora inserta en la
+//     tabla `productos` (español) en lugar de `products` (inglés).
+//     Antes, los productos por defecto NO se cargaban nunca.
+//     Ahora se insertan correctamente con las columnas reales:
+//     nombre, precio_venta, unidad_venta, cantidad_por_unidad.
+//   - ✅ getPrefijoBackup() y writeBackupMeta() actualizados a v2.2.1
+//   - ✅ exportRecetasProductosSalva() actualizado a v2.2.1
+//   - ✅ Fallback de versión en console.log actualizado a 2.2.1
 // ============================================================
 
 let db = null;
@@ -1160,39 +1169,76 @@ function updateUserDashboardConfig(userId, config) {
 // SEMILLAS
 // ============================================================
 
+/**
+ * 🆕 v2.2.1: Semilla de productos por defecto.
+ * 
+ * CORRECCIÓN P2.3:
+ *   - Antes insertaba en la tabla `products` (inglés), que NO EXISTE.
+ *   - Ahora inserta en la tabla `productos` (español), con las columnas
+ *     reales: nombre, descripcion, precio_venta, unidad_venta,
+ *     cantidad_por_unidad.
+ *   - Los productos por defecto ahora SÍ se cargan correctamente.
+ */
 async function seedDefaultProducts(db) {
     try {
-        const count = db.exec('SELECT COUNT(*) as count FROM products WHERE deleted_at IS NULL');
+        // Verificar cuántos productos hay en la tabla `productos`
+        const count = db.exec('SELECT COUNT(*) as count FROM productos WHERE deleted_at IS NULL');
         const existing = count[0]?.values?.[0]?.[0] || 0;
+        
         if (existing === 0) {
+            console.log('🌱 [seedDefaultProducts] Tabla productos vacía. Insertando productos por defecto...');
+            
             const defaultProducts = [
-                { name: 'Pan Integral', price: 2.50, category: 'panes' },
-                { name: 'Pan Blanco', price: 2.00, category: 'panes' },
-                { name: 'Pan de Masa Madre', price: 3.50, category: 'panes' },
-                { name: 'Pan de Centeno', price: 3.00, category: 'panes' },
-                { name: 'Pan de Ajo', price: 2.50, category: 'panes' },
-                { name: 'Pan de Semillas', price: 3.20, category: 'panes' },
-                { name: 'Pan de Campo', price: 2.80, category: 'panes' },
-                { name: 'Croissant', price: 1.50, category: 'dulces' },
-                { name: 'Medialuna', price: 1.00, category: 'dulces' },
-                { name: 'Factura', price: 1.20, category: 'dulces' },
-                { name: 'Rosca', price: 4.00, category: 'dulces' },
-                { name: 'Bizcocho', price: 2.00, category: 'dulces' },
-                { name: 'Torta', price: 8.00, category: 'tortas' },
-                { name: 'Pastel', price: 6.00, category: 'tortas' },
-                { name: 'Galletas surtidas', price: 3.00, category: 'galletas' },
-                { name: 'Pan de Hamburguesa', price: 1.50, category: 'panes' },
-                { name: 'Pan de Hot Dog', price: 1.20, category: 'panes' },
-                { name: 'Pan de Molde', price: 2.80, category: 'panes' }
+                { nombre: 'Pan Integral', precio_venta: 2.50, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Pan Blanco', precio_venta: 2.00, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Pan de Masa Madre', precio_venta: 3.50, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Pan de Centeno', precio_venta: 3.00, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Pan de Ajo', precio_venta: 2.50, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Pan de Semillas', precio_venta: 3.20, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Pan de Campo', precio_venta: 2.80, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Croissant', precio_venta: 1.50, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Medialuna', precio_venta: 1.00, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Factura', precio_venta: 1.20, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Rosca', precio_venta: 4.00, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Bizcocho', precio_venta: 2.00, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Torta', precio_venta: 8.00, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Pastel', precio_venta: 6.00, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Galletas surtidas', precio_venta: 3.00, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Pan de Hamburguesa', precio_venta: 1.50, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Pan de Hot Dog', precio_venta: 1.20, unidad_venta: 'unidad', cantidad_por_unidad: 1 },
+                { nombre: 'Pan de Molde', precio_venta: 2.80, unidad_venta: 'unidad', cantidad_por_unidad: 1 }
             ];
-            const userResult = db.exec('SELECT id FROM users LIMIT 1');
+            
+            // Obtener el primer usuario (o 1 por defecto) para user_id
+            const userResult = db.exec('SELECT id FROM users WHERE deleted_at IS NULL LIMIT 1');
             const userId = userResult[0]?.values?.[0]?.[0] || 1;
+            
+            // Obtener el negocio actual (o 1 por defecto)
+            const negocioResult = db.exec('SELECT id FROM negocios WHERE deleted_at IS NULL LIMIT 1');
+            const negocioId = negocioResult[0]?.values?.[0]?.[0] || 1;
+            
+            let insertados = 0;
             for (const product of defaultProducts) {
-                db.run(`INSERT INTO products (user_id, name, price, category, is_active) VALUES (?, ?, ?, ?, 1)`,
-                    [userId, product.name, product.price, product.category]);
+                try {
+                    db.run(
+                        `INSERT INTO productos 
+                         (user_id, negocio_id, nombre, precio_venta, unidad_venta, cantidad_por_unidad, capacidad_max_bloque)
+                         VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+                        [userId, negocioId, product.nombre, product.precio_venta, product.unidad_venta, product.cantidad_por_unidad]
+                    );
+                    insertados++;
+                } catch (e) {
+                    console.warn(`⚠️ [seedDefaultProducts] Error insertando "${product.nombre}":`, e.message);
+                }
             }
+            
+            console.log(`🌱 [seedDefaultProducts] ✅ ${insertados} productos por defecto insertados.`);
+        } else {
+            console.log(`🌱 [seedDefaultProducts] ℹ️ Ya existen ${existing} productos. No se insertan por defecto.`);
         }
-    } catch (error) {}
+    } catch (error) {
+        console.warn('⚠️ [seedDefaultProducts] Error:', error.message);
+    }
 }
 
 async function seedDefaultInsumos(db) {
@@ -2166,7 +2212,7 @@ function writeBackupMeta(db, backupType) {
         db.run(`INSERT INTO ${BACKUP_META_TABLE} 
             (backup_type, backup_date, backup_version, backup_negocio_id, backup_negocio_nombre, backup_user, backup_user_role)
             VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-            backupType, new Date().toISOString(), '2.1.19', negocioId,
+            backupType, new Date().toISOString(), '2.2.1', negocioId,
             negocio?.nombre || 'Desconocido', user?.username || 'Desconocido',
             user?.is_admin === 1 ? 'admin' : 'user'
         ]);
@@ -2288,7 +2334,7 @@ function exportRecetasProductosSalva() {
 
         const salva = {
             _meta: {
-                app: 'Panario', version: '2.1.19', type: 'salva_recetas_productos',
+                app: 'Panario', version: '2.2.1', type: 'salva_recetas_productos',
                 exportDate: new Date().toISOString(), negocio_id: negocioId,
                 negocio_nombre: getNombreNegocioDB(),
                 counts: {
@@ -3688,10 +3734,8 @@ window.DBModule = {
     BACKUP_TYPE_COMPLETE, BACKUP_TYPE_DATA_ONLY
 };
 
-console.log('📦 DB Module cargado correctamente v2.1.19 (ENTREGA B: CMPBC + migraciones completas)');
-console.log('   🆕 Novedades:');
-console.log('      • Columna capacidad_max_bloque en productos');
-console.log('      • Columnas bloques_usados y distribucion_bloques en calendario_produccion');
-console.log('      • getCMPBCProducto() → devuelve el CMPBC o null');
-console.log('      • getProductosConCMPBC() → solo productos con CMPBC definido');
-console.log('      • saveProducto() y saveProduccion() actualizados');
+console.log('📦 DB Module cargado correctamente v2.2.1 (CORRECCIONES FINALES 220926)');
+console.log('   🆕 Novedades v2.2.1:');
+console.log('      • CORRECCIÓN P2.3: seedDefaultProducts() ahora inserta en la tabla "productos" (español)');
+console.log('      • Los productos por defecto SÍ se cargan al iniciar la app por primera vez');
+console.log('      • getPrefijoBackup() y writeBackupMeta() reportan versión 2.2.1');

@@ -1,20 +1,15 @@
 // ============================================================
 // 📦 MODAL MODULE - Panario (Modales personalizados + progreso)
-// CORREGIDO FASE A.2 (170926):
-//   - z-index elevado a 9999999999
-//   - closeModalAndResolve() ahora fuerza el cierre limpio
-//   - closeProgressModal() con timeout de seguridad
-//   - createModal() cierra con tecla Escape
-// CORREGIDO FASE A.3 (170926 v2):
-//   - showProgressModal() con auto-cierre de seguridad a los 30s
-// CORREGIDO FASE 1.4 (190926 v3): 🔧 FIX DEFINITIVO
-//   - Referencia ÚNICA al modal actual (window._currentModal)
-//   - closeModal() elimina SOLO el modal actual (no getElementById)
-//   - Los setTimeout de seguridad usan la referencia local, NO el id
-//   - Esto soluciona el bug de "modales huérfanos" y "prompt que se
-//     cierra solo por setTimeouts viejos"
-//   - Nueva función limpiarModalesHuerfanos() que limpia al arrancar
-//   - Bloqueo anti-apilamiento: cerrar modal anterior si se abre otro
+// CORREGIDO FASE A.2 (170926): z-index elevado + cierre limpio
+// CORREGIDO FASE A.3 (170926 v2): auto-cierre de progreso a los 30s
+// CORREGIDO FASE 1.4 (190926 v3): FIX DEFINITIVO - referencia única
+// 🆕 v2.0.9 (230926 v4): FIX BUG #2 - Header deformado
+//   - ✅ NUEVO: lockBodyScroll() / unlockBodyScroll() con stack LIFO
+//   - ✅ NUEVO: limpiarEstilosResiduales() elimina transform/will-change
+//     residuales del body/html/#appScreen que rompen position:sticky
+//   - ✅ Se ejecuta automáticamente al cerrar cualquier modal
+//   - ✅ cerrarTodosLosModales() ahora también limpia estilos residuales
+//   - ✅ Compatibilidad total con código existente
 // ============================================================
 
 window.ModalModule = {};
@@ -28,27 +23,127 @@ const PROGRESS_Z_INDEX = 9999999999;
 const PROGRESS_SAFETY_TIMEOUT_MS = 30000;
 
 // ============================================================
-// 🆕 FASE 1.4: REFERENCIA ÚNICA AL MODAL ACTUAL
+// 🆕 v2.0.9: STACK DE OVERFLOW DEL BODY (LIFO)
+// ============================================================
+// Guarda los valores previos de `overflow` del body para restaurarlos
+// correctamente cuando se cierran modales en orden inverso.
 // ============================================================
 
-// En lugar de buscar por `getElementById('custom-modal')` (que devuelve
-// el PRIMER elemento con ese id), guardamos una referencia directa.
+const _bodyOverflowStack = [];
+
+// ============================================================
+// 🆕 v2.0.9: REFERENCIA ÚNICA AL MODAL ACTUAL
+// ============================================================
+
 let _currentModal = null;
 let _currentModalTimeoutId = null;
 
+// ============================================================
+// 🆕 v2.0.9: FUNCIONES DE BLOQUEO/DESBLOQUEO DEL SCROLL
+// ============================================================
+
 /**
- * Limpia TODOS los modales huérfanos del DOM.
- * Se llama al cargar el módulo para limpiar acumulaciones previas.
+ * Bloquea el scroll del body guardando el estado previo en un stack.
+ * Cada llamada a lock debe emparejarse con un unlock.
+ */
+function lockBodyScroll() {
+    if (!document.body) return;
+    try {
+        const prev = document.body.style.overflow || '';
+        _bodyOverflowStack.push(prev);
+        document.body.style.overflow = 'hidden';
+        console.log(`🔒 Body scroll bloqueado (stack size: ${_bodyOverflowStack.length})`);
+    } catch (e) {
+        console.warn('⚠️ Error en lockBodyScroll:', e);
+    }
+}
+
+/**
+ * Restaura el scroll del body al estado previo (LIFO).
+ */
+function unlockBodyScroll() {
+    if (!document.body) return;
+    try {
+        const prev = _bodyOverflowStack.pop();
+        if (prev === undefined) {
+            // No hay nada en el stack: por seguridad, restaurar a ''
+            document.body.style.overflow = '';
+            console.log('🔓 Body scroll liberado (stack estaba vacío)');
+        } else {
+            document.body.style.overflow = prev;
+            console.log(`🔓 Body scroll liberado (stack size: ${_bodyOverflowStack.length})`);
+        }
+    } catch (e) {
+        console.warn('⚠️ Error en unlockBodyScroll:', e);
+    }
+}
+
+/**
+ * Limpia TODOS los estilos residuales que puedan haber quedado en
+ * el body, html o #appScreen y que rompan `position: sticky`.
+ * 
+ * Esto es crítico en móvil: si un modal añade `transform` o
+ * `will-change` a un ancestro del header, el `position: sticky`
+ * del header deja de funcionar y se deforma la barra superior.
+ */
+function limpiarEstilosResiduales() {
+    try {
+        const objetivos = [
+            document.documentElement,
+            document.body,
+            document.getElementById('appScreen')
+        ];
+        
+        let limpiados = 0;
+        
+        objetivos.forEach(el => {
+            if (!el || !el.style) return;
+            
+            // Propiedades que rompen position: sticky
+            const propsAResetear = [
+                'transform',
+                'will-change',
+                'isolation',
+                'filter',
+                'perspective',
+                'backface-visibility'
+            ];
+            
+            propsAResetear.forEach(prop => {
+                if (el.style.getPropertyValue(prop)) {
+                    el.style.removeProperty(prop);
+                    limpiados++;
+                }
+            });
+        });
+        
+        // También limpiar el body overflow si quedó huérfano
+        if (document.body && document.body.style.overflow === 'hidden' && _bodyOverflowStack.length === 0) {
+            document.body.style.overflow = '';
+            console.log('🔧 Body overflow huérfano limpiado');
+        }
+        
+        if (limpiados > 0) {
+            console.log(`🧹 ${limpiados} propiedades residuales limpiadas (transform/will-change/isolation/filter)`);
+        }
+        
+        return limpiados;
+        
+    } catch (e) {
+        console.warn('⚠️ Error en limpiarEstilosResiduales:', e);
+        return 0;
+    }
+}
+
+/**
+ * Limpia modales huérfanos del DOM y llama a limpiarEstilosResiduales().
+ * Se llama al arrancar el módulo y al abrir cualquier modal.
  */
 function limpiarModalesHuerfanos() {
     try {
-        // Eliminar TODOS los custom-modal (huérfanos)
         const customModals = document.querySelectorAll('#custom-modal');
-        customModals.forEach(m => {
-            try { m.remove(); } catch (e) {}
-        });
+        customModals.forEach(m => { try { m.remove(); } catch (e) {} });
         
-        // Eliminar TODOS los modales conocidos que puedan estar abiertos
         const modalesConocidos = [
             'progress-modal', 'order-modal', 'order-view-modal',
             'add-product-modal', 'insumo-modal', 'recipe-modal',
@@ -66,25 +161,30 @@ function limpiarModalesHuerfanos() {
             'qr-view-modal', 'tour-overlay', 'tour-highlight',
             'tour-tooltip', 'liberated-sale-modal',
             'edit-user-modal', 'create-user-modal',
-            'change-password-modal'
+            'change-password-modal', 'ayuda-modal',
+            'help-popover', 'global-cancel-modal',
+            'reprogramar-modal', 'production-diagnostic-modal',
+            'dias-sin-ventas-modal', 'dia-sin-venta-form-modal',
+            'produccion-rango-modal', 'calculo-bloques-modal',
+            'waiting-manager-modal'
         ];
         
         let limpiados = 0;
         for (const id of modalesConocidos) {
             const modales = document.querySelectorAll(`#${id}`);
-            modales.forEach(m => {
-                try { m.remove(); limpiados++; } catch (e) {}
-            });
+            modales.forEach(m => { try { m.remove(); limpiados++; } catch (e) {} });
         }
         
         if (customModals.length > 0 || limpiados > 0) {
             console.log(`🧹 Modal: Limpieza inicial — ${customModals.length} custom-modal(s) + ${limpiados} otros modales eliminados`);
         }
         
-        // Resetear estado de resolución
         window._modalResolve = null;
         window._modalResolved = false;
         _currentModal = null;
+        
+        // 🆕 v2.0.9: Limpiar estilos residuales
+        limpiarEstilosResiduales();
         
         return customModals.length + limpiados;
     } catch (e) {
@@ -93,7 +193,7 @@ function limpiarModalesHuerfanos() {
     }
 }
 
-// Ejecutar limpieza al cargar el módulo (con pequeño delay para esperar al DOM)
+// Ejecutar limpieza al cargar el módulo
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => setTimeout(limpiarModalesHuerfanos, 100));
 } else {
@@ -104,16 +204,11 @@ if (document.readyState === 'loading') {
 // FUNCIONES PRINCIPALES
 // ============================================================
 
-/**
- * Muestra un modal de confirmación
- */
 function showConfirm(options) {
     return new Promise((resolve) => {
         console.log('📦 Modal: showConfirm llamado', options);
         
-        // 🆕 FASE 1.4: Cerrar modal anterior si existe
         if (_currentModal) {
-            console.log('📦 Modal: cerrando modal anterior antes de abrir nuevo');
             closeCurrentModalImmediate();
         }
         
@@ -147,17 +242,15 @@ function showConfirm(options) {
 
         document.body.appendChild(modal);
         _currentModal = modal;
+        
+        // 🆕 v2.0.9: bloquear scroll
+        lockBodyScroll();
     });
 }
 
-/**
- * Muestra un modal de alerta
- */
 function showAlert(options) {
     return new Promise((resolve) => {
-        // 🆕 FASE 1.4: Cerrar modal anterior si existe
         if (_currentModal) {
-            console.log('📦 Modal: cerrando modal anterior antes de abrir alert');
             closeCurrentModalImmediate();
         }
         
@@ -194,17 +287,13 @@ function showAlert(options) {
 
         document.body.appendChild(modal);
         _currentModal = modal;
+        lockBodyScroll();
     });
 }
 
-/**
- * Muestra un modal de prompt (para entrada de texto)
- */
 function showPrompt(options) {
     return new Promise((resolve) => {
-        // 🆕 FASE 1.4: Cerrar modal anterior si existe
         if (_currentModal) {
-            console.log('📦 Modal: cerrando modal anterior antes de abrir prompt');
             closeCurrentModalImmediate();
         }
         
@@ -248,6 +337,7 @@ function showPrompt(options) {
 
         document.body.appendChild(modal);
         _currentModal = modal;
+        lockBodyScroll();
 
         setTimeout(() => {
             const input = document.getElementById('modal-input');
@@ -267,7 +357,7 @@ function showPrompt(options) {
 }
 
 // ============================================================
-// MODAL DE PROGRESO (CON RELOJ DE ARENA)
+// MODAL DE PROGRESO
 // ============================================================
 
 function showProgressModal(options = {}) {
@@ -337,6 +427,7 @@ function showProgressModal(options = {}) {
 
     document.body.appendChild(modal);
     window._progressModal = modal;
+    lockBodyScroll();
 
     window._progressSafetyTimeout = setTimeout(() => {
         console.warn('⚠️ Progress modal: timeout de seguridad alcanzado (30s). Cerrando automáticamente.');
@@ -456,36 +547,35 @@ function closeProgressModal() {
             }
         }, 1000);
     }
+    
+    unlockBodyScroll();
+    limpiarEstilosResiduales();
 }
 
 // ============================================================
-// 🆕 FASE 1.4: CIERRE INMEDIATO DEL MODAL ACTUAL
+// CIERRE INMEDIATO DEL MODAL ACTUAL
 // ============================================================
 
-/**
- * Cierra el modal actual SIN esperar la animación.
- * Se usa cuando hay que abrir otro modal inmediatamente.
- */
 function closeCurrentModalImmediate() {
     if (!_currentModal) return;
     
     try {
-        // Cancelar timeout pendiente si existe
         if (_currentModalTimeoutId) {
             clearTimeout(_currentModalTimeoutId);
             _currentModalTimeoutId = null;
         }
         
-        // Eliminar el modal actual
         if (_currentModal.parentNode) {
             _currentModal.remove();
         }
         
         _currentModal = null;
         
-        // Resetear estado de resolución
         window._modalResolve = null;
         window._modalResolved = false;
+        
+        unlockBodyScroll();
+        limpiarEstilosResiduales();
         
     } catch (e) {
         console.warn('⚠️ Error en closeCurrentModalImmediate:', e);
@@ -506,18 +596,16 @@ function closeModalAndResolve(value) {
     
     const resolveFn = window._modalResolve;
     const resolved = value;
-    const modalToClose = _currentModal; // ⚠️ Referencia LOCAL
+    const modalToClose = _currentModal;
     
     window._modalResolved = true;
     
-    // Cerrar el modal USANDO LA REFERENCIA LOCAL (no getElementById)
     if (modalToClose) {
         closeModalByReference(modalToClose);
     }
     
     _currentModal = null;
     
-    // Resolver la promesa
     if (resolveFn) {
         console.log('📦 Modal: resolviendo con:', resolved);
         try {
@@ -526,37 +614,33 @@ function closeModalAndResolve(value) {
             console.warn('⚠️ Error resolviendo promesa del modal:', e);
         }
         window._modalResolve = null;
-    } else {
-        console.log('📦 Modal: no hay función resolve');
     }
+    
+    // 🆕 v2.0.9: Restaurar scroll y limpiar estilos residuales
+    unlockBodyScroll();
+    limpiarEstilosResiduales();
 }
 
-/**
- * Cierra un modal usando su REFERENCIA directa.
- * Los setTimeout solo afectan a ESE modal.
- */
 function closeModalByReference(modal) {
     if (!modal || !modal.parentNode) return;
     
     try {
         modal.style.animation = 'modalFadeOut 0.2s ease forwards';
         
-        // ⚠️ CLAVE: Guardar la referencia en una variable local
-        // para que el setTimeout NO busque por id
         const modalRef = modal;
         
         setTimeout(() => {
-            // Solo eliminar SI es el mismo modal y sigue en el DOM
             if (modalRef && modalRef.parentNode) {
                 modalRef.remove();
             }
         }, 200);
         
-        // Timeout de seguridad: solo elimina ESTE modal
         setTimeout(() => {
             if (modalRef && modalRef.parentNode) {
                 modalRef.remove();
             }
+            // 🆕 v2.0.9: limpieza final
+            limpiarEstilosResiduales();
         }, 500);
         
     } catch (e) {
@@ -565,17 +649,14 @@ function closeModalByReference(modal) {
 }
 
 // ============================================================
-// FUNCIONES INTERNAS DE CREACIÓN Y CIERRE
+// FUNCIONES INTERNAS DE CREACIÓN
 // ============================================================
 
 function createModal(options) {
     const { title, icon, body, footer } = options;
 
-    // Limpiar TODOS los modales huérfanos antes de crear uno nuevo
     const huerfanos = document.querySelectorAll('#custom-modal');
-    huerfanos.forEach(m => {
-        try { m.remove(); } catch (e) {}
-    });
+    huerfanos.forEach(m => { try { m.remove(); } catch (e) {} });
 
     const overlay = document.createElement('div');
     overlay.id = 'custom-modal';
@@ -633,7 +714,6 @@ function createModal(options) {
         </div>
     `;
 
-    // Cerrar con Escape
     setTimeout(() => {
         const escHandler = function(e) {
             if (e.key === 'Escape') {
@@ -648,7 +728,6 @@ function createModal(options) {
 }
 
 function closeModal() {
-    // ⚠️ FASE 1.4: Usar closeCurrentModalImmediate para no dejar huérfanos
     closeCurrentModalImmediate();
 }
 
@@ -659,7 +738,7 @@ function confirmPromptAndResolve() {
 }
 
 // ============================================================
-// 🆕 FASE 1.4: CERRAR TODOS LOS MODALES (sigue siendo útil)
+// CERRAR TODOS LOS MODALES
 // ============================================================
 
 function cerrarTodosLosModales() {
@@ -703,7 +782,18 @@ function cerrarTodosLosModales() {
         'liberated-sale-modal',
         'edit-user-modal',
         'create-user-modal',
-        'change-password-modal'
+        'change-password-modal',
+        'ayuda-modal',
+        'help-popover',
+        'global-cancel-modal',
+        'reprogramar-modal',
+        'production-diagnostic-modal',
+        'dias-sin-ventas-modal',
+        'dia-sin-venta-form-modal',
+        'produccion-rango-modal',
+        'calculo-bloques-modal',
+        'waiting-manager-modal',
+        'progress-modal'
     ];
     
     let cerrados = 0;
@@ -727,9 +817,24 @@ function cerrarTodosLosModales() {
         window._currentModalTimeoutId = null;
     }
     
-    console.log(`🔧 cerrarTodosLosModales(): ${cerrados} modales cerrados`);
+    // 🆕 v2.0.9: Vaciar el stack y limpiar estilos
+    _bodyOverflowStack.length = 0;
+    if (document.body) {
+        document.body.style.overflow = '';
+    }
+    limpiarEstilosResiduales();
+    
+    console.log(`🔧 cerrarTodosLosModales(): ${cerrados} modales cerrados, stack limpiado, estilos residuales limpiados`);
     
     return cerrados;
+}
+
+/**
+ * 🆕 v2.0.9: Cerrar todos los modales Y limpiar estilos residuales.
+ * Alias de cerrarTodosLosModales() con nombre más descriptivo.
+ */
+function cerrarTodosYLimpiar() {
+    return cerrarTodosLosModales();
 }
 
 // ============================================================
@@ -749,9 +854,13 @@ window.ModalModule = {
     closeModalAndResolve,
     confirmPromptAndResolve,
     cerrarTodosLosModales,
-    // 🆕 FASE 1.4
+    cerrarTodosYLimpiar,
     limpiarModalesHuerfanos,
-    closeCurrentModalImmediate
+    closeCurrentModalImmediate,
+    // 🆕 v2.0.9: Nuevas funciones
+    lockBodyScroll,
+    unlockBodyScroll,
+    limpiarEstilosResiduales
 };
 
 // Para compatibilidad con código existente
@@ -762,6 +871,18 @@ window.showProgressModal = showProgressModal;
 window.updateProgressModal = updateProgressModal;
 window.closeProgressModal = closeProgressModal;
 window.cerrarTodosLosModales = cerrarTodosLosModales;
+window.cerrarTodosYLimpiar = cerrarTodosYLimpiar;
 window.limpiarModalesHuerfanos = limpiarModalesHuerfanos;
 
-console.log('📦 Modal Module v2.0.8 (FASE 1.4: FIX DEFINITIVO - referencia única, sin huérfanos)');
+// 🆕 v2.0.9: Exponer funciones de scroll globalmente
+window.lockBodyScroll = lockBodyScroll;
+window.unlockBodyScroll = unlockBodyScroll;
+window.limpiarEstilosResiduales = limpiarEstilosResiduales;
+
+console.log('📦 Modal Module v2.0.9 (FIX BUG #2: lockBodyScroll stack + limpiarEstilosResiduales)');
+console.log('   🆕 Nuevas funciones:');
+console.log('      • lockBodyScroll() → bloquea scroll con stack LIFO');
+console.log('      • unlockBodyScroll() → restaura scroll del body');
+console.log('      • limpiarEstilosResiduales() → elimina transform/will-change residuales');
+console.log('      • cerrarTodosYLimpiar() → cierra todo + limpia');
+console.log('   ✅ Se ejecuta limpieza automática al cerrar cualquier modal');

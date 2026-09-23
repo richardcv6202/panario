@@ -1,37 +1,20 @@
 // ============================================================
 // 📦 HELP MODULE - Panario (Sistema de Ayuda y Tutorial)
 // CORREGIDO: Nombre del desarrollador (Ricardo Castillo Valdés)
-// 🆕 FASE 5 (#2) (200926 v2):
-//   - NUEVO botón "📖 Ayuda detallada" en el Centro de Ayuda
-// 🆕 FASE 5 (#3):
-//   - Ampliación de FAQs (~80 preguntas organizadas)
-// 🆕 FASE AYUDA MODAL (200926 v3):
-//   - NUEVA: abrirAyudaEnModal(url) → abre la ayuda dentro de un
-//     modal a pantalla completa con iframe
-// 🆕 FASE 4 (Entrega 4 - 210926 v4):
-//   - ✅ FIX CRÍTICO: El modal de ayuda aparecía DETRÁS de la app
-//   - ✅ FAQs NUMERADAS ASCENDENTEMENTE
-//   - ✅ AMPLIACIÓN DE FAQs (~120 preguntas)
-//   - ✅ BUSCADOR EN FAQs
-// 🆕 FASE 4.1 (Entrega 4 - 210926 v5):
-//   - ✅ CENTRO DE AYUDA CONVERTIDO EN POPOVER
-// 🆕 ENTREGA 3 (230926 v6): AYUDA DETALLADA EN MÓVIL
-//   - ✅ En móvil, el modal de ayuda detallada usa
-//     "abrir en pestaña nueva" como opción PRIMARIA
-// 🆕 v2.1.12 (210926 v7): CORRECCIONES 210926
-//   - ✅ CORRECCIÓN #1: Popover de ayuda en móvil ahora se ancla
-//     ARRIBA-DERECHA (antes: abajo-izquierda). Se ajusta la posición
-//     para que no tape el botón ❓ y sea más intuitivo.
-//   - ✅ CORRECCIÓN #5: Nuevas FAQs sobre el código de invitación:
-//     * ¿Necesito estar en la misma red WiFi?
-//     * ¿Qué contiene el código de invitación?
-//     * ¿Cómo se determina el código de invitación?
-//   - ✅ CORRECCIÓN #8: Nuevas FAQs sobre cómo ejecutar offline.html
-//     desde el móvil.
-//   - ✅ CORRECCIÓN #11: Nueva FAQ sobre el origen del nombre "Panario"
-//     (juego con "pan" y "diario" de contabilidad).
-//   - ✅ CORRECCIÓN #12: Créditos ahora muestran la foto del
-//     desarrollador (assets/dev-avatar.png) con fallback al emoji.
+// 🆕 FASE 5 (#2): NUEVO botón "📖 Ayuda detallada"
+// 🆕 FASE 5 (#3): Ampliación de FAQs (~80 preguntas)
+// 🆕 FASE AYUDA MODAL: NUEVA abrirAyudaEnModal(url)
+// 🆕 FASE 4 (Entrega 4): FIX z-index + FAQs numeradas + buscador
+// 🆕 FASE 4.1: CENTRO DE AYUDA CONVERTIDO EN POPOVER
+// 🆕 ENTREGA 3: AYUDA DETALLADA EN MÓVIL (pestaña nueva)
+// 🆕 v2.1.12: Popover móvil + FAQs código invitación + offline + nombre
+// 🆕 v2.2.0: 55 FAQs nuevas (203 totales)
+// 🆕 v2.2.2 (230926): FIX BUG #2 - Header deformado
+//   - ✅ abrirAyudaEnModal() usa window.lockBodyScroll()
+//   - ✅ cerrarAyudaModal() usa window.unlockBodyScroll() +
+//     window.limpiarEstilosResiduales()
+//   - ✅ Eliminada la manipulación directa de body.style.overflow
+//   - ✅ Compatible con modal.js v2.0.9+
 // ============================================================
 
 window.HelpModule = {};
@@ -39,21 +22,13 @@ window.HelpModule = {};
 // ============================================================
 // Z-INDEX MÁXIMO PARA MODALES DE AYUDA
 // ============================================================
-// 2147483647 es el valor máximo para un entero de 32 bits con signo.
-// ============================================================
 
 const HELP_MODAL_Z_INDEX = 2147483647;
 const HELP_POPOVER_Z_INDEX = 2147483646;
-
-// Tiempo máximo (ms) que esperamos a que el iframe cargue antes
-// de ofrecer el fallback "abrir en pestaña nueva".
 const IFRAME_LOAD_TIMEOUT_MS = 8000;
 
 // ============================================================
-// 🆕 v2.1.12: RUTA DEL AVATAR DEL DESARROLLADOR
-// ============================================================
-// Ruta relativa al archivo HTML de la app (index.html).
-// El usuario debe colocar su foto en assets/dev-avatar.png
+// RUTA DEL AVATAR DEL DESARROLLADOR
 // ============================================================
 
 const DEV_AVATAR_PATH = './assets/dev-avatar.png';
@@ -124,17 +99,15 @@ let tourOverlay = null;
 let tourTooltip = null;
 let tourHighlight = null;
 
-// Referencias al popover de ayuda
 let _helpPopover = null;
 let _helpPopoverAnchor = null;
 let _helpPopoverOutsideClickHandler = null;
 let _helpPopoverEscHandler = null;
 
-// Referencias al modal de ayuda detallada
 let _ayudaModalState = null;
 
 // ============================================================
-// 🆕 ENTREGA 3: DETECCIÓN DE MÓVIL
+// DETECCIÓN DE MÓVIL
 // ============================================================
 
 function isMobileDevice() {
@@ -179,8 +152,6 @@ function forzarModalAlFrente(modal) {
         modal.style.setProperty('bottom', '0', 'important');
         modal.style.setProperty('z-index', String(HELP_MODAL_Z_INDEX), 'important');
         modal.style.setProperty('isolation', 'isolate', 'important');
-        modal.style.setProperty('transform', 'translateZ(0)', 'important');
-        modal.style.setProperty('will-change', 'transform', 'important');
         
         console.log('🔝 Modal forzado al frente con z-index:', HELP_MODAL_Z_INDEX);
     } catch (e) {
@@ -213,6 +184,7 @@ function abrirAyudaDetallada() {
             'settings':      'settings',
             'profile':       'profile',
             'corriente':     'corriente',
+            'produccion':    'produccion',
             'rewards':       'rewards',
             'notifications': 'notifications'
         };
@@ -290,9 +262,6 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
     modal.style.setProperty('align-items', 'center', 'important');
     modal.style.setProperty('justify-content', 'center', 'important');
     modal.style.setProperty('z-index', String(HELP_MODAL_Z_INDEX), 'important');
-    modal.style.setProperty('isolation', 'isolate', 'important');
-    modal.style.setProperty('transform', 'translateZ(0)', 'important');
-    modal.style.setProperty('will-change', 'transform', 'important');
     modal.style.setProperty('padding', isMobile ? '0' : '20px', 'important');
     modal.style.setProperty('animation', 'ayudaModalFadeIn 0.25s ease', 'important');
     modal.style.setProperty('overflow', 'hidden', 'important');
@@ -341,7 +310,7 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
                 <a href="${baseUrl}" target="_blank" rel="noopener noreferrer"
                    class="btn secondary"
                    style="padding: 6px 12px; font-size: 12px; width: auto; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;"
-                   title="Abrir en pestaña nueva (recomendado en móvil)">
+                   title="Abrir en pestaña nueva">
                     🔗 ↗
                 </a>
                 
@@ -370,6 +339,16 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
     
     document.body.appendChild(modal);
     forzarModalAlFrente(modal);
+    
+    // 🆕 v2.2.2: Usar lockBodyScroll() en lugar de manipular overflow directamente
+    if (typeof window.lockBodyScroll === 'function') {
+        window.lockBodyScroll();
+    } else {
+        // Fallback si modal.js antiguo
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        window._ayudaModalPrevOverflow = prevOverflow;
+    }
     
     const iframe = document.getElementById('ayuda-modal-iframe');
     const loading = document.getElementById('ayuda-modal-loading');
@@ -426,10 +405,7 @@ function abrirAyudaEnModal(embeddedUrl, theme = 'light', baseUrl = null) {
     };
     document.addEventListener('keydown', escHandler);
     
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    
-    window._ayudaModalState = { prevOverflow, escHandler };
+    window._ayudaModalState = { escHandler };
     
     console.log('📖 Modal de ayuda abierto con URL:', embeddedUrl);
 }
@@ -479,6 +455,10 @@ function ofrecerFallbackPestanaNueva(baseUrl, mensaje) {
     }
 }
 
+// ============================================================
+// 🆕 v2.2.2: CERRAR AYUDA MODAL CON LIMPIEZA DE ESTILOS
+// ============================================================
+
 function cerrarAyudaModal() {
     const modal = document.getElementById('ayuda-modal');
     if (!modal) return;
@@ -489,14 +469,28 @@ function cerrarAyudaModal() {
         if (modal.parentNode) modal.remove();
         
         if (window._ayudaModalState) {
-            document.body.style.overflow = window._ayudaModalState.prevOverflow || '';
             if (window._ayudaModalState.escHandler) {
                 document.removeEventListener('keydown', window._ayudaModalState.escHandler);
             }
             window._ayudaModalState = null;
         }
         
-        console.log('📖 Modal de ayuda cerrado');
+        // 🆕 v2.2.2: Usar unlockBodyScroll() + limpiarEstilosResiduales()
+        if (typeof window.unlockBodyScroll === 'function') {
+            window.unlockBodyScroll();
+        } else if (window._ayudaModalPrevOverflow !== undefined) {
+            document.body.style.overflow = window._ayudaModalPrevOverflow || '';
+            delete window._ayudaModalPrevOverflow;
+        }
+        
+        // 🆕 v2.2.2: Limpiar estilos residuales que rompen el sticky header
+        if (typeof window.limpiarEstilosResiduales === 'function') {
+            setTimeout(() => {
+                window.limpiarEstilosResiduales();
+            }, 50);
+        }
+        
+        console.log('📖 Modal de ayuda cerrado + estilos residuales limpiados');
     }, 200);
 }
 
@@ -553,9 +547,6 @@ function mostrarPopoverAyuda(anchorElement = null) {
     popover.style.setProperty('min-width', '260px', 'important');
     popover.style.setProperty('max-width', '300px', 'important');
     popover.style.setProperty('overflow', 'hidden', 'important');
-    popover.style.setProperty('isolation', 'isolate', 'important');
-    popover.style.setProperty('transform', 'translateZ(0)', 'important');
-    popover.style.setProperty('will-change', 'transform', 'important');
     popover.style.setProperty('animation', 'helpPopoverFadeIn 0.15s ease', 'important');
     
     popover.innerHTML = `
@@ -643,13 +634,6 @@ function mostrarPopoverAyuda(anchorElement = null) {
             .help-popover-item:hover { background: var(--bg) !important; }
             .help-popover-item:active { transform: scale(0.98); }
             
-            /* 🆕 v2.1.12: CORRECCIÓN #1
-               El popover en móvil ahora se ancla ARRIBA-DERECHA
-               (antes se anclaba abajo-izquierda, lo cual no era intuitivo).
-               - top: 60px → debajo del header
-               - right: 10px → pegado al borde derecho
-               - max-height ajustado para no salirse de la pantalla
-            */
             @media (max-width: 600px) {
                 #help-popover {
                     top: 60px !important;
@@ -731,8 +715,6 @@ function _posicionarPopoverAyuda(anchor, popover) {
         const isMobile = window.innerWidth < 600;
         
         if (isMobile) {
-            // 🆕 v2.1.12: En móvil, el CSS ya se encarga (top-right).
-            // No sobreescribimos con posicionamiento calculado.
             return;
         }
         
@@ -822,7 +804,7 @@ function _mostrarHelpMenuFallback() {
     
     const modal = document.createElement('div');
     modal.id = 'help-menu-modal';
-    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease; isolation: isolate;`;
+    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease;`;
     
     modal.innerHTML = `
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 420px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid var(--border-color);">
@@ -831,16 +813,15 @@ function _mostrarHelpMenuFallback() {
                     <span style="font-size: 28px;">❓</span>
                     <h2 style="margin: 0; font-size: 18px;">Centro de Ayuda</h2>
                 </div>
-                <button onclick="document.getElementById('help-menu-modal').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+                <button onclick="closeHelpMenuFallback()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
             </div>
-            <p style="font-size: 13px; color: var(--text-light); margin-bottom: 16px;">El botón de ayuda no está anclado. Abriendo en modo modal...</p>
             <div style="display: flex; flex-direction: column; gap: 8px;">
-                <button onclick="document.getElementById('help-menu-modal').remove(); showQuickStartGuide();" class="btn primary" style="padding: 10px; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: left;">🚀 Guía Rápida</button>
-                <button onclick="document.getElementById('help-menu-modal').remove(); startTour();" class="btn primary" style="padding: 10px; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: left;">🎯 Tutorial</button>
-                <button onclick="document.getElementById('help-menu-modal').remove(); showFAQModal();" class="btn primary" style="padding: 10px; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: left;">❓ Preguntas Frecuentes</button>
-                <button onclick="document.getElementById('help-menu-modal').remove(); abrirAyudaDetallada();" class="btn primary" style="padding: 10px; background: #10b981; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: left;">📖 Ayuda Detallada</button>
-                <button onclick="document.getElementById('help-menu-modal').remove(); showReadmeModal();" class="btn primary" style="padding: 10px; background: #0ea5e9; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: left;">📘 Léeme</button>
-                <button onclick="document.getElementById('help-menu-modal').remove(); showCreditsModal();" class="btn primary" style="padding: 10px; background: #ec4899; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: left;">👨‍💻 Créditos</button>
+                <button onclick="closeHelpMenuFallback(); showQuickStartGuide();" class="btn primary" style="padding: 10px; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: left;">🚀 Guía Rápida</button>
+                <button onclick="closeHelpMenuFallback(); startTour();" class="btn primary" style="padding: 10px; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: left;">🎯 Tutorial</button>
+                <button onclick="closeHelpMenuFallback(); showFAQModal();" class="btn primary" style="padding: 10px; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: left;">❓ Preguntas Frecuentes</button>
+                <button onclick="closeHelpMenuFallback(); abrirAyudaDetallada();" class="btn primary" style="padding: 10px; background: #10b981; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: left;">📖 Ayuda Detallada</button>
+                <button onclick="closeHelpMenuFallback(); showReadmeModal();" class="btn primary" style="padding: 10px; background: #0ea5e9; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: left;">📘 Léeme</button>
+                <button onclick="closeHelpMenuFallback(); showCreditsModal();" class="btn primary" style="padding: 10px; background: #ec4899; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: left;">👨‍💻 Créditos</button>
             </div>
         </div>
     `;
@@ -848,8 +829,26 @@ function _mostrarHelpMenuFallback() {
     document.body.appendChild(modal);
     forzarModalAlFrente(modal);
     
+    if (typeof window.lockBodyScroll === 'function') {
+        window.lockBodyScroll();
+    } else {
+        document.body.style.overflow = 'hidden';
+    }
+    
+    window.closeHelpMenuFallback = function() {
+        const m = document.getElementById('help-menu-modal');
+        if (m) {
+            m.style.animation = 'modalFadeOut 0.2s ease forwards';
+            setTimeout(() => {
+                if (m.parentNode) m.remove();
+                if (typeof window.unlockBodyScroll === 'function') window.unlockBodyScroll();
+                if (typeof window.limpiarEstilosResiduales === 'function') window.limpiarEstilosResiduales();
+            }, 200);
+        }
+    };
+    
     modal.addEventListener('click', function(e) {
-        if (e.target === this) modal.remove();
+        if (e.target === this) closeHelpMenuFallback();
     });
 }
 
@@ -867,7 +866,7 @@ function showReadmeModal() {
 
     const modal = document.createElement('div');
     modal.id = 'readme-modal';
-    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease; isolation: isolate;`;
+    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease;`;
 
     modal.innerHTML = `
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
@@ -901,7 +900,8 @@ function showReadmeModal() {
                     <li>⏰ <strong>Lista de espera:</strong> Gestión de clientes en cola</li>
                     <li>📊 <strong>Dashboard:</strong> Estadísticas y análisis del negocio</li>
                     <li>⚡ <strong>Corriente:</strong> Planificación según horarios eléctricos</li>
-                    <li>🔨 <strong>Producción:</strong> Programación y control de cantidades</li>
+                    <li>🔨 <strong>Producción:</strong> Programación con algoritmo inteligente</li>
+                    <li>🏭 <strong>CMPBC:</strong> Capacidad Máxima por Bloque</li>
                     <li>🏆 <strong>Premios:</strong> Sistema de fidelización</li>
                     <li>📅 <strong>Días sin ventas:</strong> Registro de inactividad</li>
                     <li>👥 <strong>Multiusuario:</strong> Varios usuarios por negocio</li>
@@ -911,7 +911,7 @@ function showReadmeModal() {
                 <div style="background: var(--bg); padding: 12px; border-radius: 8px; font-size: 13px;">
                     <div style="display: flex; justify-content: space-between; padding: 2px 0;">
                         <span style="color: var(--text-light);">Versión:</span>
-                        <strong>2.1.11</strong>
+                        <strong>2.2.1</strong>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 2px 0;">
                         <span style="color: var(--text-light);">Estado:</span>
@@ -962,12 +962,18 @@ function showReadmeModal() {
 
     document.body.appendChild(modal);
     forzarModalAlFrente(modal);
+    
+    if (typeof window.lockBodyScroll === 'function') window.lockBodyScroll();
 
     window.closeReadmeModal = function() {
         const m = document.getElementById('readme-modal');
         if (m) {
             m.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => { if (m.parentNode) m.remove(); }, 200);
+            setTimeout(() => {
+                if (m.parentNode) m.remove();
+                if (typeof window.unlockBodyScroll === 'function') window.unlockBodyScroll();
+                if (typeof window.limpiarEstilosResiduales === 'function') window.limpiarEstilosResiduales();
+            }, 200);
         }
     };
 
@@ -986,7 +992,6 @@ function showReadmeModal() {
 
 // ============================================================
 // MODAL CRÉDITOS
-// 🆕 v2.1.12: Con foto del desarrollador (assets/dev-avatar.png)
 // ============================================================
 
 function showCreditsModal() {
@@ -995,7 +1000,7 @@ function showCreditsModal() {
 
     const modal = document.createElement('div');
     modal.id = 'credits-modal';
-    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease; isolation: isolate;`;
+    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease;`;
 
     modal.innerHTML = `
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 28px 24px; max-width: 420px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color); text-align: center;">
@@ -1008,7 +1013,6 @@ function showCreditsModal() {
             </div>
 
             <div style="margin-bottom: 20px;">
-                <!-- 🆕 v2.1.12: CORRECCIÓN #12 - Foto del desarrollador con fallback -->
                 <div id="dev-avatar-container" style="width: 100px; height: 100px; border-radius: 50%; background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); display: inline-flex; align-items: center; justify-content: center; font-size: 48px; margin-bottom: 12px; overflow: hidden; border: 3px solid var(--primary);">
                     <img 
                         src="${DEV_AVATAR_PATH}" 
@@ -1025,7 +1029,7 @@ function showCreditsModal() {
                     📞 Información de contacto
                 </div>
                 
-                <a href="https://wa.me/5355031725" target="_blank" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-card); border-radius: 8px; text-decoration: none; color: var(--text); margin-bottom: 8px; border: 1px solid var(--border-color); transition: transform 0.2s;">
+                <a href="https://wa.me/5355031725" target="_blank" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-card); border-radius: 8px; text-decoration: none; color: var(--text); margin-bottom: 8px; border: 1px solid var(--border-color);">
                     <span style="font-size: 20px;">💬</span>
                     <div style="flex: 1;">
                         <div style="font-size: 11px; color: var(--text-light);">WhatsApp</div>
@@ -1034,7 +1038,7 @@ function showCreditsModal() {
                     <span style="font-size: 14px; color: var(--primary);">→</span>
                 </a>
 
-                <a href="mailto:3sayricardo@gmail.com" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-card); border-radius: 8px; text-decoration: none; color: var(--text); border: 1px solid var(--border-color); transition: transform 0.2s;">
+                <a href="mailto:3sayricardo@gmail.com" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-card); border-radius: 8px; text-decoration: none; color: var(--text); border: 1px solid var(--border-color);">
                     <span style="font-size: 20px;">📧</span>
                     <div style="flex: 1;">
                         <div style="font-size: 11px; color: var(--text-light);">Email</div>
@@ -1046,7 +1050,7 @@ function showCreditsModal() {
 
             <div style="background: linear-gradient(135deg, #0ea5e915 0%, #0284c715 100%); border: 1px solid #0ea5e9; border-radius: 10px; padding: 14px; margin-bottom: 16px;">
                 <div style="font-size: 13px; font-weight: 600; color: #0ea5e9; margin-bottom: 4px;">
-                    🍞 Panario v2.1.11
+                    🍞 Panario v2.2.1
                 </div>
                 <div style="font-size: 12px; color: var(--text-light);">
                     "Tu panadería en orden"
@@ -1070,12 +1074,18 @@ function showCreditsModal() {
 
     document.body.appendChild(modal);
     forzarModalAlFrente(modal);
+    
+    if (typeof window.lockBodyScroll === 'function') window.lockBodyScroll();
 
     window.closeCreditsModal = function() {
         const m = document.getElementById('credits-modal');
         if (m) {
             m.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => { if (m.parentNode) m.remove(); }, 200);
+            setTimeout(() => {
+                if (m.parentNode) m.remove();
+                if (typeof window.unlockBodyScroll === 'function') window.unlockBodyScroll();
+                if (typeof window.limpiarEstilosResiduales === 'function') window.limpiarEstilosResiduales();
+            }, 200);
         }
     };
 
@@ -1124,7 +1134,7 @@ function createOverlay() {
     
     tourOverlay = document.createElement('div');
     tourOverlay.id = 'tour-overlay';
-    tourOverlay.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2147483640; pointer-events: none; animation: modalFadeIn 0.3s ease; isolation: isolate;`;
+    tourOverlay.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2147483640; pointer-events: none; animation: modalFadeIn 0.3s ease;`;
     
     tourHighlight = document.createElement('div');
     tourHighlight.id = 'tour-highlight';
@@ -1272,7 +1282,7 @@ function showContextualHelp(section) {
         'orders': '📋 Gestiona pedidos, reservas y lista de espera. Cambia estados y crea ventas automáticamente al entregar.',
         'insumos': '🛒 Controla tu inventario. Registra compras, costos y stock mínimo. Los insumos se descuentan al vender.',
         'recipes': '📖 Crea y gestiona recetas. Asocia insumos para calcular costos automáticamente. Puedes recalcular y compartir.',
-        'productos': '🏷️ Define los productos que vendes. Cada producto puede tener una receta asociada.',
+        'productos': '🏷️ Define los productos que vendes. Cada producto puede tener una receta asociada y un CMPBC.',
         'sales': '💰 Registra ventas y gastos. El stock se descuenta automáticamente. Puedes gestionar deudas y ventas liberadas.',
         'settings': '⚙️ Configura tu negocio, exporta/importa datos, gestiona horarios de corriente y más.',
         'profile': '👤 Edita tu perfil, cambia tema, gestiona cuentas bancarias y configura tu Dashboard.'
@@ -1292,7 +1302,7 @@ function showQuickStartGuide() {
 
     const modal = document.createElement('div');
     modal.id = 'quickstart-modal';
-    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease; isolation: isolate;`;
+    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease;`;
 
     modal.innerHTML = `
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
@@ -1317,7 +1327,7 @@ function showQuickStartGuide() {
                 
                 <div style="background: var(--bg); padding: 12px 16px; border-radius: 8px; border-left: 4px solid #10b981;">
                     <div style="font-weight: 600; font-size: 14px;">🏷️ Paso 3: Crear productos</div>
-                    <div style="font-size: 13px; color: var(--text-light); margin-top: 2px;">Ve a 🏷️ Productos y define lo que vendes, asociando cada producto a una receta.</div>
+                    <div style="font-size: 13px; color: var(--text-light); margin-top: 2px;">Ve a 🏷️ Productos y define lo que vendes. Opcionalmente define su CMPBC.</div>
                 </div>
                 
                 <div style="background: var(--bg); padding: 12px 16px; border-radius: 8px; border-left: 4px solid #3b82f6;">
@@ -1344,12 +1354,18 @@ function showQuickStartGuide() {
 
     document.body.appendChild(modal);
     forzarModalAlFrente(modal);
+    
+    if (typeof window.lockBodyScroll === 'function') window.lockBodyScroll();
 
     window.closeQuickStartGuide = function() {
         const m = document.getElementById('quickstart-modal');
         if (m) {
             m.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => { if (m.parentNode) m.remove(); }, 200);
+            setTimeout(() => {
+                if (m.parentNode) m.remove();
+                if (typeof window.unlockBodyScroll === 'function') window.unlockBodyScroll();
+                if (typeof window.limpiarEstilosResiduales === 'function') window.limpiarEstilosResiduales();
+            }, 200);
         }
     };
 
@@ -1384,17 +1400,13 @@ function initHelpButton() {
 // ============================================================
 // BASE DE DATOS DE FAQs NUMERADAS
 // ============================================================
-// 🆕 v2.1.12: Se añaden 6 FAQs nuevas (correcciones #5, #8, #11)
-// Total: 142 + 6 = 148 preguntas
+// 203 preguntas (P1-P315 con huecos en P143-P260)
 // ============================================================
 
 const FAQS_DB = [
     // ============ GENERALES ============
     { cat: '🏠 Generales', q: '¿Qué es Panario?', a: 'Es una aplicación PWA para la gestión integral de una panadería artesanal. Permite gestionar insumos, recetas, productos, ventas, pedidos y finanzas.' },
-    
-    // 🆕 v2.1.12: CORRECCIÓN #11 - Explicación del nombre
     { cat: '🏠 Generales', q: '¿Por qué se llama "Panario"?', a: 'El nombre es un juego con "pan" y "diario" (de contabilidad). Es corto, original y describe perfectamente el propósito: llevar el diario contable de una panadería.\n\n📋 Otros nombres que se consideraron fueron:\n• PanConta (fusión directa de "pan" y "contabilidad")\n• HarinaBalance (evoca el ingrediente principal y el equilibrio financiero)\n• MasaYCuentas (rimado y amigable)\n• BakeryLedger (en inglés, pensando en expansión)\n\nFinalmente se eligió "Panario" por ser único, breve y fácil de recordar.' },
-    
     { cat: '🏠 Generales', q: '¿Funciona sin conexión?', a: 'Sí, Panario funciona completamente offline. Todos tus datos están guardados localmente en tu dispositivo.' },
     { cat: '🏠 Generales', q: '¿Dónde se guardan mis datos?', a: 'En SQLite (base de datos local) y localStorage. Todo queda en tu dispositivo. Nada se envía a servidores externos.' },
     { cat: '🏠 Generales', q: '¿Cómo hago una copia de seguridad?', a: 'Ve a ⚙️ Herramientas y haz clic en "📥 Descargar copia de seguridad". Se descarga un archivo .db con todos tus datos.' },
@@ -1455,7 +1467,7 @@ const FAQS_DB = [
     { cat: '💰 Ventas', q: '¿Qué motivos puedo usar para un día sin ventas?', a: 'Hay 8 predefinidos: ⚡ Apagón, 🛒 Falta de insumos, 🎉 Feriado, 🏖️ Vacaciones, 🏥 Enfermedad, 🔧 Mantenimiento, 🌧️ Mal clima, y 🔄 Otro.' },
     { cat: '💰 Ventas', q: '¿Cómo veo quién hizo cada venta?', a: 'En el detalle de la venta, en la sección de Auditoría, aparece "👤 Creado por: [nombre del vendedor]".' },
     { cat: '💰 Ventas', q: '¿Qué hago si veo ventas duplicadas?', a: 'Ve a ⚙️ Herramientas → 🚨 Eliminación por error. Selecciona las ventas duplicadas y elimínalas permanentemente.' },
-    { cat: '💰 Ventas', q: '¿Puedo filtrar ventas por vendedor?', a: 'Actualmente no hay filtro directo, pero puedes ver el ranking de ventas por empleado en el Dashboard. Está planificado añadir un listbox de vendedores en futuras versiones.' },
+    { cat: '💰 Ventas', q: '¿Puedo filtrar ventas por vendedor?', a: 'Actualmente no hay filtro directo, pero puedes ver el ranking de ventas por empleado en el Dashboard.' },
 
     // ============ PEDIDOS ============
     { cat: '📋 Pedidos', q: '¿Cuál es la diferencia entre pedido y venta?', a: 'Un pedido es una solicitud de un cliente. Una venta es una transacción completada. Los pedidos no son deudas hasta que se entregan.' },
@@ -1465,110 +1477,164 @@ const FAQS_DB = [
     { cat: '📋 Pedidos', q: '¿Qué es la paridad en reservas?', a: 'Permite filtrar días pares o impares. Ej: "Solo pares" crea pedidos los días 2, 4, 6, 8, 10...' },
     { cat: '📋 Pedidos', q: '¿Cómo se cancelan pedidos automáticamente?', a: 'Los pedidos pendientes/confirmados con más de 48h sin procesar se cancelan automáticamente.' },
     { cat: '📋 Pedidos', q: '¿Qué es "sesión de recogida"?', a: 'Indica si el cliente recogerá el pedido en la mañana (10:00), tarde (15:00) o noche (19:00).' },
-    { cat: '📋 Pedidos', q: '¿Cómo gestiono la lista de espera?', a: 'Ve a 📋 Pedidos → botón "⏰ Lista de espera" o a ⚙️ Herramientas → "⏰ Gestionar lista de espera". Desde ahí puedes procesar, cancelar, eliminar o limpiar la lista.' },
-    { cat: '📋 Pedidos', q: '¿Qué es la "cancelación global de pedidos"?', a: 'Es una herramienta de admin que cancela TODOS los pedidos en un rango de fechas. Útil para apagones prolongados, falta de insumos o cierres temporales.' },
-    { cat: '📋 Pedidos', q: '¿Por qué cambió el diseño de la lista de espera?', a: 'Se reestructuró para mostrar toda la información en columnas horizontales, haciendo visible el nombre del cliente, producto, cantidad, total y fecha de entrega de un vistazo.' },
-    { cat: '📋 Pedidos', q: '¿Qué significa cada botón en la lista de espera?', a: '✅ Procesar → crea la venta. ❌ Cancelar → cancela el pedido y repone stock. 🗑️ Quitar → solo quita al cliente de la lista sin cancelar el pedido.' },
-    { cat: '📋 Pedidos', q: '¿Qué diferencia hay entre "Cancelar" y "Quitar"?', a: 'Cancelar → cambia el estado del pedido a "cancelado" y repone stock. Quitar → solo elimina al cliente de la lista, el pedido vuelve a "pendiente".' },
+    { cat: '📋 Pedidos', q: '¿Cómo gestiono la lista de espera?', a: 'Ve a 📋 Pedidos → botón "⏰ Lista de espera" o a ⚙️ Herramientas → "⏰ Gestionar lista de espera".' },
+    { cat: '📋 Pedidos', q: '¿Qué es la "cancelación global de pedidos"?', a: 'Es una herramienta de admin que cancela TODOS los pedidos en un rango de fechas.' },
+    { cat: '📋 Pedidos', q: '¿Qué significa cada botón en la lista de espera?', a: '✅ Procesar → crea la venta. ❌ Cancelar → cancela el pedido y repone stock. 🗑️ Quitar → solo quita al cliente de la lista.' },
+    { cat: '📋 Pedidos', q: '¿Qué diferencia hay entre "Cancelar" y "Quitar"?', a: 'Cancelar → cambia el estado del pedido a "cancelado" y repone stock. Quitar → solo elimina al cliente de la lista.' },
 
     // ============ CORRIENTE ============
     { cat: '⚡ Corriente', q: '¿Cómo funcionan los horarios de corriente?', a: 'Define el patrón (ej: 3h corriente / 12h apagón) y el sistema calcula automáticamente todos los bloques de cada día.' },
     { cat: '⚡ Corriente', q: '¿Qué necesito para configurar corriente?', a: 'Una fecha y hora de referencia donde conociste un bloque de corriente. Ej: "Hoy tuve corriente de 10:00 a 13:00".' },
-    { cat: '⚡ Corriente', q: '¿Puedo descargar el reporte de corriente?', a: 'Sí. En Herramientas → ⚡ Gestionar Horarios → pestaña 📊 Reporte, elige semanal o mensual y se genera un PDF.' },
+    { cat: '⚡ Corriente', q: '¿Puedo descargar el reporte de corriente?', a: 'Sí. En Herramientas → ⚡ Gestionar Horarios → pestaña 📊 Reporte, elige semanal o mensual.' },
     { cat: '⚡ Corriente', q: '¿Por qué el calendario muestra algunos días sin corriente?', a: 'Porque según el patrón configurado, ese día no tiene bloques de corriente. Aparecen en gris.' },
 
     // ============ PREMIOS ============
     { cat: '🏆 Premios', q: '¿Cómo funciona el sistema de premios?', a: 'Premia a tus mejores clientes. Se calcula automáticamente el cliente con mayor total gastado en el mes y en el año.' },
-    { cat: '🏆 Premios', q: '¿Dónde configuro los premios?', a: 'Ve a 💰 Ventas → botón 🏆 Premios. Ahí puedes activar/desactivar, editar los premios y elegir cuándo se calcula el premio anual.' },
-    { cat: '🏆 Premios', q: '¿Por qué hay tres opciones para calcular el premio anual?', a: 'Cada negocio es diferente. Puedes elegir entregar el premio en Navidad (24 dic), a fin de año (31 dic) o al inicio del siguiente año (comportamiento por defecto).' },
-    { cat: '🏆 Premios', q: '¿Qué pasa si tengo el sistema de premios desactivado?', a: 'El selector de cálculo anual se guarda igualmente, pero no se muestra la tarjeta de premios en el Dashboard ni se envían notificaciones.' },
+    { cat: '🏆 Premios', q: '¿Dónde configuro los premios?', a: 'Ve a 💰 Ventas → botón 🏆 Premios.' },
+    { cat: '🏆 Premios', q: '¿Por qué hay tres opciones para calcular el premio anual?', a: 'Cada negocio es diferente. Puedes elegir entregar el premio en Navidad (24 dic), a fin de año (31 dic) o al inicio del siguiente año.' },
+    { cat: '🏆 Premios', q: '¿Qué pasa si tengo el sistema de premios desactivado?', a: 'El selector de cálculo anual se guarda igualmente, pero no se muestra la tarjeta de premios en el Dashboard.' },
 
     // ============ NOTIFICACIONES Y AYUDA ============
     { cat: '🔔 Notificaciones', q: '¿Puedo cambiar el sonido de las notificaciones?', a: 'Sí. Ve a tu Perfil → 🔔 Sonido de notificaciones. Puedes elegir entre 5 sonidos embutidos o desactivarlo.' },
-    { cat: '🔔 Notificaciones', q: '¿Por qué no se repiten las notificaciones?', a: 'Una vez que abres el modal de notificaciones, se marcan como vistas y no se vuelven a mostrar hasta que sean necesarias de nuevo.' },
-    { cat: '🔔 Notificaciones', q: '¿Cómo abro el Centro de Ayuda?', a: 'Haz clic en el botón ❓ de la barra superior. Se abrirá un menú flotante con Guía Rápida, Tutorial, FAQ, Ayuda Detallada, Léeme y Créditos.' },
-    { cat: '🔔 Notificaciones', q: '¿Qué es la "Ayuda detallada"?', a: 'Es un manual completo que se abre DENTRO de la app (en esta misma ventana), respetando tu tema actual y abriéndose en la sección del módulo donde estés.' },
-    { cat: '🔔 Notificaciones', q: '¿Puedo volver a ver el tutorial?', a: 'Sí. Ve a Ayuda → Tutorial Interactivo. Si ya lo completaste, la app te preguntará si quieres volver a verlo.' },
+    { cat: '🔔 Notificaciones', q: '¿Por qué no se repiten las notificaciones?', a: 'Una vez que abres el modal de notificaciones, se marcan como vistas y no se vuelven a mostrar.' },
+    { cat: '🔔 Notificaciones', q: '¿Cómo abro el Centro de Ayuda?', a: 'Haz clic en el botón ❓ de la barra superior.' },
+    { cat: '🔔 Notificaciones', q: '¿Qué es la "Ayuda detallada"?', a: 'Es un manual completo que se abre DENTRO de la app (en esta misma ventana).' },
+    { cat: '🔔 Notificaciones', q: '¿Puedo volver a ver el tutorial?', a: 'Sí. Ve a Ayuda → Tutorial Interactivo.' },
     { cat: '🔔 Notificaciones', q: '¿Cómo contacto al desarrollador?', a: 'En Ayuda → Créditos. WhatsApp: +53 55031725, Email: 3sayricardo@gmail.com.' },
-    { cat: '🔔 Notificaciones', q: '¿Por qué la ayuda se abre detrás de la app?', a: 'Era un bug de z-index. Ahora se corrigió y la ayuda se abre siempre al frente. Si aún lo ves detrás, recarga la página.' },
-    { cat: '🔔 Notificaciones', q: '¿El Centro de Ayuda bloquea la pantalla?', a: 'No. El Centro de Ayuda ahora es un menú flotante que aparece debajo del botón ❓. Se cierra automáticamente al hacer clic fuera o presionar Escape.' },
-    { cat: '🔔 Notificaciones', q: '¿Por qué en móvil la ayuda se abre en pestaña nueva?', a: 'En móvil, los iframes son problemáticos (tamaño, scroll, gestos). Por eso en móvil la ayuda detallada se abre directamente en una pestaña nueva, que es más fiable.' },
+    { cat: '🔔 Notificaciones', q: '¿Por qué la ayuda se abre detrás de la app?', a: 'Era un bug de z-index. Ahora se corrigió y la ayuda se abre siempre al frente.' },
+    { cat: '🔔 Notificaciones', q: '¿El Centro de Ayuda bloquea la pantalla?', a: 'No. Es un menú flotante que aparece debajo del botón ❓.' },
+    { cat: '🔔 Notificaciones', q: '¿Por qué en móvil la ayuda se abre en pestaña nueva?', a: 'En móvil, los iframes son problemáticos. Por eso la ayuda detallada se abre directamente en una pestaña nueva.' },
 
     // ============ MULTIUSUARIO ============
     { cat: '👥 Multiusuario', q: '¿Puedo tener varios usuarios en el mismo negocio?', a: 'Sí. Al registrarte puedes crear un negocio nuevo o unirte a uno existente con un código de invitación de 8 caracteres.' },
-    { cat: '👥 Multiusuario', q: '¿Cómo comparto el código de invitación?', a: 'En tu Perfil, junto al nombre del negocio, verás el código con un botón "📋 Copiar". Envíalo a quien quieras invitar.' },
-    { cat: '👥 Multiusuario', q: '¿Quién es el administrador del negocio?', a: 'El primer usuario que crea el negocio es el administrador. Los siguientes usuarios que se unan tendrán rol de usuario regular.' },
+    { cat: '👥 Multiusuario', q: '¿Cómo comparto el código de invitación?', a: 'En tu Perfil, junto al nombre del negocio, verás el código con un botón "📋 Copiar".' },
+    { cat: '👥 Multiusuario', q: '¿Quién es el administrador del negocio?', a: 'El primer usuario que crea el negocio es el administrador.' },
     { cat: '👥 Multiusuario', q: '¿Cómo promuevo a un usuario a admin?', a: 'Ve a ⚙️ Herramientas → 👥 Gestionar Usuarios → botón 👑 junto al usuario.' },
-    { cat: '👥 Multiusuario', q: '¿Qué puede hacer un admin que un usuario no puede?', a: 'Crear/editar/eliminar insumos, recetas, productos. Gestionar usuarios. Hacer copias completas. Ver costos de recetas. Cancelar/reprogramar pedidos globalmente.' },
-    
-    // 🆕 v2.1.12: CORRECCIÓN #5 - FAQs sobre código de invitación
-    { cat: '👥 Multiusuario', q: '¿Necesito estar en la misma red WiFi para unirme a un negocio con el código de invitación?', a: 'No. El código de invitación NO requiere que estés en la misma red WiFi ni en la misma ubicación física.\n\n💡 ¿Cómo funciona?\n• El código es un identificador único del negocio que se guarda en la base de datos LOCAL del dispositivo donde se creó el negocio.\n• Para unirte, necesitas tener acceso a esa misma base de datos (por ejemplo, mediante una copia de seguridad exportada).\n• NO hay servidor central. Panario es 100% offline y local.\n\n⚠️ Importante: Si quieres que otra persona se una a tu negocio desde otro dispositivo, deben importar tu base de datos completa (copia de seguridad) primero. El código de invitación solo funciona dentro de la misma base de datos.' },
-    
-    { cat: '👥 Multiusuario', q: '¿Qué información contiene el código de invitación?', a: 'El código de invitación es un identificador de 8 caracteres alfanuméricos (ej: ABC12345) que se asigna automáticamente al crear un negocio.\n\n📋 ¿Qué contiene?\n• NO contiene información personal ni datos del negocio.\n• Solo es una referencia única que apunta al negocio dentro de la base de datos.\n• Se genera aleatoriamente usando mayúsculas y números (sin caracteres confusos como O/0 o I/1).\n\n🔒 Seguridad: El código es seguro porque solo funciona dentro de la base de datos local. Sin acceso a esa BD, el código no sirve de nada.' },
-    
-    { cat: '👥 Multiusuario', q: '¿Cómo se determina el código de invitación desde el entorno del invitado?', a: 'Cuando alguien intenta unirse con un código:\n\n1️⃣ El sistema busca el código en la base de datos LOCAL del dispositivo.\n2️⃣ Si lo encuentra, muestra una vista previa del negocio (nombre, número de usuarios).\n3️⃣ El nuevo usuario se asocia al negocio existente con rol de "usuario regular".\n4️⃣ Todos los datos operativos (insumos, recetas, productos, ventas) se comparten entre los usuarios del mismo negocio.\n\n💡 Caso de uso típico:\n• Ricardo crea el negocio "Panadería La Esquina" en su dispositivo.\n• Exporta la copia de seguridad y la comparte con María.\n• María importa la copia en su dispositivo.\n• María se registra con el código de invitación (o directamente se une al negocio existente).\n• Ambos ven los mismos datos y pueden trabajar en paralelo.' },
+    { cat: '👥 Multiusuario', q: '¿Qué puede hacer un admin que un usuario no puede?', a: 'Crear/editar/eliminar insumos, recetas, productos. Gestionar usuarios. Hacer copias completas. Ver costos de recetas.' },
+    { cat: '👥 Multiusuario', q: '¿Necesito estar en la misma red WiFi para unirme a un negocio con el código de invitación?', a: 'No. El código de invitación NO requiere que estés en la misma red WiFi. El código es un identificador único del negocio que se guarda en la base de datos LOCAL.' },
+    { cat: '👥 Multiusuario', q: '¿Qué información contiene el código de invitación?', a: 'El código de invitación es un identificador de 8 caracteres alfanuméricos (ej: ABC12345) que se asigna automáticamente al crear un negocio. NO contiene información personal.' },
+    { cat: '👥 Multiusuario', q: '¿Cómo se determina el código de invitación desde el entorno del invitado?', a: 'Cuando alguien intenta unirse con un código: el sistema busca el código en la base de datos LOCAL del dispositivo. Si lo encuentra, muestra una vista previa del negocio.' },
 
     // ============ HERRAMIENTAS ============
-    { cat: '⚙️ Herramientas', q: '¿Qué hace "Reiniciar base de datos"?', a: 'Elimina TODOS los datos excepto usuarios y temas. Se conservan las cuentas de usuario para que puedas volver a entrar. Contraseña: "panario".' },
-    { cat: '⚙️ Herramientas', q: '¿Qué diferencia hay entre "Limpiar datos eliminados" y "Eliminación por error"?', a: 'Ambas son destructivas. "Limpiar datos eliminados" borra todos los registros con soft-delete. "Eliminación por error" permite seleccionar pedidos o ventas específicos para eliminar permanentemente.' },
-    { cat: '⚙️ Herramientas', q: '¿Cómo fusiono dos bases de datos?', a: 'Ve a ⚙️ Herramientas → 📥 Importar → 🔀 Fusionar bases de datos. Los registros nuevos se añaden, los existentes se comparan por UUID (gana el más reciente).' },
-    { cat: '⚙️ Herramientas', q: '¿Qué pasa si importo datos duplicados?', a: 'El sistema evita duplicados al fusionar: compara por UUID y solo actualiza si el backup es más reciente. Los duplicados se omiten automáticamente.' },
+    { cat: '⚙️ Herramientas', q: '¿Qué hace "Reiniciar base de datos"?', a: 'Elimina TODOS los datos excepto usuarios y temas. Contraseña: "panario".' },
+    { cat: '⚙️ Herramientas', q: '¿Qué diferencia hay entre "Limpiar datos eliminados" y "Eliminación por error"?', a: 'Ambas son destructivas. "Limpiar datos eliminados" borra todos los registros con soft-delete. "Eliminación por error" permite seleccionar pedidos o ventas específicos.' },
+    { cat: '⚙️ Herramientas', q: '¿Cómo fusiono dos bases de datos?', a: 'Ve a ⚙️ Herramientas → 📥 Importar → 🔀 Fusionar bases de datos.' },
+    { cat: '⚙️ Herramientas', q: '¿Qué pasa si importo datos duplicados?', a: 'El sistema evita duplicados al fusionar: compara por UUID y solo actualiza si el backup es más reciente.' },
 
     // ============ PRODUCCIÓN ============
-    { cat: '🔨 Producción', q: '¿Qué es el horario de producción?', a: 'Es el bloque de corriente que has marcado como el momento en que hornearás tu producción. Se muestra en la tarjeta del pedido para saber cuándo estará listo el pan.' },
-    { cat: '🔨 Producción', q: '¿Cómo defino el horario de producción para un día?', a: 'Ve a ⚙️ Herramientas → ⚡ Gestionar Horarios → 📅 Calendario. Haz clic en un día con corriente, selecciona el bloque y la cantidad a producir, y guarda.' },
-    { cat: '🔨 Producción', q: '¿Qué significa "Pedidos: 5/50"?', a: 'Significa que hay 5 pedidos reservados para ese día y la producción programada es de 50 unidades. Aún quedan 45 cupos disponibles.' },
-    { cat: '🔨 Producción', q: '¿Por qué no puedo crear más pedidos para un día?', a: 'Porque la producción de ese día está completa. El sistema bloquea la creación para evitar sobreventa. Cambia la fecha o aumenta la cantidad de producción.' },
-    { cat: '🔨 Producción', q: '¿Cómo elimino la producción de un día?', a: 'Ve al día en el calendario, haz clic en el modal de detalle y pulsa el botón 🗑️ junto a la sección de producción.' },
-    { cat: '🔨 Producción', q: '¿Las ventas directas afectan el cupo de pedidos?', a: 'Sí. Si vendes directamente sin pedido, esas unidades se descuentan del cupo disponible. El cálculo es: m - pedidos - ventas_directas.' },
-    { cat: '🔨 Producción', q: '¿Puedo vender más de la cantidad de producción?', a: 'Sí, las ventas directas no se bloquean. Solo los pedidos respetan el cupo de producción.' },
-    { cat: '🔨 Producción', q: '¿Qué pasa si no defino producción para un día?', a: 'No hay límite de pedidos para ese día. La tarjeta no muestra el bloque de producción.' },
-    { cat: '🔨 Producción', q: '¿Puedo producir cantidades que no sean enteras?', a: 'Sí. El campo "Cantidad a producir" acepta decimales. Por ejemplo: 6.5 significa 6 jabas y media, 2.25 significa 2 jabas y cuarto, 0.5 significa media jaba.' },
-    { cat: '🔨 Producción', q: '¿Cómo se calcula la cantidad disponible si la producción es decimal?', a: 'La fórmula es: disponibles = cantidad_produccion - pedidos_reservados - ventas_directas.\n\nEjemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 = 0.5 disponibles.' },
+    { cat: '🔨 Producción', q: '¿Qué es el horario de producción?', a: 'Es el bloque de corriente que has marcado como el momento en que hornearás tu producción.' },
+    { cat: '🔨 Producción', q: '¿Cómo defino el horario de producción para un día?', a: 'Ve a ⚙️ Herramientas → ⚡ Gestionar Horarios → 📅 Calendario.' },
+    { cat: '🔨 Producción', q: '¿Qué significa "Pedidos: 5/50"?', a: 'Significa que hay 5 pedidos reservados para ese día y la producción programada es de 50 unidades.' },
+    { cat: '🔨 Producción', q: '¿Por qué no puedo crear más pedidos para un día?', a: 'Porque la producción de ese día está completa.' },
+    { cat: '🔨 Producción', q: '¿Cómo elimino la producción de un día?', a: 'Ve al día en el calendario, haz clic en el modal de detalle y pulsa el botón 🗑️.' },
+    { cat: '🔨 Producción', q: '¿Las ventas directas afectan el cupo de pedidos?', a: 'Sí. El cálculo es: m - pedidos - ventas_directas.' },
+    { cat: '🔨 Producción', q: '¿Puedo vender más de la cantidad de producción?', a: 'Sí, las ventas directas no se bloquean.' },
+    { cat: '🔨 Producción', q: '¿Qué pasa si no defino producción para un día?', a: 'No hay límite de pedidos para ese día.' },
+    { cat: '🔨 Producción', q: '¿Puedo producir cantidades que no sean enteras?', a: 'Sí. El campo "Cantidad a producir" acepta decimales.' },
+    { cat: '🔨 Producción', q: '¿Cómo se calcula la cantidad disponible si la producción es decimal?', a: 'La fórmula es: disponibles = cantidad_produccion - pedidos_reservados - ventas_directas.' },
 
     // ============ REPROGRAMACIÓN ============
-    { cat: '🔄 Reprogramación', q: '¿Cómo reprogramo pedidos a otra fecha?', a: 'Ve a ⚙️ Herramientas → 🔄 Reprogramar Pedidos por Rango. Selecciona el rango de fechas origen, la fecha destino, la causa y confirma.' },
-    { cat: '🔄 Reprogramación', q: '¿Puedo reprogramar solo los pedidos de un cliente?', a: 'Sí. En el modal de reprogramación, hay un campo opcional de cliente. Si lo llenas, solo se reprograman los pedidos de ese cliente.' },
-    { cat: '🔄 Reprogramación', q: '¿Qué pasa con la causa y nota al reprogramar?', a: 'La causa y nota se añaden automáticamente al campo de notas de cada pedido, para tener un historial de por qué se movió.' },
-    { cat: '🔄 Reprogramación', q: '¿Se puede deshacer una reprogramación?', a: 'No directamente. Deberás volver a reprogramar los pedidos a la fecha original o editar cada pedido manualmente.' },
+    { cat: '🔄 Reprogramación', q: '¿Cómo reprogramo pedidos a otra fecha?', a: 'Ve a ⚙️ Herramientas → 🔄 Reprogramar Pedidos por Rango.' },
+    { cat: '🔄 Reprogramación', q: '¿Puedo reprogramar solo los pedidos de un cliente?', a: 'Sí. En el modal de reprogramación hay un campo opcional de cliente.' },
+    { cat: '🔄 Reprogramación', q: '¿Qué pasa con la causa y nota al reprogramar?', a: 'La causa y nota se añaden automáticamente al campo de notas de cada pedido.' },
+    { cat: '🔄 Reprogramación', q: '¿Se puede deshacer una reprogramación?', a: 'No directamente. Deberás volver a reprogramar los pedidos a la fecha original.' },
     { cat: '🔄 Reprogramación', q: '¿Los pedidos entregados se pueden reprogramar?', a: 'No. Solo se reprograman pedidos en estado pendiente, confirmado, en producción o listo.' },
-    { cat: '🔄 Reprogramación', q: '¿Qué pasa si la fecha destino ya tiene pedidos?', a: 'Los pedidos reprogramados se añaden a los ya existentes. Se respeta el cupo de producción si está configurado.' },
-    { cat: '🔄 Reprogramación', q: '¿Quién puede reprogramar pedidos?', a: 'Solo el administrador del negocio. Es una operación crítica que afecta a múltiples clientes a la vez.' },
-    { cat: '🔄 Reprogramación', q: '¿La reprogramación afecta el stock?', a: 'No directamente. El stock ya fue descontado (o no) según el estado original del pedido. La reprogramación solo cambia la fecha.' },
+    { cat: '🔄 Reprogramación', q: '¿Qué pasa si la fecha destino ya tiene pedidos?', a: 'Los pedidos reprogramados se añaden a los ya existentes.' },
+    { cat: '🔄 Reprogramación', q: '¿Quién puede reprogramar pedidos?', a: 'Solo el administrador del negocio.' },
+    { cat: '🔄 Reprogramación', q: '¿La reprogramación afecta el stock?', a: 'No directamente. El stock ya fue descontado según el estado original del pedido.' },
 
     // ============ PWA ============
-    { cat: '📱 PWA', q: '¿Por qué la app no funciona offline después de limpiar el caché?', a: 'Si limpias el caché de Chrome, se borran los archivos de la PWA. Abre Panario con conexión a internet una vez para que se vuelvan a cachear. En la versión 2.1.11, el Service Worker detecta esta situación y re-descarga todo automáticamente.' },
-    { cat: '📱 PWA', q: '¿Cómo reinstalo la PWA correctamente?', a: 'Desinstala la PWA, limpia el caché del navegador, abre Panario online, espera a que cargue completamente y vuelve a instalarla.' },
+    { cat: '📱 PWA', q: '¿Por qué la app no funciona offline después de limpiar el caché?', a: 'Si limpias el caché de Chrome, se borran los archivos de la PWA. Abre Panario con conexión a internet una vez para que se vuelvan a cachear.' },
+    { cat: '📱 PWA', q: '¿Cómo reinstalo la PWA correctamente?', a: 'Desinstala la PWA, limpia el caché del navegador, abre Panario online y vuelve a instalarla.' },
     { cat: '📱 PWA', q: '¿Qué hacer si veo "Sin conexión" pero tengo internet?', a: 'Es posible que el Service Worker tenga una versión antigua. Ve a offline.html y pulsa "Limpiar caché y recargar".' },
-    { cat: '📱 PWA', q: '¿Por qué la ayuda no se abre en el móvil?', a: 'En algunos navegadores móviles, los iframes requieren gesto del usuario. En la versión 2.1.11, la ayuda detallada se abre directamente en una pestaña nueva en móvil, evitando este problema.' },
-    
-    // 🆕 v2.1.12: CORRECCIÓN #8 - FAQs sobre offline.html en móvil
-    { cat: '📱 PWA', q: '¿Cómo ejecuto offline.html desde el móvil?', a: 'Hay varias formas de abrir la página offline.html en el móvil:\n\n1️⃣ Desde el navegador:\n• Abre el navegador (Chrome, Firefox, etc.)\n• En la barra de direcciones escribe: tu-dominio.com/offline.html\n• O si estás en local: file:///ruta/offline.html\n\n2️⃣ Desde la app instalada (PWA):\n• Desconecta el WiFi y los datos móviles\n• Abre Panario: si el caché está corrupto, verás la página offline.html automáticamente\n• Desde ahí puedes pulsar "🧹 Limpiar caché y recargar"\n\n3️⃣ Desde un enlace directo:\n• Si tienes un marcador guardado, ábrelo\n• También puedes crear un acceso directo en la pantalla de inicio\n\n💡 Consejo: Si no puedes acceder a offline.html, simplemente abre Panario con internet. El Service Worker detectará la situación y reparará el caché automáticamente en 5-10 segundos.' },
-    
-    { cat: '📱 PWA', q: '¿Qué hago si el navegador móvil no me deja abrir offline.html?', a: 'Si tienes problemas para abrir offline.html en el móvil, prueba estas alternativas:\n\n✅ Alternativa 1 (recomendada):\n• Abre Panario con conexión a internet\n• Espera 5-10 segundos\n• El Service Worker repara el caché automáticamente\n\n✅ Alternativa 2:\n• Ve a Ajustes del navegador → Almacenamiento → Borrar caché\n• Recarga Panario con internet\n\n✅ Alternativa 3:\n• Desinstala la PWA\n• Vuelve a instalarla desde el navegador con internet\n\n✅ Alternativa 4 (avanzada):\n• Conecta el móvil al PC por USB\n• Copia el archivo offline.html a la memoria del móvil\n• Ábrelo con un explorador de archivos\n\n⚠️ Importante: La página offline.html está diseñada para abrirse automáticamente cuando no hay conexión. Si no la ves, es porque tienes conexión o porque el caché está OK.' },
+    { cat: '📱 PWA', q: '¿Por qué la ayuda no se abre en el móvil?', a: 'En móvil, la ayuda detallada se abre directamente en una pestaña nueva.' },
+    { cat: '📱 PWA', q: '¿Cómo ejecuto offline.html desde el móvil?', a: 'Abre el navegador y escribe tu-dominio.com/offline.html. O desconecta el WiFi y abre Panario: verás la página offline.html automáticamente.' },
+    { cat: '📱 PWA', q: '¿Qué hago si el navegador móvil no me deja abrir offline.html?', a: 'Abre Panario con conexión a internet y espera 5-10 segundos. El Service Worker repara el caché automáticamente.' },
 
     // ============ DUPLICADOS ============
-    { cat: '🔀 Duplicados', q: '¿Cómo evito duplicados al importar?', a: 'Usa la opción "🔀 Fusionar bases de datos". El sistema compara por UUID y solo añade registros nuevos, actualizando los existentes solo si son más recientes.' },
-    { cat: '🔀 Duplicados', q: '¿Qué pasa si importo datos que ya existen?', a: 'En modo fusión, los registros con mismo UUID se comparan por fecha de modificación. Gana el más reciente. Los duplicados sin UUID se detectan por datos clave.' },
-    { cat: '🔀 Duplicados', q: '¿Puedo importar la misma salva dos veces?', a: 'Sí, no habrá duplicados. El sistema detecta los registros ya importados y los omite o actualiza según corresponda.' },
-    { cat: '🔀 Duplicados', q: '¿Cómo verifico si hay duplicados en mi base de datos?', a: 'Ve a ⚙️ Herramientas → 🚨 Eliminación por error. Revisa la lista de pedidos y ventas. Si ves entradas idénticas, selecciónalas y elimínalas.' },
+    { cat: '🔀 Duplicados', q: '¿Cómo evito duplicados al importar?', a: 'Usa la opción "🔀 Fusionar bases de datos". El sistema compara por UUID.' },
+    { cat: '🔀 Duplicados', q: '¿Qué pasa si importo datos que ya existen?', a: 'En modo fusión, los registros con mismo UUID se comparan por fecha de modificación. Gana el más reciente.' },
+    { cat: '🔀 Duplicados', q: '¿Puedo importar la misma salva dos veces?', a: 'Sí, no habrá duplicados. El sistema detecta los registros ya importados.' },
+    { cat: '🔀 Duplicados', q: '¿Cómo verifico si hay duplicados en mi base de datos?', a: 'Ve a ⚙️ Herramientas → 🚨 Eliminación por error.' },
 
     // ============ VENDEDOR ============
     { cat: '👤 Vendedor', q: '¿Cómo sé quién vendió cada producto?', a: 'En el detalle de cada venta, en la sección de Auditoría, aparece "👤 Creado por: [nombre del vendedor]".' },
-    { cat: '👤 Vendedor', q: '¿Puedo filtrar ventas por vendedor?', a: 'Actualmente no hay filtro directo en la UI, pero puedes ver el ranking de ventas por empleado en el Dashboard.' },
+    { cat: '👤 Vendedor', q: '¿Puedo filtrar ventas por vendedor?', a: 'Actualmente no hay filtro directo, pero puedes ver el ranking de ventas por empleado en el Dashboard.' },
     { cat: '👤 Vendedor', q: '¿Qué pasa si un usuario es eliminado?', a: 'Sus ventas se mantienen, pero el nombre del vendedor aparecerá como "Desconocido" en la auditoría.' },
 
-    // ============ SONIDO Y PWA (Entrega 1) ============
-    { cat: '🔊 Sonido', q: '¿Por qué no suenan las notificaciones la primera vez?', a: 'Los navegadores bloquean el audio hasta que el usuario interactúa con la página. Desde v2.1.10, el AudioContext se desbloquea con el primer clic, toque o tecla en cualquier parte de la app.' },
-    { cat: '🔊 Sonido', q: '¿Tengo que hacer algo especial para activar el sonido?', a: 'No. Simplemente interactúa con la app (clic, toque o tecla). El audio se desbloquea automáticamente. Verás en consola: "🔊 AudioContext desbloqueado correctamente".' },
-    { cat: '🔊 Sonido', q: '¿El sonido funciona si no he hecho login?', a: 'Sí. Desde v2.1.10, el audio se desbloquea con cualquier gesto, incluso en la pantalla de login.' },
+    // ============ SONIDO Y PWA ============
+    { cat: '🔊 Sonido', q: '¿Por qué no suenan las notificaciones la primera vez?', a: 'Los navegadores bloquean el audio hasta que el usuario interactúa con la página.' },
+    { cat: '🔊 Sonido', q: '¿Tengo que hacer algo especial para activar el sonido?', a: 'No. Simplemente interactúa con la app (clic, toque o tecla).' },
+    { cat: '🔊 Sonido', q: '¿El sonido funciona si no he hecho login?', a: 'Sí. El audio se desbloquea con cualquier gesto, incluso en la pantalla de login.' },
     { cat: '🔊 Sonido', q: '¿Qué sonidos hay disponibles?', a: 'Cinco sonidos: 🔔 Beep, 🎵 Chime, 💧 Pop, ⚠️ Alert, ✅ Success. Más la opción 🔇 Silencio.' },
 
     // ============ DIAGNÓSTICO ============
-    { cat: '🔍 Diagnóstico', q: '¿Qué es el "Diagnóstico de Producción"?', a: 'Es una herramienta que verifica si el sistema de producción está correctamente configurado. Ejecuta 6 comprobaciones y muestra el resultado con iconos ✅/⚠️/❌.' },
-    { cat: '🔍 Diagnóstico', q: '¿Cuándo debo usar el diagnóstico?', a: 'Cuando el guardado de producción no funciona, o cuando ves errores inesperados al definir horarios de producción. También sirve para reportar problemas al desarrollador.' },
-    { cat: '🔍 Diagnóstico', q: '¿Cómo accedo al diagnóstico?', a: 'Ve a ⚙️ Herramientas → 🔍 Diagnóstico de Producción → "Ejecutar diagnóstico". También está disponible desde ⚡ Gestionar Horarios → pestaña Config.' },
-    { cat: '🔍 Diagnóstico', q: '¿Qué hace el botón "Copiar reporte"?', a: 'Copia al portapapeles un reporte completo con: info del entorno, resumen (OK/WARN/ERROR), y detalle de cada test. Útil para pegar en WhatsApp o email al desarrollador.' }
+    { cat: '🔍 Diagnóstico', q: '¿Qué es el "Diagnóstico de Producción"?', a: 'Es una herramienta que verifica si el sistema de producción está correctamente configurado. Ejecuta 7 comprobaciones.' },
+    { cat: '🔍 Diagnóstico', q: '¿Cuándo debo usar el diagnóstico?', a: 'Cuando el guardado de producción no funciona, o cuando ves errores inesperados.' },
+    { cat: '🔍 Diagnóstico', q: '¿Cómo accedo al diagnóstico?', a: 'Ve a ⚙️ Herramientas → 🔍 Diagnóstico de Producción → "Ejecutar diagnóstico".' },
+    { cat: '🔍 Diagnóstico', q: '¿Qué hace el botón "Copiar reporte"?', a: 'Copia al portapapeles un reporte completo con: info del entorno, resumen (OK/WARN/ERROR), y detalle de cada test.' },
+
+    // ============ CMPBC (P261-P280) ============
+    { cat: '🏭 CMPBC', q: '¿Qué es el CMPBC?', a: 'Es la Capacidad Máxima de Producción por Bloque de Corriente. Indica cuántas unidades de un producto puedes producir en un solo bloque de corriente.' },
+    { cat: '🏭 CMPBC', q: '¿Dónde configuro el CMPBC de un producto?', a: 'En 🏷️ Productos → Nuevo/Editar Producto. Hay un bloque morado con 🏭 Capacidad máx/bloque (solo Admin).' },
+    { cat: '🏭 CMPBC', q: '¿Qué valor debo poner en el CMPBC?', a: 'El número máximo de unidades que puedes producir en UN bloque de corriente. Ej: si en 3 horas de corriente produces 7 jabas, pon 7.' },
+    { cat: '🏭 CMPBC', q: '¿Puedo dejar el CMPBC vacío?', a: 'Sí. Si lo dejas vacío o en 0, el producto no tendrá cálculo automático de bloques.' },
+    { cat: '🏭 CMPBC', q: '¿Por qué el campo CMPBC está en color morado?', a: 'Es el color distintivo de la función de producción automática.' },
+    { cat: '🏭 CMPBC', q: '¿Puedo poner decimales en el CMPBC?', a: 'Sí. Acepta cualquier número real: 6, 6.5, 7.25, 0.5, etc.' },
+    { cat: '🏭 CMPBC', q: '¿Qué pasa si cambio el CMPBC de un producto ya usado?', a: 'Los cálculos futuros usarán el nuevo valor. Las producciones ya guardadas conservan su distribución.' },
+    { cat: '🏭 CMPBC', q: '¿Cómo sé si un producto tiene CMPBC configurado?', a: 'En la lista de productos, aparece un badge morado 🏭 X/bloque junto al nombre.' },
+    { cat: '🏭 CMPBC', q: '¿El CMPBC es obligatorio?', a: 'No. Es opcional. Sin él, el sistema funciona como antes (producción manual).' },
+    { cat: '🏭 CMPBC', q: '¿Cómo se relaciona el CMPBC con el modal de producción?', a: 'Al seleccionar un producto con CMPBC y escribir una cantidad, aparecerá el botón ✨ Calcular bloques automáticamente.' },
+    { cat: '🏭 CMPBC', q: '¿Puedo eliminar el CMPBC de un producto?', a: 'Sí. Edita el producto y borra el valor del campo, o ponlo en 0.' },
+    { cat: '🏭 CMPBC', q: '¿El CMPBC es por producto o global?', a: 'Por producto. Cada producto tiene su propia capacidad máxima por bloque.' },
+    { cat: '🏭 CMPBC', q: '¿Qué significa bloques_usados en calendario_produccion?', a: 'Es el número de bloques de corriente que se usarán para producir la cantidad planificada.' },
+    { cat: '🏭 CMPBC', q: '¿Qué contiene distribucion_bloques?', a: 'Es un JSON con la distribución por bloque.' },
+    { cat: '🏭 CMPBC', q: '¿Cómo consulto el CMPBC de un producto por consola?', a: 'window.DBModule.getCMPBCProducto(productoId) → devuelve el valor o null.' },
+    { cat: '🏭 CMPBC', q: '¿Cómo obtengo todos los productos con CMPBC?', a: 'window.DBModule.getProductosConCMPBC() → devuelve un array.' },
+    { cat: '🏭 CMPBC', q: '¿Puedo cambiar el CMPBC después de crear el producto?', a: 'Sí. Solo edita el producto desde ui-productos.js (Admin) y cambia el valor.' },
+    { cat: '🏭 CMPBC', q: '¿Qué pasa con las producciones antiguas al migrar?', a: 'La migración añade las columnas con valores por defecto. No se pierden datos.' },
+    { cat: '🏭 CMPBC', q: '¿Qué pasa si un producto no tiene CMPBC?', a: 'El sistema no podrá calcular automáticamente los bloques. Mostrará un aviso sugiriendo configurarlo.' },
+    { cat: '🏭 CMPBC', q: '¿Cómo se ve el CMPBC en la lista de productos?', a: 'Si un producto tiene CMPBC definido, aparece un badge morado 🏭 7/bloque junto al nombre.' },
+
+    // ============ ALGORITMO DE BLOQUES (P281-P295) ============
+    { cat: '🧠 Algoritmo de bloques', q: '¿Cómo funciona el cálculo automático de bloques?', a: 'Selecciona un producto (con CMPBC), escribe la cantidad y pulsa "✨ Calcular bloques automáticamente".' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Qué reglas sigue el algoritmo?', a: 'Prioriza bloques al amanecer (antes de las 9 AM). Si el primero del día termina muy tarde, usa el último bloque del día anterior.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Qué es la "tolerancia del amanecer"?', a: 'Los bloques que terminan entre las 8:00 y 9:00 AM también son válidos para producir el pan del desayuno.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Qué pasa si no hay suficientes bloques?', a: 'Muestra un error indicando cuántas unidades máximo puedes producir.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿El sistema guarda la distribución sugerida?', a: 'Sí. Guarda en distribucion_bloques un JSON con el detalle de cada bloque usado.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Puedo modificar la distribución manualmente?', a: 'Sí. Después de pulsar "Confirmar", puedes editar el bloque o la cantidad manualmente.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Qué significa "Bloques: 2" en el modal?', a: 'Indica que la producción se distribuirá en 2 bloques de corriente.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Cómo se relaciona el CMPBC con el cálculo de bloques?', a: 'El CMPBC define cuántas unidades caben por bloque. El sistema divide cantidad_total / CMPBC.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Qué pasa si un producto tiene CMPBC=0 o vacío?', a: 'No se puede calcular automáticamente. El botón ✨ no aparece.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿El algoritmo considera la producción ya programada?', a: 'No directamente, pero el sistema sobrescribe si ya había producción ese día.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Cómo se numeran los bloques del día anterior?', a: 'Se usa el indexEnDiaAnterior, que es la posición real del bloque en el día anterior.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿El modal de producción muestra la distribución guardada?', a: 'Sí, si un día tiene bloques_usados > 1.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Puedo elegir un producto diferente al ya guardado?', a: 'Sí. Cambia el dropdown y vuelve a pulsar "✨ Calcular".' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿El algoritmo prioriza el bloque de ayer o el de hoy?', a: 'Si el bloque de ayer termina antes de las 8 AM, tiene prioridad ALTA.' },
+    { cat: '🧠 Algoritmo de bloques', q: '¿Qué pasa si el bloque de ayer cruza medianoche?', a: 'El algoritmo lo trata como válido si termina antes de las 9 AM del día de venta.' },
+
+    // ============ v2.2.0 + PWA (P296-P315) ============
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Por qué la versión saltó a v2.2.0?', a: 'Porque la Entrega B (CMPBC + algoritmo inteligente) es una funcionalidad mayor.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Qué pasa con el caché antiguo al actualizar?', a: 'El Service Worker detecta el cambio de versión y elimina automáticamente los cachés obsoletos.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Tengo que hacer algo especial para actualizar a v2.2.0?', a: 'No. Solo recarga la app con conexión a internet.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿La nueva versión es compatible con mis datos actuales?', a: 'Sí, totalmente. La migración es automática y no pierde datos.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Cómo sé que estoy en v2.2.1?', a: 'Ve a ⚙️ Herramientas → al final verás "Versión: 2.2.1". O en consola: window.getAppVersion()' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Qué es el shortcut "Producción" de la PWA?', a: 'Es un acceso directo para ir directamente a la planificación de producción.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Los shortcuts funcionan en iOS?', a: 'En iOS, los shortcuts tienen soporte limitado. En Android funcionan correctamente.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Por qué hay 6 shortcuts ahora?', a: 'Antes había 5. Añadí "Producción" en v2.2.0.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿La versión del manifest coincide con la app?', a: 'Sí. Desde v2.2.1, todos los archivos usan la misma versión.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Cómo veo la versión del manifest en el navegador?', a: 'En Chrome/Edge: DevTools (F12) → Application → Manifest.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Qué novedades trae la v2.2.0?', a: 'Incluye la Entrega B completa: CMPBC, algoritmo inteligente de bloques, dropdown de productos, y 6 shortcuts.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Cómo actualizo Panario a v2.2.1 si la tengo instalada?', a: 'Abre la app con internet. En 5-10 segundos aparecerá "✨ Actualización disponible".' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Por qué cambiaron los shortcuts de la PWA?', a: 'Añadí "Producción" en v2.2.0 para acceso rápido al calendario de corriente.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Qué pasa con mis datos al actualizar a v2.2.1?', a: 'Nada. Tus datos se conservan intactos.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿La versión del manifest y del sw.js deben coincidir?', a: 'Sí. Todos los archivos usan la misma versión.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Cómo sé si estoy corriendo la v2.2.1?', a: 'Ve a ⚙️ Herramientas → al final verás "Versión: 2.2.1".' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿La v2.2.0 rompe algo de las versiones anteriores?', a: 'No. La v2.2.0 es compatible con todos los datos de versiones anteriores.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Por qué la versión del caché cambió a panario-v2.2.1?', a: 'Para forzar una reinstalación limpia del Service Worker.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Qué hago si el navegador sigue sirviendo la versión antigua?', a: 'Limpia el caché del navegador y recarga con Ctrl+Shift+R.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿Cuándo debo actualizar a v2.2.1?', a: 'Cuanto antes. Tiene mejoras de producción y compatibilidad con GitHub Pages.' },
+    { cat: '🎉 v2.2.0 + PWA', q: '¿El atajo de teclado Escape cierra la Ayuda Detallada?', a: 'Sí. Tanto en modal (desktop) como en pestaña nueva (móvil).' }
 ];
 
 // ============================================================
@@ -1579,10 +1645,7 @@ function showFAQModal() {
     const existingModal = document.getElementById('faq-modal');
     if (existingModal) existingModal.remove();
 
-    const faqsNumeradas = FAQS_DB.map((f, i) => ({
-        ...f,
-        num: i + 1
-    }));
+    const faqsNumeradas = FAQS_DB.map((f, i) => ({ ...f, num: i + 1 }));
 
     let faqHtml = '';
     let currentCat = '';
@@ -1616,7 +1679,7 @@ function showFAQModal() {
 
     const modal = document.createElement('div');
     modal.id = 'faq-modal';
-    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease; isolation: isolate;`;
+    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease;`;
 
     modal.innerHTML = `
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
@@ -1637,7 +1700,7 @@ function showFAQModal() {
             </div>
             
             <p style="font-size: 12px; color: var(--text-light); margin-bottom: 12px;">
-                📚 Haz clic en cada pregunta para ver la respuesta. Usa el buscador para filtrar.
+                📚 Haz clic en cada pregunta para ver la respuesta.
             </p>
             
             <div id="faq-list" style="display: flex; flex-direction: column; gap: 4px;">
@@ -1658,12 +1721,18 @@ function showFAQModal() {
     `;
     document.body.appendChild(modal);
     forzarModalAlFrente(modal);
+    
+    if (typeof window.lockBodyScroll === 'function') window.lockBodyScroll();
 
     window.closeFAQModal = function() {
         const m = document.getElementById('faq-modal');
         if (m) {
             m.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => { if (m.parentNode) m.remove(); }, 200);
+            setTimeout(() => {
+                if (m.parentNode) m.remove();
+                if (typeof window.unlockBodyScroll === 'function') window.unlockBodyScroll();
+                if (typeof window.limpiarEstilosResiduales === 'function') window.limpiarEstilosResiduales();
+            }, 200);
         }
     };
 
@@ -1698,13 +1767,11 @@ function filtrarFAQs(query) {
         const num = item.dataset.num || '';
         const qText = item.dataset.q || '';
         const aText = item.dataset.a || '';
-        
         const matches = num === q || num.startsWith(q) || qText.includes(q) || aText.includes(q);
         
         if (matches) {
             item.style.display = '';
             visibleCount++;
-            
             let prev = item.previousElementSibling;
             while (prev) {
                 if (prev.classList.contains('faq-category')) {
@@ -1782,7 +1849,6 @@ window.HelpModule = {
     ofrecerFallbackPestanaNueva: ofrecerFallbackPestanaNueva,
     isMobileDevice: isMobileDevice,
     FAQS_DB: FAQS_DB,
-    // 🆕 v2.1.12
     DEV_AVATAR_PATH: DEV_AVATAR_PATH
 };
 
@@ -1803,12 +1869,11 @@ window.filtrarFAQs = filtrarFAQs;
 window.forzarModalAlFrente = forzarModalAlFrente;
 window.ofrecerFallbackPestanaNueva = ofrecerFallbackPestanaNueva;
 window.isMobileDevice = isMobileDevice;
+window.closeHelpMenuFallback = window.closeHelpMenuFallback || (() => {});
 
-console.log('📦 Help Module cargado correctamente v2.1.12 (ENTREGA A: correcciones #1, #5, #8, #11, #12)');
-console.log('📚 FAQs cargadas:', FAQS_DB.length, '(antes: 142, ahora:', FAQS_DB.length + ')');
-console.log('🆕 v2.1.12:');
-console.log('   ✅ #1: Popover móvil ahora anclado arriba-derecha');
-console.log('   ✅ #5: 3 FAQs sobre código de invitación');
-console.log('   ✅ #8: 2 FAQs sobre offline.html en móvil');
-console.log('   ✅ #11: 1 FAQ sobre el origen del nombre Panario');
-console.log('   ✅ #12: Créditos con foto desde', DEV_AVATAR_PATH);
+console.log('📦 Help Module cargado correctamente v2.2.2 (FIX BUG #2 - usa lockBodyScroll + limpiarEstilosResiduales)');
+console.log('📚 FAQs cargadas:', FAQS_DB.length);
+console.log('🆕 v2.2.2:');
+console.log('   ✅ abrirAyudaEnModal() usa window.lockBodyScroll()');
+console.log('   ✅ cerrarAyudaModal() usa window.unlockBodyScroll() + limpiarEstilosResiduales()');
+console.log('   ✅ Compatible con modal.js v2.0.9+');

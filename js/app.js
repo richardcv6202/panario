@@ -55,6 +55,9 @@
 //   - ✅ Click en cada columna navega a Pedidos con filtro apropiado
 //   - ✅ Iconos grandes y legibles
 //   - ✅ Compatibilidad total con el resto del Dashboard
+// 🆕 v2.2.1 (230926 v11): FALLBACK DE VERSIÓN ACTUALIZADO
+//   - ✅ getAppVersion() fallback cambiado de '2.1.11' a '2.2.1'
+//   - ✅ Sin cambios funcionales adicionales
 // ============================================================
 
 let currentUser = null;
@@ -143,7 +146,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.1.11'; // Fallback
+    return '2.2.1'; // 🆕 Fallback actualizado a 2.2.1
 }
 
 window.getAppVersion = getAppVersion;
@@ -3194,7 +3197,7 @@ window.renderSalesByEmployee = renderSalesByEmployee;
 window.openDetailedHelp = openDetailedHelp;
 window.getAppVersion = getAppVersion;
 
-console.log('📦 App Controller v' + getAppVersion() + ' (ENTREGA 5: pedidos mañana en dashboard)');
+console.log('📦 App Controller v' + getAppVersion() + ' (ENTREGA 5: pedidos mañana en dashboard + fallback 2.2.1)');
 
 // ============================================================
 // INICIALIZACIÓN AUTOMÁTICA

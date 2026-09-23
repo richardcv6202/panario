@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Panario v2.1.12 — Ayuda Completa</title>
+    <title>Panario v2.2.0 — Ayuda Completa</title>
     <style>
         /* ============================================================
            RESET Y VARIABLES
@@ -155,6 +155,70 @@
         .help-btn.primary:hover {
             background: var(--primary-dark);
             color: #fff;
+        }
+
+        /* ============================================================
+           BOTÓN "VOLVER A PANARIO" (DESTACADO)
+           ============================================================ */
+        .help-btn.back-btn {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: #fff;
+            border-color: var(--primary);
+            font-weight: 700;
+            box-shadow: 0 3px 10px rgba(245, 166, 35, 0.35);
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+
+        .help-btn.back-btn:hover {
+            background: linear-gradient(135deg, var(--primary-dark) 0%, #b87514 100%);
+            color: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(245, 166, 35, 0.5);
+        }
+
+        /* ============================================================
+           BOTÓN FLOTANTE DE CERRAR (solo modo NO-embedded)
+           ============================================================ */
+        .help-close-fab {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--danger);
+            color: #fff;
+            border: none;
+            font-size: 22px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+            transition: all 0.2s;
+            z-index: 200;
+            line-height: 1;
+        }
+
+        .help-close-fab:hover {
+            background: #dc2626;
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 8px 25px rgba(239, 68, 68, 0.55);
+        }
+
+        .help-close-fab:active {
+            transform: scale(0.95) rotate(90deg);
+        }
+
+        /* En modo embedded (iframe), ocultar el botón flotante y el botón Volver */
+        body.embedded .help-close-fab {
+            display: none;
+        }
+
+        body.embedded .help-btn.back-btn {
+            display: none;
         }
 
         /* ============================================================
@@ -701,6 +765,21 @@
             table.help-table td {
                 padding: 6px 8px;
             }
+
+            /* Botón flotante más pequeño en móvil */
+            .help-close-fab {
+                width: 40px;
+                height: 40px;
+                font-size: 20px;
+                top: 12px;
+                right: 12px;
+            }
+
+            /* Botón "Volver a Panario" más compacto */
+            .help-btn.back-btn {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
         }
 
         /* ============================================================
@@ -721,7 +800,9 @@
                 border: 1px solid #ccc;
             }
 
-            .back-to-top {
+            .back-to-top,
+            .help-close-fab,
+            .help-btn.back-btn {
                 display: none;
             }
         }
@@ -751,6 +832,13 @@
 <body>
 
 <!-- ============================================================
+     BOTÓN FLOTANTE DE CERRAR (solo modo NO-embedded)
+     ============================================================ -->
+<button class="help-close-fab" id="help-close-fab" onclick="cerrarAyuda()" title="Cerrar ayuda (Esc)">
+    ✕
+</button>
+
+<!-- ============================================================
      HEADER
      ============================================================ -->
 <header class="help-header">
@@ -759,8 +847,12 @@
         <h1 class="help-title">Panario — Ayuda Completa</h1>
         <p class="help-subtitle">Guía de uso de todos los módulos</p>
     </div>
-    <span class="help-version">v2.1.12</span>
+    <span class="help-version">v2.2.0</span>
     <div class="help-controls">
+        <!-- 🆕 Botón "Volver a Panario" (oculto en modo embedded) -->
+        <button class="help-btn back-btn" id="btn-volver-panario" onclick="cerrarAyuda()" title="Volver a la aplicación Panario (Esc)">
+            ← Volver a Panario
+        </button>
         <button class="help-btn" onclick="toggleTheme()" title="Cambiar tema">
             <span id="theme-icon">🌙</span>
         </button>
@@ -801,6 +893,7 @@
             
             <li class="nav-section">Funciones avanzadas</li>
             <li><a href="#corriente"><span class="nav-icon">⚡</span> Corriente</a></li>
+            <li><a href="#produccion"><span class="nav-icon">🔨</span> Producción</a></li>
             <li><a href="#rewards"><span class="nav-icon">🏆</span> Premios</a></li>
             <li><a href="#notifications"><span class="nav-icon">🔔</span> Notificaciones</a></li>
             <li><a href="#profile"><span class="nav-icon">👤</span> Perfil</a></li>
@@ -822,7 +915,7 @@
         <section class="help-section" id="intro">
             <h2>🏠 Introducción</h2>
             
-            <p><strong>Panario v2.1.12</strong> es una aplicación PWA (Progressive Web App) diseñada específicamente para la gestión integral de una <strong>panadería artesanal</strong>. Funciona completamente offline y guarda todos tus datos localmente en tu dispositivo.</p>
+            <p><strong>Panario v2.2.0</strong> es una aplicación PWA (Progressive Web App) diseñada específicamente para la gestión integral de una <strong>panadería artesanal</strong>. Funciona completamente offline y guarda todos tus datos localmente en tu dispositivo.</p>
 
             <div class="card-help primary">
                 <div class="card-help-title">✨ ¿Qué puedes hacer con Panario?</div>
@@ -835,6 +928,8 @@
                     <li>⏰ Administrar la <strong>lista de espera</strong></li>
                     <li>📊 Ver <strong>estadísticas</strong> y análisis del negocio</li>
                     <li>⚡ Planificar según <strong>horarios de corriente</strong></li>
+                    <li>🔨 Programar <strong>producción</strong> con algoritmo inteligente</li>
+                    <li>🏭 Configurar <strong>CMPBC</strong> (Capacidad Máxima por Bloque)</li>
                     <li>🏆 Premiar a tus <strong>mejores clientes</strong></li>
                     <li>📅 Registrar <strong>días sin ventas</strong></li>
                     <li>👥 Trabajar en <strong>multiusuario</strong></li>
@@ -853,7 +948,7 @@
                     <th style="width: 40%;">Propiedad</th>
                     <th>Valor</th>
                 </tr>
-                <tr><td>Versión</td><td><strong>2.1.12</strong></td></tr>
+                <tr><td>Versión</td><td><strong>2.2.0</strong></td></tr>
                 <tr><td>Estado</td><td><span class="badge-help badge-success">✅ Producción</span></td></tr>
                 <tr><td>Arquitectura</td><td>Cliente local (SQLite WASM)</td></tr>
                 <tr><td>Tecnología</td><td>HTML5 + CSS3 + JavaScript (ES6+)</td></tr>
@@ -1058,6 +1153,7 @@
                 <li><strong>Paridad:</strong> Solo pares o solo impares</li>
                 <li><strong>Días de la semana:</strong> Solo martes, etc.</li>
                 <li><strong>Días específicos:</strong> 1, 15, 30 del mes</li>
+                <li><strong>🆕 Excluir días:</strong> Excluir domingos, sábados, etc.</li>
             </ul>
 
             <div class="card-help info">
@@ -1229,6 +1325,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <tr><td>📦 Unidad de venta</td><td>unidad, jaba, docena, etc.</td></tr>
                 <tr><td>📊 Cantidad por unidad</td><td>Cuántas unidades contiene</td></tr>
                 <tr><td>📋 Receta asociada</td><td>Receta que usa este producto</td></tr>
+                <tr><td>🆕 🏭 CMPBC</td><td>Capacidad Máxima de Producción por Bloque</td></tr>
             </table>
 
             <h3>💡 Ejemplo práctico</h3>
@@ -1239,9 +1336,18 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                     <li><strong>Unidad:</strong> jaba</li>
                     <li><strong>Cantidad:</strong> 10 panes por jaba</li>
                     <li><strong>Receta:</strong> Pan de Yogur (33 panes)</li>
+                    <li><strong>🏭 CMPBC:</strong> 7 jabas por bloque de corriente</li>
                 </ul>
                 <p>Al vender 1 jaba, se descuentan 0.303 kg de harina, 0.003 kg de levadura, etc.</p>
             </div>
+
+            <h3>🆕 🏭 CMPBC — Capacidad Máxima por Bloque</h3>
+            <p>Es un valor opcional que indica <strong>cuántas unidades de un producto puedes producir en un solo bloque de corriente</strong>.</p>
+            <ul>
+                <li><strong>NULL / vacío / 0:</strong> Sin límite definido (comportamiento anterior)</li>
+                <li><strong>> 0:</strong> CMPBC real (Ej: 7 = 7 jabas por bloque)</li>
+            </ul>
+            <p>Se usa para que el sistema calcule automáticamente cuántos bloques necesitas para producir una cantidad.</p>
 
             <h3>📈 Margen de ganancia</h3>
             <p>Se calcula automáticamente: <code>(precio - costo) / precio × 100</code></p>
@@ -1336,6 +1442,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <li><span class="badge-help badge-warning">🟠 Naranja</span> — Días con corriente</li>
                 <li><span class="badge-help badge-info">⚪ Gris</span> — Días sin corriente</li>
                 <li><span class="badge-help badge-danger">🔴 Rojo</span> — Día actual</li>
+                <li><span class="badge-help badge-purple">🟣 Borde morado</span> — Día con producción programada</li>
             </ul>
             <p>Navega con <strong>◀ ▶</strong> y vuelve al mes actual con <strong>🔄 Hoy</strong>.</p>
 
@@ -1349,6 +1456,90 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <li>💰 Ventas: banner con bloques del día</li>
                 <li>📊 Dashboard: tarjeta "Corriente hoy"</li>
             </ul>
+        </section>
+
+        <!-- ============================================================
+             PRODUCCIÓN (NUEVA SECCIÓN)
+             ============================================================ -->
+        <section class="help-section" id="produccion">
+            <h2>🔨 Producción</h2>
+            
+            <p>El módulo de <strong>Producción</strong> permite programar qué se va a producir cada día, en qué bloque de corriente y con un algoritmo inteligente que sugiere la distribución óptima.</p>
+
+            <h3>🎯 Conceptos clave</h3>
+            <table class="help-table">
+                <tr>
+                    <th style="width: 30%;">Concepto</th>
+                    <th>Descripción</th>
+                </tr>
+                <tr><td>🔨 Bloque de producción</td><td>Bloque de corriente donde se horneará</td></tr>
+                <tr><td>📦 CPD</td><td>Cantidad de Producción Diaria</td></tr>
+                <tr><td>🏭 CMPBC</td><td>Capacidad Máxima por Bloque</td></tr>
+                <tr><td>✨ Algoritmo</td><td>Calcula automáticamente los bloques</td></tr>
+            </table>
+
+            <h3>📅 Programar producción para un día</h3>
+            <ol>
+                <li>Ve a <strong>⚙️ Herramientas → ⚡ Gestionar Horarios → 📅 Calendario</strong></li>
+                <li>Haz clic en el día que quieras programar</li>
+                <li>Selecciona el <strong>🏷️ producto a producir</strong></li>
+                <li>Escribe la <strong>📦 cantidad</strong></li>
+                <li>Opcional: pulsa <strong>✨ Calcular bloques automáticamente</strong></li>
+                <li>Confirma y guarda</li>
+            </ol>
+
+            <h3>🧠 Algoritmo inteligente de bloques</h3>
+            <p>El sistema sugiere cómo distribuir la producción entre los bloques de corriente, priorizando que el pan esté listo <strong>antes de las 8:00 AM</strong> del día de venta.</p>
+
+            <h4>Reglas del algoritmo:</h4>
+            <ul>
+                <li><strong>P1:</strong> Bloques que cierran entre 8:00 y 9:00 AM son válidos (tolerancia)</li>
+                <li><strong>P2:</strong> Un bloque pertenece al día en que <strong>empieza</strong></li>
+                <li><strong>P3:</strong> Cada producto tiene su propio CMPBC</li>
+                <li><strong>P4:</strong> Si CPD > CMPBC × bloques disponibles → error</li>
+                <li><strong>P5:</strong> El primer bloque lleva más cantidad</li>
+                <li><strong>P6:</strong> El usuario puede sobrescribir el cálculo</li>
+            </ul>
+
+            <h4>Ejemplo:</h4>
+            <div class="card-help purple">
+                <div class="card-help-title">Jaba de Pan, CMPBC=7, CPD=12</div>
+                <p>El algoritmo calcula:</p>
+                <ul>
+                    <li><strong>Bloques necesarios:</strong> 2 (12 ÷ 7 = 1.71 → 2)</li>
+                    <li><strong>Bloque 1 (amanecer):</strong> 7 unidades</li>
+                    <li><strong>Bloque 2 (tarde):</strong> 5 unidades</li>
+                </ul>
+                <p><em>"Se horneará en 2 bloques: 7 al amanecer (2-5 AM), 5 por la tarde (5-8 PM)."</em></p>
+            </div>
+
+            <h3>🌙 Producción en el bloque del día anterior</h3>
+            <p>Si el primer bloque del día de venta comienza demasiado tarde, el sistema usa el <strong>último bloque del día anterior</strong> para que el pan esté listo al amanecer.</p>
+            <p>En el calendario aparece con el icono 🌙 y se guarda con <code>es_bloque_dia_anterior = 1</code>.</p>
+
+            <h3>📅 Aplicar producción a un rango</h3>
+            <p>Permite aplicar la misma producción a varios días:</p>
+            <ul>
+                <li>Selecciona el rango (7, 14, 30 días o mes completo)</li>
+                <li>Excluir domingos opcionalmente</li>
+                <li>Excluir días sin corriente opcionalmente</li>
+                <li><strong>Bloque relativo:</strong> Cada día usa su bloque equivalente</li>
+                <li><strong>Bloque fijo:</strong> Mismo horario exacto del día base</li>
+            </ul>
+
+            <h3>🔢 Cantidades decimales</h3>
+            <p>La cantidad a producir acepta decimales:</p>
+            <ul>
+                <li><code>6.5</code> = 6 jabas y media</li>
+                <li><code>2.25</code> = 2 jabas y cuarto</li>
+                <li><code>0.5</code> = media jaba</li>
+            </ul>
+
+            <h3>🔍 Diagnóstico de producción</h3>
+            <p>Si algo no funciona, ve a <strong>⚙️ Herramientas → 🔍 Diagnóstico de Producción</strong> y ejecuta los 7 tests.</p>
+
+            <h3>🔒 Permisos por rol</h3>
+            <p>La programación de producción está disponible para <strong>todos los usuarios</strong> del negocio.</p>
         </section>
 
         <!-- ============================================================
@@ -1505,7 +1696,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             <ul>
                 <li><strong>🚀 Guía rápida:</strong> 5 pasos para empezar</li>
                 <li><strong>🎯 Tutorial interactivo:</strong> Recorrido guiado</li>
-                <li><strong>❓ Preguntas frecuentes:</strong> FAQ con 148 preguntas</li>
+                <li><strong>❓ Preguntas frecuentes:</strong> FAQ con 203 preguntas</li>
             </ul>
         </section>
 
@@ -1525,6 +1716,9 @@ Costo por unidad = Costo total / rendimiento</code></pre>
 
             <h3>🚨 Cancelación global</h3>
             <p>Solo admin. Cancela todos los pedidos en un rango de fechas con causa y nota.</p>
+
+            <h3>🔄 Reprogramar por rango</h3>
+            <p>Solo admin. Mueve todos los pedidos de un rango a una fecha destino.</p>
 
             <h3>📊 Reporte de gastos</h3>
             <p>Genera un reporte parametrizable de gastos por rango, categoría y origen del pago.</p>
@@ -1566,6 +1760,10 @@ Costo por unidad = Costo total / rendimiento</code></pre>
              ============================================================ -->
         <section class="help-section" id="faq">
             <h2>❓ Preguntas frecuentes</h2>
+
+            <p style="font-size: 13px; color: var(--text-light); margin-bottom: 16px;">
+                📚 <strong>203 preguntas</strong> organizadas por categorías. Haz clic en cada pregunta para ver la respuesta.
+            </p>
 
             <h3>🏠 Generales</h3>
 
@@ -1625,6 +1823,11 @@ Finalmente se eligió "Panario" por ser único, breve y fácil de recordar.</div
             <details class="faq-item">
                 <summary>¿Quién desarrolló Panario?</summary>
                 <div class="faq-answer">Panario fue desarrollado por Ricardo Castillo Valdés. Puedes contactarlo por WhatsApp (+53 55031725) o email (3sayricardo@gmail.com).</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Por qué no suenan las notificaciones?</summary>
+                <div class="faq-answer">Los navegadores modernos bloquean el audio hasta que el usuario interactúa con la página. Haz clic en cualquier parte de la app y las notificaciones sonarán desde ese momento.</div>
             </details>
 
             <h3>📊 Dashboard</h3>
@@ -1738,7 +1941,7 @@ Finalmente se eligió "Panario" por ser único, breve y fácil de recordar.</div
 
             <details class="faq-item">
                 <summary>¿Por qué la app no funciona offline después de limpiar el caché?</summary>
-                <div class="faq-answer">Si limpias el caché de Chrome, se borran los archivos de la PWA. Abre Panario con conexión a internet una vez para que se vuelvan a cachear. En la versión 2.1.11, el Service Worker detecta esta situación y re-descarga todo automáticamente.</div>
+                <div class="faq-answer">Si limpias el caché de Chrome, se borran los archivos de la PWA. Abre Panario con conexión a internet una vez para que se vuelvan a cachear. En la versión 2.2.0, el Service Worker detecta esta situación y re-descarga todo automáticamente.</div>
             </details>
 
             <details class="faq-item">
@@ -1816,6 +2019,296 @@ Esto es útil cuando produces jabas de diferentes tamaños.</div>
 Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 = 0.5 disponibles.</div>
             </details>
 
+            <!-- ============================================================ -->
+            <!-- 🆕 NUEVAS FAQs P261-P280: CMPBC (20 preguntas)              -->
+            <!-- ============================================================ -->
+            <h3>🏭 CMPBC (Capacidad Máxima por Bloque)</h3>
+
+            <details class="faq-item">
+                <summary>¿Qué es el CMPBC?</summary>
+                <div class="faq-answer">Es la Capacidad Máxima de Producción por Bloque de Corriente. Indica cuántas unidades de un producto puedes producir en un solo bloque de corriente.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Dónde configuro el CMPBC de un producto?</summary>
+                <div class="faq-answer">En 🏷️ Productos → Nuevo/Editar Producto. Hay un bloque morado con 🏭 Capacidad máx/bloque (solo Admin).</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué valor debo poner en el CMPBC?</summary>
+                <div class="faq-answer">El número máximo de unidades que puedes producir en UN bloque de corriente. Ej: si en 3 horas de corriente produces 7 jabas, pon 7.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Puedo dejar el CMPBC vacío?</summary>
+                <div class="faq-answer">Sí. Si lo dejas vacío o en 0, el producto no tendrá cálculo automático de bloques. El sistema seguirá funcionando con producción manual.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Por qué el campo CMPBC está en color morado?</summary>
+                <div class="faq-answer">Es el color distintivo de la función de producción automática. El morado se usa también en el modal de producción y en los badges de la lista.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Puedo poner decimales en el CMPBC?</summary>
+                <div class="faq-answer">Sí. Acepta cualquier número real: 6, 6.5, 7.25, 0.5, etc.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué pasa si cambio el CMPBC de un producto ya usado?</summary>
+                <div class="faq-answer">Los cálculos futuros usarán el nuevo valor. Las producciones ya guardadas conservan su distribución.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo sé si un producto tiene CMPBC configurado?</summary>
+                <div class="faq-answer">En la lista de productos, aparece un badge morado 🏭 X/bloque junto al nombre.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿El CMPBC es obligatorio?</summary>
+                <div class="faq-answer">No. Es opcional. Sin él, el sistema funciona como antes (producción manual).</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo se relaciona el CMPBC con el modal de producción?</summary>
+                <div class="faq-answer">En el modal de producción, al seleccionar un producto con CMPBC y escribir una cantidad, aparecerá el botón ✨ Calcular bloques automáticamente.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Puedo eliminar el CMPBC de un producto?</summary>
+                <div class="faq-answer">Sí. Edita el producto y borra el valor del campo, o ponlo en 0. Se guardará como null.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Dónde configuro el CMPBC de un producto? (repetida)</summary>
+                <div class="faq-answer">En 🏷️ Productos → Nuevo/Editar Producto. Campo 🏭 Capacidad máx/bloque.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿El CMPBC es por producto o global?</summary>
+                <div class="faq-answer">Por producto. Cada producto tiene su propia capacidad máxima por bloque.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué significa bloques_usados en calendario_produccion?</summary>
+                <div class="faq-answer">Es el número de bloques de corriente que se usarán para producir la cantidad planificada (por ejemplo, 2 si necesitas dividir la producción).</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué contiene distribucion_bloques?</summary>
+                <div class="faq-answer">Es un JSON con la distribución por bloque. Ejemplo: [{"bloque_index": 1, "cantidad": 7}, {"bloque_index": 3, "cantidad": 5.5}].</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo consulto el CMPBC de un producto por consola?</summary>
+                <div class="faq-answer">window.DBModule.getCMPBCProducto(productoId) → devuelve el valor o null.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo obtengo todos los productos con CMPBC?</summary>
+                <div class="faq-answer">window.DBModule.getProductosConCMPBC() → devuelve un array con los productos que tienen CMPBC > 0.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Puedo cambiar el CMPBC después de crear el producto?</summary>
+                <div class="faq-answer">Sí. Solo edita el producto desde ui-productos.js (Admin) y cambia el valor.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué pasa con las producciones antiguas al migrar?</summary>
+                <div class="faq-answer">La migración añade las columnas con valores por defecto (bloques_usados=1, distribucion_bloques=NULL). No se pierden datos.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué pasa si un producto no tiene CMPBC?</summary>
+                <div class="faq-answer">El sistema no podrá calcular automáticamente los bloques. Mostrará un aviso sugiriendo configurarlo, pero seguirás pudiendo crear producción manualmente.</div>
+            </details>
+
+            <!-- ============================================================ -->
+            <!-- 🆕 NUEVAS FAQs P281-P295: Algoritmo de bloques (15 preguntas) -->
+            <!-- ============================================================ -->
+            <h3>🧠 Algoritmo de bloques</h3>
+
+            <details class="faq-item">
+                <summary>¿Cómo funciona el cálculo automático de bloques?</summary>
+                <div class="faq-answer">Selecciona un producto (con CMPBC), escribe la cantidad y pulsa "✨ Calcular bloques automáticamente". El sistema sugiere cómo distribuir la producción entre los bloques de corriente.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué reglas sigue el algoritmo?</summary>
+                <div class="faq-answer">Prioriza bloques al amanecer (antes de las 9 AM). Si el primero del día termina muy tarde, usa el último bloque del día anterior. El primer bloque lleva más cantidad.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué es la "tolerancia del amanecer"?</summary>
+                <div class="faq-answer">Los bloques que terminan entre las 8:00 y 9:00 AM también son válidos para producir el pan del desayuno.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué pasa si no hay suficientes bloques?</summary>
+                <div class="faq-answer">Muestra un error indicando cuántas unidades máximo puedes producir. Puedes aumentar el CMPBC, elegir otro producto o dividir la producción en varios días.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿El sistema guarda la distribución sugerida?</summary>
+                <div class="faq-answer">Sí. Guarda en distribucion_bloques un JSON con el detalle de cada bloque usado (fecha, bloque, cantidad).</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Puedo modificar la distribución manualmente?</summary>
+                <div class="faq-answer">Sí. Después de pulsar "Confirmar", puedes editar el bloque o la cantidad manualmente y volver a guardar.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué significa "Bloques: 2" en el modal?</summary>
+                <div class="faq-answer">Indica que la producción se distribuirá en 2 bloques de corriente. Ej: 7 unidades al amanecer + 5 unidades por la tarde.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo se relaciona el CMPBC con el cálculo de bloques?</summary>
+                <div class="faq-answer">El CMPBC define cuántas unidades caben por bloque. El sistema divide cantidad_total / CMPBC para saber cuántos bloques necesita.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué pasa si un producto tiene CMPBC=0 o vacío?</summary>
+                <div class="faq-answer">No se puede calcular automáticamente. El botón ✨ no aparece. Puedes seguir configurando manualmente.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿El algoritmo considera la producción ya programada?</summary>
+                <div class="faq-answer">No directamente, pero el sistema sobrescribe si ya había producción ese día. El modal de confirmación avisa.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo se numeran los bloques del día anterior?</summary>
+                <div class="faq-answer">Se usa el indexEnDiaAnterior, que es la posición real del bloque en el día anterior. Ej: si es el 4º bloque del día anterior, bloque_index=4 con es_bloque_dia_anterior=1.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿El modal de producción muestra la distribución guardada?</summary>
+                <div class="faq-answer">Sí, si un día tiene bloques_usados > 1, el reporte PDF de corriente muestra un badge "N bloques" y la app puede mostrar la distribución completa.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Puedo elegir un producto diferente al ya guardado?</summary>
+                <div class="faq-answer">Sí. Cambia el dropdown y vuelve a pulsar "✨ Calcular". El nuevo cálculo reemplazará la distribución anterior al confirmar.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿El algoritmo prioriza el bloque de ayer o el de hoy?</summary>
+                <div class="faq-answer">Si el bloque de ayer termina antes de las 8 AM, tiene prioridad ALTA. Si no, se ordenan por cercanía al amanecer.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué pasa si el bloque de ayer cruza medianoche?</summary>
+                <div class="faq-answer">El algoritmo lo trata como válido si termina antes de las 9 AM del día de venta. Se muestra como "🌙 Último bloque del [fecha]".</div>
+            </details>
+
+            <!-- ============================================================ -->
+            <!-- 🆕 NUEVAS FAQs P296-P315: v2.2.0 + PWA (20 preguntas)       -->
+            <!-- ============================================================ -->
+            <h3>🎉 v2.2.0 + PWA</h3>
+
+            <details class="faq-item">
+                <summary>¿Por qué la versión saltó a v2.2.0?</summary>
+                <div class="faq-answer">Porque la Entrega B (CMPBC + algoritmo inteligente de bloques) es una funcionalidad mayor que justifica un salto de versión. v2.1.x → v2.2.0.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué pasa con el caché antiguo al actualizar?</summary>
+                <div class="faq-answer">El Service Worker detecta el cambio de versión y elimina automáticamente los cachés obsoletos (panario-static-v2.1.11, etc.). Solo se conserva el caché nuevo.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Tengo que hacer algo especial para actualizar a v2.2.0?</summary>
+                <div class="faq-answer">No. Solo recarga la app con conexión a internet. El SW se actualizará solo en 5-10 segundos. Si no ves los cambios, limpia el caché y recarga con Ctrl+Shift+R.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿La nueva versión es compatible con mis datos actuales?</summary>
+                <div class="faq-answer">Sí, totalmente. La migración es automática y no pierde datos. Tienes tu base de datos intacta.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo sé que estoy en v2.2.0?</summary>
+                <div class="faq-answer">Ve a ⚙️ Herramientas → al final verás "Versión: 2.2.0". También puedes verificar en la consola: window.getAppVersion()</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué es el shortcut "Producción" de la PWA?</summary>
+                <div class="faq-answer">Es un acceso directo que añadí en v2.2.0 para que puedas ir directamente a la planificación de producción desde el icono de Panario en tu móvil. Mantén pulsado el icono y verás las opciones.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Los shortcuts funcionan en iOS?</summary>
+                <div class="faq-answer">En iOS, los shortcuts de la PWA tienen soporte limitado. Solo funcionan si la PWA está instalada y depende de la versión de iOS. En Android funcionan correctamente.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Por qué hay 6 shortcuts ahora?</summary>
+                <div class="faq-answer">Antes había 5 (Inicio, Pedidos, Lista de espera, Ventas, Herramientas). Añadí "Producción" en v2.2.0 porque la nueva funcionalidad de CMPBC requiere acceso rápido al calendario de corriente.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿La versión del manifest coincide con la app?</summary>
+                <div class="faq-answer">Sí. Desde v2.2.0, el manifest.json, el sw.js, el index.html y todos los archivos usan la misma versión: 2.2.0. Esto facilita el mantenimiento.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo veo la versión del manifest en el navegador?</summary>
+                <div class="faq-answer">En Chrome/Edge: DevTools (F12) → Application → Manifest. Ahí verás el nombre, la descripción y los iconos. La versión no siempre se muestra visualmente, pero puedes verla con fetch('./manifest.json').then(r => r.json())</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué novedades trae la v2.2.0?</summary>
+                <div class="faq-answer">Incluye la Entrega B completa: capacidad máxima por bloque (CMPBC), algoritmo inteligente de bloques, dropdown de productos en el modal de producción, y 6 shortcuts en la PWA.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo actualizo Panario a v2.2.0 si la tengo instalada?</summary>
+                <div class="faq-answer">Abre la app con internet. En 5-10 segundos aparecerá un diálogo "✨ Actualización disponible". Pulsa "🔄 Sí, actualizar" y la app se recargará con la nueva versión.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Por qué cambiaron los shortcuts de la PWA?</summary>
+                <div class="faq-answer">Añadí un shortcut "Producción" para que puedas acceder rápidamente al calendario de corriente y al algoritmo CMPBC. Ahora hay 6 shortcuts (antes 5).</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué pasa con mis datos al actualizar a v2.2.0?</summary>
+                <div class="faq-answer">Nada. Tus datos (SQLite + localStorage) se conservan intactos. La migración de BD es automática e idempotente.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿La versión del manifest y del sw.js deben coincidir?</summary>
+                <div class="faq-answer">Sí. En v2.2.0, el manifest.json, el sw.js, el index.html, el offline.html y los fallbacks de getAppVersion() usan todos 2.2.0. Esto garantiza coherencia.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cómo sé si estoy corriendo la v2.2.0?</summary>
+                <div class="faq-answer">Ve a ⚙️ Herramientas → al final verás "Versión: 2.2.0". También puedes verificar en la consola: window.getAppVersion().</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿La v2.2.0 rompe algo de las versiones anteriores?</summary>
+                <div class="faq-answer">No. La v2.2.0 es compatible con todos los datos de versiones anteriores (v2.0.x, v2.1.x). Solo añade funcionalidad nueva.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Por qué la versión del caché cambió a panario-v2.2.0?</summary>
+                <div class="faq-answer">Para forzar una reinstalación limpia del Service Worker y garantizar que todos los assets actualizados se re-cachean correctamente.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Qué hago si el navegador sigue sirviendo la versión antigua?</summary>
+                <div class="faq-answer">Limpia el caché del navegador (o usa offline.html → "🧹 Limpiar caché y recargar") y recarga con Ctrl+Shift+R. Si persiste, desinstala la PWA y vuelve a instalarla.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary>¿Cuándo debo actualizar a v2.2.0?</summary>
+                <div class="faq-answer">Cuanto antes. La v2.2.0 tiene mejoras significativas de producción (CMPBC + algoritmo de bloques) y mejoras de compatibilidad con GitHub Pages.</div>
+            </details>
+
         </section>
 
         <!-- ============================================================
@@ -1836,6 +2329,7 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
                 <tr><td>Abrir notificaciones</td><td>Clic en 🔔 de la barra superior</td></tr>
                 <tr><td>Menú de usuario</td><td>Clic en tu nombre o avatar</td></tr>
                 <tr><td>Cerrar modal</td><td>Tecla Escape o clic fuera</td></tr>
+                <tr><td>Cerrar ayuda</td><td>Tecla Escape o botón "← Volver a Panario"</td></tr>
             </table>
 
             <h3>💡 Consejos de uso</h3>
@@ -1843,6 +2337,7 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
                 <li>Configura el <strong>stock mínimo</strong> de cada insumo para recibir alertas</li>
                 <li>Usa <strong>ventas liberadas</strong> para clientes ocasionales</li>
                 <li>Aprovecha la <strong>reserva por período</strong> para clientes frecuentes</li>
+                <li>Configura el <strong>CMPBC</strong> de cada producto para cálculo automático</li>
                 <li>Activa el <strong>sistema de premios</strong> para fidelizar</li>
                 <li>Revisa el <strong>Dashboard</strong> cada mañana</li>
                 <li>Haz <strong>copias de seguridad</strong> semanales</li>
@@ -1860,7 +2355,6 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
 
         <!-- ============================================================
              CRÉDITOS
-             🆕 v2.1.12: Foto del desarrollador (assets/dev-avatar.png)
              ============================================================ -->
         <section class="help-section" id="creditos">
             <h2>👨‍💻 Créditos</h2>
@@ -1872,7 +2366,6 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
 
                 <div style="background: var(--bg-alt); border-radius: var(--radius); padding: 24px; max-width: 400px; margin: 0 auto; text-align: left;">
                     <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
-                        <!-- 🆕 v2.1.12: Foto del desarrollador con fallback al emoji -->
                         <div id="dev-avatar-container" 
                              style="width: 80px; height: 80px; border-radius: 50%; 
                                     background: linear-gradient(135deg, #0ea5e9, #0284c7); 
@@ -1906,7 +2399,7 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
                 </div>
 
                 <div style="margin-top: 24px; color: var(--text-light); font-size: 12px; line-height: 1.7;">
-                    <p><strong>Panario v2.1.12</strong></p>
+                    <p><strong>Panario v2.2.0</strong></p>
                     <p>© 2026 Ricardo Castillo Valdés</p>
                     <p>Todos los derechos reservados</p>
                     <p style="margin-top: 12px;">Hecho con ❤️ para panaderos artesanales</p>
@@ -1929,7 +2422,7 @@ Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 
      FOOTER
      ============================================================ -->
 <footer class="help-footer">
-    <p>🍞 <strong>Panario v2.1.12</strong> — Ayuda Completa</p>
+    <p>🍞 <strong>Panario v2.2.0</strong> — Ayuda Completa</p>
     <p style="margin-top: 4px;">Desarrollado por Ricardo Castillo Valdés — © 2026</p>
 </footer>
 
@@ -1951,6 +2444,75 @@ function parseUrlParams() {
 }
 
 const urlParams = parseUrlParams();
+
+// ============================================================
+// 🆕 CERRAR AYUDA / VOLVER A PANARIO
+// ============================================================
+// 
+// Comportamiento inteligente según el contexto:
+//   1. Si estamos DENTRO de un iframe (window.self !== window.top):
+//      → Enviar mensaje al padre para que cierre el modal/iframe
+//      → Fallback: navegar al index.html
+//   2. Si NO estamos en iframe (pestaña independiente):
+//      → Intentar window.close()
+//      → Si el navegador no permite cerrar, navegar a index.html
+// 
+// Se activa con:
+//   - Botón "← Volver a Panario" del header
+//   - Botón flotante "✕"
+//   - Tecla Escape
+// ============================================================
+
+function cerrarAyuda() {
+    try {
+        // Detectar si estamos dentro de un iframe
+        const enIframe = (window.self !== window.top);
+        
+        console.log('📖 cerrarAyuda() llamado. En iframe:', enIframe);
+        
+        if (enIframe) {
+            // Estamos embebidos: avisar al padre para que cierre el modal
+            try {
+                // Mensaje estándar que el modal de ayuda (help.js) puede escuchar
+                window.parent.postMessage({ type: 'CLOSE_HELP' }, '*');
+                console.log('📖 Mensaje CLOSE_HELP enviado al padre');
+            } catch (e) {
+                console.warn('⚠️ No se pudo enviar mensaje al padre:', e);
+            }
+            
+            // Fallback: intentar cerrar la ventana por si el padre no responde
+            setTimeout(() => {
+                try {
+                    window.close();
+                } catch (e) {
+                    // Si tampoco funciona, no hacer nada (el padre debería cerrar)
+                }
+            }, 300);
+            
+            return;
+        }
+        
+        // NO estamos en iframe: intentar cerrar la pestaña
+        try {
+            window.close();
+        } catch (e) {
+            console.warn('⚠️ No se pudo cerrar la ventana:', e);
+        }
+        
+        // Fallback: navegar al index.html después de un pequeño delay
+        // (si window.close() no funcionó, seguimos aquí)
+        setTimeout(() => {
+            window.location.href = './index.html';
+        }, 200);
+        
+    } catch (e) {
+        console.error('❌ Error en cerrarAyuda():', e);
+        // Último recurso: intentar ir al index
+        try {
+            window.location.href = './index.html';
+        } catch (e2) {}
+    }
+}
 
 // ============================================================
 // TEMA
@@ -2141,6 +2703,64 @@ function initEmbeddedMode() {
 }
 
 // ============================================================
+// 🆕 LISTENER PARA MENSAJES DEL PADRE (cuando estamos en iframe)
+// ============================================================
+// 
+// El padre (help.js de la app principal) puede enviar mensajes:
+//   - CLOSE_HELP: cerrar la ventana desde dentro
+//   - NAVIGATE: navegar a una sección
+// 
+// NOTA: Esta funcionalidad es OPCIONAL y no rompe nada si el
+// padre no envía mensajes.
+// ============================================================
+
+function initParentMessageListener() {
+    window.addEventListener('message', function(event) {
+        if (!event.data || typeof event.data !== 'object') return;
+        
+        const tipo = event.data.type;
+        
+        if (tipo === 'NAVIGATE' && event.data.section) {
+            console.log('📖 Navegando a sección por mensaje:', event.data.section);
+            scrollToSection(event.data.section);
+        }
+        
+        if (tipo === 'CLOSE_HELP') {
+            console.log('📖 Cerrando ayuda por mensaje del padre');
+            try {
+                window.close();
+            } catch (e) {
+                // Si no se puede cerrar, no pasa nada (el padre lo hará)
+            }
+        }
+    });
+}
+
+// ============================================================
+// 🆕 ATAJO DE TECLADO: ESCAPE PARA CERRAR AYUDA
+// ============================================================
+
+function initEscapeKey() {
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            // Solo actuar si NO estamos dentro de un iframe
+            // (si estamos en iframe, el padre se encarga de cerrar)
+            const enIframe = (window.self !== window.top);
+            
+            if (!enIframe) {
+                console.log('📖 Escape pulsado → cerrando ayuda');
+                cerrarAyuda();
+            } else {
+                // Estamos en iframe: avisar al padre
+                try {
+                    window.parent.postMessage({ type: 'CLOSE_HELP' }, '*');
+                } catch (e) {}
+            }
+        }
+    });
+}
+
+// ============================================================
 // INICIALIZACIÓN
 // ============================================================
 
@@ -2148,6 +2768,8 @@ document.addEventListener('DOMContentLoaded', function() {
     initTheme();
     initEmbeddedMode();
     initSmoothScroll();
+    initParentMessageListener();
+    initEscapeKey();
     
     window.addEventListener('scroll', function() {
         handleScroll();
@@ -2161,12 +2783,15 @@ document.addEventListener('DOMContentLoaded', function() {
         scrollToSection(urlParams.section);
     }
     
-    console.log('📖 Ayuda de Panario cargada correctamente (v2.1.12)');
+    console.log('📖 Ayuda de Panario cargada correctamente (v2.2.0)');
     console.log('   📋 Params:', urlParams);
     console.log('   🆕 Novedades:');
-    console.log('   ✅ Foto del desarrollador en Créditos');
-    console.log('   ✅ 6 FAQs nuevas (código invitación + offline.html + nombre Panario)');
-    console.log('   ✅ Versión v2.1.12');
+    console.log('   ✅ Botón "← Volver a Panario" en el header');
+    console.log('   ✅ Botón flotante "✕" para cerrar (NO en embedded)');
+    console.log('   ✅ Atajo Escape para cerrar');
+    console.log('   ✅ Versión v2.2.0');
+    console.log('   ✅ 55 FAQs nuevas (CMPBC, Algoritmo, v2.2.0)');
+    console.log('   ✅ Total: 203 FAQs');
 });
 </script>
 

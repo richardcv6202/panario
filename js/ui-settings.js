@@ -49,6 +49,13 @@
 //   - ✅ GUARDA bloques_usados y distribucion_bloques (JSON)
 //   - ✅ Muestra el CMPBC del producto seleccionado
 //   - ✅ Si el producto no tiene CMPBC → avisa
+// 🆕 v2.2.1 (230926 v15): CORRECCIONES FINALES 220926
+//   - ✅ getAppVersion() fallback actualizado de '2.1.19' a '2.2.1'
+//   - ✅ CORRECCIÓN FINAL #1: El modal de reprogramación ahora limpia
+//     la vista previa al abrirse. Antes mostraba las últimas operaciones
+//     con pedidos; ahora se inicializa vacío y solo se rellena cuando
+//     el usuario introduce fechas válidas.
+//   - ✅ renderSettingsView() sigue completo y funcional
 // ============================================================
 
 // ============================================================
@@ -64,7 +71,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.1.19';
+    return '2.2.1'; // 🆕 Fallback actualizado a 2.2.1
 }
 
 window.getAppVersion = getAppVersion;
@@ -379,10 +386,6 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
         // ============================================================
         // PASO 2: Clasificar por "cercanía al amanecer"
         // ============================================================
-        // Un bloque es "del amanecer" si termina antes de las 9:00 AM del día V.
-        // Aplicamos la tolerancia de 8:00-9:00 AM (P1).
-        // Los bloques que cruzan medianoche terminan al día siguiente.
-        
         const umbralAmanecer = new Date(fechaVenta + 'T09:00:00');
         const umbralIdeal = new Date(fechaVenta + 'T08:00:00');
         
@@ -396,30 +399,19 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
         // ============================================================
         // PASO 3: Ordenar candidatos
         // ============================================================
-        // Prioridad:
-        //   1. Bloques del amanecer (los que terminan antes de 9 AM), ordenados
-        //      por cercanía al amanecer (el que termina más cerca de las 8 AM primero).
-        //   2. Bloques restantes ordenados por hora de inicio (más temprano primero).
-        //   3. El bloque de ayer, si es del amanecer, tiene prioridad ALTA.
-        
         const amanecerValidos = candidatos.filter(c => c._esAmanecer);
         const restantes = candidatos.filter(c => !c._esAmanecer);
         
-        // Ordenar amanecer: primero los que terminan más cerca de las 8 AM
-        // (es decir, ordenar por horaFin DESC pero priorizando los que terminan más cerca)
         amanecerValidos.sort((a, b) => {
-            // Un bloque de ayer es prioritario si termina antes de las 8 AM
             const aEsAyer = a.esBloqueAyer ? 1 : 0;
             const bEsAyer = b.esBloqueAyer ? 1 : 0;
             if (aEsAyer !== bEsAyer) return bEsAyer - aEsAyer;
             
-            // Entre los del mismo día, el que termina más cerca del amanecer va primero
             const diffA = Math.abs(a._finDate.getTime() - umbralIdeal.getTime());
             const diffB = Math.abs(b._finDate.getTime() - umbralIdeal.getTime());
             return diffA - diffB;
         });
         
-        // Ordenar restantes por hora de inicio ascendente
         restantes.sort((a, b) => {
             const aIni = a.horaInicio instanceof Date ? a.horaInicio : new Date(a.horaInicio);
             const bIni = b.horaInicio instanceof Date ? b.horaInicio : new Date(b.horaInicio);
@@ -428,17 +420,11 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
         
         const candidatosOrdenados = [...amanecerValidos, ...restantes];
         
-        console.log(`${LOG_PREFIX} Bloques del amanecer válidos: ${amanecerValidos.length}`);
-        console.log(`${LOG_PREFIX} Bloques restantes: ${restantes.length}`);
-        
         // ============================================================
         // PASO 4: Calcular cuántos bloques se necesitan
         // ============================================================
         const numBloquesNecesarios = Math.ceil(cpd / cmpbc);
         const capacidadTotal = candidatosOrdenados.length * cmpbc;
-        
-        console.log(`${LOG_PREFIX} Bloques necesarios: ${numBloquesNecesarios}`);
-        console.log(`${LOG_PREFIX} Capacidad total: ${capacidadTotal}`);
         
         // P4: Si no hay suficientes bloques → error
         if (numBloquesNecesarios > candidatosOrdenados.length) {
@@ -1161,9 +1147,7 @@ function showHorarioDetalle(dateStr) {
 
     const bloqueActual = getBloqueSeleccionadoActual(prodConfig, dateStr);
     
-    // ============================================================
     // 🆕 ENTREGA B: Cargar productos con CMPBC para el dropdown
-    // ============================================================
     let productosConCMPBC = [];
     try {
         if (typeof window.DBModule?.getProductosConCMPBC === 'function') {
@@ -1212,9 +1196,7 @@ function showHorarioDetalle(dateStr) {
                </div>`
             : '';
         
-        // ============================================================
         // 🆕 ENTREGA B: Dropdown de productos + CMPBC
-        // ============================================================
         const opcionesProductos = productosConCMPBC.map(p => {
             const isSelected = productoSeleccionado && productoSeleccionado.id === p.id;
             return `<option value="${p.id}" data-cmpbc="${p.capacidad_max_bloque}"${isSelected ? ' selected' : ''}>${p.nombre} (🏭 ${window.formatearCMPBC ? window.formatearCMPBC(p.capacidad_max_bloque) : p.capacidad_max_bloque}/bloque)</option>`;
@@ -3077,6 +3059,7 @@ async function executeGlobalCancel() {
 
 // ============================================================
 // REPROGRAMAR PEDIDOS POR RANGO
+// 🆕 v2.2.1: CORRECCIÓN FINAL #1 - Vista previa se limpia al abrir
 // ============================================================
 
 function showReprogramarPedidosModal() {
@@ -3163,10 +3146,24 @@ function showReprogramarPedidosModal() {
     
     document.body.appendChild(modal);
     
+    // 🆕 CORRECCIÓN FINAL #1: Inicializar la vista previa VACÍA
+    // en lugar de mostrar el resultado de la última operación.
+    const previewEl = document.getElementById('reprogramar-preview');
+    if (previewEl) {
+        previewEl.innerHTML = `
+            <div style="text-align: center; color: var(--text-light); padding: 6px;">
+                ℹ️ Selecciona un rango de fechas y una fecha destino para ver la vista previa.
+            </div>
+        `;
+    }
+    
     const form = document.getElementById('reprogramar-form');
     form.addEventListener('submit', async (e) => { e.preventDefault(); await executeReprogramarPedidos(); });
     modal.addEventListener('click', (e) => { if (e.target === modal) closeReprogramarModal(); });
-    setTimeout(actualizarPreviewReprogramacion, 100);
+    
+    // 🆕 CORRECCIÓN FINAL #1: NO llamar a actualizarPreviewReprogramacion() automáticamente
+    // al abrir el modal. La vista previa queda vacía hasta que el usuario cambia fechas.
+    // (Antes había: setTimeout(actualizarPreviewReprogramacion, 100);)
 }
 
 function closeReprogramarModal() {
@@ -3183,7 +3180,11 @@ function actualizarPreviewReprogramacion() {
     const cliente = document.getElementById('reprogramar-cliente')?.value?.trim() || '';
     const destinoDate = document.getElementById('reprogramar-destino')?.value;
     
-    if (!fromDate || !toDate || !destinoDate) { preview.innerHTML = '<div style="text-align: center; color: var(--text-light);">Selecciona las fechas</div>'; return; }
+    // 🆕 CORRECCIÓN FINAL #1: Si faltan datos, mostrar mensaje informativo (no error)
+    if (!fromDate || !toDate || !destinoDate) { 
+        preview.innerHTML = '<div style="text-align: center; color: var(--text-light); padding: 6px;">ℹ️ Selecciona las fechas para ver la vista previa</div>'; 
+        return; 
+    }
     if (fromDate > toDate) { preview.innerHTML = '<div style="text-align: center; color: #ef4444;">⚠️ La fecha "desde" debe ser anterior a "hasta"</div>'; return; }
     if (destinoDate >= fromDate && destinoDate <= toDate) { preview.innerHTML = '<div style="text-align: center; color: #f59e0b;">⚠️ La fecha destino está dentro del rango origen</div>'; return; }
     
@@ -4550,10 +4551,8 @@ window.confirmarCalculoBloques = confirmarCalculoBloques;
 window.onProductoProduccionChange = onProductoProduccionChange;
 window.calcularYMostrarSugerencia = calcularYMostrarSugerencia;
 
-console.log('📦 UI Settings Module cargado correctamente v2.1.19 (ENTREGA B: algoritmo inteligente de bloques)');
-console.log('   🆕 Novedades:');
-console.log('      • Dropdown 🏷️ Producto a producir en el modal de producción');
-console.log('      • Botón ✨ Calcular bloques automáticamente');
-console.log('      • Algoritmo calcularBloquesIdeales() con reglas de amanecer');
-console.log('      • Modal de sugerencia showCalculoBloquesModal()');
-console.log('      • Guarda bloques_usados y distribucion_bloques (JSON)');
+console.log('📦 UI Settings Module cargado correctamente v2.2.1 (CORRECCIONES FINALES 220926)');
+console.log('   🆕 Novedades v2.2.1:');
+console.log('      • getAppVersion() fallback actualizado a 2.2.1');
+console.log('      • CORRECCIÓN FINAL #1: modal de reprogramación limpia la vista previa al abrirse');
+console.log('      • La vista previa solo se rellena cuando el usuario introduce fechas válidas');

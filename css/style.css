@@ -94,6 +94,19 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    /* 🆕 v2.2.1: Prevenir que transform residual del body rompa el sticky header */
+    will-change: auto;
+    isolation: auto;
+}
+
+/* 🆕 v2.2.1: Regla defensiva - resetear transform/will-change residuales
+   que puedan haber quedado en html, body o #appScreen y que rompan
+   `position: sticky` del header en móvil. */
+html, body, #appScreen {
+    /* No usar transform en estos elementos */
+}
+html {
+    will-change: auto;
 }
 
 .screen {
@@ -340,6 +353,7 @@ body {
 
 /* ============================================================
    APP HEADER - MODO OSCURO MEJORADO
+   🆕 v2.2.1: FIX BUG #2 - Forzar position: sticky
    ============================================================ */
 
 header {
@@ -352,12 +366,19 @@ header {
     box-shadow: var(--shadow);
     flex-shrink: 0;
     border-bottom: 1px solid var(--border-color);
-    position: relative;
-    z-index: 10;
+    /* 🆕 v2.2.1: FIX BUG #2 - Forzar position sticky con z-index alto
+       para que NO se deforme al abrir/cerrar modales */
+    position: sticky;
+    top: 0;
+    z-index: 200;
     padding-top: calc(12px + var(--safe-area-inset-top, 0px));
     padding-left: calc(16px + var(--safe-area-inset-left, 0px));
     padding-right: calc(16px + var(--safe-area-inset-right, 0px));
+    /* 🆕 v2.2.1: Evitar transform en el header */
+    transform: none;
+    will-change: auto;
 }
+
 header h1 { 
     font-size: 20px; 
     flex: 1;
@@ -453,6 +474,8 @@ main {
     width: 100%;
     max-width: 800px;
     margin: 0 auto;
+    /* 🆕 v2.2.1: Evitar transform en el main */
+    will-change: auto;
 }
 
 @supports not (padding-bottom: env(safe-area-inset-bottom)) {
@@ -751,6 +774,31 @@ hr {
     60% { transform: rotate(10deg); }
     80% { transform: rotate(-10deg); }
     100% { transform: rotate(0deg); }
+}
+
+/* ============================================================
+   🆕 v2.2.1: REGLAS DEFENSIVAS CONTRA DEFORMACIÓN DEL HEADER
+   ============================================================ */
+/* Estas reglas previenen que transforms residuales de modales
+   rompan el `position: sticky` del header en móvil. */
+
+/* Asegurar que el header siempre esté por encima del contenido */
+header#appScreen > header,
+#appScreen > header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 200 !important;
+}
+
+/* Resetear transforms en el body si algún modal los dejó huérfanos */
+body:not(.modal-open) {
+    transform: none !important;
+    will-change: auto !important;
+}
+
+/* Asegurar que #appScreen nunca tenga transform residual */
+#appScreen {
+    transform: none !important;
 }
 
 /* ============================================================

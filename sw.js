@@ -1,5 +1,5 @@
 // ============================================================
-// PANARIO - Service Worker (PWA) v2.2.0
+// PANARIO - Service Worker (PWA) v2.2.1
 // Estrategia: Cache First + Network Fallback + Offline + AUTO-REPARACIÓN
 // HISTORIAL DE CAMBIOS:
 //   v2.0.3 (180926):
@@ -37,11 +37,17 @@
 //     - ✅ Incluye todos los cambios de las Fases A, B, C, D, E, F
 //     - ✅ Añadido soporte para el nuevo campo CMPBC
 //     - ✅ Compatible con todas las versiones anteriores
+//   v2.2.1 (230926 v7): 🔧 FIX PWA - Pantalla completa
+//     - ✅ manifest.json ahora usa "display": "fullscreen"
+//     - ✅ Se fuerza reinstalación limpia del caché para que
+//       todos los usuarios obtengan el nuevo manifest
+//     - ✅ Sin cambios funcionales, solo actualización de caché
+//     - ✅ Compatible con todas las versiones anteriores
 // ============================================================
 
-const CACHE_NAME = 'panario-v2.2.0';
-const CACHE_STATIC = 'panario-static-v2.2.0';
-const CACHE_DYNAMIC = 'panario-dynamic-v2.2.0';
+const CACHE_NAME = 'panario-v2.2.1';
+const CACHE_STATIC = 'panario-static-v2.2.1';
+const CACHE_DYNAMIC = 'panario-dynamic-v2.2.1';
 const OFFLINE_URL = './offline.html';
 
 // Timeout para peticiones de red (ms)
@@ -376,7 +382,7 @@ self.addEventListener('install', function(event) {
         );
       })
       .then(function() {
-        console.log('✅ SW Panario: Instalación completada (v2.2.0)');
+        console.log('✅ SW Panario: Instalación completada (v2.2.1)');
         return self.skipWaiting();
       })
       .catch(function(error) {
@@ -739,10 +745,10 @@ setInterval(async function() {
   }
 }, 15 * 60 * 1000); // 15 minutos
 
-console.log('📦 SW Panario v2.2.0 cargado correctamente');
+console.log('📦 SW Panario v2.2.1 cargado correctamente');
 console.log('   📋 Assets precacheados:', CRITICAL_ASSETS.length);
 console.log('   🎯 CACHE_NAME:', CACHE_NAME);
 console.log('   🔧 Auto-reparación de caché activada');
 console.log('   ⏱️ Verificación periódica cada 15 minutos');
 console.log('   🛡️ Umbral de integridad:', (INTEGRITY_THRESHOLD * 100) + '%');
-console.log('   🎉 Entrega B: CMPBC + algoritmo inteligente de bloques incluidos');
+console.log('   🎉 v2.2.1: manifest con fullscreen + caché renovado');

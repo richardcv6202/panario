@@ -18,7 +18,7 @@
     <!-- loguea. Formato: "Panadería La Esquina - Panario"            -->
     <!-- ============================================================ -->
     <title>Panario - Panadería Artesanal</title>
-    <meta name="app-version" content="2.2.0">
+    <meta name="app-version" content="2.2.1">
     <meta name="app-build" content="20260923">
     
     <!-- ============================================================ -->
@@ -294,7 +294,7 @@
     <!-- ============================================================ -->
     <script>
     // ============================================================
-    // SERVICE WORKER REGISTRATION - Panario v2.2.0
+    // SERVICE WORKER REGISTRATION - Panario v2.2.1
     // ============================================================
     // Registra el SW con ruta RELATIVA (./sw.js) para que funcione
     // tanto en localhost como en GitHub Pages (subcarpeta).
@@ -569,6 +569,14 @@
             console.log('📱 PWA: Ejecutándose en modo standalone (instalada)');
             document.documentElement.setAttribute('data-pwa-installed', 'true');
         }
+        
+        // ============================================================
+        // 🆕 v2.2.1: DETECTAR MODO FULLSCREEN (pantalla completa)
+        // ============================================================
+        if (window.matchMedia('(display-mode: fullscreen)').matches) {
+            console.log('📱 PWA: Ejecutándose en modo FULLSCREEN');
+            document.documentElement.setAttribute('data-pwa-fullscreen', 'true');
+        }
     })();
     
     // ============================================================
@@ -594,7 +602,7 @@
         }
     })();
     
-    console.log('📦 PWA Scripts cargados correctamente (index.html v2.2.0)');
+    console.log('📦 PWA Scripts cargados correctamente (index.html v2.2.1)');
     </script>
 
 </body>
