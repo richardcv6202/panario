@@ -65,6 +65,17 @@
 //     es del día anterior (badge morado + texto).
 //   - ✅ Compatibilidad total con versiones anteriores: si el pedido no
 //     tiene producción programada con bloque de ayer, se comporta igual.
+// 🆕 v2.2.1 (230926 v13): FIX FECHA REAL EN BLOQUE DEL DÍA ANTERIOR
+//   - ✅ getProduccionInfo(): ahora SIEMPRE usa formato
+//     `DD/MM de HH:MM a HH:MM` para el texto del bloque, incluso cuando
+//     es del día anterior. Antes, el bloque del día anterior usaba el
+//     formato corto `HH:MM - HH:MM` sin fecha, lo que era ambiguo.
+//   - ✅ El texto del badge morado ahora es:
+//     * Día actual:  `🔨 Producción: 23/09 de 2:00 AM a 5:00 AM`
+//     * Día anterior: `🌙 Prod. ayer: 23/09 de 5:00 PM a 8:00 PM`
+//   - ✅ Mismo formato en `viewOrder()` (detalle del pedido).
+//   - ✅ Mismo formato en `onOrderDateChange()` (formulario de pedido).
+//   - ✅ Consistencia visual total entre todos los bloques de producción.
 // ============================================================
 
 // ============================================================
@@ -151,9 +162,16 @@ window.updateOrderTotal = function() {
 };
 
 // ============================================================
-// 🆕 CORRECCIÓN #6: HELPER PARA OBTENER INFO DE PRODUCCIÓN
-// (con soporte para bloque del día anterior)
+// 🆕 v2.2.1: HELPER PARA OBTENER INFO DE PRODUCCIÓN
+// (con soporte para bloque del día anterior Y formato de fecha consistente)
 // ============================================================
+// 
+// CAMBIO v2.2.1: El texto del bloque SIEMPRE usa el formato
+// `DD/MM de HH:MM a HH:MM`, sin importar si es del día actual o anterior.
+// 
+// Ejemplos:
+//   Día actual:  "23/09 de 2:00 AM a 5:00 AM"
+//   Día anterior: "23/09 de 5:00 PM a 8:00 PM" (con fecha real del bloque)
 
 function getProduccionInfo(fechaISO) {
     try {
@@ -205,17 +223,31 @@ function getProduccionInfo(fechaISO) {
         if (bloques && bloques.length >= config.bloque_index) {
             const bloque = bloques[config.bloque_index - 1];
             
-            if (esBloqueDiaAnterior) {
-                // 🆕 CORRECCIÓN #6: Texto simplificado para el día anterior
-                // Ej: "5:00 PM - 8:00 PM"
-                bloqueTexto = `${bloque.inicioStr} - ${bloque.finStr}`;
-                bloqueTextoAyer = bloqueTexto;
-            } else {
-                // Texto con fecha completa (comportamiento original)
-                const fechaObj = new Date(fechaISO + 'T00:00:00');
+            // ============================================================
+            // 🆕 v2.2.1: SIEMPRE usar formato DD/MM de HH:MM a HH:MM
+            // usando la fecha correcta (fechaBloqueReal si es del día
+            // anterior, fechaISO si es del día actual).
+            // ============================================================
+            const fechaParaTexto = esBloqueDiaAnterior ? fechaBloqueReal : fechaISO;
+            
+            try {
+                const fechaObj = new Date(fechaParaTexto + 'T00:00:00');
                 const dia = String(fechaObj.getDate()).padStart(2, '0');
                 const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
+                
                 bloqueTexto = `${dia}/${mes} de ${bloque.inicioStr} a ${bloque.finStr}`;
+                
+                // Guardar el mismo texto para el caso de "día anterior"
+                // (ya no usamos un formato distinto)
+                if (esBloqueDiaAnterior) {
+                    bloqueTextoAyer = bloqueTexto;
+                }
+            } catch (e) {
+                console.warn('⚠️ Error formateando texto de producción:', e);
+                bloqueTexto = `${bloque.inicioStr} - ${bloque.finStr}`;
+                if (esBloqueDiaAnterior) {
+                    bloqueTextoAyer = bloqueTexto;
+                }
             }
         }
         
@@ -868,9 +900,13 @@ async function reporteListaEspera() {
 }
 
 // ============================================================
-// 🆕 CORRECCIÓN #6: RENDER INFO DE PRODUCCIÓN EN TARJETA DE FECHA
-// (con soporte para bloque del día anterior)
+// 🆕 v2.2.1: RENDER INFO DE PRODUCCIÓN EN TARJETA DE FECHA
+// (con soporte para bloque del día anterior Y formato de fecha consistente)
 // ============================================================
+// 
+// CAMBIO v2.2.1: El badge del día anterior ahora muestra la fecha real:
+//   ANTES: "🌙 Prod. ayer: 5:00 PM - 8:00 PM"
+//   AHORA: "🌙 Prod. ayer: 23/09 de 5:00 PM a 8:00 PM"
 
 function renderProduccionInfoHTML(fechaISO) {
     try {
@@ -897,7 +933,9 @@ function renderProduccionInfoHTML(fechaISO) {
         }
         
         // ============================================================
-        // 🆕 CORRECCIÓN #6: Badge especial si es bloque de ayer
+        // 🆕 v2.2.1: Badge especial si es bloque de ayer
+        // AHORA incluye la fecha real en el texto (bloqueTexto ya tiene
+        // formato "DD/MM de HH:MM a HH:MM")
         // ============================================================
         const badgeBloqueHoy = esAyer
             ? `<span style="background: #8b5cf615; color: #8b5cf6; padding: 3px 10px; border-radius: 6px; font-weight: 600; border: 1px dashed #8b5cf6;">
@@ -2904,7 +2942,7 @@ function highlightSesionSelection(sesion) {
 }
 
 // ============================================================
-// 🆕 CORRECCIÓN #6: onOrderDateChange con soporte de bloque ayer
+// 🆕 v2.2.1: onOrderDateChange con formato de fecha consistente
 // ============================================================
 
 function onOrderDateChange() {
@@ -2952,7 +2990,8 @@ function onOrderDateChange() {
             }
             
             // ============================================================
-            // 🆕 CORRECCIÓN #6: Título según si es bloque de ayer
+            // 🆕 v2.2.1: Título según si es bloque de ayer
+            // AHORA el texto ya incluye la fecha real (bloqueTexto)
             // ============================================================
             const tituloProduccion = esAyer
                 ? `<span style="font-weight: 700; color: #8b5cf6; font-size: 13px;">🌙 Prod. ayer: ${info.bloqueTexto}</span>`
@@ -3267,7 +3306,7 @@ async function submitOrderForm(isEdit) {
 
 // ============================================================
 // VER PEDIDO EN DETALLE
-// 🆕 CORRECCIÓN #6: producción del día anterior visible
+// 🆕 v2.2.1: producción del día anterior con fecha real
 // ============================================================
 
 async function viewOrder(id) {
@@ -3316,7 +3355,8 @@ async function viewOrder(id) {
         const auditoriaSection = renderAuditoriaHTML(order);
         
         // ============================================================
-        // 🆕 CORRECCIÓN #6: Info de producción con soporte de bloque ayer
+        // 🆕 v2.2.1: Info de producción con formato consistente
+        // (el texto ya incluye la fecha real del bloque en ambos casos)
         // ============================================================
         const prodInfo = getProduccionInfo(order.delivery_date.split('T')[0]);
         const fmt = window.formatearCantidadProduccion || (v => String(v));
@@ -3329,7 +3369,7 @@ async function viewOrder(id) {
                 <div style="background: linear-gradient(135deg, #8b5cf615 0%, #8b5cf608 100%); border: ${esAyer ? '2px dashed' : '1px solid'} #8b5cf6; border-radius: 8px; padding: 10px 12px; margin: 10px 0;">
                     <div style="font-size: 13px; font-weight: 600; color: #8b5cf6; margin-bottom: 4px;">
                         ${esAyer 
-                            ? `🌙 Producción del día anterior: ${prodInfo.bloqueTexto}` 
+                            ? `🌙 Prod. ayer: ${prodInfo.bloqueTexto}` 
                             : `🔨 Horario de producción: ${prodInfo.bloqueTexto}`
                         }
                     </div>
@@ -4005,8 +4045,8 @@ window.selectDiasExcluidos = selectDiasExcluidos;
 window.limpiarDiasExcluidos = limpiarDiasExcluidos;
 window.updateExclusionSummary = updateExclusionSummary;
 
-console.log('📦 UI Orders Module v2.1.15 (CORRECCIÓN #6: producción del día anterior)');
-console.log('   ✅ getProduccionInfo(): detecta es_bloque_dia_anterior y expone fechaBloqueReal');
-console.log('   ✅ renderProduccionInfoHTML(): badge "🌙 Prod. ayer" cuando corresponde');
-console.log('   ✅ onOrderDateChange(): aviso morado cuando la producción es del día anterior');
-console.log('   ✅ viewOrder(): muestra el bloque de producción del día anterior con estilo diferenciado');
+console.log('📦 UI Orders Module v2.2.1 (FIX: fecha real en bloque del día anterior)');
+console.log('   ✅ getProduccionInfo(): formato consistente DD/MM de HH:MM a HH:MM');
+console.log('   ✅ Bloque del día anterior: "🌙 Prod. ayer: 23/09 de 5:00 PM a 8:00 PM"');
+console.log('   ✅ Bloque del día actual: "🔨 Producción: 23/09 de 2:00 AM a 5:00 AM"');
+console.log('   ✅ Consistencia total entre loadOrders(), viewOrder() y onOrderDateChange()');
