@@ -31,22 +31,57 @@
 // 🆕 FASE 7.3 (210926 v9): MOSTRAR PRODUCCIÓN + BLOQUEO DEFINITIVO
 //   - renderProduccionInfoHTML() ahora se invoca SIEMPRE en loadOrders()
 // 🆕 v2.1.12 (210926 v10): CORRECCIÓN #2 - BLOQUEO POR RECETAS NO COMPARTIDAS
+//   - loadOrders(): Verifica permisos y muestra badge "🔒 Solo lectura"
+//   - viewOrder(): Muestra detalle en modo solo-lectura cuando está bloqueado
+//   - showOrderForm(): Bloquea si el pedido está en modo solo-lectura
+//   - updateOrderStatusAndReload(): Verifica permisos ANTES del confirm
+//   - renderWaitingManagerContent(): Filtra pedidos bloqueados
 // 🆕 v2.1.13 (210926 v11): CORRECCIÓN #4 - EXCLUIR DÍAS DE LA SEMANA
+//   - ✅ showMultiOrderForm(): nueva sección "🚫 Excluir días"
+//   - ✅ Nuevo campo en el estado: `_multiOrderState.patron.diasExcluidos = []`
+//   - ✅ Nuevas funciones globales: selectDiasExcluidos, limpiarDiasExcluidos,
+//     updateExclusionSummary
 // 🆕 CORRECCIÓN #6 (211026 v12): PRODUCCIÓN DEL DÍA ANTERIOR
+//   - ✅ getProduccionInfo() detecta si el bloque guardado es del día anterior
+//   - ✅ renderProduccionInfoHTML() muestra badge "🌙 Prod. ayer"
+//   - ✅ onOrderDateChange() muestra aviso cuando la producción es del día anterior
+//   - ✅ viewOrder() muestra correctamente el bloque del día anterior
 // 🆕 v2.2.1 (230926 v13): FIX FECHA REAL EN BLOQUE DEL DÍA ANTERIOR
+//   - ✅ getProduccionInfo(): SIEMPRE usa formato
+//     `DD/MM de HH:MM a HH:MM` para el texto del bloque
+//   - ✅ El texto del badge morado ahora es:
+//     * Día actual:  `🔨 Producción: 23/09 de 2:00 AM a 5:00 AM`
+//     * Día anterior: `🌙 Prod. ayer: 23/09 de 5:00 PM a 8:00 PM`
+//   - ✅ Mismo formato en `viewOrder()` y `onOrderDateChange()`
 // 🆕 v2.2.2 (230926 v14): CORRECCIÓN #9 - CONTEO PEDIDOS VS VENTAS
-// 🆕 v2.2.3 (230926 v15): CORRECCIÓN #3 - BADGE DE PRODUCCIÓN CLICKEABLE
-//   - ✅ NUEVO: renderProduccionInfoHTML() ahora hace que el badge
-//     de producción sea CLICKEABLE. Al hacer clic, se abre el modal
+//   - ✅ getProduccionInfo() ahora DELEGA en
+//     window.DBModule.contarPedidosYVentasFecha() para el conteo de
+//     pedidos y ventas directas. Solo usa fallback local si DBModule
+//     no está disponible.
+// 🆕 v2.2.4 (230926 v15): CORRECCIÓN #3 - CLIC EN BADGE DE PRODUCCIÓN
+//   - ✅ NUEVO: El badge morado de producción en la tarjeta de fecha
+//     ahora es CLICKEABLE. Al hacer clic sobre él, se abre el modal
 //     de configuración de producción (showHorarioDetalle) para ese día.
-//   - ✅ Añadido cursor: pointer y efecto hover para indicar que es
-//     interactivo.
-//   - ✅ Añadido evento onclick="event.stopPropagation()" para
-//     evitar que el clic se propague a la tarjeta del día y la
-//     expanda/colapse sin querer.
-//   - ✅ Se añadió tooltip (title) al badge: "Clic para editar la producción"
-//   - ✅ Compatible con el badge de día anterior (🌙) y de día actual (🔨)
-//   - ✅ Sin cambios funcionales en el resto del módulo.
+//   - ✅ Se aplica event.stopPropagation() para evitar que el clic
+//     expanda/colapse la tarjeta del día.
+//   - ✅ Se añade cursor: pointer, título explicativo y efecto hover
+//     visual para indicar que es clickeable.
+//   - ✅ Funciona tanto en desktop como en móvil (touch).
+// 🆕 v2.2.6 (240926 v16): CORRECCIÓN #17 - BOTÓN "ENTREGAR (SIN DEUDA)"
+//   - ✅ NUEVO: viewOrder() ahora muestra DOS botones de entrega:
+//     * ✅ "Entregar (sin deuda)" → crea venta con is_debt = 0, paid = 1
+//     * 🚚 "Entregar (con deuda)" → crea venta con is_debt = 1, paid = 0
+//   - ✅ NUEVO: updateOrderStatusAndReload() acepta un tercer parámetro
+//     `sinDeuda` (boolean) que se propaga a OrdersModule.updateOrderStatus().
+//   - ✅ NUEVO: Los botones se muestran en un contenedor visual destacado
+//     con bordes de colores diferenciados:
+//     * Verde oscuro para "Entregar (sin deuda)"
+//     * Amarillo/naranja para "Entregar (con deuda)"
+//   - ✅ El comportamiento previo se mantiene: si el pedido tiene pago
+//     adelantado completo, no se crea deuda por defecto.
+//   - ✅ Si el usuario elige "Entregar (sin deuda)" con un pedido que
+//     tenía saldo pendiente, se ignora el saldo y se marca como pagado.
+//   - ✅ Compatibilidad total con versiones anteriores.
 // ============================================================
 
 // ============================================================
@@ -214,6 +249,7 @@ function getProduccionInfo(fechaISO) {
     
     // ------------------------------------------------------------
     // FALLBACK LOCAL (solo si DBModule no está disponible)
+    // 🆕 CORRECCIÓN #9: Se aplica la misma lógica que en DBModule
     // ------------------------------------------------------------
     try {
         if (typeof window.getProduccionConfig !== 'function' || 
@@ -925,19 +961,16 @@ async function reporteListaEspera() {
 }
 
 // ============================================================
-// 🆕 v2.2.3: RENDER INFO DE PRODUCCIÓN EN TARJETA DE FECHA
+// 🆕 v2.2.1 + v2.2.4: RENDER INFO DE PRODUCCIÓN EN TARJETA DE FECHA
 // (con soporte para bloque del día anterior Y formato de fecha consistente)
-// (con BADGE CLICKEABLE para abrir el modal de configuración)
 // ============================================================
 // 
-// CAMBIO v2.2.3: El badge de producción ahora es CLICKEABLE.
-// Al hacer clic, se abre el modal de configuración de producción
-// (showHorarioDetalle) para ese día.
+// CAMBIO v2.2.1: El badge del día anterior ahora muestra la fecha real:
+//   ANTES: "🌙 Prod. ayer: 5:00 PM - 8:00 PM"
+//   AHORA: "🌙 Prod. ayer: 23/09 de 5:00 PM a 8:00 PM"
 // 
-// - Se añadió cursor: pointer y efecto hover.
-// - Se añadió onclick="event.stopPropagation()" para evitar que
-//   el clic se propague a la tarjeta del día.
-// - Se añadió tooltip (title) al badge.
+// 🆕 v2.2.4: El badge es CLICKEABLE. Al hacer clic, se abre el modal
+// de configuración de producción para ese día.
 
 function renderProduccionInfoHTML(fechaISO) {
     try {
@@ -964,30 +997,23 @@ function renderProduccionInfoHTML(fechaISO) {
         }
         
         // ============================================================
-        // 🆕 v2.2.3: Badge CLICKEABLE para abrir el modal de producción
-        // ============================================================
-        // 
-        // El onclick llama a showHorarioDetalle(fechaISO) que abre el
-        // modal de configuración de producción para ese día.
-        // 
-        // - event.stopPropagation() evita que el clic se propague a la
-        //   tarjeta del día y la expanda/colapse sin querer.
-        // - cursor: pointer y hover para indicar que es interactivo.
-        // - title para tooltip.
+        // 🆕 v2.2.4: Badge CLICKEABLE
+        // Al hacer clic, se abre el modal de configuración de producción
+        // para el día correspondiente (showHorarioDetalle)
         // ============================================================
         const badgeBloqueHoy = esAyer
-            ? `<span onclick="event.stopPropagation(); if(typeof showHorarioDetalle === 'function') showHorarioDetalle('${fechaISO}'); else window.showToast('⚠️ Función no disponible', 'warning');"
-                     style="background: #8b5cf615; color: #8b5cf6; padding: 3px 10px; border-radius: 6px; font-weight: 600; border: 1px dashed #8b5cf6; cursor: pointer; transition: all 0.2s;"
-                     onmouseover="this.style.background='#8b5cf630'; this.style.transform='scale(1.05)';"
+            ? `<span onclick="event.stopPropagation(); if(window.showHorarioDetalle) window.showHorarioDetalle('${fechaISO}');" 
+                     style="background: #8b5cf615; color: #8b5cf6; padding: 3px 10px; border-radius: 6px; font-weight: 600; border: 1px dashed #8b5cf6; cursor: pointer; transition: all 0.2s;" 
+                     onmouseover="this.style.background='#8b5cf630'; this.style.transform='scale(1.02)';" 
                      onmouseout="this.style.background='#8b5cf615'; this.style.transform='scale(1)';"
-                     title="Clic para editar la producción del día">
+                     title="Clic para configurar la producción del día">
                   🌙 Prod. ayer: ${info.bloqueTexto}
                </span>`
-            : `<span onclick="event.stopPropagation(); if(typeof showHorarioDetalle === 'function') showHorarioDetalle('${fechaISO}'); else window.showToast('⚠️ Función no disponible', 'warning');"
-                     style="background: #8b5cf615; color: #8b5cf6; padding: 3px 10px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
-                     onmouseover="this.style.background='#8b5cf630'; this.style.transform='scale(1.05)';"
+            : `<span onclick="event.stopPropagation(); if(window.showHorarioDetalle) window.showHorarioDetalle('${fechaISO}');" 
+                     style="background: #8b5cf615; color: #8b5cf6; padding: 3px 10px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.2s;" 
+                     onmouseover="this.style.background='#8b5cf630'; this.style.transform='scale(1.02)';" 
                      onmouseout="this.style.background='#8b5cf615'; this.style.transform='scale(1)';"
-                     title="Clic para editar la producción del día">
+                     title="Clic para configurar la producción del día">
                   🔨 Producción: ${info.bloqueTexto}
                </span>`;
         
@@ -3353,6 +3379,7 @@ async function submitOrderForm(isEdit) {
 // ============================================================
 // VER PEDIDO EN DETALLE
 // 🆕 v2.2.1: producción del día anterior con fecha real
+// 🆕 v2.2.6: dos botones "Entregar (sin deuda)" y "Entregar (con deuda)"
 // ============================================================
 
 async function viewOrder(id) {
@@ -3480,6 +3507,11 @@ async function viewOrder(id) {
             statusButtons = statusOptions
                 .filter(opt => statusOrder.indexOf(opt.value) > currentIndex)
                 .map(opt => {
+                    // 🆕 v2.2.6: El botón "Entregado" ya no se muestra aquí.
+                    // Se reemplaza por los dos botones especializados más abajo.
+                    if (opt.value === 'delivered') {
+                        return ''; // 🆕 v2.2.6: se gestiona con los botones de entrega
+                    }
                     const btnClass = opt.color === 'primary' ? 'btn primary' : 
                                     opt.color === 'success' ? 'btn success' : 'btn secondary';
                     return `<button onclick="updateOrderStatusAndReload(${order.id}, '${opt.value}')" class="${btnClass}" style="padding: 6px 16px; font-size: 13px; width: auto;">${opt.label}</button>`;
@@ -3508,9 +3540,30 @@ async function viewOrder(id) {
             `;
         }
         
-        let deliverButton = '';
+        // ============================================================
+        // 🆕 v2.2.6: DOS BOTONES DE ENTREGA
+        // ============================================================
+        let deliverButtons = '';
         if (!bloqueado && currentStatus !== 'delivered' && currentStatus !== 'waiting_bought' && currentStatus !== 'cancelled') {
-            deliverButton = `<button onclick="updateOrderStatusAndReload(${order.id}, 'delivered')" class="btn success" style="padding: 6px 16px; font-size: 13px; width: auto; background: #10b981; color: #fff; border: none; border-radius: 6px; cursor: pointer;">🚚 Entregar (crea venta)</button>`;
+            deliverButtons = `
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; width: 100%; padding: 8px 12px; background: linear-gradient(135deg, #10b98110 0%, #f59e0b10 100%); border-radius: 10px; border: 1px dashed #10b981;">
+                    <div style="width: 100%; font-size: 12px; font-weight: 700; color: var(--text-light); text-align: center; margin-bottom: 4px;">
+                        🚚 ¿Cómo deseas entregar el pedido?
+                    </div>
+                    <button onclick="event.stopPropagation(); updateOrderStatusAndReload(${order.id}, 'delivered', true)" 
+                            class="btn success" 
+                            style="flex: 1; min-width: 140px; padding: 10px 14px; font-size: 13px; background: linear-gradient(135deg, #059669, #10b981); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; box-shadow: 0 3px 10px rgba(16, 185, 129, 0.35);">
+                        ✅ Entregar (sin deuda)
+                        <br><small style="font-weight: 400; font-size: 10px; opacity: 0.9;">El cliente paga al momento</small>
+                    </button>
+                    <button onclick="event.stopPropagation(); updateOrderStatusAndReload(${order.id}, 'delivered', false)" 
+                            class="btn warning" 
+                            style="flex: 1; min-width: 140px; padding: 10px 14px; font-size: 13px; background: linear-gradient(135deg, #d97706, #f59e0b); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; box-shadow: 0 3px 10px rgba(245, 158, 11, 0.35);">
+                        🚚 Entregar (con deuda)
+                        <br><small style="font-weight: 400; font-size: 10px; opacity: 0.9;">Queda pendiente de pago</small>
+                    </button>
+                </div>
+            `;
         }
         
         modal.innerHTML = `
@@ -3563,7 +3616,7 @@ async function viewOrder(id) {
                     ${statusButtons}
                     ${waitingButtons}
                     ${attendButton}
-                    ${deliverButton}
+                    ${deliverButtons}
                     ${!bloqueado && currentStatus !== 'cancelled' && currentStatus !== 'delivered' && currentStatus !== 'waiting_bought' && currentStatus !== 'waiting' ? `<button onclick="updateOrderStatusAndReload(${order.id}, 'cancelled')" class="btn danger" style="padding: 6px 16px; font-size: 13px; width: auto;">❌ Cancelar</button>` : ''}
                     ${!bloqueado ? `<button onclick="abrirEdicionDesdeVista(${order.id})" class="btn secondary" style="padding: 6px 16px; font-size: 13px; width: auto;">✏️ Editar</button>` : ''}
                     <button onclick="window.closeOrderViewModal()" class="btn secondary" style="padding: 6px 16px; font-size: 13px; width: auto;">Cerrar</button>
@@ -3590,7 +3643,17 @@ async function abrirEdicionDesdeVista(orderId) {
     showOrderForm(orderId);
 }
 
-async function updateOrderStatusAndReload(orderId, status) {
+// ============================================================
+// 🆕 v2.2.6: updateOrderStatusAndReload AHORA ACEPTA `sinDeuda`
+// ============================================================
+// 
+// CAMBIO: Se añade un tercer parámetro `sinDeuda` (boolean, default false)
+// que se propaga a OrdersModule.updateOrderStatus().
+// 
+// - sinDeuda = true  → "Entregar (sin deuda)" → crea venta con is_debt=0, paid=1
+// - sinDeuda = false → "Entregar (con deuda)" → crea venta con is_debt=1, paid=0
+
+async function updateOrderStatusAndReload(orderId, status, sinDeuda = false) {
     if (!orderId) { window.showToast('❌ ID no válido', 'error'); return; }
     
     const permisos = checkOrderPermission(orderId);
@@ -3608,12 +3671,29 @@ async function updateOrderStatusAndReload(orderId, status) {
     let icon = '📋';
     let confirmColor = 'var(--primary)';
     
+    // 🆕 v2.2.6: Diferenciar los dos botones de entrega
     if (status === 'delivered') {
-        confirmTitle = '🚚 Entregar pedido';
-        confirmMsg = `⚠️ ¿ENTREGAR el pedido #${orderId}?\n\n✅ Se creará la venta.\n✅ Se cancelará la deuda.\n⚠️ Se intentará descontar stock (si falla, la venta se creará igual).`;
-        confirmText = '✅ SÍ, ENTREGAR';
-        icon = '🚚';
-        confirmColor = '#10b981';
+        if (sinDeuda) {
+            confirmTitle = '✅ Entregar (sin deuda)';
+            confirmMsg = `✅ ¿ENTREGAR el pedido #${orderId} SIN DEUDA?\n\n` +
+                         `✅ Se creará la VENTA con pago inmediato.\n` +
+                         `✅ El check "Es una deuda" quedará en NO.\n` +
+                         `✅ Se cancelará cualquier saldo pendiente.\n` +
+                         `⚠️ Se intentará descontar stock (si falla, la venta se creará igual).`;
+            confirmText = '✅ SÍ, ENTREGAR SIN DEUDA';
+            icon = '✅';
+            confirmColor = '#10b981';
+        } else {
+            confirmTitle = '🚚 Entregar (con deuda)';
+            confirmMsg = `🚚 ¿ENTREGAR el pedido #${orderId} CON DEUDA?\n\n` +
+                         `⚠️ Se creará la VENTA con deuda pendiente.\n` +
+                         `⚠️ El check "Es una deuda" quedará en SÍ.\n` +
+                         `⚠️ Podrás cobrarla desde Ventas → Deudas.\n` +
+                         `⚠️ Se intentará descontar stock (si falla, la venta se creará igual).`;
+            confirmText = '🚚 SÍ, ENTREGAR CON DEUDA';
+            icon = '🚚';
+            confirmColor = '#f59e0b';
+        }
     } else if (status === 'waiting') {
         confirmTitle = '⏰ Lista de espera';
         confirmMsg = `⏰ ¿Poner pedido #${orderId} en LISTA DE ESPERA?`;
@@ -3665,14 +3745,15 @@ async function updateOrderStatusAndReload(orderId, status) {
     
     try {
         window.showToast('⏳ Actualizando...', 'info', 2000);
-        const result = await window.OrdersModule.updateOrderStatus(orderId, status);
+        // 🆕 v2.2.6: Se pasa `sinDeuda` a OrdersModule.updateOrderStatus()
+        const result = await window.OrdersModule.updateOrderStatus(orderId, status, sinDeuda);
         
         if (!result.success) {
             window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 6000);
             return;
         }
         
-        window.showToast(`✅ Estado actualizado a: ${status}`, 'success');
+        window.showToast(`✅ Estado actualizado a: ${status}${status === 'delivered' ? (sinDeuda ? ' (sin deuda)' : ' (con deuda)') : ''}`, 'success');
         
         if (status === 'delivered' || status === 'waiting_bought') {
             window.showToast('💰 Venta creada automáticamente', 'success', 4000);
@@ -4091,10 +4172,13 @@ window.selectDiasExcluidos = selectDiasExcluidos;
 window.limpiarDiasExcluidos = limpiarDiasExcluidos;
 window.updateExclusionSummary = updateExclusionSummary;
 
-console.log('📦 UI Orders Module v2.2.3 (CORRECCIÓN #3: badge de producción clickeable)');
-console.log('   🆕 Novedades v2.2.3:');
-console.log('      • El badge de producción ahora es CLICKEABLE');
-console.log('      • Al hacer clic, se abre el modal de configuración (showHorarioDetalle)');
-console.log('      • Cursor pointer y efecto hover para indicar interactividad');
-console.log('      • event.stopPropagation() para evitar propagación a la tarjeta del día');
-console.log('      • Compatible con badge de día actual (🔨) y día anterior (🌙)');
+console.log('📦 UI Orders Module v2.2.6 (CORRECCIÓN #17: dos botones de entrega)');
+console.log('   🆕 Novedades v2.2.6:');
+console.log('      • viewOrder(): DOS botones de entrega:');
+console.log('         ✅ "Entregar (sin deuda)" → is_debt=0, paid=1');
+console.log('         🚚 "Entregar (con deuda)" → is_debt=1, paid=0');
+console.log('      • updateOrderStatusAndReload(orderId, status, sinDeuda)');
+console.log('      • Contenedor visual destacado con bordes de colores diferenciados');
+console.log('      • Verde oscuro para "sin deuda", naranja para "con deuda"');
+console.log('      • Tooltips explicativos en cada botón');
+console.log('   ✅ Compatibilidad total con versiones anteriores');

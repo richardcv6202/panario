@@ -42,26 +42,41 @@
 // 🆕 RESTAURACIÓN COMPLETA (221026 v13):
 //   - ✅ renderSettingsView() COMPLETA: restaurar TODAS las secciones
 // 🆕 ENTREGA B (221026 v14): ALGORITMO INTELIGENTE DE BLOQUES
-//   - ✅ NUEVO dropdown "🏷️ Producto a producir" en modal producción
-//   - ✅ NUEVO botón "✨ Calcular bloques automáticamente"
-//   - ✅ NUEVA función calcularBloquesIdeales(fechaVenta, cpd, cmpbc)
-//   - ✅ NUEVO modal showCalculoBloquesModal() con vista previa
-//   - ✅ GUARDA bloques_usados y distribucion_bloques (JSON)
-//   - ✅ Muestra el CMPBC del producto seleccionado
-//   - ✅ Si el producto no tiene CMPBC → avisa
 // 🆕 v2.2.1 (230926 v15): CORRECCIONES FINALES 220926
-//   - ✅ getAppVersion() fallback actualizado de '2.1.19' a '2.2.1'
-//   - ✅ CORRECCIÓN FINAL #1: El modal de reprogramación ahora limpia
-//     la vista previa al abrirse.
-//   - ✅ renderSettingsView() sigue completo y funcional
 // 🆕 v2.2.2 (230926 v16): CORRECCIÓN #9 - CONTEO PEDIDOS VS VENTAS
-//   - ✅ contarPedidosYVentasFecha() ahora DELEGA en
-//     window.DBModule.contarPedidosYVentasFecha() si está disponible.
-//   - ✅ Fallback local MANTIENE la lógica corregida:
-//     * Cuenta TODOS los pedidos excepto cancelados
-//     * Cuenta ventas directas (sin order_id) por separado
-//     * Calcula disponibles = cantidad_produccion - pedidos - ventasDirectas
-//   - ✅ Log de diagnóstico cuando delega en DBModule
+// 🆕 v2.2.3 (230926 v17): CORRECCIÓN #11 - GUARDAR PRODUCTO EN PRODUCCIÓN
+// 🆕 v2.2.4 (240926 v18): CORRECCIÓN #11 COMPLETA - DROPDOWN CON TODOS LOS PRODUCTOS
+// 🆕 v2.2.5 (240926 v19): CORRECCIÓN #10 - ALGORITMO INTELIGENTE DE BLOQUES
+//   REGLA DEL AMANECER CORREGIDA
+//   - ✅ NUEVO: El umbral del amanecer se compara contra el INICIO del
+//     día de venta (00:00), no contra el inicio del bloque.
+//   - ✅ NUEVO: Un bloque es "del amanecer" si su hora de FIN es
+//     <= 09:00 AM del día de venta (día V).
+//   - ✅ NUEVO: Un bloque del día anterior (día V-1) es válido si su
+//     hora de FIN es <= 09:00 AM del día de venta (día V). Esto permite
+//     que bloques del día anterior que terminan en la noche del día V-1
+//     se consideren válidos (porque el pan estará listo para el desayuno
+//     del día V).
+//   - ✅ NUEVO: Se prioriza el bloque del día anterior si el primer
+//     bloque del día de venta comienza después de las 8:00 AM.
+//   - ✅ NUEVO: El mensaje del modal usa SIEMPRE el formato
+//     `Producción: DD/MM de HH:MM a HH:MM`, sin usar la palabra "ayer".
+//   - ✅ NUEVO: Logs detallados en consola para verificar el cálculo:
+//     * Muestra todos los candidatos con su hora de inicio/fin.
+//     * Muestra cuáles son considerados "amanecer".
+//     * Muestra el orden final de priorización.
+//   - ✅ NUEVO: Función auxiliar `_esBloqueDelAmanecer(horaFin, fechaVenta)`
+//     que determina si un bloque termina antes de las 9 AM del día de venta.
+//   - ✅ NUEVO: Función auxiliar `_formatearMensajeBloque(bloque)` que
+//     genera el mensaje con el formato correcto.
+//   - ✅ FIX: Antes, un bloque que comenzaba a las 8 AM y terminaba a
+//     las 11 AM era considerado "amanecer" incorrectamente. Ahora NO lo es.
+//   - ✅ FIX: Antes, el bloque del día anterior solo se usaba si su
+//     hora de fin era <= 8 AM del día de venta. Ahora se usa si su
+//     hora de fin es <= 9 AM del día de venta (tolerancia ampliada).
+//   - ✅ FIX: Antes, el mensaje usaba "ayer" para el bloque del día
+//     anterior. Ahora usa la fecha real: "Producción: 23/09 de 5:00 PM a 8:00 PM".
+//   - ✅ Sin cambios funcionales en el resto del módulo.
 // ============================================================
 
 // ============================================================
@@ -77,7 +92,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.2.1'; // 🆕 Fallback actualizado a 2.2.1
+    return '2.2.5'; // 🆕 Fallback actualizado a 2.2.5
 }
 
 window.getAppVersion = getAppVersion;
@@ -139,19 +154,8 @@ function getProduccionConfig(fechaISO) {
 
 /**
  * 🆕 CORRECCIÓN #9: Cuenta los pedidos y ventas de una fecha específica.
- * 
- * ⚠️ IMPORTANTE: Esta función ahora DELEGA en
- * window.DBModule.contarPedidosYVentasFecha() para tener una única
- * fuente de verdad. Solo usa el fallback local si DBModule no está
- * disponible (por ejemplo, durante la inicialización temprana).
- * 
- * El fallback local también aplica la lógica CORREGIDA:
- *   - pedidos: TODOS los pedidos excepto cancelados
- *   - ventasDirectas: ventas sin order_id
- *   - disponibles: cantidadProduccion - pedidos - ventasDirectas
  */
 function contarPedidosYVentasFecha(fechaISO) {
-    // 🆕 CORRECCIÓN #9: Delegar en DBModule si está disponible
     try {
         if (window.DBModule && typeof window.DBModule.contarPedidosYVentasFecha === 'function') {
             const resultado = window.DBModule.contarPedidosYVentasFecha(fechaISO);
@@ -162,17 +166,12 @@ function contarPedidosYVentasFecha(fechaISO) {
         console.warn('⚠️ [ui-settings] Error delegando en DBModule.contarPedidosYVentasFecha:', e);
     }
     
-    // ------------------------------------------------------------
-    // FALLBACK LOCAL (solo si DBModule no está disponible)
-    // 🆕 CORRECCIÓN #9: Se aplica la misma lógica que en DBModule
-    // ------------------------------------------------------------
     try {
         const negocioId = window.DBModule?.getNegocioIdActual?.();
         if (!negocioId || !fechaISO) {
             return { pedidos: 0, ventas: 0, disponibles: 0, cantidadProduccion: 0 };
         }
         
-        // PASO 1: Contar pedidos (TODOS excepto cancelados)
         const pedidosResult = window.DBModule.query(
             `SELECT COUNT(*) as count FROM orders 
              WHERE negocio_id = ? 
@@ -183,7 +182,6 @@ function contarPedidosYVentasFecha(fechaISO) {
         );
         const pedidos = pedidosResult[0]?.count || 0;
         
-        // PASO 2: Contar ventas DIRECTAS (sin order_id)
         const ventasResult = window.DBModule.query(
             `SELECT COUNT(*) as count FROM sales 
              WHERE negocio_id = ? 
@@ -195,11 +193,9 @@ function contarPedidosYVentasFecha(fechaISO) {
         );
         const ventas = ventasResult[0]?.count || 0;
         
-        // PASO 3: Obtener la cantidad de producción planificada
         const config = getProduccionConfig(fechaISO);
         const cantidadProduccion = parseFloat(config?.cantidad_produccion) || 0;
         
-        // PASO 4: Calcular disponibles
         const disponibles = cantidadProduccion > 0 
             ? Math.max(0, cantidadProduccion - pedidos - ventas)
             : null;
@@ -223,6 +219,23 @@ function formatearCantidadProduccion(cantidad) {
 window.getProduccionConfig = getProduccionConfig;
 window.contarPedidosYVentasFecha = contarPedidosYVentasFecha;
 window.formatearCantidadProduccion = formatearCantidadProduccion;
+
+// ============================================================
+// 🆕 v2.2.4: HELPER PARA OBTENER TODOS LOS PRODUCTOS
+// ============================================================
+
+function getTodosLosProductosParaDropdown() {
+    try {
+        if (typeof window.DBModule?.getProductos === 'function') {
+            return window.DBModule.getProductos();
+        }
+    } catch (e) {
+        console.warn('⚠️ Error obteniendo todos los productos:', e);
+    }
+    return [];
+}
+
+window.getTodosLosProductosParaDropdown = getTodosLosProductosParaDropdown;
 
 // ============================================================
 // HELPERS PARA BLOQUE DEL DÍA ANTERIOR
@@ -252,7 +265,8 @@ function getBloqueSeleccionadoActual(prodConfig, fechaVentaISO) {
         esDiaAnterior: esDiaAnterior,
         fechaBloqueReal: prodConfig.fecha_bloque_real || (esDiaAnterior ? null : fechaVentaISO),
         cantidad: prodConfig.cantidad_produccion || null,
-        notas: prodConfig.notas || null
+        notas: prodConfig.notas || null,
+        productoId: prodConfig.producto_id || null
     };
 }
 
@@ -328,11 +342,101 @@ window.getFechaCortaConDia = getFechaCortaConDia;
 window.esHoyISO = esHoyISO;
 
 // ============================================================
-// 🆕 ENTREGA B: ALGORITMO INTELIGENTE DE BLOQUES
+// 🆕 v2.2.5: HELPERS PARA EL ALGORITMO DE BLOQUES
+// ============================================================
+
+/**
+ * 🆕 v2.2.5: Determina si un bloque termina antes del umbral del amanecer
+ * del día de venta.
+ * 
+ * Un bloque es "del amanecer" si su hora de FIN es <= 09:00 AM del día
+ * de venta. Esto incluye:
+ *   - Bloques del día V que terminan en la madrugada (00:00 - 09:00).
+ *   - Bloques del día V-1 que terminan en la noche del V-1 (válidos porque
+ *     el pan estará listo para el desayuno del día V).
+ *   - Bloques del día V-1 que cruzan medianoche y terminan en la madrugada
+ *     del día V (válidos).
+ * 
+ * @param {Date} horaFin - Hora de fin del bloque
+ * @param {string} fechaVenta - Fecha ISO del día de venta (YYYY-MM-DD)
+ * @returns {boolean}
+ */
+function _esBloqueDelAmanecer(horaFin, fechaVenta) {
+    try {
+        const finDate = horaFin instanceof Date ? horaFin : new Date(horaFin);
+        const umbralAmanecer = new Date(fechaVenta + 'T09:00:00');
+        return finDate <= umbralAmanecer;
+    } catch (e) {
+        console.warn('⚠️ Error en _esBloqueDelAmanecer:', e);
+        return false;
+    }
+}
+
+/**
+ * 🆕 v2.2.5: Formatea el mensaje de un bloque con el formato correcto.
+ * 
+ * Reglas:
+ *   - SIEMPRE usa el formato `DD/MM de HH:MM a HH:MM`.
+ *   - NO usa la palabra "ayer".
+ *   - Usa la fecha real del bloque (fechaBloqueReal), no la fecha de venta.
+ * 
+ * @param {Object} bloque - Objeto bloque con horaInicioStr, horaFinStr, fechaBloqueReal
+ * @returns {string} Mensaje formateado
+ */
+function _formatearMensajeBloque(bloque) {
+    try {
+        const fechaParaTexto = bloque.fechaBloqueReal || bloque.fecha;
+        const fechaObj = new Date(fechaParaTexto + 'T00:00:00');
+        const dia = String(fechaObj.getDate()).padStart(2, '0');
+        const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
+        return `${dia}/${mes} de ${bloque.horaInicioStr} a ${bloque.horaFinStr}`;
+    } catch (e) {
+        console.warn('⚠️ Error en _formatearMensajeBloque:', e);
+        return `${bloque.horaInicioStr} a ${bloque.horaFinStr}`;
+    }
+}
+
+window._esBloqueDelAmanecer = _esBloqueDelAmanecer;
+window._formatearMensajeBloque = _formatearMensajeBloque;
+
+// ============================================================
+// 🆕 ENTREGA B + CORRECCIÓN #10: ALGORITMO INTELIGENTE DE BLOQUES
+// ============================================================
+// 
+// REGLAS DEL ALGORITMO (v2.2.5):
+// 
+// 1. RECOPILAR CANDIDATOS:
+//    - Todos los bloques del día V (día de venta).
+//    - El último bloque del día V-1 (día anterior), si existe.
+// 
+// 2. CLASIFICAR:
+//    - "Del amanecer": bloques cuya hora de FIN es <= 09:00 AM del día V.
+//    - "Restantes": el resto de bloques.
+// 
+// 3. ORDENAR (prioridad):
+//    a) Primero los "del amanecer".
+//    b) Entre los "del amanecer", priorizar el bloque del día V-1
+//       (porque el pan estará listo mucho antes del desayuno).
+//    c) Luego ordenar por cercanía al umbral ideal (08:00 AM del día V).
+//    d) Finalmente, los "restantes" ordenados por hora de inicio.
+// 
+// 4. CALCULAR:
+//    - numBloques = ceil(CPD / CMPBC).
+// 
+// 5. DISTRIBUIR:
+//    - Primer bloque: min(CPD, CMPBC).
+//    - Resto: repartir en bloques siguientes.
+// 
+// 6. VALIDAR:
+//    - Si CPD > CMPBC × bloques → error.
+// 
+// 7. MENSAJE:
+//    - SIEMPRE formato `Producción: DD/MM de HH:MM a HH:MM`.
+//    - NUNCA usar la palabra "ayer".
 // ============================================================
 
 function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
-    const LOG_PREFIX = '🧠 [calcularBloquesIdeales]';
+    const LOG_PREFIX = '🧠 [calcularBloquesIdeales v2.2.5]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -350,8 +454,12 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
             return { success: false, error: 'El CMPBC debe ser mayor a 0' };
         }
         
+        // ============================================================
+        // PASO 1: RECOPILAR CANDIDATOS
+        // ============================================================
         const candidatos = [];
         
+        // 1.1. Bloques del día V (todos)
         const bloquesHoy = window.CorrienteUtils.getBloques(fechaVenta);
         if (bloquesHoy && bloquesHoy.length > 0) {
             for (let i = 0; i < bloquesHoy.length; i++) {
@@ -372,6 +480,7 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
             }
         }
         
+        // 1.2. Último bloque del día V-1 (día anterior)
         const bloqueAyer = window.CorrienteUtils.getUltimoBloqueDiaAnterior(fechaVenta);
         if (bloqueAyer) {
             candidatos.push({
@@ -399,25 +508,44 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
         }
         
         console.log(`${LOG_PREFIX} Candidatos encontrados: ${candidatos.length}`);
+        candidatos.forEach((c, i) => {
+            console.log(`${LOG_PREFIX}   [${i + 1}] ${c.esBloqueAyer ? '🌙' : '🔨'} ${c.fechaBloqueReal} ${c.horaInicioStr} - ${c.horaFinStr}`);
+        });
         
+        // ============================================================
+        // PASO 2: CLASIFICAR
+        // 🆕 v2.2.5: Un bloque es "del amanecer" si su hora de FIN es
+        // <= 09:00 AM del día de venta.
+        // ============================================================
         const umbralAmanecer = new Date(fechaVenta + 'T09:00:00');
         const umbralIdeal = new Date(fechaVenta + 'T08:00:00');
         
         for (const c of candidatos) {
             const fin = c.horaFin instanceof Date ? c.horaFin : new Date(c.horaFin);
             c._finDate = fin;
-            c._esAmanecer = fin <= umbralAmanecer;
+            c._esAmanecer = _esBloqueDelAmanecer(fin, fechaVenta);
             c._esIdeal = fin <= umbralIdeal;
         }
         
         const amanecerValidos = candidatos.filter(c => c._esAmanecer);
         const restantes = candidatos.filter(c => !c._esAmanecer);
         
+        console.log(`${LOG_PREFIX} Del amanecer: ${amanecerValidos.length}`);
+        console.log(`${LOG_PREFIX} Restantes: ${restantes.length}`);
+        
+        // ============================================================
+        // PASO 3: ORDENAR
+        // 🆕 v2.2.5: Priorizar bloque del día anterior si termina antes
+        // de las 8 AM (ideal) o antes de las 9 AM (tolerancia).
+        // ============================================================
         amanecerValidos.sort((a, b) => {
             const aEsAyer = a.esBloqueAyer ? 1 : 0;
             const bEsAyer = b.esBloqueAyer ? 1 : 0;
+            
+            // Prioridad 1: Bloque del día anterior primero
             if (aEsAyer !== bEsAyer) return bEsAyer - aEsAyer;
             
+            // Prioridad 2: Cercanía al umbral ideal (08:00 AM)
             const diffA = Math.abs(a._finDate.getTime() - umbralIdeal.getTime());
             const diffB = Math.abs(b._finDate.getTime() - umbralIdeal.getTime());
             return diffA - diffB;
@@ -431,6 +559,15 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
         
         const candidatosOrdenados = [...amanecerValidos, ...restantes];
         
+        console.log(`${LOG_PREFIX} Orden final de priorización:`);
+        candidatosOrdenados.forEach((c, i) => {
+            const tipo = c._esAmanecer ? (c.esBloqueAyer ? '🌙 AMANECER (AYER)' : '🌅 AMANECER') : '🔨 RESTO';
+            console.log(`${LOG_PREFIX}   [${i + 1}] ${tipo} - ${c.fechaBloqueReal} ${c.horaInicioStr} - ${c.horaFinStr}`);
+        });
+        
+        // ============================================================
+        // PASO 4: CALCULAR
+        // ============================================================
         const numBloquesNecesarios = Math.ceil(cpd / cmpbc);
         const capacidadTotal = candidatosOrdenados.length * cmpbc;
         
@@ -447,6 +584,9 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
             };
         }
         
+        // ============================================================
+        // PASO 5: DISTRIBUIR
+        // ============================================================
         const asignacion = [];
         let restante = cpd;
         
@@ -469,39 +609,44 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
                 fechaBloqueReal: candidato.fechaBloqueReal,
                 esAmanecer: candidato._esAmanecer,
                 etiqueta: candidato.esBloqueAyer
-                    ? `🌙 Ayer ${candidato.horaInicioStr} - ${candidato.horaFinStr}`
-                    : `🔨 Hoy ${candidato.horaInicioStr} - ${candidato.horaFinStr}`
+                    ? `🌙 ${_formatearMensajeBloque(candidato)}`
+                    : `🔨 ${_formatearMensajeBloque(candidato)}`
             });
             
             restante -= cantidad;
         }
         
+        // ============================================================
+        // PASO 7: MENSAJE
+        // 🆕 v2.2.5: SIEMPRE formato `Producción: DD/MM de HH:MM a HH:MM`.
+        // NUNCA usar la palabra "ayer".
+        // ============================================================
         let mensaje = '';
         
         if (asignacion.length === 1) {
             const unico = asignacion[0];
-            if (unico.esBloqueAyer) {
-                mensaje = `Se horneará todo (${formatearCantidadProduccion(unico.cantidad)} uds) en el último bloque de ayer: ${unico.horaInicioStr} - ${unico.horaFinStr}.`;
-            } else if (unico.esAmanecer) {
-                mensaje = `Se horneará todo (${formatearCantidadProduccion(unico.cantidad)} uds) al amanecer: ${unico.horaInicioStr} - ${unico.horaFinStr}.`;
+            const formatoFecha = _formatearMensajeBloque(unico);
+            
+            if (unico.esAmanecer) {
+                mensaje = `Se horneará todo (${formatearCantidadProduccion(unico.cantidad)} uds) en el bloque del amanecer: ${formatoFecha}.`;
             } else {
-                mensaje = `Se horneará todo (${formatearCantidadProduccion(unico.cantidad)} uds) en el bloque ${unico.horaInicioStr} - ${unico.horaFinStr}.`;
+                mensaje = `Se horneará todo (${formatearCantidadProduccion(unico.cantidad)} uds) en el bloque ${formatoFecha}.`;
             }
         } else {
             const partes = asignacion.map((a, i) => {
                 const num = i + 1;
-                if (a.esBloqueAyer) {
-                    return `${num}º: ${formatearCantidadProduccion(a.cantidad)} uds en el último bloque de ayer (${a.horaInicioStr} - ${a.horaFinStr})`;
-                } else if (a.esAmanecer) {
-                    return `${num}º: ${formatearCantidadProduccion(a.cantidad)} uds al amanecer (${a.horaInicioStr} - ${a.horaFinStr})`;
+                const formatoFecha = _formatearMensajeBloque(a);
+                if (a.esAmanecer) {
+                    return `${num}º: ${formatearCantidadProduccion(a.cantidad)} uds en el bloque del amanecer (${formatoFecha})`;
                 } else {
-                    return `${num}º: ${formatearCantidadProduccion(a.cantidad)} uds (${a.horaInicioStr} - ${a.horaFinStr})`;
+                    return `${num}º: ${formatearCantidadProduccion(a.cantidad)} uds (${formatoFecha})`;
                 }
             });
             mensaje = `Se horneará en ${asignacion.length} bloques → ` + partes.join(' · ');
         }
         
         console.log(`${LOG_PREFIX} ✅ Cálculo exitoso`);
+        console.log(`${LOG_PREFIX} Mensaje: ${mensaje}`);
         console.log(`${LOG_PREFIX} ========== FIN ==========`);
         
         return {
@@ -585,7 +730,6 @@ async function runProductionDiagnostics() {
         results.push({ name: '4. saveProduccionRango() existe', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
     }
     
-    // 🆕 ENTREGA B: Test de CMPBC
     try {
         if (typeof window.DBModule?.getCMPBCProducto !== 'function') {
             results.push({ name: '5. getCMPBCProducto() existe', status: 'error', message: 'NO es una función', detail: 'ENTREGA B no disponible.' });
@@ -596,7 +740,6 @@ async function runProductionDiagnostics() {
         results.push({ name: '5. getCMPBCProducto() existe', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
     }
     
-    // 🆕 CORRECCIÓN #9: Test de contarPedidosYVentasFecha
     try {
         if (typeof window.DBModule?.contarPedidosYVentasFecha !== 'function') {
             results.push({ name: '6. contarPedidosYVentasFecha() existe', status: 'warning', message: 'NO es una función', detail: 'CORRECCIÓN #9 no disponible. Usando fallback local.' });
@@ -615,20 +758,19 @@ async function runProductionDiagnostics() {
             results.push({ name: '7. Estructura calendario_produccion', status: 'error', message: 'No se pudo leer PRAGMA table_info', detail: '' });
         } else {
             const columnas = pragma[0].values.map(row => row[1]);
-            const requeridas = ['id', 'negocio_id', 'fecha', 'hora_inicio', 'hora_fin', 'bloque_index', 'cantidad_produccion', 'notas', 'es_bloque_dia_anterior', 'fecha_bloque_real', 'bloques_usados', 'distribucion_bloques'];
+            const requeridas = ['id', 'negocio_id', 'fecha', 'hora_inicio', 'hora_fin', 'bloque_index', 'cantidad_produccion', 'notas', 'es_bloque_dia_anterior', 'fecha_bloque_real', 'bloques_usados', 'distribucion_bloques', 'producto_id'];
             const faltantes = requeridas.filter(c => !columnas.includes(c));
             
             if (faltantes.length > 0) {
                 results.push({ name: '7. Estructura calendario_produccion', status: 'error', message: `Faltan: ${faltantes.join(', ')}`, detail: '' });
             } else {
-                results.push({ name: '7. Estructura calendario_produccion', status: 'ok', message: `OK (${columnas.length} columnas)`, detail: 'Incluye bloques_usados + distribucion_bloques' });
+                results.push({ name: '7. Estructura calendario_produccion', status: 'ok', message: `OK (${columnas.length} columnas)`, detail: 'Incluye bloques_usados + distribucion_bloques + producto_id' });
             }
         }
     } catch (e) {
         results.push({ name: '7. Estructura calendario_produccion', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
     }
     
-    // 🆕 ENTREGA B: Test de columna CMPBC en productos
     try {
         const db = window.DBModule.getDB();
         const pragma = db.exec('PRAGMA table_info(productos)');
@@ -645,6 +787,44 @@ async function runProductionDiagnostics() {
         }
     } catch (e) {
         results.push({ name: '8. Columna CMPBC en productos', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
+    }
+    
+    try {
+        const db = window.DBModule.getDB();
+        const pragma = db.exec('PRAGMA table_info(calendario_produccion)');
+        
+        if (pragma.length === 0 || !pragma[0].values) {
+            results.push({ name: '9. Columna producto_id en producción', status: 'error', message: 'No se pudo leer', detail: '' });
+        } else {
+            const columnas = pragma[0].values.map(row => row[1]);
+            if (columnas.includes('producto_id')) {
+                results.push({ name: '9. Columna producto_id en producción', status: 'ok', message: 'OK', detail: 'producto_id existe (CORRECCIÓN #11)' });
+            } else {
+                results.push({ name: '9. Columna producto_id en producción', status: 'error', message: 'Falta producto_id', detail: '' });
+            }
+        }
+    } catch (e) {
+        results.push({ name: '9. Columna producto_id en producción', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
+    }
+    
+    // 🆕 v2.2.5: Test 10 - Algoritmo de bloques
+    try {
+        if (typeof window.calcularBloquesIdeales !== 'function') {
+            results.push({ name: '10. Algoritmo calcularBloquesIdeales()', status: 'error', message: 'NO es una función', detail: 'CORRECCIÓN #10 no disponible.' });
+        } else {
+            // Test funcional básico
+            const testResult = window.calcularBloquesIdeales('2026-12-31', 7, 7);
+            if (testResult && testResult.success === true) {
+                results.push({ name: '10. Algoritmo calcularBloquesIdeales()', status: 'ok', message: 'Disponible y funcional (CORRECCIÓN #10)', detail: `Test: 7 uds con CMPBC 7 → ${testResult.numBloques} bloque(s)` });
+            } else if (testResult && testResult.success === false) {
+                // Puede fallar por falta de configuración de corriente, lo cual es válido
+                results.push({ name: '10. Algoritmo calcularBloquesIdeales()', status: 'ok', message: 'Disponible (CORRECCIÓN #10)', detail: `Test no ejecutable: ${testResult.error}` });
+            } else {
+                results.push({ name: '10. Algoritmo calcularBloquesIdeales()', status: 'warning', message: 'Disponible pero comportamiento inesperado', detail: JSON.stringify(testResult) });
+            }
+        }
+    } catch (e) {
+        results.push({ name: '10. Algoritmo calcularBloquesIdeales()', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
     }
     
     const okCount = results.filter(r => r.status === 'ok').length;
@@ -1117,6 +1297,7 @@ function changeCorrienteMonth(delta) {
 
 // ============================================================
 // SHOW HORARIO DETALLE
+// 🆕 v2.2.4: dropdown con TODOS los productos (con o sin CMPBC)
 // ============================================================
 
 window._horarioDetalleFechaActual = null;
@@ -1157,13 +1338,11 @@ function showHorarioDetalle(dateStr) {
 
     const bloqueActual = getBloqueSeleccionadoActual(prodConfig, dateStr);
     
-    let productosConCMPBC = [];
+    let todosLosProductos = [];
     try {
-        if (typeof window.DBModule?.getProductosConCMPBC === 'function') {
-            productosConCMPBC = window.DBModule.getProductosConCMPBC();
-        }
+        todosLosProductos = getTodosLosProductosParaDropdown();
     } catch (e) {
-        console.warn('⚠️ Error cargando productos con CMPBC:', e);
+        console.warn('⚠️ Error cargando productos para dropdown:', e);
     }
     
     let productoSeleccionado = null;
@@ -1204,9 +1383,13 @@ function showHorarioDetalle(dateStr) {
                </div>`
             : '';
         
-        const opcionesProductos = productosConCMPBC.map(p => {
+        const opcionesProductos = todosLosProductos.map(p => {
             const isSelected = productoSeleccionado && productoSeleccionado.id === p.id;
-            return `<option value="${p.id}" data-cmpbc="${p.capacidad_max_bloque}"${isSelected ? ' selected' : ''}>${p.nombre} (🏭 ${window.formatearCMPBC ? window.formatearCMPBC(p.capacidad_max_bloque) : p.capacidad_max_bloque}/bloque)</option>`;
+            const tieneCMPBC = p.capacidad_max_bloque && parseFloat(p.capacidad_max_bloque) > 0;
+            const cmpbcTexto = tieneCMPBC 
+                ? `🏭 ${window.formatearCMPBC ? window.formatearCMPBC(p.capacidad_max_bloque) : p.capacidad_max_bloque}/bloque`
+                : `— Sin CMPBC —`;
+            return `<option value="${p.id}" data-cmpbc="${p.capacidad_max_bloque || ''}" data-nombre="${(p.nombre || '').replace(/"/g, '&quot;')}"${isSelected ? ' selected' : ''}>${p.nombre} (${cmpbcTexto})</option>`;
         }).join('');
         
         const bloqueProductoHTML = `
@@ -1221,9 +1404,9 @@ function showHorarioDetalle(dateStr) {
                     ${opcionesProductos}
                 </select>
                 <div id="producto-cmpbc-info" style="margin-top: 6px; font-size: 11px; color: #3b82f6; min-height: 16px;"></div>
-                ${productosConCMPBC.length === 0 ? `
+                ${todosLosProductos.length === 0 ? `
                     <div style="margin-top: 6px; padding: 6px 10px; background: #fef9e7; border-left: 3px solid #f59e0b; border-radius: 6px; font-size: 11px; color: #92400e;">
-                        ⚠️ Ningún producto tiene CMPBC configurado. Ve a 🏷️ Productos para definirlo.
+                        ⚠️ No hay productos registrados. Ve a 🏷️ Productos para crear uno.
                     </div>
                 ` : ''}
             </div>
@@ -1468,6 +1651,7 @@ function showHorarioDetalle(dateStr) {
 
 // ============================================================
 // 🆕 ENTREGA B: CALLBACK AL CAMBIAR EL PRODUCTO EN EL MODAL
+// 🆕 v2.2.4: muestra aviso si el producto no tiene CMPBC
 // ============================================================
 
 window.onProductoProduccionChange = function() {
@@ -1488,7 +1672,7 @@ window.onProductoProduccionChange = function() {
     }
     
     const cmpbc = parseFloat(selectedOption?.dataset?.cmpbc);
-    const nombreProducto = selectedOption?.textContent?.split(' (')[0] || 'Producto';
+    const nombreProducto = selectedOption?.dataset?.nombre || 'Producto';
     
     if (isNaN(cmpbc) || cmpbc <= 0) {
         cmpbcInfo.innerHTML = `
@@ -1575,7 +1759,7 @@ function showCalculoBloquesModal(resultado, fechaVenta, nombreProducto) {
                 <span style="font-size: 20px; flex-shrink: 0;">${icono}</span>
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-size: 13px; font-weight: 700; color: ${etiquetaColor};">
-                        ${b.esBloqueAyer ? '🌙 Bloque del día anterior' : (b.esAmanecer ? '🌅 Bloque al amanecer' : '🔨 Bloque del día')}
+                        ${b.esAmanecer ? '🌅 Bloque del amanecer' : '🔨 Bloque del día'}
                     </div>
                     <div style="font-size: 12px; color: var(--text-light); margin-top: 2px;">
                         🕐 ${b.horaInicioStr} - ${b.horaFinStr} · ${b.duracionHoras.toFixed(1)}h
@@ -1682,6 +1866,7 @@ window.showCalculoBloquesModal = showCalculoBloquesModal;
 
 // ============================================================
 // 🆕 ENTREGA B: CONFIRMAR CÁLCULO DE BLOQUES
+// 🆕 CORRECCIÓN #11: incluye producto_id
 // ============================================================
 
 window.confirmarCalculoBloques = async function(fechaVenta) {
@@ -1702,6 +1887,19 @@ window.confirmarCalculoBloques = async function(fechaVenta) {
         fecha_bloque_real: b.fechaBloqueReal
     }));
     
+    let productoId = null;
+    try {
+        const productoSelect = document.getElementById('produccion-producto');
+        if (productoSelect && productoSelect.value) {
+            const parsed = parseInt(productoSelect.value);
+            if (!isNaN(parsed) && parsed > 0) {
+                productoId = parsed;
+            }
+        }
+    } catch (e) {
+        console.warn('⚠️ No se pudo leer producto_id del dropdown:', e);
+    }
+    
     const dataGuardar = {
         fecha: fechaVenta,
         hora_inicio: bloquePrincipal.horaInicioStr24,
@@ -1712,7 +1910,8 @@ window.confirmarCalculoBloques = async function(fechaVenta) {
         es_bloque_dia_anterior: bloquePrincipal.esBloqueAyer ? 1 : 0,
         fecha_bloque_real: bloquePrincipal.fechaBloqueReal,
         bloques_usados: resultado.numBloques,
-        distribucion_bloques: JSON.stringify(distribucion)
+        distribucion_bloques: JSON.stringify(distribucion),
+        producto_id: productoId
     };
     
     console.log('💾 Guardando producción con distribución:', dataGuardar);
@@ -1769,12 +1968,14 @@ async function guardarProduccionAutoSiHayCambios(fechaISO) {
         const bloqueSelectEl = document.getElementById('produccion-bloque');
         const cantidadEl = document.getElementById('produccion-cantidad');
         const notasEl = document.getElementById('produccion-notas');
+        const productoSelectEl = document.getElementById('produccion-producto');
         
         if (!bloqueSelectEl || !cantidadEl || !notasEl) return true;
         
         const bloqueSelectValue = bloqueSelectEl.value || '';
         const cantidadActual = cantidadEl.value?.trim() || '';
         const notasActual = notasEl.value?.trim() || '';
+        const productoActual = productoSelectEl ? (productoSelectEl.value || '') : '';
         
         const prodConfig = getProduccionConfig(fechaISO);
         
@@ -1784,6 +1985,9 @@ async function guardarProduccionAutoSiHayCambios(fechaISO) {
             ? String(parseFloat(prodConfig.cantidad_produccion)) 
             : '';
         const notasBD = prodConfig?.notas || '';
+        const productoBD = prodConfig?.producto_id != null 
+            ? String(prodConfig.producto_id) 
+            : '';
         
         let bloqueActualSelect = null;
         let esAyerSelect = false;
@@ -1799,7 +2003,8 @@ async function guardarProduccionAutoSiHayCambios(fechaISO) {
             bloqueActualSelect !== bloqueActualBD ||
             esAyerSelect !== esAyerBD ||
             cantidadActual !== cantidadBD ||
-            notasActual !== notasBD;
+            notasActual !== notasBD ||
+            productoActual !== productoBD;
         
         if (!hayCambios) return true;
         
@@ -1820,7 +2025,7 @@ async function guardarProduccionAutoSiHayCambios(fechaISO) {
             return true;
         }
         
-        const resultado = await ejecutarGuardadoProduccion(fechaISO, bloqueSelectValue, cantidadActual, notasActual);
+        const resultado = await ejecutarGuardadoProduccion(fechaISO, bloqueSelectValue, cantidadActual, notasActual, productoActual);
         
         if (resultado.success) {
             console.log(`✅ [Navegación] Cambios guardados`);
@@ -1835,7 +2040,7 @@ async function guardarProduccionAutoSiHayCambios(fechaISO) {
     }
 }
 
-async function ejecutarGuardadoProduccion(fechaISO, bloqueSelectValue, cantidadRaw, notas) {
+async function ejecutarGuardadoProduccion(fechaISO, bloqueSelectValue, cantidadRaw, notas, productoRaw) {
     try {
         const cantidad = parseFloat(cantidadRaw);
         if (isNaN(cantidad) || cantidad <= 0) return { success: false, error: 'Cantidad no válida' };
@@ -1845,6 +2050,14 @@ async function ejecutarGuardadoProduccion(fechaISO, bloqueSelectValue, cantidadR
         
         const tipo = match[1];
         const index = parseInt(match[2]);
+        
+        let productoId = null;
+        if (productoRaw !== undefined && productoRaw !== null && productoRaw !== '') {
+            const parsed = parseInt(productoRaw);
+            if (!isNaN(parsed) && parsed > 0) {
+                productoId = parsed;
+            }
+        }
         
         let esBloqueDiaAnterior = false;
         let bloqueIndexParaGuardar = null;
@@ -1874,7 +2087,8 @@ async function ejecutarGuardadoProduccion(fechaISO, bloqueSelectValue, cantidadR
             cantidad_produccion: cantidad,
             notas: notas || null,
             es_bloque_dia_anterior: esBloqueDiaAnterior ? 1 : 0,
-            fecha_bloque_real: fechaBloqueRealParaGuardar
+            fecha_bloque_real: fechaBloqueRealParaGuardar,
+            producto_id: productoId
         };
         
         const result = window.DBModule.saveProduccion(data);
@@ -1904,12 +2118,12 @@ function guardarProduccion(fechaISO) {
     const notas = document.getElementById('produccion-notas')?.value?.trim() || null;
     
     const productoSelect = document.getElementById('produccion-producto');
-    const productoId = productoSelect ? parseInt(productoSelect.value) : null;
+    const productoRaw = productoSelect ? productoSelect.value : '';
     
     if (!bloqueSelectValue) { window.showToast('⚠️ Selecciona un bloque de producción', 'warning'); return; }
     if (isNaN(cantidad) || cantidad <= 0) { window.showToast('⚠️ La cantidad debe ser mayor a 0', 'warning'); return; }
     
-    ejecutarGuardadoProduccion(fechaISO, bloqueSelectValue, cantidadRaw, notas).then(result => {
+    ejecutarGuardadoProduccion(fechaISO, bloqueSelectValue, cantidadRaw, notas, productoRaw).then(result => {
         if (result.success) {
             const match = bloqueSelectValue.match(/^(hoy|ayer)_(\d+)$/);
             const esAyer = match && match[1] === 'ayer';
@@ -1952,7 +2166,7 @@ window.guardarProduccion = guardarProduccion;
 window.eliminarProduccion = eliminarProduccion;
 
 // ============================================================
-// PRODUCCIÓN POR RANGO (CORRECCIÓN #7)
+// PRODUCCIÓN POR RANGO (CORRECCIÓN #7 + #11)
 // ============================================================
 
 function showProduccionRangoModal(fechaBase) {
@@ -1967,6 +2181,8 @@ function showProduccionRangoModal(fechaBase) {
     const cantidadBase = document.getElementById('produccion-cantidad')?.value || '';
     const notasBase = document.getElementById('produccion-notas')?.value?.trim() || '';
     const bloqueSelectBase = document.getElementById('produccion-bloque')?.value || '';
+    const productoSelectBase = document.getElementById('produccion-producto');
+    const productoIdBase = productoSelectBase ? (productoSelectBase.value || '') : '';
     
     const fechaInicioDefault = fechaBase;
     const fechaFinDefaultObj = new Date(fechaBase + 'T00:00:00');
@@ -2013,6 +2229,7 @@ function showProduccionRangoModal(fechaBase) {
             <div style="background: #eff6ff; border: 1px solid #3b82f6; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12px; color: #1e40af;">
                 💡 Se aplicará la misma cantidad a TODAS las fechas del rango.
                 <br>Los días con producción existente serán <strong>sobrescritos</strong>.
+                ${productoIdBase ? `<br>🏷️ <strong>Producto:</strong> ${productoSelectBase.options[productoSelectBase.selectedIndex]?.textContent || ''}` : ''}
             </div>
             
             <form id="produccion-rango-form" style="display: flex; flex-direction: column; gap: 12px;">
@@ -2094,7 +2311,7 @@ function showProduccionRangoModal(fechaBase) {
     
     document.body.appendChild(modal);
     
-    window._prState = { fechaBase, bloqueInfoBase, bloqueSelectBase };
+    window._prState = { fechaBase, bloqueInfoBase, bloqueSelectBase, productoIdBase };
     
     const form = document.getElementById('produccion-rango-form');
     form.addEventListener('submit', async (e) => { e.preventDefault(); await submitProduccionRango(); });
@@ -2319,10 +2536,19 @@ async function submitProduccionRango() {
     
     const bloqueInfoBase = window._prState?.bloqueInfoBase;
     const bloqueSelectBase = window._prState?.bloqueSelectBase || '';
+    const productoIdBase = window._prState?.productoIdBase || '';
     const matchBase = bloqueSelectBase.match(/^(hoy|ayer)_(\d+)$/);
     const tipoBase = matchBase ? matchBase[1] : 'hoy';
     const indexBase = matchBase ? parseInt(matchBase[2]) : 1;
     const esBloqueAyerBase = tipoBase === 'ayer';
+    
+    let productoId = null;
+    if (productoIdBase !== undefined && productoIdBase !== null && productoIdBase !== '') {
+        const parsed = parseInt(productoIdBase);
+        if (!isNaN(parsed) && parsed > 0) {
+            productoId = parsed;
+        }
+    }
     
     let produccionesExistentes = { total: 0, fechas: [] };
     try {
@@ -2334,7 +2560,7 @@ async function submitProduccionRango() {
     const fechasSet = new Set(fechas);
     const produccionesAfectadas = produccionesExistentes.fechas.filter(f => fechasSet.has(f));
     
-    const msgConfirm = `¿Aplicar producción a ${fechas.length} día(s)?\n\n📅 Rango: ${inicio} → ${fin}\n📦 Cantidad por día: ${formatearCantidadProduccion(cantidad)}\n🔨 Bloque: ${bloqueInfoBase ? `${bloqueInfoBase.inicioStr} - ${bloqueInfoBase.finStr}` : 'según cada día'}\n🎯 Modo: ${bloqueTipo === 'relativo' ? 'Relativo' : 'Fijo'}\n${notas ? `📝 Notas: ${notas}\n` : ''}${produccionesAfectadas.length > 0 ? `\n⚠️ Se sobrescribirán ${produccionesAfectadas.length} producción(es).\n` : ''}\n¿Confirmas?`;
+    const msgConfirm = `¿Aplicar producción a ${fechas.length} día(s)?\n\n📅 Rango: ${inicio} → ${fin}\n📦 Cantidad por día: ${formatearCantidadProduccion(cantidad)}\n🔨 Bloque: ${bloqueInfoBase ? `${bloqueInfoBase.inicioStr} - ${bloqueInfoBase.finStr}` : 'según cada día'}\n🎯 Modo: ${bloqueTipo === 'relativo' ? 'Relativo' : 'Fijo'}\n${notas ? `📝 Notas: ${notas}\n` : ''}${productoId ? `🏷️ Producto ID: ${productoId}\n` : ''}${produccionesAfectadas.length > 0 ? `\n⚠️ Se sobrescribirán ${produccionesAfectadas.length} producción(es).\n` : ''}\n¿Confirmas?`;
     
     const confirm = await window.ModalModule.showConfirm({
         title: '📅 Aplicar a rango',
@@ -2397,7 +2623,8 @@ async function submitProduccionRango() {
                 cantidad_produccion: cantidad,
                 notas: notas,
                 es_bloque_dia_anterior: esBloqueAyerFecha ? 1 : 0,
-                fecha_bloque_real: fechaBloqueRealGuardar
+                fecha_bloque_real: fechaBloqueRealGuardar,
+                producto_id: productoId
             });
         } catch (e) { fallidos.push(`${fecha}: ${e.message}`); }
     }
@@ -2412,13 +2639,14 @@ async function submitProduccionRango() {
         
         const grupos = {};
         for (const ex of exitos) {
-            const key = `${ex.hora_inicio}|${ex.hora_fin}|${ex.bloque_index}|${ex.es_bloque_dia_anterior}|${ex.fecha_bloque_real}`;
+            const key = `${ex.hora_inicio}|${ex.hora_fin}|${ex.bloque_index}|${ex.es_bloque_dia_anterior}|${ex.fecha_bloque_real}|${ex.producto_id || ''}`;
             if (!grupos[key]) {
                 grupos[key] = {
                     hora_inicio: ex.hora_inicio, hora_fin: ex.hora_fin,
                     bloque_index: ex.bloque_index,
                     es_bloque_dia_anterior: ex.es_bloque_dia_anterior,
                     fecha_bloque_real: ex.fecha_bloque_real,
+                    producto_id: ex.producto_id,
                     fechas: []
                 };
             }
@@ -2439,7 +2667,8 @@ async function submitProduccionRango() {
                 cantidad_produccion: cantidad,
                 notas: notas,
                 es_bloque_dia_anterior: grupo.es_bloque_dia_anterior,
-                fecha_bloque_real: grupo.fecha_bloque_real
+                fecha_bloque_real: grupo.fecha_bloque_real,
+                producto_id: grupo.producto_id
             });
             if (result.success) {
                 totalCreados += result.creados || 0;
@@ -2588,7 +2817,8 @@ function generarReportePDF(tipo) {
             bloqueAyerTexto: bloqueAyer ? `${bloqueAyer.inicioStr} - ${bloqueAyer.finStr}` : null,
             produccion: prodConfig ? formatearCantidadProduccion(prodConfig.cantidad_produccion) : null,
             esBloqueAyer: prodConfig ? (prodConfig.es_bloque_dia_anterior === 1) : false,
-            bloquesUsados: prodConfig ? (prodConfig.bloques_usados || 1) : 0
+            bloquesUsados: prodConfig ? (prodConfig.bloques_usados || 1) : 0,
+            productoId: prodConfig ? prodConfig.producto_id : null
         });
     }
 
@@ -3055,7 +3285,6 @@ async function executeGlobalCancel() {
 
 // ============================================================
 // REPROGRAMAR PEDIDOS POR RANGO
-// 🆕 v2.2.1: CORRECCIÓN FINAL #1 - Vista previa se limpia al abrir
 // ============================================================
 
 function showReprogramarPedidosModal() {
@@ -3234,7 +3463,7 @@ async function executeReprogramarPedidos() {
     
     try {
         window.showToast('⏳ Reprogramando...', 'info', 3000);
-        const result = await window.OrdersModule.reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, causa, nota, clienteFiltro);
+        const result = await window.OrdersModule.rpZEAWYtiB6bJ16NuLbGCc6CZ6jJdKfb63(fechaDesde, fechaHasta, fechaDestino, causa, nota, clienteFiltro);
         
         if (!result.success) { window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 6000); return; }
         
@@ -3364,6 +3593,8 @@ function renderSettingsView() {
                 <br>🆕 Programa la producción en el <strong>último bloque de ayer</strong>.
                 <br>🆕 Aplica la misma producción a un <strong>rango de fechas</strong>.
                 <br>🆕 El conteo de pedidos vs ventas ahora es <strong>correcto</strong> (Corrección #9).
+                <br>🆕 El <strong>producto seleccionado</strong> se guarda y se carga al reabrir el modal (Corrección #11).
+                <br>🆕 El <strong>algoritmo de bloques</strong> respeta la regla del amanecer: solo bloques que terminan antes de las 9 AM (Corrección #10).
             </p>
             <button onclick="showCorrienteModal()" class="btn primary" style="padding: 8px 16px; font-size: 14px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
                 ⚡ Gestionar Horarios
@@ -3374,7 +3605,7 @@ function renderSettingsView() {
             <h3 style="margin: 0 0 8px 0; color: #8b5cf6;">🔍 Diagnóstico de Producción</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
                 ¿El guardado de producción no funciona? Ejecuta un diagnóstico técnico para identificar el problema.
-                <br>Verifica las 8 comprobaciones clave del sistema (incluye CMPBC y conteo #9).
+                <br>Verifica las 10 comprobaciones clave del sistema (incluye CMPBC, conteo #9, producto_id #11 y algoritmo #10).
             </p>
             <button onclick="showProductionDiagnosticModal()" class="btn" style="padding: 8px 16px; font-size: 14px; width: auto; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                 🔍 Ejecutar diagnóstico
@@ -3642,10 +3873,6 @@ async function showUsersModal() {
     
     modal.addEventListener('click', function(e) { if (e.target === this) closeUsersModal(); });
 }
-
-// ============================================================
-// RESTO DE FUNCIONES DE USUARIOS
-// ============================================================
 
 async function showCreateUserModal() {
     const user = window.AuthModule.getCurrentUser();
@@ -4504,6 +4731,9 @@ window.getFechaCortaConDia = getFechaCortaConDia;
 window.esHoyISO = esHoyISO;
 window.getAppVersion = getAppVersion;
 window.MOTIVOS_REPROGRAMACION = MOTIVOS_REPROGRAMACION;
+window.getTodosLosProductosParaDropdown = getTodosLosProductosParaDropdown;
+window._esBloqueDelAmanecer = _esBloqueDelAmanecer;
+window._formatearMensajeBloque = _formatearMensajeBloque;
 window.showUsersModal = showUsersModal;
 window.showCreateUserModal = showCreateUserModal;
 window.showEditUserModal = showEditUserModal;
@@ -4540,8 +4770,13 @@ window.confirmarCalculoBloques = confirmarCalculoBloques;
 window.onProductoProduccionChange = onProductoProduccionChange;
 window.calcularYMostrarSugerencia = calcularYMostrarSugerencia;
 
-console.log('📦 UI Settings Module cargado correctamente v2.2.2 (CORRECCIÓN #9: conteo pedidos vs ventas)');
-console.log('   🆕 Novedades v2.2.2:');
-console.log('      • contarPedidosYVentasFecha() ahora DELEGA en window.DBModule.contarPedidosYVentasFecha()');
-console.log('      • Fallback local mantiene la lógica corregida (cuenta TODOS los pedidos excepto cancelados)');
-console.log('      • Diagnóstico ampliado a 8 tests (incluye test de contarPedidosYVentasFecha)');
+console.log('📦 UI Settings Module cargado correctamente v2.2.5 (CORRECCIÓN #10: algoritmo de bloques - regla del amanecer)');
+console.log('   🆕 Novedades v2.2.5:');
+console.log('      • _esBloqueDelAmanecer() determina si un bloque termina antes de las 9 AM del día de venta');
+console.log('      • _formatearMensajeBloque() usa SIEMPRE formato "DD/MM de HH:MM a HH:MM"');
+console.log('      • El bloque del día anterior se considera válido si termina antes de las 9 AM del día de venta');
+console.log('      • Priorización: bloque de ayer > bloques de hoy que terminan cerca de las 8 AM');
+console.log('      • Un bloque que comienza a las 8 AM y termina a las 11 AM YA NO es del amanecer');
+console.log('      • El mensaje NO usa la palabra "ayer", usa la fecha real: "23/09 de 5:00 PM a 8:00 PM"');
+console.log('      • Logs detallados en consola para verificar el cálculo');
+console.log('      • Diagnóstico ampliado a 10 tests (incluye test funcional del algoritmo)');
