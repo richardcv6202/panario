@@ -34,32 +34,19 @@
 // 🆕 v2.2.1 (230926 v13): CORRECCIONES FINALES 220926
 // 🆕 v2.2.2 (230926 v14): CORRECCIÓN #9 - CONTEO PEDIDOS VS VENTAS
 // 🆕 v2.2.3 (230926 v15): CORRECCIÓN #11 - GUARDAR PRODUCTO EN PRODUCCIÓN
-//   - ✅ NUEVA columna en calendario_produccion: producto_id INTEGER
-//   - ✅ NUEVA función: ensureProductoIdColumn(db)
-//     * Migración idempotente: añade la columna si no existe
-//   - ✅ saveProduccion() ahora acepta y guarda producto_id
-//   - ✅ getProduccionByFecha() devuelve producto_id
-//   - ✅ getProduccionRango() devuelve producto_id
-//   - ✅ saveProduccionRango() ahora acepta y guarda producto_id
-//   - ✅ Compatibilidad total: si producto_id es null/undefined,
-//     se guarda como NULL sin romper nada
 // 🆕 v2.2.7 (240926 v16): CORRECCIÓN #11 REFORZADA
-//   - ✅ ensureProductoIdColumn() con logs de diagnóstico detallados.
-//   - ✅ saveProduccion() con logs detallados de producto_id.
-//   - ✅ getProduccionByFecha() con logs de producto_id.
-//   - ✅ saveProduccionRango() con logs de producto_id.
-//   - ✅ getProduccionRangoFechas() devuelve producto_id.
-//   - ✅ NUEVA función: getProductoDeProduccion(fechaISO)
-//     * Devuelve el objeto completo del producto asociado a una
-//       producción guardada, o null si no hay.
-//   - ✅ NUEVA función: getProduccionConProducto(fechaISO)
-//     * Devuelve la config de producción + el objeto del producto.
-//   - ✅ NUEVA función: validarProductoId(productoId)
-//     * Verifica que un producto_id existe y devuelve su info.
-//   - ✅ NUEVA función: contarProduccionConProducto(desde, hasta)
-//     * Cuenta cuántas producciones tienen producto_id definido.
-//   - ✅ Exportadas todas las nuevas funciones.
-//   - ✅ Se mantiene la compatibilidad total con versiones anteriores.
+// 🆕 v2.3.0 (250926 v17): 🎯 CORRECCIÓN #1 (250926) - CONTEO DE UNIDADES
+//   - ✅ contarPedidosYVentasFecha() ahora cuenta UNIDADES (order_items.quantity)
+//     en lugar de CONTAR FILAS de pedidos (COUNT(o.id)).
+//   - ✅ Solo cuenta unidades de productos con CMPBC definido (> 0).
+//   - ✅ Los productos sin CMPBC se reservan libremente (no consumen cupo).
+//   - ✅ Las ventas directas también suman UNIDADES (sales.quantity).
+//   - ✅ Se añade un objeto detalle con el desglose por producto para
+//     facilitar la depuración y la visualización.
+//   - ✅ Mantiene retrocompatibilidad total: los campos `pedidos` y `ventas`
+//     siguen existiendo (ahora como números decimales que representan unidades).
+//   - ✅ Nueva función auxiliar contarPedidosYVentasFechaDetallado() que
+//     devuelve el desglose por pedido/producto.
 // ============================================================
 
 let db = null;
@@ -317,7 +304,7 @@ async function initDB() {
         await migrateCantidadProduccionToReal(db);
         await ensureCapacidadMaxBloqueColumn(db);
         await ensureBloquesDistribucionColumns(db);
-        await ensureProductoIdColumn(db);  // 🆕 CORRECCIÓN #11
+        await ensureProductoIdColumn(db);
         await ensureNegociosTable(db);
         await ensureNegocioIdColumn(db);
         await migrateToMultiUser(db);
@@ -346,60 +333,281 @@ async function initDB() {
 }
 
 // ============================================================
-// 🆕 CORRECCIÓN #9: CONTEO UNIFICADO DE PEDIDOS Y VENTAS
+// 🆕 CORRECCIÓN #1 (250926): CONTEO UNIFICADO DE UNIDADES
+// ============================================================
+// 
+// CAMBIO CLAVE:
+//   Antes contábamos FILAS de pedidos (COUNT(o.id)).
+//   Ahora sumamos UNIDADES (SUM(oi.quantity)) de productos con CMPBC.
+//
+// REGLAS:
+//   1. Solo cuentan los productos con CMPBC definido (> 0).
+//   2. Los productos sin CMPBC se reservan libremente (no consumen cupo).
+//   3. Los pedidos cancelados NO cuentan.
+//   4. Los pedidos entregados SÍ cuentan (el cupo se reservó).
+//   5. Los pedidos en lista de espera SÍ cuentan.
+//   6. Los pedidos "waiting_bought" NO cuentan (ya se convirtieron en venta).
+//   7. Las ventas directas (sin order_id) también suman unidades.
+//
+// FÓRMULA:
+//   disponibles = cantidad_produccion - unidades_reservadas - ventas_directas
 // ============================================================
 
+/**
+ * 🆕 CORRECCIÓN #1: Cuenta UNIDADES reservadas en pedidos para una fecha.
+ * 
+ * Solo cuenta productos con CMPBC definido (> 0).
+ * 
+ * @param {number} negocioId - ID del negocio
+ * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
+ * @returns {number} Total de unidades reservadas
+ */
+function _contarUnidadesPedidos(negocioId, fechaISO) {
+    const LOG_PREFIX = '📊 [contarUnidadesPedidos]';
+    
+    try {
+        const result = query(`
+            SELECT COALESCE(SUM(oi.quantity), 0) as unidades
+            FROM orders o
+            INNER JOIN order_items oi ON oi.order_id = o.id
+            INNER JOIN productos p ON p.id = oi.producto_id
+            WHERE o.negocio_id = ? 
+              AND DATE(o.delivery_date) = DATE(?)
+              AND o.deleted_at IS NULL
+              AND o.status NOT IN ('cancelled', 'waiting_bought')
+              AND oi.deleted_at IS NULL
+              AND p.deleted_at IS NULL
+              AND p.capacidad_max_bloque IS NOT NULL 
+              AND p.capacidad_max_bloque > 0
+        `, [negocioId, fechaISO]);
+        
+        const unidades = parseFloat(result[0]?.unidades) || 0;
+        console.log(`${LOG_PREFIX} Fecha=${fechaISO} → ${unidades} unidades reservadas en pedidos`);
+        return unidades;
+        
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} ⚠️ Error:`, e);
+        return 0;
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #1: Cuenta UNIDADES de ventas directas para una fecha.
+ * 
+ * Solo cuenta productos con CMPBC definido (> 0).
+ * Ventas directas = ventas sin order_id (no vienen de pedido).
+ * 
+ * @param {number} negocioId - ID del negocio
+ * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
+ * @returns {number} Total de unidades vendidas directamente
+ */
+function _contarUnidadesVentasDirectas(negocioId, fechaISO) {
+    const LOG_PREFIX = '📊 [contarUnidadesVentasDirectas]';
+    
+    try {
+        const result = query(`
+            SELECT COALESCE(SUM(s.quantity), 0) as unidades
+            FROM sales s
+            INNER JOIN productos p ON p.id = s.producto_id
+            WHERE s.negocio_id = ? 
+              AND DATE(s.sale_date, "localtime") = DATE(?)
+              AND s.deleted_at IS NULL 
+              AND s.voided = 0
+              AND (s.order_id IS NULL OR s.order_id = 0)
+              AND p.deleted_at IS NULL
+              AND p.capacidad_max_bloque IS NOT NULL 
+              AND p.capacidad_max_bloque > 0
+        `, [negocioId, fechaISO]);
+        
+        const unidades = parseFloat(result[0]?.unidades) || 0;
+        console.log(`${LOG_PREFIX} Fecha=${fechaISO} → ${unidades} unidades en ventas directas`);
+        return unidades;
+        
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} ⚠️ Error:`, e);
+        return 0;
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #1 (250926): Conteo unificado de pedidos y ventas en UNIDADES.
+ * 
+ * Esta función reemplaza la lógica anterior que contaba FILAS de pedidos.
+ * Ahora suma UNIDADES de productos con CMPBC definido.
+ * 
+ * RETORNA:
+ *   - pedidos: unidades reservadas en pedidos (decimal)
+ *   - ventas: unidades vendidas directamente (decimal)
+ *   - disponibles: cupos disponibles (decimal o null si no hay producción)
+ *   - cantidadProduccion: total programado para ese día
+ *   - unidadesReservadas: pedidos + ventas
+ * 
+ * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
+ * @returns {object} Objeto con el conteo detallado
+ */
 function contarPedidosYVentasFecha(fechaISO) {
-    const LOG_PREFIX = '📊 [contarPedidosYVentasFecha]';
+    const LOG_PREFIX = '📊 [contarPedidosYVentasFecha v2.3.0]';
     
     try {
         const negocioId = getNegocioIdActual();
         if (!negocioId || !fechaISO) {
-            return { pedidos: 0, ventas: 0, disponibles: 0, cantidadProduccion: 0 };
+            return { 
+                pedidos: 0, 
+                ventas: 0, 
+                disponibles: 0, 
+                cantidadProduccion: 0,
+                unidadesReservadas: 0
+            };
         }
         
-        console.log(`${LOG_PREFIX} Contando para fecha=${fechaISO}, negocio=${negocioId}`);
+        console.log(`${LOG_PREFIX} Contando UNIDADES para fecha=${fechaISO}, negocio=${negocioId}`);
         
-        const pedidosResult = query(
-            `SELECT COUNT(*) as count FROM orders 
-             WHERE negocio_id = ? 
-               AND DATE(delivery_date) = DATE(?)
-               AND deleted_at IS NULL
-               AND status NOT IN ('cancelled')`,
-            [negocioId, fechaISO]
-        );
-        const pedidos = pedidosResult[0]?.count || 0;
+        // 🆕 CORRECCIÓN #1: Sumar UNIDADES en lugar de contar filas
+        const unidadesPedidos = _contarUnidadesPedidos(negocioId, fechaISO);
+        const unidadesVentas = _contarUnidadesVentasDirectas(negocioId, fechaISO);
         
-        const ventasResult = query(
-            `SELECT COUNT(*) as count FROM sales 
-             WHERE negocio_id = ? 
-               AND DATE(sale_date) = DATE(?)
-               AND deleted_at IS NULL 
-               AND voided = 0
-               AND (order_id IS NULL OR order_id = 0)`,
-            [negocioId, fechaISO]
-        );
-        const ventas = ventasResult[0]?.count || 0;
-        
+        // Obtener producción programada
         const prodConfig = getProduccionByFecha(fechaISO);
         const cantidadProduccion = parseFloat(prodConfig?.cantidad_produccion) || 0;
         
+        const unidadesReservadas = unidadesPedidos + unidadesVentas;
+        
         const disponibles = cantidadProduccion > 0 
-            ? Math.max(0, cantidadProduccion - pedidos - ventas)
+            ? Math.max(0, cantidadProduccion - unidadesReservadas)
             : null;
         
-        console.log(`${LOG_PREFIX} Resultado: pedidos=${pedidos}, ventasDirectas=${ventas}, cantidadProd=${cantidadProduccion}, disponibles=${disponibles}`);
+        console.log(`${LOG_PREFIX} Resultado: unidadesPedidos=${unidadesPedidos}, unidadesVentas=${unidadesVentas}, cantidadProd=${cantidadProduccion}, disponibles=${disponibles}`);
         
         return { 
-            pedidos, 
-            ventas, 
+            pedidos: unidadesPedidos, 
+            ventas: unidadesVentas, 
             disponibles, 
-            cantidadProduccion 
+            cantidadProduccion,
+            unidadesReservadas
         };
         
     } catch (e) {
         console.warn(`${LOG_PREFIX} ⚠️ Error:`, e);
-        return { pedidos: 0, ventas: 0, disponibles: 0, cantidadProduccion: 0 };
+        return { 
+            pedidos: 0, 
+            ventas: 0, 
+            disponibles: 0, 
+            cantidadProduccion: 0,
+            unidadesReservadas: 0
+        };
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #1 (250926): Conteo detallado por producto.
+ * 
+ * Devuelve un desglose por producto para facilitar depuración
+ * y visualización en UI (ej: modal de producción).
+ * 
+ * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
+ * @returns {object} Objeto con el desglose
+ */
+function contarPedidosYVentasFechaDetallado(fechaISO) {
+    const LOG_PREFIX = '📊 [contarPedidosYVentasFechaDetallado]';
+    
+    try {
+        const negocioId = getNegocioIdActual();
+        if (!negocioId || !fechaISO) {
+            return { productos: [], resumen: { pedidos: 0, ventas: 0, total: 0 } };
+        }
+        
+        // Desglose de pedidos por producto
+        const pedidosPorProducto = query(`
+            SELECT 
+                p.id as producto_id,
+                p.nombre as producto_nombre,
+                p.capacidad_max_bloque,
+                COALESCE(SUM(oi.quantity), 0) as unidades
+            FROM orders o
+            INNER JOIN order_items oi ON oi.order_id = o.id
+            INNER JOIN productos p ON p.id = oi.producto_id
+            WHERE o.negocio_id = ? 
+              AND DATE(o.delivery_date) = DATE(?)
+              AND o.deleted_at IS NULL
+              AND o.status NOT IN ('cancelled', 'waiting_bought')
+              AND oi.deleted_at IS NULL
+              AND p.deleted_at IS NULL
+              AND p.capacidad_max_bloque IS NOT NULL 
+              AND p.capacidad_max_bloque > 0
+            GROUP BY p.id
+        `, [negocioId, fechaISO]);
+        
+        // Desglose de ventas directas por producto
+        const ventasPorProducto = query(`
+            SELECT 
+                p.id as producto_id,
+                p.nombre as producto_nombre,
+                p.capacidad_max_bloque,
+                COALESCE(SUM(s.quantity), 0) as unidades
+            FROM sales s
+            INNER JOIN productos p ON p.id = s.producto_id
+            WHERE s.negocio_id = ? 
+              AND DATE(s.sale_date, "localtime") = DATE(?)
+              AND s.deleted_at IS NULL 
+              AND s.voided = 0
+              AND (s.order_id IS NULL OR s.order_id = 0)
+              AND p.deleted_at IS NULL
+              AND p.capacidad_max_bloque IS NOT NULL 
+              AND p.capacidad_max_bloque > 0
+            GROUP BY p.id
+        `, [negocioId, fechaISO]);
+        
+        // Combinar
+        const productosMap = {};
+        
+        pedidosPorProducto.forEach(row => {
+            productosMap[row.producto_id] = {
+                producto_id: row.producto_id,
+                producto_nombre: row.producto_nombre,
+                capacidad_max_bloque: row.capacidad_max_bloque,
+                unidades_pedidos: parseFloat(row.unidades) || 0,
+                unidades_ventas: 0,
+                unidades_total: parseFloat(row.unidades) || 0
+            };
+        });
+        
+        ventasPorProducto.forEach(row => {
+            if (!productosMap[row.producto_id]) {
+                productosMap[row.producto_id] = {
+                    producto_id: row.producto_id,
+                    producto_nombre: row.producto_nombre,
+                    capacidad_max_bloque: row.capacidad_max_bloque,
+                    unidades_pedidos: 0,
+                    unidades_ventas: 0,
+                    unidades_total: 0
+                };
+            }
+            productosMap[row.producto_id].unidades_ventas = parseFloat(row.unidades) || 0;
+            productosMap[row.producto_id].unidades_total = 
+                productosMap[row.producto_id].unidades_pedidos + 
+                productosMap[row.producto_id].unidades_ventas;
+        });
+        
+        const productos = Object.values(productosMap).sort((a, b) => 
+            b.unidades_total - a.unidades_total
+        );
+        
+        const totalPedidos = productos.reduce((sum, p) => sum + p.unidades_pedidos, 0);
+        const totalVentas = productos.reduce((sum, p) => sum + p.unidades_ventas, 0);
+        
+        return {
+            productos,
+            resumen: {
+                pedidos: totalPedidos,
+                ventas: totalVentas,
+                total: totalPedidos + totalVentas,
+                num_productos: productos.length
+            }
+        };
+        
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} ⚠️ Error:`, e);
+        return { productos: [], resumen: { pedidos: 0, ventas: 0, total: 0 } };
     }
 }
 
@@ -2024,8 +2232,6 @@ function getProduccionByFecha(fecha) {
             return null;
         }
         
-        console.log(`${LOG_PREFIX} Buscando producción para fecha=${fecha}, negocio=${negocioId}`);
-        
         const result = query(
             `SELECT * FROM calendario_produccion 
              WHERE negocio_id = ? AND fecha = ? AND deleted_at IS NULL 
@@ -2049,7 +2255,7 @@ function getProduccionByFecha(fecha) {
 }
 
 function saveProduccion(data) {
-    const LOG_PREFIX = '💾 [saveProduccion v2.2.7]';
+    const LOG_PREFIX = '💾 [saveProduccion v2.3.0]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -2089,18 +2295,12 @@ function saveProduccion(data) {
         const bloquesUsados = parseInt(data.bloques_usados) || 1;
         const distribucionBloques = data.distribucion_bloques || null;
         
-        // 🆕 v2.2.7: producto_id con logs detallados
         let productoId = null;
         if (data.producto_id !== undefined && data.producto_id !== null && data.producto_id !== '') {
             const parsed = parseInt(data.producto_id);
             if (!isNaN(parsed) && parsed > 0) {
                 productoId = parsed;
-                console.log(`${LOG_PREFIX}   ✅ producto_id válido: ${productoId}`);
-            } else {
-                console.warn(`${LOG_PREFIX}   ⚠️ producto_id inválido: ${data.producto_id}`);
             }
-        } else {
-            console.log(`${LOG_PREFIX}   ℹ️ producto_id no proporcionado (se guardará NULL)`);
         }
         
         console.log(`${LOG_PREFIX}   ✅ Validaciones OK`);
@@ -2118,18 +2318,13 @@ function saveProduccion(data) {
             return { success: false, error: 'La tabla de producción no existe. Reinicia la app.' };
         }
         
-        console.log(`${LOG_PREFIX}   ✅ Tabla existe`);
-        
-        // Verificar que la columna producto_id existe
         const columnsCheck = db.exec('PRAGMA table_info(calendario_produccion)');
         const columnNames = columnsCheck[0]?.values?.map(row => row[1]) || [];
         if (!columnNames.includes('producto_id')) {
             console.error(`${LOG_PREFIX} ❌ La columna producto_id NO EXISTE en la tabla`);
             return { success: false, error: 'La columna producto_id no existe. Reinicia la app.' };
         }
-        console.log(`${LOG_PREFIX}   ✅ Columna producto_id existe`);
         
-        console.log(`${LOG_PREFIX} PASO 3: Buscando registro existente...`);
         const existing = getProduccionByFecha(data.fecha);
         
         if (existing) {
@@ -2161,7 +2356,6 @@ function saveProduccion(data) {
             ]);
             
             console.log(`${LOG_PREFIX} ✅ UPDATE ejecutado correctamente`);
-            console.log(`${LOG_PREFIX}   🏷️ producto_id guardado: ${productoId || 'NULL'}`);
             console.log(`${LOG_PREFIX} ========== FIN (actualizado) ==========`);
             return { success: true, id: existing.id, updated: true, productoId };
             
@@ -2169,7 +2363,6 @@ function saveProduccion(data) {
             console.log(`${LOG_PREFIX} PASO 4B: Creando nuevo registro`);
             
             const uuid = generateUuidForTable('calendario_produccion');
-            console.log(`${LOG_PREFIX}   UUID generado: ${uuid}`);
             
             const result = execute(`
                 INSERT INTO calendario_produccion 
@@ -2197,19 +2390,6 @@ function saveProduccion(data) {
             ]);
             
             console.log(`${LOG_PREFIX} ✅ INSERT ejecutado. lastId=${result.lastId}`);
-            console.log(`${LOG_PREFIX}   🏷️ producto_id guardado: ${productoId || 'NULL'}`);
-            
-            // Verificación post-INSERT
-            if (result.lastId) {
-                const verificacion = query(
-                    'SELECT id, producto_id, cantidad_produccion FROM calendario_produccion WHERE id = ?',
-                    [result.lastId]
-                );
-                if (verificacion.length > 0) {
-                    console.log(`${LOG_PREFIX} ✅ Verificación post-INSERT:`, JSON.stringify(verificacion[0]));
-                }
-            }
-            
             console.log(`${LOG_PREFIX} ========== FIN (creado) ==========`);
             return { success: true, id: result.lastId, updated: false, productoId };
         }
@@ -2225,7 +2405,6 @@ function deleteProduccion(fecha) {
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
-        console.log(`${LOG_PREFIX} Eliminando producción para fecha=${fecha}`);
         
         const negocioId = getNegocioIdActual();
         if (!negocioId) {
@@ -2243,7 +2422,6 @@ function deleteProduccion(fecha) {
         `, [negocioId, fecha]);
         
         console.log(`${LOG_PREFIX} ✅ Soft-delete ejecutado`);
-        console.log(`${LOG_PREFIX} ========== FIN ==========`);
         return { success: true };
         
     } catch (e) {
@@ -2253,15 +2431,9 @@ function deleteProduccion(fecha) {
 }
 
 function getProduccionRango(desde, hasta) {
-    const LOG_PREFIX = '🔍 [getProduccionRango]';
-    
     try {
         const negocioId = getNegocioIdActual();
-        if (!negocioId) {
-            return [];
-        }
-        
-        console.log(`${LOG_PREFIX} Buscando producción entre ${desde} y ${hasta}`);
+        if (!negocioId) return [];
         
         const result = query(`
             SELECT * FROM calendario_produccion 
@@ -2272,21 +2444,16 @@ function getProduccionRango(desde, hasta) {
             ORDER BY fecha ASC, bloque_index ASC
         `, [negocioId, desde, hasta]);
         
-        console.log(`${LOG_PREFIX} ✅ Encontrados ${result.length} registros`);
         return result;
         
     } catch (e) {
-        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        console.error(`❌ [getProduccionRango] Error:`, e);
         return [];
     }
 }
 
-// ============================================================
-// CORRECCIÓN #7 + #11: PRODUCCIÓN POR RANGO DE FECHAS
-// ============================================================
-
 function saveProduccionRango(data) {
-    const LOG_PREFIX = '💾💾 [saveProduccionRango v2.2.7]';
+    const LOG_PREFIX = '💾💾 [saveProduccionRango v2.3.0]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -2318,7 +2485,6 @@ function saveProduccionRango(data) {
         const esBloqueDiaAnterior = data.es_bloque_dia_anterior ? 1 : 0;
         const fechaBloqueReal = data.fecha_bloque_real || null;
         
-        // 🆕 v2.2.7: producto_id con logs detallados
         let productoId = null;
         if (data.producto_id !== undefined && data.producto_id !== null && data.producto_id !== '') {
             const parsed = parseInt(data.producto_id);
@@ -2326,9 +2492,6 @@ function saveProduccionRango(data) {
                 productoId = parsed;
             }
         }
-        
-        console.log(`${LOG_PREFIX} Procesando ${data.fechas.length} fechas...`);
-        console.log(`${LOG_PREFIX} 🏷️ Producto ID: ${productoId || 'NULL'}`);
         
         const db = getDB();
         const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='calendario_produccion'`);
@@ -2405,9 +2568,6 @@ function saveProduccionRango(data) {
             
             db.run('COMMIT');
             saveAndNotify();
-            
-            console.log(`${LOG_PREFIX} ✅ Procesadas ${data.fechas.length} fechas: +${creados} nuevos, ~${actualizados} actualizados`);
-            console.log(`${LOG_PREFIX}   🏷️ producto_id propagado a TODAS las fechas: ${productoId || 'NULL'}`);
             
             return {
                 success: true,
@@ -2512,7 +2672,7 @@ function writeBackupMeta(db, backupType) {
         db.run(`INSERT INTO ${BACKUP_META_TABLE} 
             (backup_type, backup_date, backup_version, backup_negocio_id, backup_negocio_nombre, backup_user, backup_user_role)
             VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-            backupType, new Date().toISOString(), '2.2.7', negocioId,
+            backupType, new Date().toISOString(), '2.3.0', negocioId,
             negocio?.nombre || 'Desconocido', user?.username || 'Desconocido',
             user?.is_admin === 1 ? 'admin' : 'user'
         ]);
@@ -2634,7 +2794,7 @@ function exportRecetasProductosSalva() {
 
         const salva = {
             _meta: {
-                app: 'Panario', version: '2.2.7', type: 'salva_recetas_productos',
+                app: 'Panario', version: '2.3.0', type: 'salva_recetas_productos',
                 exportDate: new Date().toISOString(), negocio_id: negocioId,
                 negocio_nombre: getNombreNegocioDB(),
                 counts: {
@@ -4001,8 +4161,9 @@ window.DBModule = {
     ensureBloquesDistribucionColumns,
     getCMPBCProducto,
     getProductosConCMPBC,
-    // 🆕 CORRECCIÓN #9
+    // 🆕 CORRECCIÓN #9 + #1
     contarPedidosYVentasFecha,
+    contarPedidosYVentasFechaDetallado,
     // 🆕 CORRECCIÓN #11
     ensureProductoIdColumn,
     // 🆕 v2.2.7: NUEVAS funciones de producto_id
@@ -4050,15 +4211,10 @@ window.DBModule = {
     BACKUP_TYPE_COMPLETE, BACKUP_TYPE_DATA_ONLY
 };
 
-console.log('📦 DB Module cargado correctamente v2.2.7 (CORRECCIÓN #11 REFORZADA: producto_id en producción)');
-console.log('   🆕 Novedades v2.2.7:');
-console.log('      • ensureProductoIdColumn() con logs detallados');
-console.log('      • saveProduccion() con logs de producto_id');
-console.log('      • getProduccionByFecha() con logs de producto_id');
-console.log('      • saveProduccionRango() con logs de producto_id');
-console.log('      • getProduccionRangoFechas() devuelve producto_id');
-console.log('      • NUEVA: getProductoDeProduccion(fechaISO)');
-console.log('      • NUEVA: getProduccionConProducto(fechaISO)');
-console.log('      • NUEVA: validarProductoId(productoId)');
-console.log('      • NUEVA: contarProduccionConProducto(desde, hasta)');
-console.log('      • Compatibilidad total con versiones anteriores');
+console.log('📦 DB Module cargado correctamente v2.3.0 (CORRECCIÓN #1 250926: conteo de UNIDADES)');
+console.log('   🆕 Novedades v2.3.0:');
+console.log('      • contarPedidosYVentasFecha() ahora suma UNIDADES (order_items.quantity)');
+console.log('      • Solo cuenta productos con CMPBC definido (> 0)');
+console.log('      • Las ventas directas también suman UNIDADES (sales.quantity)');
+console.log('      • NUEVA: contarPedidosYVentasFechaDetallado() con desglose por producto');
+console.log('      • Mantiene retrocompatibilidad total');

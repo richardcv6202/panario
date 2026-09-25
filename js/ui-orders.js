@@ -29,64 +29,26 @@
 // 🆕 FASE 7 (Entrega 5 - 200926 v7):
 //   - NUEVO: Validación de cantidad de producción al crear pedidos
 // 🆕 FASE 7.3 (210926 v9): MOSTRAR PRODUCCIÓN + BLOQUEO DEFINITIVO
-//   - renderProduccionInfoHTML() ahora se invoca SIEMPRE en loadOrders()
 // 🆕 v2.1.12 (210926 v10): CORRECCIÓN #2 - BLOQUEO POR RECETAS NO COMPARTIDAS
-//   - loadOrders(): Verifica permisos y muestra badge "🔒 Solo lectura"
-//   - viewOrder(): Muestra detalle en modo solo-lectura cuando está bloqueado
-//   - showOrderForm(): Bloquea si el pedido está en modo solo-lectura
-//   - updateOrderStatusAndReload(): Verifica permisos ANTES del confirm
-//   - renderWaitingManagerContent(): Filtra pedidos bloqueados
-// 🆕 v2.1.13 (210926 v11): CORRECCIÓN #4 - EXCLUIR DÍAS DE LA SEMANA
-//   - ✅ showMultiOrderForm(): nueva sección "🚫 Excluir días"
-//   - ✅ Nuevo campo en el estado: `_multiOrderState.patron.diasExcluidos = []`
-//   - ✅ Nuevas funciones globales: selectDiasExcluidos, limpiarDiasExcluidos,
-//     updateExclusionSummary
+// 🆕 v2.1.13 (210926 v11): CORRECCIÓN #4 - EXCLUIR DÍAS DE LA SEMANA EN RANGO
 // 🆕 CORRECCIÓN #6 (211026 v12): PRODUCCIÓN DEL DÍA ANTERIOR
-//   - ✅ getProduccionInfo() detecta si el bloque guardado es del día anterior
-//   - ✅ renderProduccionInfoHTML() muestra badge "🌙 Prod. ayer"
-//   - ✅ onOrderDateChange() muestra aviso cuando la producción es del día anterior
-//   - ✅ viewOrder() muestra correctamente el bloque del día anterior
 // 🆕 v2.2.1 (230926 v13): FIX FECHA REAL EN BLOQUE DEL DÍA ANTERIOR
-//   - ✅ getProduccionInfo(): SIEMPRE usa formato
-//     `DD/MM de HH:MM a HH:MM` para el texto del bloque
-//   - ✅ El texto del badge morado ahora es:
-//     * Día actual:  `🔨 Producción: 23/09 de 2:00 AM a 5:00 AM`
-//     * Día anterior: `🌙 Prod. ayer: 23/09 de 5:00 PM a 8:00 PM`
-//   - ✅ Mismo formato en `viewOrder()` y `onOrderDateChange()`
 // 🆕 v2.2.2 (230926 v14): CORRECCIÓN #9 - CONTEO PEDIDOS VS VENTAS
-//   - ✅ getProduccionInfo() ahora DELEGA en
-//     window.DBModule.contarPedidosYVentasFecha() para el conteo de
-//     pedidos y ventas directas. Solo usa fallback local si DBModule
-//     no está disponible.
 // 🆕 v2.2.4 (230926 v15): CORRECCIÓN #3 - CLIC EN BADGE DE PRODUCCIÓN
-//   - ✅ NUEVO: El badge morado de producción en la tarjeta de fecha
-//     ahora es CLICKEABLE. Al hacer clic sobre él, se abre el modal
-//     de configuración de producción (showHorarioDetalle) para ese día.
-//   - ✅ Se aplica event.stopPropagation() para evitar que el clic
-//     expanda/colapse la tarjeta del día.
-//   - ✅ Se añade cursor: pointer, título explicativo y efecto hover
-//     visual para indicar que es clickeable.
-//   - ✅ Funciona tanto en desktop como en móvil (touch).
 // 🆕 v2.2.6 (240926 v16): CORRECCIÓN #17 - BOTÓN "ENTREGAR (SIN DEUDA)"
-//   - ✅ NUEVO: viewOrder() ahora muestra DOS botones de entrega:
-//     * ✅ "Entregar (sin deuda)" → crea venta con is_debt = 0, paid = 1
-//     * 🚚 "Entregar (con deuda)" → crea venta con is_debt = 1, paid = 0
-//   - ✅ NUEVO: updateOrderStatusAndReload() acepta un tercer parámetro
-//     `sinDeuda` (boolean) que se propaga a OrdersModule.updateOrderStatus().
-//   - ✅ NUEVO: Los botones se muestran en un contenedor visual destacado
-//     con bordes de colores diferenciados:
-//     * Verde oscuro para "Entregar (sin deuda)"
-//     * Amarillo/naranja para "Entregar (con deuda)"
-//   - ✅ El comportamiento previo se mantiene: si el pedido tiene pago
-//     adelantado completo, no se crea deuda por defecto.
-//   - ✅ Si el usuario elige "Entregar (sin deuda)" con un pedido que
-//     tenía saldo pendiente, se ignora el saldo y se marca como pagado.
-//   - ✅ Compatibilidad total con versiones anteriores.
 // 🆕 v2.2.7 (240926 v17): CORRECCIÓN #19 - FILTROS AL HACER CLIC EN TARJETAS
-//   - ✅ renderOrdersView() ahora lee window._pendingOrderFilters y
-//     aplica los filtros a los inputs (fechas, estado, búsqueda).
-//   - ✅ Se limpia window._pendingOrderFilters después de aplicarlo.
-//   - ✅ Compatible con navigateWithFilters() de app.js v2.2.3+.
+// 🆕 v2.3.0 (250926 v18): 🎯 CORRECCIÓN #1 (250926) - CONTEO DE UNIDADES
+//   - ✅ renderProduccionInfoHTML() ahora muestra UNIDADES (con decimales)
+//     * Formato: "📋 Pedidos: 3.5/6.5" en lugar de "3/6"
+//     * Se usa formatearCantidadProduccion() para evitar ceros innecesarios
+//   - ✅ submitOrderForm() propaga `validarCupo: true` a saveOrder()
+//     * Si hubo ajustes, muestra modal de alerta al usuario
+//     * Si NO hubo ajustes, guarda normalmente
+//   - ✅ submitMultiOrderForm() maneja `ajustados` en el resumen final
+//   - ✅ onOrderDateChange() previsualiza cupo en UNIDADES
+//   - ✅ getProduccionInfo() delega en DBModule (ya devuelve unidades)
+//   - ✅ Mensajes con lenguaje claro: "unidad(es)" en lugar de "pedido(s)"
+//   - ✅ Mantiene total compatibilidad con versiones anteriores
 // ============================================================
 
 // ============================================================
@@ -175,17 +137,11 @@ window.updateOrderTotal = function() {
 // ============================================================
 // 🆕 v2.2.1: HELPER PARA OBTENER INFO DE PRODUCCIÓN
 // (con soporte para bloque del día anterior Y formato de fecha consistente)
+// 🆕 CORRECCIÓN #1 (250926): Delegación total en DBModule
 // ============================================================
-// 
-// CAMBIO v2.2.1: El texto del bloque SIEMPRE usa el formato
-// `DD/MM de HH:MM a HH:MM`, sin importar si es del día actual o anterior.
-// 
-// Ejemplos:
-//   Día actual:  "23/09 de 2:00 AM a 5:00 AM"
-//   Día anterior: "23/09 de 5:00 PM a 8:00 PM" (con fecha real del bloque)
 
 function getProduccionInfo(fechaISO) {
-    // 🆕 CORRECCIÓN #9: Delegar en DBModule si está disponible
+    // 🆕 CORRECCIÓN #1 + #9: Delegar en DBModule si está disponible
     try {
         if (window.DBModule && typeof window.DBModule.contarPedidosYVentasFecha === 'function') {
             const conteo = window.DBModule.contarPedidosYVentasFecha(fechaISO);
@@ -249,12 +205,11 @@ function getProduccionInfo(fechaISO) {
             };
         }
     } catch (e) {
-        console.warn('⚠️ [ui-orders] Error delegando en DBModule.contarPedidosYVentasFecha:', e);
+        console.warn('⚠️ [ui-orders] Error delegando en DBModule:', e);
     }
     
     // ------------------------------------------------------------
     // FALLBACK LOCAL (solo si DBModule no está disponible)
-    // 🆕 CORRECCIÓN #9: Se aplica la misma lógica que en DBModule
     // ------------------------------------------------------------
     try {
         if (typeof window.getProduccionConfig !== 'function' || 
@@ -310,7 +265,6 @@ function getProduccionInfo(fechaISO) {
                     bloqueTextoAyer = bloqueTexto;
                 }
             } catch (e) {
-                console.warn('⚠️ Error formateando texto de producción:', e);
                 bloqueTexto = `${bloque.inicioStr} - ${bloque.finStr}`;
                 if (esBloqueDiaAnterior) {
                     bloqueTextoAyer = bloqueTexto;
@@ -479,6 +433,39 @@ async function mostrarAlertaStockWarning(orderId, stockWarning) {
 }
 
 // ============================================================
+// 🆕 CORRECCIÓN #1: MODAL DE AJUSTES DE CUPO
+// ============================================================
+// Se muestra cuando el usuario intenta guardar un pedido cuya
+// cantidad excede el cupo disponible. Informa qué se ajustó.
+// ============================================================
+
+async function mostrarAlertaAjusteCupo(detalles, mensaje) {
+    try {
+        let detalleHtml = '';
+        if (Array.isArray(detalles) && detalles.length > 0) {
+            detalleHtml = '\n\n📋 Detalle de ajustes:\n' + detalles.map(d => 
+                `• ${d.producto_nombre}: ${d.cantidad_original} → ${d.cantidad_ajustada} (disponibles: ${d.disponibles})`
+            ).join('\n');
+        }
+        
+        await window.ModalModule.showAlert({
+            title: '⚠️ Cantidad ajustada por cupo',
+            message: (mensaje || 'Se ajustaron algunas cantidades por falta de cupo.') + detalleHtml,
+            icon: '⚠️',
+            type: 'warning',
+            buttonText: '✅ Entendido'
+        });
+    } catch (e) {
+        console.warn('⚠️ Error mostrando alerta de ajuste:', e);
+        if (window.showToast) {
+            window.showToast('⚠️ Cantidad ajustada por cupo disponible', 'warning', 5000);
+        }
+    }
+}
+
+window.mostrarAlertaAjusteCupo = mostrarAlertaAjusteCupo;
+
+// ============================================================
 // MODAL DE GESTIÓN DE LISTA DE ESPERA
 // ============================================================
 
@@ -536,12 +523,14 @@ async function renderWaitingManagerContent() {
         const totalCantidad = lista.reduce((sum, item) => sum + (item.quantity || 0), 0);
         const totalMonto = lista.reduce((sum, item) => sum + (item.order_total || 0), 0);
         
+        const fmt = window.formatearCantidadProduccion || (v => String(v));
+        
         let listaHtml = '';
         
         if (lista.length === 0) {
             let mensajeBloqueados = '';
             if (bloqueados > 0) {
-                mensajeBloqueados = `<p style="font-size: 12px; color: #94a3b8; margin-top: 8px;">🔒 ${bloqueados} pedido(s) ocultos por permisos de recetas no compartidas</p>`;
+                mensajeBloqueados = `<p style="font-size: 12px; color: #94a3b8; margin-top: 8px;">🔒 ${bloqueados} pedido(s) ocultos por permisos</p>`;
             }
             listaHtml = `
                 <div style="text-align: center; padding: 40px 20px; color: var(--text-light);">
@@ -576,7 +565,7 @@ async function renderWaitingManagerContent() {
                             
                             <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px;">
                                 <span style="color: var(--text);">📦 <strong>${item.product_name || 'Producto'}</strong></span>
-                                <span style="color: #3b82f6; background: #3b82f620; padding: 2px 8px; border-radius: 6px; font-weight: 600;">× ${cantidad}</span>
+                                <span style="color: #3b82f6; background: #3b82f620; padding: 2px 8px; border-radius: 6px; font-weight: 600;">× ${fmt(cantidad)}</span>
                                 <span style="color: var(--primary); font-weight: 700; font-size: 15px;">$${total.toFixed(2)}</span>
                             </div>
                             
@@ -632,7 +621,7 @@ async function renderWaitingManagerContent() {
                         <div style="font-size: 11px; color: var(--text-light);">👥 Clientes</div>
                     </div>
                     <div style="background: #8b5cf615; border-left: 3px solid #8b5cf6; padding: 8px 12px; border-radius: 8px; text-align: center;">
-                        <div style="font-size: 20px; font-weight: 700; color: #8b5cf6;">${totalCantidad}</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #8b5cf6;">${fmt(totalCantidad)}</div>
                         <div style="font-size: 11px; color: var(--text-light);">📦 Unidades</div>
                     </div>
                     <div style="background: #10b98115; border-left: 3px solid #10b981; padding: 8px 12px; border-radius: 8px; text-align: center;">
@@ -669,7 +658,7 @@ async function renderWaitingManagerContent() {
                 
                 <div style="background: #fef9e7; border: 1px solid #f59e0b; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: #92400e;">
                     💡 <strong>Procesar</strong> → crea la venta · <strong>Cancelar</strong> → cancela el pedido · <strong>Quitar</strong> → solo quita de la lista
-                    ${bloqueados > 0 ? `<br>🔒 <strong>${bloqueados} pedido(s) oculto(s)</strong> por usar recetas no compartidas contigo.` : ''}
+                    ${bloqueados > 0 ? `<br>🔒 <strong>${bloqueados} pedido(s) oculto(s)</strong> por permisos.` : ''}
                 </div>
                 
                 <div id="waiting-manager-list" style="flex: 1; overflow-y: auto; max-height: 500px; padding-right: 4px;">
@@ -743,7 +732,7 @@ async function procesarClienteDeListaUI(orderId) {
     
     const confirm = await window.ModalModule.showConfirm({
         title: '✅ Procesar cliente',
-        message: `¿Procesar al cliente de la posición #${orderId}?\n\n✅ Se creará la VENTA automáticamente.\n✅ Se descontará del stock.\n✅ El cliente saldrá de la lista.`,
+        message: `¿Procesar al cliente del pedido #${orderId}?\n\n✅ Se creará la VENTA automáticamente.\n✅ Se descontará del stock.\n✅ El cliente saldrá de la lista.`,
         confirmText: '✅ SÍ, PROCESAR',
         cancelText: '❌ Cancelar',
         icon: '✅',
@@ -870,15 +859,11 @@ async function eliminarClienteDeListaUI(orderId, clientName) {
         if (result.success) {
             window.showToast('✅ Cliente quitado de la lista', 'success', 3000);
             
-            // 🆕 CORRECCIÓN #13: Refrescar SIEMPRE el badge tras quitar de la lista
             if (window.OrdersModule.getWaitingListCount) {
                 try {
                     const count = await window.OrdersModule.getWaitingListCount();
                     updateWaitingBadge(count);
-                    console.log(`🔄 [eliminarClienteDeListaUI] Badge actualizado: ${count} en lista de espera`);
-                } catch (e) {
-                    console.warn('⚠️ Error actualizando badge:', e);
-                }
+                } catch (e) {}
             }
             
             await refrescarListaEsperaUI();
@@ -913,7 +898,7 @@ async function limpiarListaEsperaUI() {
     
     const confirm2 = await window.ModalModule.showConfirm({
         title: '🚨 CONFIRMACIÓN FINAL',
-        message: `Esta es la ÚLTIMA advertencia.\n\nEscribe mentalmente: "SÍ, QUIERO LIMPIAR LA LISTA"\n\n¿Confirmas?`,
+        message: `Esta es la ÚLTIMA advertencia.\n\n¿Confirmas?`,
         confirmText: '🧹 SÍ, LIMPIAR TODO',
         cancelText: '❌ NO, cancelar',
         icon: '🚨',
@@ -932,7 +917,7 @@ async function limpiarListaEsperaUI() {
         
         if (result.success) {
             let msg = `✅ Lista limpiada: ${result.eliminados} eliminados, ${result.cancelados} cancelados`;
-            if (result.bloqueados > 0) msg += `, ${result.bloqueados} omitidos por permisos`;
+            if (result.bloqueados > 0) msg += `, ${result.bloqueados} omitidos`;
             window.showToast(msg, 'success', 5000);
             
             await refrescarListaEsperaUI();
@@ -977,8 +962,12 @@ async function reporteListaEspera() {
 }
 
 // ============================================================
-// 🆕 v2.2.4: RENDER INFO DE PRODUCCIÓN EN TARJETA DE FECHA
-// (con badge CLICKEABLE - Corrección #3)
+// 🆕 v2.2.4 + CORRECCIÓN #1: RENDER INFO DE PRODUCCIÓN
+// ============================================================
+// CAMBIO v2.3.0:
+//   - El mensaje "📋 Pedidos: m/n" ahora muestra UNIDADES.
+//   - Se usa formatearCantidadProduccion() para evitar ceros innecesarios.
+//   - Ejemplo: "📋 Pedidos: 3.5/6.5" en lugar de "3/6"
 // ============================================================
 
 function renderProduccionInfoHTML(fechaISO) {
@@ -1005,11 +994,7 @@ function renderProduccionInfoHTML(fechaISO) {
             bgDisponible = '#f59e0b15';
         }
         
-        // ============================================================
-        // 🆕 v2.2.4: Badge CLICKEABLE (Corrección #3)
-        // Al hacer clic, se abre el modal de configuración de producción
-        // para el día correspondiente (showHorarioDetalle)
-        // ============================================================
+        // 🆕 v2.2.4: Badge CLICKEABLE
         const badgeBloqueHoy = esAyer
             ? `<span onclick="event.stopPropagation(); if(window.showHorarioDetalle) window.showHorarioDetalle('${fechaISO}');" 
                      style="background: #8b5cf615; color: #8b5cf6; padding: 3px 10px; border-radius: 6px; font-weight: 600; border: 1px dashed #8b5cf6; cursor: pointer; transition: all 0.2s;" 
@@ -1030,11 +1015,11 @@ function renderProduccionInfoHTML(fechaISO) {
             <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-color); font-size: 11px;">
                 ${badgeBloqueHoy}
                 <span style="background: ${bgDisponible}; color: ${colorDisponible}; padding: 3px 10px; border-radius: 6px; font-weight: 600;">
-                    📋 Pedidos: ${pedidos}/${fmt(cantidadProd)}
+                    📋 Pedidos: ${fmt(pedidos)}/${fmt(cantidadProd)}
                 </span>
                 ${ventas > 0 ? `
                     <span style="background: #3b82f615; color: #3b82f6; padding: 3px 10px; border-radius: 6px;">
-                        💰 Ventas directas: ${ventas}
+                        💰 Ventas directas: ${fmt(ventas)}
                     </span>
                 ` : ''}
                 ${disponibles === 0 ? `
@@ -1058,15 +1043,11 @@ window.renderProduccionInfoHTML = renderProduccionInfoHTML;
 
 // ============================================================
 // RENDER ORDERS VIEW
-// 🆕 v2.2.7: Lee window._pendingOrderFilters (Corrección #19)
 // ============================================================
 
 function renderOrdersView() {
     const main = document.getElementById('mainContent');
     
-    // ============================================================
-    // 🆕 v2.2.7: Leer filtros pendientes (Corrección #19)
-    // ============================================================
     let filtros = window._pendingOrderFilters || {};
     window._pendingOrderFilters = null;
     
@@ -1084,17 +1065,13 @@ function renderOrdersView() {
     const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
     const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
     
-    // Aplicar filtros de fecha si vienen
     let fechaInicioMes = primerDiaMes.toISOString().split('T')[0];
     let fechaFinMes = ultimoDiaMes.toISOString().split('T')[0];
     
     if (filtros.from_date) fechaInicioMes = filtros.from_date;
     if (filtros.to_date) fechaFinMes = filtros.to_date;
     
-    // Aplicar filtro de estado si viene
     let statusSeleccionado = filtros.status || 'pending';
-    
-    // Aplicar filtro de búsqueda si viene
     let searchValue = filtros.search || '';
     
     main.innerHTML = `
@@ -1472,7 +1449,6 @@ async function loadOrders() {
             grouped[dateKey].push(order);
         });
         
-        // 🆕 CORRECCIÓN #7: Ordenar los pedidos DENTRO de cada día por ID ascendente
         Object.keys(grouped).forEach(dateKey => {
             grouped[dateKey].sort((a, b) => {
                 const idA = parseInt(a.id) || 0;
@@ -1797,7 +1773,7 @@ async function showOrderForm(orderId = null) {
         if (!permisos.puede) {
             await window.ModalModule.showAlert({
                 title: '🔒 Pedido bloqueado',
-                message: `No puedes editar este pedido.\n\n${permisos.razon}\n\n💡 Pídele al administrador que comparta las recetas asociadas con el negocio.`,
+                message: `No puedes editar este pedido.\n\n${permisos.razon}\n\n💡 Pídele al administrador que comparta las recetas asociadas.`,
                 icon: '🔒',
                 type: 'warning',
                 buttonText: 'Entendido'
@@ -2043,7 +2019,6 @@ async function showOrderForm(orderId = null) {
 
 // ============================================================
 // RESERVA POR PERÍODO
-// 🆕 v2.1.13: Con exclusión de días de la semana
 // ============================================================
 
 async function showMultiOrderForm() {
@@ -2086,7 +2061,7 @@ async function showMultiOrderForm() {
             </div>
             
             <p style="font-size: 13px; color: var(--text-light); margin-bottom: 16px;">
-                💡 Crea múltiples pedidos a la vez. Se compartirán cliente y productos, cambiando solo la fecha de entrega.
+                💡 Crea múltiples pedidos a la vez. Se compartirán cliente y productos, cambiando solo la fecha.
             </p>
             
             <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 12px;">
@@ -2163,18 +2138,12 @@ async function showMultiOrderForm() {
                             🟡 Solo impares
                         </label>
                     </div>
-                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px;">
-                        💡 Ej: "Solo pares" crea pedidos los días 2, 4, 6, 8, 10...
-                    </div>
                 </div>
                 
                 <div id="multi-exclusion-container" style="margin-bottom: 12px; padding: 10px 12px; background: #ef444410; border-radius: 8px; border: 1px dashed #ef4444;">
                     <div style="font-size: 12px; font-weight: 600; color: #ef4444; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
                         <span>🚫</span>
                         <span>Excluir días de la semana (opcional)</span>
-                    </div>
-                    <div style="font-size: 11px; color: var(--text-light); margin-bottom: 8px;">
-                        Los días marcados NO se incluirán en la reserva (útil para excluir los días que no trabajas).
                     </div>
                     
                     <div style="display: flex; gap: 4px; flex-wrap: wrap;">
@@ -2297,7 +2266,6 @@ async function showMultiOrderForm() {
                         <span style="font-size: 13px;">🌙 Noche</span>
                     </label>
                 </div>
-                <small style="font-size: 11px; color: var(--text-light);">La hora se asigna automáticamente: Mañana 10:00, Tarde 15:00, Noche 19:00</small>
             </div>
             
             <div class="form-group" style="margin-bottom: 12px;">
@@ -2462,10 +2430,6 @@ function selectMultiSesion(sesion) {
     
     onMultiPatronChange();
 }
-
-// ============================================================
-// HELPERS DE EXCLUSIÓN DE DÍAS
-// ============================================================
 
 function selectDiasExcluidos(dias) {
     if (!Array.isArray(dias)) return;
@@ -2680,7 +2644,7 @@ async function actualizarVistaPrevia() {
             borderColor = '#dc2626';
             bgColor = '#dc262610';
             icono = '⛔';
-            textoExtra = `<span style="color: #dc2626; font-weight: 600;">Completo (${prodInfo.pedidos}/${fmt(prodInfo.cantidadProduccion)})</span>`;
+            textoExtra = `<span style="color: #dc2626; font-weight: 600;">Completo (${fmt(prodInfo.pedidos)}/${fmt(prodInfo.cantidadProduccion)})</span>`;
             omitidosCount++;
         } else {
             creadosCount++;
@@ -2697,8 +2661,8 @@ async function actualizarVistaPrevia() {
             
             if (prodInfo.tieneProduccion) {
                 const prodBadge = prodInfo.esBloqueDiaAnterior 
-                    ? `🌙 ${prodInfo.pedidos}/${fmt(prodInfo.cantidadProduccion)}` 
-                    : `🔨 ${prodInfo.pedidos}/${fmt(prodInfo.cantidadProduccion)}`;
+                    ? `🌙 ${fmt(prodInfo.pedidos)}/${fmt(prodInfo.cantidadProduccion)}` 
+                    : `🔨 ${fmt(prodInfo.pedidos)}/${fmt(prodInfo.cantidadProduccion)}`;
                 textoExtra += ` <span style="color: #8b5cf6;">${prodBadge}</span>`;
             }
         }
@@ -2888,7 +2852,8 @@ function removeMultiItem(index) {
 }
 
 // ============================================================
-// ENVIAR RESERVA POR PERÍODO
+// 🆕 CORRECCIÓN #1: ENVIAR RESERVA POR PERÍODO
+// Maneja `ajustados` en el resumen final.
 // ============================================================
 
 async function submitMultiOrderForm() {
@@ -2970,10 +2935,47 @@ async function submitMultiOrderForm() {
         
         if (result.success) {
             let msg = `✅ ${result.totalCreados} pedido${result.totalCreados > 1 ? 's' : ''} creado${result.totalCreados > 1 ? 's' : ''}`;
+            if (result.totalAjustados > 0) msg += ` · ${result.totalAjustados} con ajustes de cupo`;
             if (result.totalOmitidos > 0) msg += ` · ${result.totalOmitidos} omitido${result.totalOmitidos > 1 ? 's' : ''}`;
             if (result.totalErrores > 0) msg += ` · ${result.totalErrores} error${result.totalErrores > 1 ? 'es' : ''}`;
             
             window.showToast(msg, 'success', 5000);
+            
+            // Si hubo ajustes, mostrar modal informativo
+            if (result.totalAjustados > 0) {
+                const detalles = [];
+                (result.ajustados || []).forEach(aj => {
+                    (aj.detalles || []).forEach(d => {
+                        detalles.push({
+                            producto_nombre: d.producto_nombre,
+                            cantidad_original: d.cantidad_original,
+                            cantidad_ajustada: d.cantidad_ajustada,
+                            disponibles: d.disponibles,
+                            fecha: aj.fecha
+                        });
+                    });
+                });
+                
+                if (detalles.length > 0) {
+                    let detalleMsg = 'Algunos pedidos fueron ajustados por falta de cupo:\n\n';
+                    detalles.slice(0, 10).forEach(d => {
+                        detalleMsg += `📅 ${d.fecha}\n• ${d.producto_nombre}: ${d.cantidad_original} → ${d.cantidad_ajustada} (disponibles: ${d.disponibles})\n`;
+                    });
+                    if (detalles.length > 10) {
+                        detalleMsg += `\n... y ${detalles.length - 10} ajuste(s) más.`;
+                    }
+                    
+                    setTimeout(() => {
+                        window.ModalModule.showAlert({
+                            title: '⚠️ Ajustes aplicados',
+                            message: detalleMsg,
+                            icon: '⚠️',
+                            type: 'warning',
+                            buttonText: '✅ Entendido'
+                        });
+                    }, 800);
+                }
+            }
             
             await loadOrders();
             
@@ -3053,7 +3055,7 @@ function highlightSesionSelection(sesion) {
 }
 
 // ============================================================
-// 🆕 v2.2.1: onOrderDateChange con formato de fecha consistente
+// 🆕 CORRECCIÓN #1: onOrderDateChange con conteo en UNIDADES
 // ============================================================
 
 function onOrderDateChange() {
@@ -3119,18 +3121,18 @@ function onOrderDateChange() {
                     ` : ''}
                     <div style="display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px;">
                         <span style="background: var(--bg); padding: 3px 10px; border-radius: 8px;">
-                            📋 Pedidos: <strong>${info.pedidos}/${fmt(info.cantidadProduccion)}</strong>
+                            📋 Pedidos: <strong>${fmt(info.pedidos)}/${fmt(info.cantidadProduccion)}</strong>
                         </span>
                         ${info.ventas > 0 ? `
                             <span style="background: var(--bg); padding: 3px 10px; border-radius: 8px;">
-                                💰 Ventas: <strong>${info.ventas}</strong>
+                                💰 Ventas: <strong>${fmt(info.ventas)}</strong>
                             </span>
                         ` : ''}
                         <span style="background: ${colorDisponible}20; color: ${colorDisponible}; padding: 3px 10px; border-radius: 8px; font-weight: 700;">
                             ${disponibles === 0 ? '⛔ COMPLETO' : `✅ ${fmt(disponibles)} disponibles`}
                         </span>
                     </div>
-                    ${info.notas ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 6px;">📝 ${info.notes || info.notas}</div>` : ''}
+                    ${info.notas ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 6px;">📝 ${info.notas}</div>` : ''}
                 </div>
             `;
         }
@@ -3283,7 +3285,8 @@ function clearOrderItems() {
 }
 
 // ============================================================
-// ENVIAR FORMULARIO INDIVIDUAL
+// 🆕 CORRECCIÓN #1: ENVIAR FORMULARIO INDIVIDUAL CON MANEJO
+// DE AJUSTES DE CUPO
 // ============================================================
 
 async function submitOrderForm(isEdit) {
@@ -3317,6 +3320,7 @@ async function submitOrderForm(isEdit) {
     if (!deliveryDateRaw) { window.showToast('⚠️ La fecha de entrega es obligatoria', 'error'); return; }
     if (hasAdvancePayment && advanceAmount <= 0) { window.showToast('⚠️ Monto adelanto > 0', 'error'); return; }
     
+    // Pre-chequeo visual (no bloquea el guardado, solo informa)
     if (!isEdit) {
         const prodInfo = getProduccionInfo(deliveryDateRaw);
         const fmt = window.formatearCantidadProduccion || (v => String(v));
@@ -3325,8 +3329,8 @@ async function submitOrderForm(isEdit) {
             await window.ModalModule.showAlert({
                 title: '⛔ Pedidos completos',
                 message: `Los pedidos para el ${deliveryDateRaw} están completos.\n\n` +
-                         `📋 Pedidos reservados: ${prodInfo.pedidos}/${fmt(prodInfo.cantidadProduccion)}\n` +
-                         (prodInfo.ventas > 0 ? `💰 Ventas directas: ${prodInfo.ventas}\n` : '') +
+                         `📋 Unidades reservadas: ${fmt(prodInfo.pedidos)}/${fmt(prodInfo.cantidadProduccion)}\n` +
+                         (prodInfo.ventas > 0 ? `💰 Ventas directas: ${fmt(prodInfo.ventas)}\n` : '') +
                          `\nNo hay cupos disponibles para este día.\n\n` +
                          `💡 Puedes:\n` +
                          `• Elegir otra fecha\n` +
@@ -3390,7 +3394,9 @@ async function submitOrderForm(isEdit) {
         total,
         has_advance_payment: hasAdvancePayment,
         advance_amount: hasAdvancePayment ? advanceAmount : 0,
-        advance_payment_method: hasAdvancePayment ? advancePaymentMethod : null
+        advance_payment_method: hasAdvancePayment ? advancePaymentMethod : null,
+        // 🆕 CORRECCIÓN #1: activar validación de cupo
+        validarCupo: true
     };
     
     const orderIdInput = document.getElementById('order-id');
@@ -3400,11 +3406,34 @@ async function submitOrderForm(isEdit) {
         const result = await window.OrdersModule.saveOrder(orderData);
         if (result.success) {
             window.closeOrderModal();
-            window.showToast(`✅ Pedido ${result.updated ? 'actualizado' : 'guardado'} correctamente`, 'success');
+            
+            // 🆕 CORRECCIÓN #1: Manejar ajustes de cupo
+            if (result.huboAjustes) {
+                // Mostrar alerta informativa sobre los ajustes
+                await mostrarAlertaAjusteCupo(
+                    null,
+                    result.mensajeAjustes || 'Se ajustaron algunas cantidades por falta de cupo.'
+                );
+                window.showToast(`✅ Pedido ${result.updated ? 'actualizado' : 'guardado'} (con ajustes de cupo)`, 'success', 5000);
+            } else {
+                window.showToast(`✅ Pedido ${result.updated ? 'actualizado' : 'guardado'} correctamente`, 'success');
+            }
+            
             await loadOrders();
             if (typeof window.loadDashboardData === 'function') setTimeout(window.loadDashboardData, 500);
         } else {
-            window.showToast('❌ Error: ' + result.error, 'error');
+            // Si hubo ajustes pero TODOS los items quedaron en 0, mostrar mensaje
+            if (result.huboAjustes && result.mensajeAjustes) {
+                await window.ModalModule.showAlert({
+                    title: '⛔ Sin cupo disponible',
+                    message: result.error + '\n\n' + result.mensajeAjustes,
+                    icon: '⛔',
+                    type: 'warning',
+                    buttonText: 'Entendido'
+                });
+            } else {
+                window.showToast('❌ Error: ' + result.error, 'error');
+            }
         }
     } catch (error) {
         window.showToast('❌ Error: ' + error.message, 'error');
@@ -3413,8 +3442,7 @@ async function submitOrderForm(isEdit) {
 
 // ============================================================
 // VER PEDIDO EN DETALLE
-// 🆕 v2.2.1: producción del día anterior con fecha real
-// 🆕 v2.2.6: dos botones "Entregar (sin deuda)" y "Entregar (con deuda)"
+// 🆕 CORRECCIÓN #1: Producción y conteo en UNIDADES
 // ============================================================
 
 async function viewOrder(id) {
@@ -3483,7 +3511,7 @@ async function viewOrder(id) {
                         </div>
                     ` : ''}
                     <div style="font-size: 12px; color: var(--text-light);">
-                        📋 Pedidos: ${prodInfo.pedidos}/${fmt(prodInfo.cantidadProduccion)}
+                        📋 Unidades reservadas: ${fmt(prodInfo.pedidos)}/${fmt(prodInfo.cantidadProduccion)}
                         ${prodInfo.notas ? ` · 📝 ${prodInfo.notas}` : ''}
                     </div>
                 </div>
@@ -3625,7 +3653,7 @@ async function viewOrder(id) {
                         ${order.items.map(item => `
                             <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color); font-size: 14px;">
                                 <span>${item.producto_nombre || item.product_name}</span>
-                                <span>${item.quantity} × $${item.unit_price.toFixed(2)} = $${item.subtotal.toFixed(2)}</span>
+                                <span>${fmt(item.quantity)} × $${item.unit_price.toFixed(2)} = $${item.subtotal.toFixed(2)}</span>
                             </div>
                         `).join('')}
                     </div>
@@ -3670,7 +3698,7 @@ async function abrirEdicionDesdeVista(orderId) {
 }
 
 // ============================================================
-// 🆕 v2.2.6: updateOrderStatusAndReload AHORA ACEPTA `sinDeuda`
+// updateOrderStatusAndReload
 // ============================================================
 
 async function updateOrderStatusAndReload(orderId, status, sinDeuda = false) {
@@ -3777,19 +3805,11 @@ async function updateOrderStatusAndReload(orderId, status, sinDeuda = false) {
             window.showToast('💰 Venta creada automáticamente', 'success', 4000);
         }
         
-        // ============================================================
-        // 🆕 CORRECCIÓN #13: Refrescar SIEMPRE el badge de lista de espera
-        // cuando cambia el estado, porque puede haber entrado o salido
-        // de la lista de espera.
-        // ============================================================
         if (window.OrdersModule.getWaitingListCount) {
             try {
                 const count = await window.OrdersModule.getWaitingListCount();
                 updateWaitingBadge(count);
-                console.log(`🔄 [updateOrderStatusAndReload] Badge actualizado: ${count} en lista de espera`);
-            } catch (e) {
-                console.warn('⚠️ Error actualizando badge de lista de espera:', e);
-            }
+            } catch (e) {}
         }
         
         if (result.stockWarning) {
@@ -4177,6 +4197,7 @@ window.abrirEdicionDesdeVista = abrirEdicionDesdeVista;
 window.waitForModalRemoval = waitForModalRemoval;
 window.renderAuditoriaHTML = renderAuditoriaHTML;
 window.mostrarAlertaStockWarning = mostrarAlertaStockWarning;
+window.mostrarAlertaAjusteCupo = mostrarAlertaAjusteCupo;
 
 window.showWaitingListManagerModal = showWaitingListManagerModal;
 window.closeWaitingManagerModal = closeWaitingManagerModal;
@@ -4199,14 +4220,12 @@ window.selectDiasExcluidos = selectDiasExcluidos;
 window.limpiarDiasExcluidos = limpiarDiasExcluidos;
 window.updateExclusionSummary = updateExclusionSummary;
 
-console.log('📦 UI Orders Module v2.2.7 (CORRECCIÓN #19: filtros al hacer clic en tarjetas)');
-console.log('   🆕 Novedades v2.2.7:');
-console.log('      • renderOrdersView() lee window._pendingOrderFilters');
-console.log('      • Aplica filtros a los inputs (fechas, estado, búsqueda)');
-console.log('      • Limpia window._pendingOrderFilters después de aplicarlo');
-console.log('      • Compatible con navigateWithFilters() de app.js v2.2.3+');
-console.log('   ✅ Correcciones incluidas:');
-console.log('      • #3: Badge de producción clickeable (v2.2.4)');
-console.log('      • #17: Dos botones de entrega "sin/con deuda" (v2.2.6)');
-console.log('      • #19: Filtros al hacer clic en tarjetas (v2.2.7)');
+console.log('📦 UI Orders Module v2.3.0 (CORRECCIÓN #1 250926: conteo de UNIDADES)');
+console.log('   🆕 Novedades v2.3.0:');
+console.log('      • renderProduccionInfoHTML() muestra UNIDADES (ej: "Pedidos: 3.5/6.5")');
+console.log('      • submitOrderForm() propaga validarCupo=true y maneja ajustes');
+console.log('      • submitMultiOrderForm() maneja ajustes en el resumen final');
+console.log('      • onOrderDateChange() previsualiza cupo en UNIDADES');
+console.log('      • NUEVA: mostrarAlertaAjusteCupo() para informar ajustes');
+console.log('      • Mensajes claros: "unidad(es)" en lugar de "pedido(s)"');
 console.log('   ✅ Compatibilidad total con versiones anteriores');

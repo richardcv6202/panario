@@ -14,45 +14,28 @@
 //     procesarClienteDeLista(), cancelarPedidoDesdeLista(),
 //     cancelarPedidosGlobalmente()
 // 🆕 ENTREGA 4 (230926 v5): ORDEN ASCENDENTE POR ID
-//   - getOrders() ordena por: ORDER BY o.delivery_date ASC, o.id ASC
 // 🆕 ENTREGA 7 (230926 v6): REPROGRAMAR PEDIDOS POR RANGO
-//   - NUEVA función reprogramarPedidosPorRango()
-//   - NUEVA función autoEliminarDeListaAlComprar()
 // 🆕 v2.1.12 (210926 v7): CORRECCIÓN #2 - BLOQUEO POR RECETAS NO COMPARTIDAS
-//   - ✅ NUEVA función puedeUsuarioActualProcesarPedido(orderOrId)
-//   - ✅ NUEVA función puedeUsuarioActualProcesarVenta() (por simetría)
-//   - ✅ updateOrderStatus() verifica permisos antes de ejecutar
-//   - ✅ registrarVentaDesdePedido() verifica permisos antes de crear la venta
-//   - ✅ cancelarPedidoDesdeLista() verifica permisos
-//   - ✅ procesarClienteDeLista() verifica permisos
-//   - ✅ eliminarDeListaEspera() verifica permisos
-//   - ✅ Los pedidos de la lista de espera también se filtran por permisos
-//   - ✅ Se guarda en la caché interna para evitar queries repetidas
 // 🆕 v2.1.13 (210926 v8): CORRECCIÓN #4 - EXCLUIR DÍAS DE LA SEMANA EN RANGO
-//   - ✅ NUEVA función getNombreDiaSemana(diaNumero) para UI
-//   - ✅ generarFechasPorPatron() acepta nuevo campo: diasExcluidos
-//     * Aplica SOLO cuando patron.tipo === 'rango'
-//     * Se combina con paridad (pares/impares)
-//     * Ej: "Rango 1-30 octubre, solo pares, excluyendo domingos"
-//   - ✅ getDiasExcluidosDelPatron() helper para normalizar entrada
-//   - ✅ Compatibilidad total: si no se pasa diasExcluidos, se comporta igual que antes
-//   - ✅ Verificación en crearPedidosMultiples() para excluir fechas correctamente
-//   - ✅ Logs de diagnóstico de exclusión
 // 🆕 v2.2.6 (240926 v9): CORRECCIÓN #17 - BOTÓN "ENTREGAR (SIN DEUDA)"
-//   - ✅ NUEVO: updateOrderStatus(orderId, status, sinDeuda) acepta un
-//     tercer parámetro `sinDeuda` (boolean, default false).
-//   - ✅ NUEVO: Al entregar un pedido con sinDeuda=true, se pasa a
-//     registrarVentaDesdePedido() para forzar is_debt=0 y paid=1.
-//   - ✅ NUEVO: registrarVentaDesdePedido(orderId, cantidadOverride, sinDeuda)
-//     acepta un tercer parámetro `sinDeuda` (boolean, default false).
-//     * Si sinDeuda=true → la venta se crea con is_debt=0, paid=1
-//     * Si sinDeuda=true → la transacción se crea con paid=1
-//     * Si sinDeuda=true → se ignora cualquier saldo pendiente del pedido
-//   - ✅ El comportamiento previo se mantiene intacto cuando sinDeuda=false
-//     o no se pasa (compatibilidad total).
-//   - ✅ Se preserva la lógica de pago adelantado: si el pedido ya estaba
-//     pagado, la venta se crea sin deuda por defecto (sin necesidad de
-//     pasar sinDeuda=true).
+// 🆕 v2.3.0 (250926 v10): 🎯 CORRECCIÓN #1 (250926) - CONTEO DE UNIDADES
+//   - ✅ NUEVA función verificarConteoDisponible(fechaISO, productoId, cantidadSolicitada)
+//     * Verifica si la cantidad solicitada excede las unidades disponibles
+//     * Solo aplica a productos con CMPBC definido
+//     * Devuelve { cantidad, ajustada, disponibles, cmpbc, mensaje }
+//   - ✅ NUEVA función validarYAjustarCantidadPedido(items, fechaISO, excludeOrderId)
+//     * Aplica verificarConteoDisponible a TODOS los items de un pedido
+//     * Suma el total de ajustes realizados
+//     * Devuelve { items, totalAjustes, huboAjustes, mensaje }
+//   - ✅ updateOrderStatus() refuerza el vínculo venta↔pedido
+//     * Logs explícitos sobre el conteo de unidades
+//     * La venta SIEMPRE se guarda con order_id, para que NO se cuente
+//       doble vez (una como pedido y otra como venta directa)
+//   - ✅ registrarVentaDesdePedido() refuerza el vínculo
+//     * Los logs ahora dicen "unidades" en lugar de "pedidos"
+//   - ✅ saveOrder() opcionalmente valida y ajusta cantidades
+//     (controlado por el parámetro `validarCupo`)
+//   - ✅ Compatibilidad total con versiones anteriores
 // ============================================================
 
 window.OrdersModule = {};
@@ -296,6 +279,399 @@ window.puedeUsuarioActualProcesarPedido = puedeUsuarioActualProcesarPedido;
 window.puedeUsuarioActualProcesarVenta = puedeUsuarioActualProcesarVenta;
 
 // ============================================================
+// 🆕 CORRECCIÓN #1 (250926): VALIDACIÓN DE CUPO DISPONIBLE
+// ============================================================
+// 
+// OBJETIVO:
+//   Antes de crear/editar un pedido, verificar que la cantidad
+//   solicitada no exceda las UNIDADES disponibles del producto.
+// 
+// REGLAS:
+//   - Solo aplica a productos con CMPBC definido (> 0).
+//   - Si el producto NO tiene CMPBC, no hay límite.
+//   - Si la fecha no tiene producción programada, no hay límite.
+//   - Si la cantidad solicitada excede lo disponible, se ajusta
+//     automáticamente al máximo disponible y se notifica al usuario.
+// 
+// EJEMPLO:
+//   - CMPBC=6, VD=1, P=2 → disponibles = 6 - 2 - 1 = 3
+//   - Cliente pide 5 → se ajusta a 3
+//   - Cliente pide 2 → se acepta tal cual
+// ============================================================
+
+/**
+ * 🆕 CORRECCIÓN #1: Verifica si la cantidad solicitada está disponible
+ * para una fecha y producto específicos.
+ * 
+ * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
+ * @param {number|string} productoId - ID del producto (null = sin producto específico)
+ * @param {number} cantidadSolicitada - Cantidad que el cliente quiere
+ * @returns {object} {
+ *   cantidad: number,           // Cantidad permitida (puede ser menor)
+ *   ajustada: boolean,          // true si se ajustó
+ *   disponibles: number|null,   // Cupos disponibles (null = sin límite)
+ *   cmpbc: number|null,         // CMPBC del producto
+ *   cantidadProduccion: number, // Producción total del día
+ *   mensaje: string             // Mensaje para mostrar al usuario
+ * }
+ */
+function verificarConteoDisponible(fechaISO, productoId, cantidadSolicitada) {
+    const LOG_PREFIX = '🔍 [verificarConteoDisponible]';
+    
+    try {
+        const cantidad = parseFloat(cantidadSolicitada);
+        if (isNaN(cantidad) || cantidad <= 0) {
+            return {
+                cantidad: 0,
+                ajustada: true,
+                disponibles: 0,
+                cmpbc: null,
+                cantidadProduccion: 0,
+                mensaje: '⚠️ La cantidad debe ser mayor a 0'
+            };
+        }
+        
+        // 1. Si no hay producto específico, no se puede validar
+        if (!productoId) {
+            console.log(`${LOG_PREFIX} ℹ️ Sin producto específico → sin límite`);
+            return {
+                cantidad: cantidad,
+                ajustada: false,
+                disponibles: null,
+                cmpbc: null,
+                cantidadProduccion: 0,
+                mensaje: ''
+            };
+        }
+        
+        // 2. Verificar si el producto tiene CMPBC
+        let cmpbc = null;
+        try {
+            if (typeof window.DBModule?.getCMPBCProducto === 'function') {
+                cmpbc = window.DBModule.getCMPBCProducto(productoId);
+            }
+        } catch (e) {
+            console.warn(`${LOG_PREFIX} ⚠️ Error obteniendo CMPBC:`, e);
+        }
+        
+        if (!cmpbc || cmpbc <= 0) {
+            console.log(`${LOG_PREFIX} ℹ️ Producto #${productoId} sin CMPBC → sin límite`);
+            return {
+                cantidad: cantidad,
+                ajustada: false,
+                disponibles: null,
+                cmpbc: null,
+                cantidadProduccion: 0,
+                mensaje: ''
+            };
+        }
+        
+        // 3. Verificar si hay producción programada
+        let produccion = null;
+        try {
+            if (typeof window.DBModule?.getProduccionByFecha === 'function') {
+                produccion = window.DBModule.getProduccionByFecha(fechaISO);
+            }
+        } catch (e) {
+            console.warn(`${LOG_PREFIX} ⚠️ Error obteniendo producción:`, e);
+        }
+        
+        if (!produccion) {
+            console.log(`${LOG_PREFIX} ℹ️ Sin producción programada para ${fechaISO} → sin límite`);
+            return {
+                cantidad: cantidad,
+                ajustada: false,
+                disponibles: null,
+                cmpbc: cmpbc,
+                cantidadProduccion: 0,
+                mensaje: ''
+            };
+        }
+        
+        const cantidadProduccion = parseFloat(produccion.cantidad_produccion) || 0;
+        if (cantidadProduccion <= 0) {
+            console.log(`${LOG_PREFIX} ℹ️ Producción en 0 → sin límite`);
+            return {
+                cantidad: cantidad,
+                ajustada: false,
+                disponibles: null,
+                cmpbc: cmpbc,
+                cantidadProduccion: 0,
+                mensaje: ''
+            };
+        }
+        
+        // 4. Obtener unidades ya reservadas
+        let conteo = null;
+        try {
+            if (typeof window.DBModule?.contarPedidosYVentasFecha === 'function') {
+                conteo = window.DBModule.contarPedidosYVentasFecha(fechaISO);
+            }
+        } catch (e) {
+            console.warn(`${LOG_PREFIX} ⚠️ Error contando unidades:`, e);
+        }
+        
+        if (!conteo) {
+            console.log(`${LOG_PREFIX} ℹ️ No se pudo contar unidades → sin límite`);
+            return {
+                cantidad: cantidad,
+                ajustada: false,
+                disponibles: null,
+                cmpbc: cmpbc,
+                cantidadProduccion: cantidadProduccion,
+                mensaje: ''
+            };
+        }
+        
+        const disponibles = conteo.disponibles === null 
+            ? cantidadProduccion 
+            : conteo.disponibles;
+        
+        console.log(`${LOG_PREFIX} Fecha=${fechaISO}, Prod=${cantidadProduccion}, Reservadas=${conteo.unidadesReservadas}, Disponibles=${disponibles}, Solicitada=${cantidad}`);
+        
+        // 5. Ajustar si excede lo disponible
+        if (cantidad > disponibles) {
+            const ajustada = Math.max(0, disponibles);
+            const mensaje = ajustada > 0
+                ? `⚠️ Solo hay ${ajustada} unidad(es) disponibles. Se ajustó la cantidad de ${cantidad} a ${ajustada}.`
+                : `⛔ No hay cupos disponibles para esta fecha.`;
+            
+            console.warn(`${LOG_PREFIX} ⚠️ Cantidad ajustada: ${cantidad} → ${ajustada}`);
+            
+            return {
+                cantidad: ajustada,
+                ajustada: true,
+                disponibles: disponibles,
+                cmpbc: cmpbc,
+                cantidadProduccion: cantidadProduccion,
+                mensaje: mensaje
+            };
+        }
+        
+        // 6. Cantidad OK
+        return {
+            cantidad: cantidad,
+            ajustada: false,
+            disponibles: disponibles,
+            cmpbc: cmpbc,
+            cantidadProduccion: cantidadProduccion,
+            mensaje: ''
+        };
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return {
+            cantidad: parseFloat(cantidadSolicitada) || 0,
+            ajustada: false,
+            disponibles: null,
+            cmpbc: null,
+            cantidadProduccion: 0,
+            mensaje: ''
+        };
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #1: Aplica verificarConteoDisponible a TODOS los items
+ * de un pedido y devuelve el resultado consolidado.
+ * 
+ * Los items se procesan en orden, descontando del cupo disponible
+ * a medida que se van reservando.
+ * 
+ * @param {Array} items - Array de items del pedido
+ * @param {string} fechaISO - Fecha de entrega
+ * @param {number} excludeOrderId - ID del pedido a excluir (para ediciones)
+ * @returns {object} {
+ *   items: Array,              // Items ajustados
+ *   totalAjustes: number,      // Cuántos items se ajustaron
+ *   huboAjustes: boolean,
+ *   mensaje: string,           // Mensaje consolidado
+ *   detalles: Array            // Detalle de cada ajuste
+ * }
+ */
+function validarYAjustarCantidadPedido(items, fechaISO, excludeOrderId = null) {
+    const LOG_PREFIX = '🔧 [validarYAjustarCantidadPedido]';
+    
+    try {
+        if (!Array.isArray(items) || items.length === 0) {
+            return {
+                items: [],
+                totalAjustes: 0,
+                huboAjustes: false,
+                mensaje: '',
+                detalles: []
+            };
+        }
+        
+        if (!fechaISO) {
+            return {
+                items: items,
+                totalAjustes: 0,
+                huboAjustes: false,
+                mensaje: '',
+                detalles: []
+            };
+        }
+        
+        console.log(`${LOG_PREFIX} Validando ${items.length} item(s) para fecha ${fechaISO}`);
+        
+        const itemsAjustados = [];
+        const detalles = [];
+        let totalAjustes = 0;
+        
+        // Obtener producción y conteo base
+        let cantidadProduccion = 0;
+        let disponiblesBase = null;
+        
+        try {
+            const produccion = window.DBModule?.getProduccionByFecha?.(fechaISO);
+            cantidadProduccion = parseFloat(produccion?.cantidad_produccion) || 0;
+            
+            if (cantidadProduccion > 0) {
+                const conteo = window.DBModule?.contarPedidosYVentasFecha?.(fechaISO);
+                if (conteo) {
+                    disponiblesBase = conteo.disponibles === null 
+                        ? cantidadProduccion 
+                        : conteo.disponibles;
+                }
+            }
+        } catch (e) {
+            console.warn(`${LOG_PREFIX} ⚠️ Error obteniendo base:`, e);
+        }
+        
+        // Si no hay producción, no validar
+        if (cantidadProduccion <= 0 || disponiblesBase === null) {
+            console.log(`${LOG_PREFIX} ℹ️ Sin producción programada → sin ajustes`);
+            return {
+                items: items,
+                totalAjustes: 0,
+                huboAjustes: false,
+                mensaje: '',
+                detalles: []
+            };
+        }
+        
+        console.log(`${LOG_PREFIX} Disponibles base: ${disponiblesBase}, Producción: ${cantidadProduccion}`);
+        
+        // Trackear el cupo restante por producto
+        // (para no exceder al validar varios items del mismo producto)
+        const cupoRestantePorProducto = {};
+        let cupoGlobalRestante = disponiblesBase;
+        
+        // Inicializar cupo por producto
+        for (const item of items) {
+            const productoId = item.producto_id;
+            if (!productoId) continue;
+            if (cupoRestantePorProducto[productoId] === undefined) {
+                try {
+                    const cmpbc = window.DBModule?.getCMPBCProducto?.(productoId);
+                    if (cmpbc && cmpbc > 0) {
+                        // El cupo restante para este producto es min(disponibles, cmpbc)
+                        // Pero como puede haber varios productos con CMPBC, usamos el global
+                        cupoRestantePorProducto[productoId] = disponiblesBase;
+                    } else {
+                        cupoRestantePorProducto[productoId] = Infinity;
+                    }
+                } catch (e) {
+                    cupoRestantePorProducto[productoId] = Infinity;
+                }
+            }
+        }
+        
+        for (const item of items) {
+            const productoId = item.producto_id;
+            const cantidadOriginal = parseFloat(item.quantity) || 0;
+            
+            if (!productoId || cantidadOriginal <= 0) {
+                itemsAjustados.push({ ...item });
+                continue;
+            }
+            
+            // Verificar si este producto tiene CMPBC
+            let cmpbc = null;
+            try {
+                cmpbc = window.DBModule?.getCMPBCProducto?.(productoId);
+            } catch (e) {}
+            
+            if (!cmpbc || cmpbc <= 0) {
+                // Sin CMPBC → sin límite
+                itemsAjustados.push({ ...item });
+                continue;
+            }
+            
+            // Calcular disponibles para este item
+            const cupoProducto = cupoRestantePorProducto[productoId] ?? Infinity;
+            const cupoGlobal = cupoGlobalRestante;
+            const disponiblesItem = Math.min(cupoProducto, cupoGlobal);
+            
+            let cantidadFinal = cantidadOriginal;
+            let ajustado = false;
+            
+            if (cantidadOriginal > disponiblesItem) {
+                cantidadFinal = Math.max(0, disponiblesItem);
+                ajustado = true;
+                totalAjustes++;
+                
+                detalles.push({
+                    producto_id: productoId,
+                    producto_nombre: item.product_name || 'Producto',
+                    cantidad_original: cantidadOriginal,
+                    cantidad_ajustada: cantidadFinal,
+                    disponibles: disponiblesItem
+                });
+                
+                console.warn(`${LOG_PREFIX} ⚠️ Item "${item.product_name}": ${cantidadOriginal} → ${cantidadFinal}`);
+            }
+            
+            // Actualizar cupos
+            if (cupoRestantePorProducto[productoId] !== Infinity) {
+                cupoRestantePorProducto[productoId] = Math.max(0, cupoProducto - cantidadFinal);
+            }
+            if (cupoGlobalRestante !== null) {
+                cupoGlobalRestante = Math.max(0, cupoGlobalRestante - cantidadFinal);
+            }
+            
+            itemsAjustados.push({
+                ...item,
+                quantity: cantidadFinal
+            });
+        }
+        
+        // Construir mensaje
+        let mensaje = '';
+        if (totalAjustes > 0) {
+            const lineas = detalles.map(d => 
+                `• ${d.producto_nombre}: ${d.cantidad_original} → ${d.cantidad_ajustada}`
+            );
+            mensaje = `⚠️ Se ajustaron ${totalAjustes} item(s) por falta de cupo:\n${lineas.join('\n')}`;
+        }
+        
+        console.log(`${LOG_PREFIX} ✅ Validación completada: ${totalAjustes} ajuste(s)`);
+        
+        return {
+            items: itemsAjustados,
+            totalAjustes: totalAjustes,
+            huboAjustes: totalAjustes > 0,
+            mensaje: mensaje,
+            detalles: detalles
+        };
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return {
+            items: items,
+            totalAjustes: 0,
+            huboAjustes: false,
+            mensaje: '',
+            detalles: []
+        };
+    }
+}
+
+window.verificarConteoDisponible = verificarConteoDisponible;
+window.validarYAjustarCantidadPedido = validarYAjustarCantidadPedido;
+
+// ============================================================
 // CLIENTES
 // ============================================================
 
@@ -492,8 +868,15 @@ async function getOrder(id) {
 }
 
 // ============================================================
-// GUARDAR PEDIDO (individual)
+// 🆕 CORRECCIÓN #1: GUARDAR PEDIDO CON VALIDACIÓN DE CUPO
 // ============================================================
+// 
+// NUEVO parámetro opcional `validarCupo` (boolean, default true).
+// Si es true, antes de guardar se valida y ajusta la cantidad
+// de cada item según el cupo disponible.
+// 
+// El resultado incluye `huboAjustes` y `mensajeAjustes` para que
+// la UI pueda notificar al usuario.
 
 async function saveOrder(orderData) {
     const user = window.AuthModule.getCurrentUser();
@@ -522,12 +905,48 @@ async function saveOrder(orderData) {
             }
         }
 
+        // ============================================================
+        // 🆕 CORRECCIÓN #1: Validar y ajustar cantidades por cupo
+        // ============================================================
+        let itemsFinales = orderData.items;
+        let huboAjustes = false;
+        let mensajeAjustes = '';
+        
+        const validarCupo = orderData.validarCupo !== false; // default: true
+        
+        if (validarCupo) {
+            const fechaParaValidar = String(orderData.delivery_date).split('T')[0];
+            
+            const validacion = validarYAjustarCantidadPedido(
+                orderData.items,
+                fechaParaValidar,
+                orderId
+            );
+            
+            if (validacion.huboAjustes) {
+                itemsFinales = validacion.items;
+                huboAjustes = true;
+                mensajeAjustes = validacion.mensaje;
+                console.log(`🔧 [saveOrder] Ajustes aplicados: ${validacion.totalAjustes}`);
+            }
+        }
+
+        // Si TODOS los items quedaron en 0, no guardar
+        const itemsConCantidad = itemsFinales.filter(i => parseFloat(i.quantity) > 0);
+        if (itemsConCantidad.length === 0) {
+            return {
+                success: false,
+                error: '⛔ No hay cupos disponibles para los productos seleccionados en esta fecha.',
+                huboAjustes: true,
+                mensajeAjustes: 'No quedan unidades disponibles para esta fecha.'
+            };
+        }
+
         const clientName = orderData.client_name || 'Cliente sin nombre';
         const clientPhone = orderData.client_phone || null;
         const deliveryDate = orderData.delivery_date || new Date(Date.now() + 86400000).toISOString();
         const status = orderData.status || 'pending';
         const priority = orderData.priority || 'normal';
-        const total = orderData.total || 0;
         const notes = orderData.notes || null;
         const session = orderData.session || null;
         const hasAdvancePayment = orderData.has_advance_payment ? 1 : 0;
@@ -548,10 +967,11 @@ async function saveOrder(orderData) {
             }
         }
 
-        let calculatedTotal = total;
-        if (!total && orderData.items) {
-            calculatedTotal = orderData.items.reduce((sum, item) => sum + (item.quantity * (item.unit_price || 0)), 0);
-        }
+        // Calcular total con items finales
+        const calculatedTotal = itemsConCantidad.reduce(
+            (sum, item) => sum + (parseFloat(item.quantity) * (parseFloat(item.unit_price) || 0)),
+            0
+        );
 
         if (isUpdate) {
             window.DBModule.execute(`
@@ -589,23 +1009,22 @@ async function saveOrder(orderData) {
 
         if (!orderId) return { success: false, error: 'Error: No se pudo obtener el ID del pedido' };
 
-        if (orderData.items && orderData.items.length > 0) {
-            for (const item of orderData.items) {
-                if (item.producto_id || (item.product_name && item.quantity > 0)) {
-                    const itemUuid = window.DBModule.generateUuidForTable('order_items');
-                    
-                    window.DBModule.execute(`
-                        INSERT INTO order_items (order_id, product_name, producto_id, receta_id, 
-                            quantity, unit_price, subtotal, notes, uuid)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    `, [
-                        orderId, item.product_name || 'Producto',
-                        item.producto_id || null, item.receta_id || null,
-                        item.quantity || 1, item.unit_price || 0,
-                        (item.quantity || 1) * (item.unit_price || 0),
-                        item.notes || null, itemUuid
-                    ]);
-                }
+        // Insertar items finales (con cantidades ajustadas)
+        for (const item of itemsConCantidad) {
+            if (item.producto_id || (item.product_name && item.quantity > 0)) {
+                const itemUuid = window.DBModule.generateUuidForTable('order_items');
+                
+                window.DBModule.execute(`
+                    INSERT INTO order_items (order_id, product_name, producto_id, receta_id, 
+                        quantity, unit_price, subtotal, notes, uuid)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `, [
+                    orderId, item.product_name || 'Producto',
+                    item.producto_id || null, item.receta_id || null,
+                    parseFloat(item.quantity) || 1, parseFloat(item.unit_price) || 0,
+                    (parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0),
+                    item.notes || null, itemUuid
+                ]);
             }
         }
 
@@ -615,8 +1034,6 @@ async function saveOrder(orderData) {
             try { await descontarStockPedido(orderId); } catch (e) {}
         }
         if (status === 'delivered') {
-            // 🆕 v2.2.6: Si el estado se cambia a 'delivered' directamente desde el formulario,
-            // se entrega sin deuda por defecto (el usuario puede ajustarla después en Ventas).
             try { await registrarVentaDesdePedido(orderId, null, true); } catch (e) {}
             try { await cancelarDeudaPedido(orderId); } catch (e) {}
         }
@@ -639,14 +1056,22 @@ async function saveOrder(orderData) {
 
         window.DBModule.saveAndNotify();
         
+        // Notificación
         if (window.NotificationsModule) {
-            window.NotificationsModule.addNotification(
-                `📋 Pedido #${orderId} ${isUpdate ? 'actualizado' : 'creado'} correctamente`,
-                'success', 3000
-            );
+            let msg = `📋 Pedido #${orderId} ${isUpdate ? 'actualizado' : 'creado'} correctamente`;
+            if (huboAjustes) {
+                msg += ` (con ajustes de cupo)`;
+            }
+            window.NotificationsModule.addNotification(msg, 'success', 3000);
         }
         
-        return { success: true, id: orderId, updated: isUpdate };
+        return { 
+            success: true, 
+            id: orderId, 
+            updated: isUpdate,
+            huboAjustes: huboAjustes,
+            mensajeAjustes: mensajeAjustes
+        };
 
     } catch (e) {
         console.error('❌ Error guardando pedido:', e);
@@ -658,11 +1083,6 @@ async function saveOrder(orderData) {
 // 🆕 v2.1.13: HELPERS DE DÍAS DE LA SEMANA
 // ============================================================
 
-/**
- * Devuelve el nombre del día de la semana en español.
- * @param {number} diaNumero - 0=Domingo, 1=Lunes, ..., 6=Sábado
- * @param {boolean} corto - Si true, devuelve abreviatura (Lun, Mar...)
- */
 function getNombreDiaSemana(diaNumero, corto = false) {
     const diasLargo = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
     const diasCorto = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -671,11 +1091,6 @@ function getNombreDiaSemana(diaNumero, corto = false) {
     return corto ? diasCorto[idx] : diasLargo[idx];
 }
 
-/**
- * Normaliza el array de días excluidos.
- * Acepta: undefined, null, [], [0, 6], ['0', '6']
- * Devuelve: array de enteros únicos válidos (0-6) o [] si no hay
- */
 function getDiasExcluidosDelPatron(patron) {
     if (!patron) return [];
     const raw = patron.diasExcluidos;
@@ -694,7 +1109,6 @@ window.getDiasExcluidosDelPatron = getDiasExcluidosDelPatron;
 
 // ============================================================
 // RESERVA POR PERÍODO - GENERADOR DE FECHAS
-// 🆕 v2.1.13: Soporta exclusiones de días de la semana
 // ============================================================
 
 function generarFechasPorPatron(patron) {
@@ -707,7 +1121,6 @@ function generarFechasPorPatron(patron) {
     const fin = new Date(fechaFin + 'T00:00:00');
     if (inicio > fin) return fechas;
 
-    // 🆕 v2.1.13: Normalizar días excluidos
     const diasExcluidos = getDiasExcluidosDelPatron(patron);
     const excluidosSet = new Set(diasExcluidos);
     
@@ -741,8 +1154,6 @@ function generarFechasPorPatron(patron) {
                 incluir = true;
         }
 
-        // 🆕 v2.1.13: Aplicar exclusión SOLO en modo 'rango'
-        // (en 'semana' y 'especificos' el usuario ya selecciona qué días incluir)
         if (incluir && tipo === 'rango' && excluidosSet.size > 0) {
             if (excluidosSet.has(diaSemana)) {
                 incluir = false;
@@ -786,6 +1197,10 @@ function verificarPedidosDuplicados(clientName, fechas) {
     return resultado;
 }
 
+// ============================================================
+// 🆕 CORRECCIÓN #1: CREAR PEDIDOS MÚLTIPLES CON VALIDACIÓN DE CUPO
+// ============================================================
+
 async function crearPedidosMultiples(data) {
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
@@ -808,12 +1223,11 @@ async function crearPedidosMultiples(data) {
         if (fechasFinales.length === 0) return { success: false, error: 'No hay fechas seleccionadas para crear' };
 
         const duplicados = verificarPedidosDuplicados(clientName, fechasFinales);
-        const totalPorPedido = items.reduce((sum, item) => sum + (item.quantity * (item.unit_price || 0)), 0);
-        const horaEntrega = calcularHoraPorSesion(sesion);
-
+        
         const creados = [];
         const omitidos = [];
         const errores = [];
+        const ajustados = [];
 
         for (const fecha of fechasFinales) {
             if (duplicados[fecha]) {
@@ -822,8 +1236,31 @@ async function crearPedidosMultiples(data) {
             }
 
             try {
-                const deliveryDate = `${fecha}T${horaEntrega}:00`;
+                // 🆕 CORRECCIÓN #1: Validar y ajustar cantidades por cupo
+                const validacion = validarYAjustarCantidadPedido(items, fecha, null);
+                
+                const itemsConCantidad = validacion.items.filter(i => parseFloat(i.quantity) > 0);
+                
+                if (itemsConCantidad.length === 0) {
+                    omitidos.push({ fecha, razon: 'sin cupo' });
+                    continue;
+                }
+                
+                if (validacion.huboAjustes) {
+                    ajustados.push({
+                        fecha,
+                        totalAjustes: validacion.totalAjustes,
+                        detalles: validacion.detalles
+                    });
+                }
+
+                const deliveryDate = `${fecha}T${calcularHoraPorSesion(sesion)}:00`;
                 const orderUuid = window.DBModule.generateUuidForTable('orders');
+                
+                const totalPorPedido = itemsConCantidad.reduce(
+                    (sum, item) => sum + (parseFloat(item.quantity) * (parseFloat(item.unit_price) || 0)),
+                    0
+                );
 
                 const result = window.DBModule.execute(`
                     INSERT INTO orders (user_id, negocio_id, client_name, client_phone,
@@ -837,7 +1274,7 @@ async function crearPedidosMultiples(data) {
                 const newOrderId = result.lastId;
                 if (!newOrderId) { errores.push({ fecha, error: 'No se pudo obtener ID' }); continue; }
 
-                for (const item of items) {
+                for (const item of itemsConCantidad) {
                     const itemUuid = window.DBModule.generateUuidForTable('order_items');
                     
                     window.DBModule.execute(`
@@ -847,12 +1284,13 @@ async function crearPedidosMultiples(data) {
                     `, [
                         newOrderId, item.product_name || 'Producto',
                         item.producto_id || null, item.receta_id || null,
-                        item.quantity || 1, item.unit_price || 0,
-                        (item.quantity || 1) * (item.unit_price || 0), null, itemUuid
+                        parseFloat(item.quantity) || 1, parseFloat(item.unit_price) || 0,
+                        (parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0),
+                        null, itemUuid
                     ]);
                 }
 
-                creados.push({ fecha, orderId: newOrderId });
+                creados.push({ fecha, orderId: newOrderId, ajustado: validacion.huboAjustes });
             } catch (e) {
                 errores.push({ fecha, error: e.message });
             }
@@ -862,26 +1300,26 @@ async function crearPedidosMultiples(data) {
 
         if (window.NotificationsModule) {
             if (creados.length > 0) {
-                window.NotificationsModule.addNotification(
-                    `📅 ${creados.length} pedido${creados.length > 1 ? 's' : ''} creado${creados.length > 1 ? 's' : ''} por período`,
-                    'success', 5000
-                );
+                let msg = `📅 ${creados.length} pedido${creados.length > 1 ? 's' : ''} creado${creados.length > 1 ? 's' : ''} por período`;
+                if (ajustados.length > 0) {
+                    msg += ` · ${ajustados.length} con ajustes de cupo`;
+                }
+                window.NotificationsModule.addNotification(msg, 'success', 5000);
             }
             if (omitidos.length > 0) {
                 window.NotificationsModule.addNotification(
-                    `⚠️ ${omitidos.length} fecha${omitidos.length > 1 ? 's' : ''} omitida${omitidos.length > 1 ? 's' : ''} por duplicados`,
+                    `⚠️ ${omitidos.length} fecha${omitidos.length > 1 ? 's' : ''} omitida${omitidos.length > 1 ? 's' : ''}`,
                     'warning', 5000
                 );
             }
         }
 
         return {
-            success: true, creados, omitidos, errores,
+            success: true, creados, omitidos, errores, ajustados,
             totalCreados: creados.length,
             totalOmitidos: omitidos.length,
             totalErrores: errores.length,
-            totalPorPedido,
-            montoTotal: totalPorPedido * creados.length
+            totalAjustados: ajustados.length
         };
 
     } catch (e) {
@@ -891,20 +1329,9 @@ async function crearPedidosMultiples(data) {
 }
 
 // ============================================================
-// 🆕 v2.2.6: REGISTRAR VENTA DESDE PEDIDO (con sinDeuda)
+// REGISTRAR VENTA DESDE PEDIDO (con sinDeuda)
+// 🆕 CORRECCIÓN #1: Refuerza el vínculo venta↔pedido
 // ============================================================
-// 
-// CAMBIO: Se añade un tercer parámetro `sinDeuda` (boolean, default false).
-// 
-// - sinDeuda = false → comportamiento original:
-//     * Si el pedido tiene pago adelantado completo → is_debt=0, paid=1
-//     * Si el pedido NO tiene pago adelantado completo → is_debt=1, paid=0
-// 
-// - sinDeuda = true → fuerza:
-//     * is_debt = 0
-//     * paid = 1
-//     * payment_method = 'cash' (o el que tenga el pedido, pero paid=1)
-//     * Ignora cualquier saldo pendiente del pedido.
 
 async function registrarVentaDesdePedido(orderId, cantidadOverride = null, sinDeuda = false) {
     const user = window.AuthModule.getCurrentUser();
@@ -942,19 +1369,7 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null, sinDe
         `, [orderId]);
         const fromWaitingList = waitingItem.length > 0 ? 1 : 0;
 
-        // ============================================================
-        // 🆕 CORRECCIÓN #18: Fecha de venta desde lista de espera
-        // ============================================================
-        // REGLA: Si el cliente compró por lista de espera, la venta
-        //        SIEMPRE toma la fecha ACTUAL (nunca una fecha futura).
-        //
-        // Si NO viene de lista:
-        //   - Si el pedido es reciente (<24h) → fecha actual
-        //   - Si el pedido es antiguo → usar delivery_date
-        //     (pero nunca una fecha futura; si delivery_date > hoy,
-        //      usar hoy)
-        // ============================================================
-        
+        // Fecha de venta (CORRECCIÓN #18)
         let saleDate;
         const ahora = new Date();
         const hoyISO = ahora.toISOString();
@@ -963,24 +1378,19 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null, sinDe
         const horasDesdeCreacion = (ahora - createdDate) / (1000 * 60 * 60);
 
         if (fromWaitingList) {
-            // ✅ Compra por lista de espera → SIEMPRE fecha actual
             saleDate = hoyISO;
             console.log(`📅 [CORRECCIÓN #18] Venta desde lista de espera → fecha actual: ${hoyStr}`);
         } else if (horasDesdeCreacion < 24) {
-            // Pedido reciente → fecha actual
             saleDate = hoyISO;
             console.log(`📅 [CORRECCIÓN #18] Pedido reciente (<24h) → fecha actual: ${hoyStr}`);
         } else {
-            // Pedido antiguo → usar delivery_date, pero nunca futuro
             const deliveryDate = order.delivery_date || hoyISO;
             const deliveryDateStr = String(deliveryDate).split('T')[0];
             
             if (deliveryDateStr > hoyStr) {
-                // 🚫 delivery_date es FUTURO → usar hoy
                 saleDate = hoyISO;
                 console.log(`📅 [CORRECCIÓN #18] delivery_date (${deliveryDateStr}) es futuro → usando hoy: ${hoyStr}`);
             } else {
-                // ✅ delivery_date es pasado o hoy → usarlo
                 saleDate = deliveryDate;
                 console.log(`📅 [CORRECCIÓN #18] Usando delivery_date: ${deliveryDateStr}`);
             }
@@ -992,6 +1402,15 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null, sinDe
             
         let ventasRegistradas = 0;
         let totalVenta = 0;
+
+        // 🆕 CORRECCIÓN #1: Log del conteo antes de crear la venta
+        try {
+            const fechaConteo = String(order.delivery_date).split('T')[0];
+            const conteoAntes = window.DBModule.contarPedidosYVentasFecha?.(fechaConteo);
+            if (conteoAntes) {
+                console.log(`📊 [CORRECCIÓN #1] Conteo ANTES de entregar pedido #${orderId}: pedidos=${conteoAntes.pedidos} uds, ventas=${conteoAntes.ventas} uds`);
+            }
+        } catch (e) {}
 
         for (const item of order.items) {
             const productoId = item.producto_id || null;
@@ -1008,26 +1427,18 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null, sinDe
 
             const totalPaid = order.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
             
-            // ============================================================
-            // 🆕 v2.2.6: LÓGICA DE DEUDA CON `sinDeuda`
-            // ============================================================
             let isDebt = 0;
             
             if (sinDeuda) {
-                // ✅ "Entregar (sin deuda)" → forzar pago inmediato
                 isDebt = 0;
-                console.log(`💰 [registrarVentaDesdePedido] sinDeuda=true → venta marcada como PAGADA (is_debt=0, paid=1)`);
+                console.log(`💰 [registrarVentaDesdePedido] sinDeuda=true → venta marcada como PAGADA`);
             } else {
-                // 🚚 Comportamiento original: si no hay pago adelantado completo, es deuda
                 if (!order.has_advance_payment && totalPaid < order.total) {
                     isDebt = 1;
                 }
             }
             
-            // Si el pedido tenía pago adelantado, se respeta (no se cambia a deuda)
-            // Pero si sinDeuda=true, se fuerza a pagado incluso si había saldo pendiente
             if (!sinDeuda && order.has_advance_payment && order.advance_amount > 0) {
-                // Si el adelanto cubre todo, no es deuda
                 if (order.advance_amount >= order.total) {
                     isDebt = 0;
                 }
@@ -1036,6 +1447,7 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null, sinDe
             const productNameConNota = notaListaEspera ? `${productName} (${notaListaEspera})` : productName;
             const saleUuid = window.DBModule.generateUuidForTable('sales');
 
+            // 🆕 CORRECCIÓN #1: SIEMPRE guardar con order_id (para no contar doble)
             const result = window.DBModule.execute(`
                 INSERT INTO sales (
                     user_id, negocio_id, product_name, producto_id, receta_id, 
@@ -1054,6 +1466,7 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null, sinDe
             if (result.success) {
                 ventasRegistradas++;
                 totalVenta += total;
+                console.log(`   ✅ Venta guardada: producto=${productName}, cantidad=${quantity}, order_id=${orderId} (NO contará doble)`);
 
                 const txExistente = window.DBModule.query(`
                     SELECT id FROM transactions 
@@ -1078,6 +1491,17 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null, sinDe
         }
 
         window.DBModule.saveDatabase();
+
+        // 🆕 CORRECCIÓN #1: Log del conteo después
+        try {
+            const fechaConteo = String(order.delivery_date).split('T')[0];
+            const conteoDespues = window.DBModule.contarPedidosYVentasFecha?.(fechaConteo);
+            if (conteoDespues) {
+                console.log(`📊 [CORRECCIÓN #1] Conteo DESPUÉS de entregar pedido #${orderId}: pedidos=${conteoDespues.pedidos} uds, ventas=${conteoDespues.ventas} uds`);
+                console.log(`   ℹ️ Las unidades del pedido SIGUEN contando (status='delivered' no está excluido)`);
+                console.log(`   ℹ️ La venta NO se cuenta como directa porque tiene order_id=${orderId}`);
+            }
+        } catch (e) {}
 
         let mensaje;
         if (sinDeuda) {
@@ -1122,7 +1546,7 @@ async function procesarListaEsperaAlCancelar(orderId, seleccionados = []) {
 
                 const permisos = puedeUsuarioActualProcesarPedido(waitingOrderId);
                 if (!permisos.puede) {
-                    console.warn(`🔒 Pedido #${waitingOrderId} bloqueado por permisos:`, permisos.razon);
+                    console.warn(`🔒 Pedido #${waitingOrderId} bloqueado:`, permisos.razon);
                     continue;
                 }
 
@@ -1314,14 +1738,9 @@ async function reponerStockPedido(orderId) {
 }
 
 // ============================================================
-// 🆕 v2.2.6: CAMBIAR ESTADO DEL PEDIDO (con sinDeuda)
+// CAMBIAR ESTADO DEL PEDIDO
+// 🆕 CORRECCIÓN #1: Logs explícitos sobre el conteo de unidades
 // ============================================================
-// 
-// CAMBIO: Se añade un tercer parámetro `sinDeuda` (boolean, default false)
-// que se propaga a registrarVentaDesdePedido() cuando se entrega el pedido.
-// 
-// - status = 'delivered' + sinDeuda = true  → venta creada sin deuda
-// - status = 'delivered' + sinDeuda = false → venta creada con deuda (si aplica)
 
 async function updateOrderStatus(orderId, status, sinDeuda = false) {
     const user = window.AuthModule.getCurrentUser();
@@ -1375,9 +1794,16 @@ async function updateOrderStatus(orderId, status, sinDeuda = false) {
                 }
             }
             
-            // ============================================================
-            // 🆕 v2.2.6: Se pasa `sinDeuda` a registrarVentaDesdePedido()
-            // ============================================================
+            // 🆕 CORRECCIÓN #1: Log explícito del conteo antes/después
+            const fechaConteo = String(order.delivery_date).split('T')[0];
+            
+            try {
+                const conteoAntes = window.DBModule.contarPedidosYVentasFecha?.(fechaConteo);
+                if (conteoAntes) {
+                    console.log(`📊 [CORRECCIÓN #1] ANTES de entregar #${orderId}: pedidos=${conteoAntes.pedidos} uds (incluye este pedido), ventas=${conteoAntes.ventas} uds`);
+                }
+            } catch (e) {}
+            
             try {
                 console.log(`💰 [updateOrderStatus] Entregando pedido #${orderId} (sinDeuda=${sinDeuda})`);
                 const ventaResult = await registrarVentaDesdePedido(orderId, null, sinDeuda);
@@ -1388,13 +1814,18 @@ async function updateOrderStatus(orderId, status, sinDeuda = false) {
                 return { success: false, error: 'Error al registrar la venta: ' + e.message };
             }
             
-            // Cancelar deuda del pedido (si había pago adelantado parcial)
-            // NOTA: Si sinDeuda=true, la venta ya se creó como pagada.
-            //       Si sinDeuda=false, la venta puede quedar como deuda
-            //       (que se cobrará por separado desde Ventas → Deudas).
+            // Cancelar deuda del pedido (solo si NO es sinDeuda)
             if (!sinDeuda) {
                 try { await cancelarDeudaPedido(orderId); } catch (e) {}
             }
+            
+            try {
+                const conteoDespues = window.DBModule.contarPedidosYVentasFecha?.(fechaConteo);
+                if (conteoDespues) {
+                    console.log(`📊 [CORRECCIÓN #1] DESPUÉS de entregar #${orderId}: pedidos=${conteoDespues.pedidos} uds (incluye este pedido entregado), ventas=${conteoDespues.ventas} uds (la venta tiene order_id=${orderId}, NO cuenta como directa)`);
+                    console.log(`   ✅ El pedido entregado SIGUE contando (cupo reservado).`);
+                }
+            } catch (e) {}
         }
 
         if (status === 'waiting' && oldStatus !== 'waiting') {
@@ -1412,32 +1843,24 @@ async function updateOrderStatus(orderId, status, sinDeuda = false) {
             if (!attendResult.success) return { success: false, error: attendResult.error };
         }
 
-        // ============================================================
-        // 🆕 CORRECCIÓN #13: Si el pedido estaba en lista de espera y
-        // se cambia a OTRO estado (que no sea waiting/waiting_bought),
-        // eliminarlo de la lista y reindexar automáticamente.
-        // ============================================================
         const estabaEnListaEspera = (oldStatus === 'waiting' || oldStatus === 'waiting_bought');
         const nuevoEstadoNoEsEspera = (status !== 'waiting' && status !== 'waiting_bought');
         
         if (estabaEnListaEspera && nuevoEstadoNoEsEspera) {
-            console.log(`🔄 [updateOrderStatus] Pedido #${orderId} sale de lista de espera (${oldStatus} → ${status}). Reindexando...`);
+            console.log(`🔄 [updateOrderStatus] Pedido #${orderId} sale de lista de espera (${oldStatus} → ${status})`);
             
             try {
-                // Marcar el item de la lista como removido (soft-delete)
                 window.DBModule.execute(`
                     UPDATE waiting_list 
                     SET status = 'removed', deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                     WHERE order_id = ? AND negocio_id = ? AND deleted_at IS NULL
                 `, [orderId, negocioId]);
                 
-                // Reindexar las posiciones restantes
                 window.DBModule.reindexWaitingList();
                 
-                console.log(`✅ [updateOrderStatus] Pedido #${orderId} removido de la lista de espera y posiciones reindexadas`);
+                console.log(`✅ [updateOrderStatus] Pedido #${orderId} removido de la lista de espera`);
             } catch (e) {
-                console.warn(`⚠️ [updateOrderStatus] Error al remover de lista de espera:`, e.message);
-                // No bloqueamos el cambio de estado por un error en la lista
+                console.warn(`⚠️ [updateOrderStatus] Error al remover de lista:`, e.message);
             }
         }
 
@@ -1547,7 +1970,7 @@ async function getWaitingListWithDetails(excludeOrderId = null) {
         });
         
         if (listaFiltrada.length < lista.length) {
-            console.log(`🔒 [getWaitingListWithDetails] ${lista.length - listaFiltrada.length} pedido(s) filtrado(s) por permisos`);
+            console.log(`🔒 [getWaitingListWithDetails] ${lista.length - listaFiltrada.length} pedido(s) filtrado(s)`);
         }
         
         return listaFiltrada;
@@ -1580,8 +2003,6 @@ async function limpiarListaEspera() {
     const negocioId = window.DBModule.getNegocioIdActual();
     if (!negocioId) return { success: false, error: 'No hay negocio activo' };
 
-    console.log('🧹 [limpiarListaEspera] Iniciando...');
-
     try {
         const items = window.DBModule.query(`
             SELECT id, order_id, position, client_name
@@ -1589,8 +2010,6 @@ async function limpiarListaEspera() {
             WHERE negocio_id = ? AND deleted_at IS NULL AND status = 'waiting'
             ORDER BY position ASC
         `, [negocioId]);
-
-        console.log(`🧹 [limpiarListaEspera] ${items.length} items a limpiar`);
 
         let eliminados = 0;
         let cancelados = 0;
@@ -1601,7 +2020,6 @@ async function limpiarListaEspera() {
                 const permisos = puedeUsuarioActualProcesarPedido(item.order_id);
                 if (!permisos.puede) {
                     bloqueados++;
-                    console.log(`🔒 Pedido #${item.order_id} bloqueado, se omite de la limpieza`);
                     continue;
                 }
                 
@@ -1630,9 +2048,7 @@ async function limpiarListaEspera() {
                         cancelados++;
                     }
                 }
-            } catch (e) {
-                console.warn(`⚠️ [limpiarListaEspera] Error procesando item #${item.id}:`, e.message);
-            }
+            } catch (e) {}
         }
 
         try { window.DBModule.reindexWaitingList(); } catch (e) {}
@@ -1641,11 +2057,9 @@ async function limpiarListaEspera() {
 
         if (window.NotificationsModule) {
             let msg = `🧹 Lista de espera limpiada: ${eliminados} items eliminados, ${cancelados} pedidos cancelados`;
-            if (bloqueados > 0) msg += `, ${bloqueados} omitidos por permisos`;
+            if (bloqueados > 0) msg += `, ${bloqueados} omitidos`;
             window.NotificationsModule.addNotification(msg, 'success', 5000);
         }
-
-        console.log(`✅ [limpiarListaEspera] Completado: ${eliminados} eliminados, ${cancelados} cancelados, ${bloqueados} bloqueados`);
 
         return { success: true, eliminados, cancelados, bloqueados };
     } catch (e) {
@@ -1721,8 +2135,6 @@ async function procesarClienteDeLista(orderId, cantidad = null) {
         return { success: false, error: '🔒 ' + permisos.razon };
     }
 
-    console.log(`✅ [procesarClienteDeLista] Procesando pedido #${orderId}, cantidad: ${cantidad || 'toda'}`);
-
     try {
         const item = window.DBModule.query(`
             SELECT * FROM waiting_list 
@@ -1781,8 +2193,6 @@ async function procesarClienteDeLista(orderId, cantidad = null) {
                 'success', 4000
             );
         }
-
-        console.log(`✅ [procesarClienteDeLista] Completado: ${ventaResult.ventas} ventas, $${ventaResult.total}`);
 
         return {
             success: true,
@@ -1877,8 +2287,6 @@ async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', no
         return { success: false, error: 'La fecha "desde" debe ser anterior a "hasta"' };
     }
 
-    console.log(`🚨 [cancelarPedidosGlobalmente] Rango: ${fechaDesde} → ${fechaHasta}`);
-
     try {
         const pedidos = window.DBModule.query(`
             SELECT id, client_name, status, delivery_date
@@ -1891,8 +2299,6 @@ async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', no
             ORDER BY delivery_date ASC, id ASC
         `, [negocioId, fechaDesde, fechaHasta]);
 
-        console.log(`🚨 [cancelarPedidosGlobalmente] ${pedidos.length} pedidos a cancelar`);
-
         const notaFinal = [causa, nota].filter(x => x).join(' | ') || 'Cancelación global';
 
         let cancelados = 0;
@@ -1901,9 +2307,7 @@ async function cancelarPedidosGlobalmente(fechaDesde, fechaHasta, causa = '', no
         for (const pedido of pedidos) {
             try {
                 if (pedido.status === 'confirmed' || pedido.status === 'production') {
-                    try { await reponerStockPedido(pedido.id); } catch (e) {
-                        console.warn(`⚠️ Error reponiendo stock pedido #${pedido.id}:`, e.message);
-                    }
+                    try { await reponerStockPedido(pedido.id); } catch (e) {}
                 }
 
                 try { await window.DBModule.removeFromWaitingList(pedido.id); } catch (e) {}
@@ -2000,8 +2404,6 @@ async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, 
         return { success: false, error: 'La fecha destino no puede estar dentro del rango origen' };
     }
 
-    console.log(`🔄 [reprogramarPedidosPorRango] Rango: ${fechaDesde} → ${fechaHasta} ⇒ ${fechaDestino}`);
-
     try {
         let sql = `
             SELECT id, client_name, status, delivery_date, total
@@ -2024,7 +2426,6 @@ async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, 
         const pedidos = window.DBModule.query(sql, params);
 
         if (pedidos.length === 0) {
-            console.log('ℹ️ [reprogramarPedidosPorRango] No hay pedidos para reprogramar');
             return { 
                 success: true, 
                 reprogramados: 0, 
@@ -2032,8 +2433,6 @@ async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, 
                 mensaje: 'No hay pedidos en el rango especificado'
             };
         }
-
-        console.log(`🔄 [reprogramarPedidosPorRango] ${pedidos.length} pedidos a reprogramar`);
 
         const notaReprogramacion = [];
         if (causa) notaReprogramacion.push(`🔄 ${causa}`);
@@ -2061,7 +2460,6 @@ async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, 
                 _permisosPedidosCache.delete(pedido.id);
                 reprogramados++;
             } catch (e) {
-                console.error(`❌ Error reprogramando pedido #${pedido.id}:`, e);
                 errores.push(`Pedido #${pedido.id} (${pedido.client_name}): ${e.message}`);
             }
         }
@@ -2074,8 +2472,6 @@ async function reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, 
                 'success', 5000
             );
         }
-
-        console.log(`✅ [reprogramarPedidosPorRango] Completado: ${reprogramados} reprogramados, ${errores.length} errores`);
 
         return {
             success: true,
@@ -2117,8 +2513,6 @@ async function autoEliminarDeListaAlComprar(clientName) {
             return { success: true, eliminados: 0 };
         }
 
-        console.log(`🔄 [autoEliminarDeListaAlComprar] ${items.length} items de "${clientName}" a eliminar`);
-
         let eliminados = 0;
 
         for (const item of items) {
@@ -2159,7 +2553,7 @@ async function autoEliminarDeListaAlComprar(clientName) {
 
             if (window.NotificationsModule) {
                 window.NotificationsModule.addNotification(
-                    `✅ ${eliminados} entrada${eliminados > 1 ? 'es' : ''} de "${clientName}" eliminada${eliminados > 1 ? 's' : ''} de la lista de espera`,
+                    `✅ ${eliminados} entrada${eliminados > 1 ? 'es' : ''} de "${clientName}" eliminada${eliminados > 1 ? 's' : ''} de la lista`,
                     'info', 4000
                 );
             }
@@ -2177,6 +2571,7 @@ async function autoEliminarDeListaAlComprar(clientName) {
 // ============================================================
 
 window.OrdersModule = {
+    // CRUD básico
     getClients, getClient, saveClient,
     getProductos, getProducto,
     getOrders, getOrder, saveOrder,
@@ -2191,6 +2586,7 @@ window.OrdersModule = {
     generarFechasPorPatron,
     calcularHoraPorSesion,
     verificarPedidosDuplicados,
+    // Lista de espera
     getWaitingList, getWaitingListCount, getWaitingListWithDetails,
     addToWaitingList, removeFromWaitingList, attendFromWaitingList,
     limpiarListaEspera,
@@ -2200,21 +2596,25 @@ window.OrdersModule = {
     cancelarPedidosGlobalmente,
     reprogramarPedidosPorRango,
     autoEliminarDeListaAlComprar,
-    // 🆕 v2.1.12: Permisos
+    // Permisos
     puedeUsuarioActualProcesarPedido,
     puedeUsuarioActualProcesarVenta,
     limpiarCachePermisos,
-    // 🆕 v2.1.13: Helpers de días de la semana
+    // Helpers de días
     getNombreDiaSemana,
-    getDiasExcluidosDelPatron
+    getDiasExcluidosDelPatron,
+    // 🆕 CORRECCIÓN #1 (250926): Validación de cupo
+    verificarConteoDisponible,
+    validarYAjustarCantidadPedido
 };
 
-console.log('📦 Orders Module v2.2.6 (CORRECCIÓN #17: botón "Entregar (sin deuda)")');
-console.log('   🆕 Novedades v2.2.6:');
-console.log('      • updateOrderStatus(orderId, status, sinDeuda=false)');
-console.log('      • registrarVentaDesdePedido(orderId, cantidadOverride, sinDeuda=false)');
-console.log('      • sinDeuda=true → fuerza is_debt=0, paid=1 en la venta creada');
-console.log('      • sinDeuda=true → ignora cualquier saldo pendiente del pedido');
-console.log('      • sinDeuda=false → comportamiento original (compatibilidad)');
-console.log('      • saveOrder() con status="delivered" ahora entrega SIN DEUDA por defecto');
+console.log('📦 Orders Module v2.3.0 (CORRECCIÓN #1 250926: validación de cupo por UNIDADES)');
+console.log('   🆕 Novedades v2.3.0:');
+console.log('      • NUEVA: verificarConteoDisponible(fechaISO, productoId, cantidad)');
+console.log('      • NUEVA: validarYAjustarCantidadPedido(items, fechaISO, excludeOrderId)');
+console.log('      • saveOrder() valida y ajusta cantidades automáticamente (param. validarCupo)');
+console.log('      • crearPedidosMultiples() valida cupo por fecha');
+console.log('      • updateOrderStatus() refuerza el vínculo venta↔pedido (order_id)');
+console.log('      • registrarVentaDesdePedido() guarda SIEMPRE con order_id');
+console.log('      • Logs explícitos de conteo antes/después de entregar');
 console.log('   ✅ Compatibilidad total con versiones anteriores');

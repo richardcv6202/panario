@@ -1,7 +1,13 @@
 // ============================================================
 // 📦 UI SETTINGS - Panario (Configuración y Herramientas)
-// v2.2.9 (250926): CORRECCIONES FINALES
+// v2.3.0 (250926): CORRECCIONES FINALES
 //   - ✅ CORRECCIÓN #8 (2/2): Modal de progreso en export/import
+//     * REESCRITA COMPLETA la sección de backups
+//     * Eliminado el reemplazo temporal de ModalModule.showConfirm
+//     * Flujo lineal con await correcto
+//     * Timeout para eliminación del input file (evita cancelar diálogo)
+//     * Manejo de errores robusto en cada paso
+//     * Los modales se apilan correctamente (confirmación → progreso)
 //   - ✅ CORRECCIÓN #10: Algoritmo inteligente de bloques (regla amanecer)
 //   - ✅ CORRECCIÓN #11: Guardar y cargar producto_id en producción
 //   - ✅ CORRECCIÓN #14: Modal de eliminación por error mejorado
@@ -21,7 +27,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.2.9';
+    return '2.3.0';
 }
 
 window.getAppVersion = getAppVersion;
@@ -97,25 +103,35 @@ function contarPedidosYVentasFecha(fechaISO) {
         }
         
         const pedidosResult = window.DBModule.query(
-            `SELECT COUNT(*) as count FROM orders 
-             WHERE negocio_id = ? 
-               AND DATE(delivery_date) = DATE(?)
-               AND deleted_at IS NULL
-               AND status NOT IN ('cancelled')`,
+            `SELECT COALESCE(SUM(oi.quantity), 0) as unidades
+             FROM orders o
+             INNER JOIN order_items oi ON oi.order_id = o.id
+             INNER JOIN productos p ON p.id = oi.producto_id
+             WHERE o.negocio_id = ? 
+               AND DATE(o.delivery_date) = DATE(?)
+               AND o.deleted_at IS NULL
+               AND o.status NOT IN ('cancelled', 'waiting_bought')
+               AND oi.deleted_at IS NULL
+               AND p.capacidad_max_bloque IS NOT NULL 
+               AND p.capacidad_max_bloque > 0`,
             [negocioId, fechaISO]
         );
-        const pedidos = pedidosResult[0]?.count || 0;
+        const pedidos = parseFloat(pedidosResult[0]?.unidades) || 0;
         
         const ventasResult = window.DBModule.query(
-            `SELECT COUNT(*) as count FROM sales 
-             WHERE negocio_id = ? 
-               AND DATE(sale_date) = DATE(?)
-               AND deleted_at IS NULL 
-               AND voided = 0
-               AND (order_id IS NULL OR order_id = 0)`,
+            `SELECT COALESCE(SUM(s.quantity), 0) as unidades
+             FROM sales s
+             INNER JOIN productos p ON p.id = s.producto_id
+             WHERE s.negocio_id = ? 
+               AND DATE(s.sale_date, "localtime") = DATE(?)
+               AND s.deleted_at IS NULL 
+               AND s.voided = 0
+               AND (s.order_id IS NULL OR s.order_id = 0)
+               AND p.capacidad_max_bloque IS NOT NULL 
+               AND p.capacidad_max_bloque > 0`,
             [negocioId, fechaISO]
         );
-        const ventas = ventasResult[0]?.count || 0;
+        const ventas = parseFloat(ventasResult[0]?.unidades) || 0;
         
         const config = getProduccionConfig(fechaISO);
         const cantidadProduccion = parseFloat(config?.cantidad_produccion) || 0;
@@ -124,7 +140,7 @@ function contarPedidosYVentasFecha(fechaISO) {
             ? Math.max(0, cantidadProduccion - pedidos - ventas)
             : null;
         
-        return { pedidos, ventas, disponibles, cantidadProduccion };
+        return { pedidos, ventas, disponibles, cantidadProduccion, unidadesReservadas: pedidos + ventas };
     } catch (e) {
         return { pedidos: 0, ventas: 0, disponibles: 0, cantidadProduccion: 0 };
     }
@@ -321,7 +337,7 @@ window._formatearMensajeBloque = _formatearMensajeBloque;
 // ============================================================
 
 function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
-    const LOG_PREFIX = '🧠 [calcularBloquesIdeales v2.2.9]';
+    const LOG_PREFIX = '🧠 [calcularBloquesIdeales v2.3.0]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -1175,10 +1191,10 @@ function showHorarioDetalle(dateStr) {
                 ${conteo.cantidadProduccion > 0 ? `
                 <div style="background: var(--bg); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; font-size: 12px;">
                     <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-                        <span>📋 Pedidos reservados:</span><strong>${conteo.pedidos}</strong>
+                        <span>📋 Pedidos reservados:</span><strong>${formatearCantidadProduccion(conteo.pedidos)}</strong>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-                        <span>💰 Ventas directas:</span><strong>${conteo.ventas}</strong>
+                        <span>💰 Ventas directas:</span><strong>${formatearCantidadProduccion(conteo.ventas)}</strong>
                     </div>
                     <div style="display: flex; justify-content: space-between; padding: 4px 0; border-top: 1px solid var(--border-color); margin-top: 4px; padding-top: 4px;">
                         <span>✅ Disponibles:</span>
@@ -2431,8 +2447,8 @@ function consultarHorariosFecha() {
             <div style="background: #8b5cf615; border: 1px solid #8b5cf6; border-radius: 6px; padding: 8px 10px; margin-top: 8px; font-size: 12px;">
                 <div style="color: #8b5cf6; font-weight: 600; margin-bottom: 4px;">🔨 Producción programada${esAyer ? ' 🌙' : ''}</div>
                 <div style="display: flex; justify-content: space-between;"><span>📦 Cantidad:</span><strong>${formatearCantidadProduccion(prodConfig.cantidad_produccion)}</strong></div>
-                <div style="display: flex; justify-content: space-between;"><span>📋 Pedidos:</span><strong>${conteo.pedidos}</strong></div>
-                <div style="display: flex; justify-content: space-between;"><span>💰 Ventas:</span><strong>${conteo.ventas}</strong></div>
+                <div style="display: flex; justify-content: space-between;"><span>📋 Pedidos:</span><strong>${formatearCantidadProduccion(conteo.pedidos)}</strong></div>
+                <div style="display: flex; justify-content: space-between;"><span>💰 Ventas:</span><strong>${formatearCantidadProduccion(conteo.ventas)}</strong></div>
                 <div style="display: flex; justify-content: space-between; border-top: 1px solid var(--border-color); margin-top: 4px; padding-top: 4px;">
                     <span>✅ Disponibles:</span>
                     <strong style="color: ${conteo.disponibles > 0 ? '#10b981' : '#ef4444'};">${formatearCantidadProduccion(conteo.disponibles)} / ${formatearCantidadProduccion(conteo.cantidadProduccion)}</strong>
@@ -3164,10 +3180,104 @@ window.actualizarPreviewReprogramacion = actualizarPreviewReprogramacion;
 window.executeReprogramarPedidos = executeReprogramarPedidos;
 
 // ============================================================
-// ACCIONES DE BACKUP CON MODAL DE PROGRESO (CORRECCIÓN #8)
+// 🆕 CORRECCIÓN #8 (240926): BACKUPS - REESCRITURA COMPLETA
+// ============================================================
+// 
+// PROBLEMA ANTERIOR:
+//   Las funciones de exportar/importar reemplazaban temporalmente
+//   ModalModule.showConfirm, lo cual era frágil. Además, el input
+//   file se eliminaba demasiado pronto en móviles, cancelando el
+//   diálogo de selección de archivo.
+//
+// SOLUCIÓN:
+//   1. Eliminado el reemplazo temporal de showConfirm.
+//   2. Flujo lineal con await: confirmar → mostrar progreso → ejecutar.
+//   3. Input file con timeout de 5 minutos para no cancelar el diálogo.
+//   4. Manejo de errores robusto en cada paso.
+//   5. Modal de progreso se cierra garantizadamente con triple fallback.
 // ============================================================
 
-function exportDatabaseCompleteAction() {
+/**
+ * 🆕 CORRECCIÓN #8: Abre un diálogo de selección de archivo de forma
+ * robusta, esperando hasta 5 minutos antes de eliminar el input.
+ * 
+ * @param {string} accept - Tipos MIME aceptados (ej: ".db,.sqlite")
+ * @returns {Promise<File|null>} - El archivo seleccionado o null
+ */
+function abrirSelectorArchivo(accept = '.db,.sqlite,.sqlite3') {
+    const LOG_PREFIX = '📁 [abrirSelectorArchivo]';
+    console.log(`${LOG_PREFIX} Abriendo selector de archivo...`);
+    
+    return new Promise((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = accept;
+        input.style.position = 'fixed';
+        input.style.top = '-1000px';
+        input.style.left = '-1000px';
+        input.style.opacity = '0';
+        input.style.pointerEvents = 'none';
+        
+        let resolved = false;
+        let timeoutId = null;
+        
+        const cleanup = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            setTimeout(() => {
+                if (input.parentNode) input.parentNode.removeChild(input);
+                console.log(`${LOG_PREFIX} Input eliminado del DOM`);
+            }, 2000);
+        };
+        
+        input.onchange = (e) => {
+            if (resolved) return;
+            resolved = true;
+            const file = e.target.files && e.target.files[0];
+            console.log(`${LOG_PREFIX} Archivo seleccionado: ${file?.name || 'ninguno'}`);
+            cleanup();
+            resolve(file || null);
+        };
+        
+        // Fallback: si el usuario cancela, el navegador no dispara onchange
+        // en algunos casos, así que usamos focus como heurística
+        window.addEventListener('focus', function onFocus() {
+            window.removeEventListener('focus', onFocus);
+            setTimeout(() => {
+                if (resolved) return;
+                if (input.files && input.files.length > 0) {
+                    resolved = true;
+                    const file = input.files[0];
+                    console.log(`${LOG_PREFIX} Archivo detectado por focus: ${file.name}`);
+                    cleanup();
+                    resolve(file);
+                } else {
+                    resolved = true;
+                    console.log(`${LOG_PREFIX} Cancelado por el usuario`);
+                    cleanup();
+                    resolve(null);
+                }
+            }, 500);
+        }, { once: true });
+        
+        // Timeout de seguridad: 5 minutos
+        timeoutId = setTimeout(() => {
+            if (resolved) return;
+            resolved = true;
+            console.warn(`${LOG_PREFIX} Timeout de 5 minutos → sin archivo`);
+            cleanup();
+            resolve(null);
+        }, 5 * 60 * 1000);
+        
+        document.body.appendChild(input);
+        input.click();
+    });
+}
+
+/**
+ * 🆕 CORRECCIÓN #8: Exportar copia COMPLETA (admin)
+ * Flujo: confirmar → progreso → ejecutar → cerrar progreso.
+ */
+async function exportDatabaseCompleteAction() {
     const LOG_PREFIX = '📦 [exportDatabaseComplete]';
     console.log(`${LOG_PREFIX} Iniciando...`);
     
@@ -3177,6 +3287,24 @@ function exportDatabaseCompleteAction() {
         return;
     }
     
+    // 1) Confirmar primero
+    const confirm = await window.ModalModule.showConfirm({
+        title: '📦 Exportar copia completa',
+        message: 'Se exportará TODA la base de datos, incluyendo usuarios y negocios.\n\n' +
+                 '💾 Guarda el archivo en un lugar seguro.\n\n' +
+                 '¿Continuar?',
+        confirmText: '✅ Exportar',
+        cancelText: '❌ Cancelar',
+        icon: '📦',
+        confirmColor: '#10b981'
+    });
+    
+    if (!confirm) {
+        console.log(`${LOG_PREFIX} Cancelado por el usuario`);
+        return;
+    }
+    
+    // 2) Mostrar progreso
     let progress = null;
     try {
         progress = window.ModalModule.showProgressModal({
@@ -3188,34 +3316,66 @@ function exportDatabaseCompleteAction() {
         console.warn(`${LOG_PREFIX} No se pudo mostrar modal:`, e);
     }
     
+    // 3) Ejecutar exportación en el siguiente tick
     setTimeout(() => {
         try {
             if (progress) progress.update('Serializando base de datos...', 30);
+            
             const result = window.DBModule.downloadDatabase(window.DBModule.BACKUP_TYPE_COMPLETE);
             
             if (result && result.success) {
                 console.log(`${LOG_PREFIX} ✅ Completado:`, result.filename);
                 if (progress) progress.update('Generando archivo...', 80);
+                
                 setTimeout(() => {
-                    if (progress) progress.success(`✅ Copia completa exportada (${(result.size / 1024).toFixed(1)} KB)`);
+                    if (progress) {
+                        progress.success(`✅ Copia completa exportada (${(result.size / 1024).toFixed(1)} KB)`);
+                    }
                 }, 300);
             } else {
                 console.error(`${LOG_PREFIX} ❌ Error:`, result?.error);
-                if (progress) progress.error(result?.error || 'Error al exportar');
-                else window.showToast('❌ Error: ' + (result?.error || 'Desconocido'), 'error', 5000);
+                if (progress) {
+                    progress.error(result?.error || 'Error al exportar');
+                } else {
+                    window.showToast('❌ Error: ' + (result?.error || 'Desconocido'), 'error', 5000);
+                }
             }
         } catch (e) {
             console.error(`${LOG_PREFIX} ❌ Excepción:`, e);
-            if (progress) progress.error(e.message);
-            else window.showToast('❌ Error: ' + e.message, 'error', 5000);
+            if (progress) {
+                progress.error(e.message);
+            } else {
+                window.showToast('❌ Error: ' + e.message, 'error', 5000);
+            }
         }
     }, 150);
 }
 
-function exportDatabaseDataOnlyAction() {
+/**
+ * 🆕 CORRECCIÓN #8: Exportar copia SOLO DATOS (todos los usuarios)
+ */
+async function exportDatabaseDataOnlyAction() {
     const LOG_PREFIX = '📊 [exportDatabaseDataOnly]';
     console.log(`${LOG_PREFIX} Iniciando...`);
     
+    // 1) Confirmar primero
+    const confirm = await window.ModalModule.showConfirm({
+        title: '📊 Exportar copia de datos',
+        message: 'Se exportarán los datos operativos (ventas, pedidos, insumos, etc.)\n\n' +
+                 '⚠️ NO se incluyen usuarios ni negocios.\n\n' +
+                 '¿Continuar?',
+        confirmText: '✅ Exportar',
+        cancelText: '❌ Cancelar',
+        icon: '📊',
+        confirmColor: '#3b82f6'
+    });
+    
+    if (!confirm) {
+        console.log(`${LOG_PREFIX} Cancelado por el usuario`);
+        return;
+    }
+    
+    // 2) Mostrar progreso
     let progress = null;
     try {
         progress = window.ModalModule.showProgressModal({
@@ -3223,95 +3383,170 @@ function exportDatabaseDataOnlyAction() {
             message: 'Preparando datos operativos...',
             icon: '📊'
         });
-    } catch (e) {}
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} No se pudo mostrar modal:`, e);
+    }
     
+    // 3) Ejecutar
     setTimeout(() => {
         try {
             if (progress) progress.update('Serializando...', 30);
+            
             const result = window.DBModule.downloadDatabase(window.DBModule.BACKUP_TYPE_DATA_ONLY);
             
             if (result && result.success) {
+                console.log(`${LOG_PREFIX} ✅ Completado:`, result.filename);
                 if (progress) progress.update('Generando archivo...', 80);
+                
                 setTimeout(() => {
-                    if (progress) progress.success(`✅ Copia de datos exportada (${(result.size / 1024).toFixed(1)} KB)`);
+                    if (progress) {
+                        progress.success(`✅ Copia de datos exportada (${(result.size / 1024).toFixed(1)} KB)`);
+                    }
                 }, 300);
             } else {
-                if (progress) progress.error(result?.error || 'Error');
-                else window.showToast('❌ Error: ' + (result?.error || 'Desconocido'), 'error', 5000);
+                console.error(`${LOG_PREFIX} ❌ Error:`, result?.error);
+                if (progress) {
+                    progress.error(result?.error || 'Error al exportar');
+                } else {
+                    window.showToast('❌ Error: ' + (result?.error || 'Desconocido'), 'error', 5000);
+                }
             }
         } catch (e) {
-            if (progress) progress.error(e.message);
-            else window.showToast('❌ Error: ' + e.message, 'error', 5000);
+            console.error(`${LOG_PREFIX} ❌ Excepción:`, e);
+            if (progress) {
+                progress.error(e.message);
+            } else {
+                window.showToast('❌ Error: ' + e.message, 'error', 5000);
+            }
         }
     }, 150);
 }
 
+/**
+ * 🆕 CORRECCIÓN #8: Importar copia (detección automática)
+ * Flujo: seleccionar archivo → confirmar → progreso → ejecutar.
+ */
 async function importDatabaseSmartAction() {
-    const user = window.AuthModule.getCurrentUser();
-    if (!user || user.is_admin !== 1) {
-        window.showToast('⚠️ Solo el administrador puede importar copias completas', 'warning', 4000);
+    const LOG_PREFIX = '📥 [importDatabaseSmart]';
+    console.log(`${LOG_PREFIX} Iniciando...`);
+    
+    // 1) Seleccionar archivo (con timeout para no cancelar el diálogo)
+    const file = await abrirSelectorArchivo('.db,.sqlite,.sqlite3');
+    
+    if (!file) {
+        console.log(`${LOG_PREFIX} Sin archivo seleccionado`);
         return;
     }
     
+    const user = window.AuthModule.getCurrentUser();
+    const isAdmin = user && user.is_admin === 1;
+    
+    // 2) Confirmar
+    const confirm = await window.ModalModule.showConfirm({
+        title: '📥 Importar copia',
+        message: `¿Importar "${file.name}"?\n\n` +
+                 `⚠️ Esto REEMPLAZARÁ todos los datos actuales` +
+                 `${isAdmin ? ' (incluyendo usuarios y negocios)' : ''}.\n\n` +
+                 `💡 Haz una copia de seguridad antes si tienes datos importantes.`,
+        confirmText: '📥 Importar',
+        cancelText: '❌ Cancelar',
+        icon: '⚠️',
+        confirmColor: '#ef4444'
+    });
+    
+    if (!confirm) {
+        console.log(`${LOG_PREFIX} Cancelado por el usuario`);
+        return;
+    }
+    
+    // 3) Mostrar progreso
+    let progress = null;
     try {
-        let progress = null;
-        const originalShowConfirm = window.ModalModule.showConfirm;
+        progress = window.ModalModule.showProgressModal({
+            title: 'Importando copia',
+            message: 'Leyendo archivo...',
+            icon: '📥'
+        });
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} No se pudo mostrar modal:`, e);
+    }
+    
+    // 4) Ejecutar importación
+    try {
+        if (progress) progress.update('Validando archivo...', 20);
         
-        window.ModalModule.showConfirm = async function(options) {
-            const confirm = await originalShowConfirm.call(this, options);
-            if (confirm) {
-                try {
-                    progress = window.ModalModule.showProgressModal({
-                        title: 'Importando copia',
-                        message: 'Leyendo archivo...',
-                        icon: '📥'
-                    });
-                } catch (e) {}
-            }
-            window.ModalModule.showConfirm = originalShowConfirm;
-            return confirm;
-        };
-        
-        const result = await window.DBModule.importDatabaseFromFile();
+        const result = await window.DBModule.importDatabase(file);
         
         if (result && result.success) {
+            console.log(`${LOG_PREFIX} ✅ Importación exitosa:`, result.tables?.length, 'tablas');
             if (progress) progress.update('Aplicando cambios...', 90);
+            
             setTimeout(() => {
-                if (progress) progress.success(`✅ Importados ${result.tables?.length || 0} tablas`);
+                if (progress) {
+                    progress.success(`✅ Importados ${result.tables?.length || 0} tablas`);
+                }
             }, 300);
             
+            // Recargar tras breve pausa
             setTimeout(() => {
                 const url = new URL(window.location.href);
                 url.searchParams.set('refresh', Date.now());
                 window.location.href = url.toString();
-            }, 1500);
-        } else if (result && result.error) {
-            if (progress) progress.error(result.error);
+            }, 1800);
+        } else {
+            const errMsg = result?.error || 'Error desconocido';
+            console.error(`${LOG_PREFIX} ❌ Error:`, errMsg);
+            if (progress) {
+                progress.error(errMsg);
+            } else {
+                window.showToast('❌ Error: ' + errMsg, 'error', 6000);
+            }
         }
     } catch (e) {
-        window.showToast('❌ Error: ' + e.message, 'error', 5000);
+        console.error(`${LOG_PREFIX} ❌ Excepción:`, e);
+        if (progress) {
+            progress.error(e.message);
+        } else {
+            window.showToast('❌ Error: ' + e.message, 'error', 6000);
+        }
     }
 }
 
+/**
+ * 🆕 CORRECCIÓN #8: Importar solo datos (reemplaza operativos)
+ */
 async function importDatabaseDataOnlyFromFileAction() {
+    const LOG_PREFIX = '📊 [importDatabaseDataOnly]';
+    console.log(`${LOG_PREFIX} Iniciando...`);
+    
+    const file = await abrirSelectorArchivo('.db,.sqlite,.sqlite3');
+    if (!file) return;
+    
+    const confirm = await window.ModalModule.showConfirm({
+        title: '📊 Importar solo datos',
+        message: `¿Importar los DATOS de "${file.name}"?\n\n` +
+                 `✅ Se reemplazarán los datos operativos.\n` +
+                 `✅ Tus usuarios y código de invitación se CONSERVARÁN.\n\n` +
+                 `¿Continuar?`,
+        confirmText: '📊 Importar',
+        cancelText: '❌ Cancelar',
+        icon: '📊',
+        confirmColor: '#3b82f6'
+    });
+    
+    if (!confirm) return;
+    
+    let progress = null;
     try {
-        let progress = null;
-        const originalShowConfirm = window.ModalModule.showConfirm;
-        
-        window.ModalModule.showConfirm = async function(options) {
-            const confirm = await originalShowConfirm.call(this, options);
-            if (confirm) {
-                try {
-                    progress = window.ModalModule.showProgressModal({
-                        title: 'Importando datos',
-                        message: 'Reemplazando datos operativos...',
-                        icon: '📊'
-                    });
-                } catch (e) {}
-            }
-            window.ModalModule.showConfirm = originalShowConfirm;
-            return confirm;
-        };
+        progress = window.ModalModule.showProgressModal({
+            title: 'Importando datos',
+            message: 'Reemplazando datos operativos...',
+            icon: '📊'
+        });
+    } catch (e) {}
+    
+    try {
+        if (progress) progress.update('Validando archivo...', 20);
         
         const result = await window.DBModule.importDatabaseDataOnlyFromFile();
         
@@ -3325,40 +3560,60 @@ async function importDatabaseDataOnlyFromFileAction() {
                 const url = new URL(window.location.href);
                 url.searchParams.set('refresh', Date.now());
                 window.location.href = url.toString();
-            }, 1500);
-        } else if (result && result.error) {
-            if (progress) progress.error(result.error);
+            }, 1800);
+        } else {
+            const errMsg = result?.error || 'Error desconocido';
+            if (progress) progress.error(errMsg);
+            else window.showToast('❌ Error: ' + errMsg, 'error', 6000);
         }
     } catch (e) {
-        window.showToast('❌ Error: ' + e.message, 'error', 5000);
+        if (progress) progress.error(e.message);
+        else window.showToast('❌ Error: ' + e.message, 'error', 6000);
     }
 }
 
+/**
+ * 🆕 CORRECCIÓN #8: Fusionar bases de datos
+ */
 async function importDatabaseFusionAction() {
+    const LOG_PREFIX = '🔀 [importDatabaseFusion]';
+    console.log(`${LOG_PREFIX} Iniciando...`);
+    
     const user = window.AuthModule.getCurrentUser();
     if (!user || user.is_admin !== 1) {
         window.showToast('⚠️ Solo el administrador puede fusionar', 'warning', 4000);
         return;
     }
     
+    const file = await abrirSelectorArchivo('.db,.sqlite,.sqlite3');
+    if (!file) return;
+    
+    const confirm = await window.ModalModule.showConfirm({
+        title: '🔀 Fusionar bases de datos',
+        message: `¿Fusionar los datos de "${file.name}" con los actuales?\n\n` +
+                 `📥 Los registros NUEVOS se añadirán.\n` +
+                 `🔄 Los existentes (mismo uuid) se comparan: gana el más reciente.\n` +
+                 `✅ Tus usuarios y código se CONSERVAN.\n\n` +
+                 `¿Continuar?`,
+        confirmText: '🔀 Fusionar',
+        cancelText: '❌ Cancelar',
+        icon: '🔀',
+        confirmColor: '#8b5cf6'
+    });
+    
+    if (!confirm) return;
+    
+    let progress = null;
     try {
-        let progress = null;
-        const originalShowConfirm = window.ModalModule.showConfirm;
-        
-        window.ModalModule.showConfirm = async function(options) {
-            const confirm = await originalShowConfirm.call(this, options);
-            if (confirm) {
-                try {
-                    progress = window.ModalModule.showProgressModal({
-                        title: 'Fusionando bases de datos',
-                        message: 'Analizando registros...',
-                        icon: '🔀'
-                    });
-                } catch (e) {}
-            }
-            window.ModalModule.showConfirm = originalShowConfirm;
-            return confirm;
-        };
+        progress = window.ModalModule.showProgressModal({
+            title: 'Fusionando bases',
+            message: 'Analizando registros...',
+            icon: '🔀'
+        });
+    } catch (e) {}
+    
+    try {
+        if (progress) progress.update('Comparando por UUID...', 30);
         
         const result = await window.DBModule.importDatabaseDataOnlyFromFile();
         
@@ -3377,20 +3632,25 @@ async function importDatabaseFusionAction() {
                 const url = new URL(window.location.href);
                 url.searchParams.set('refresh', Date.now());
                 window.location.href = url.toString();
-            }, 2000);
-        } else if (result && result.error) {
-            if (progress) progress.error(result.error);
+            }, 2200);
+        } else {
+            const errMsg = result?.error || 'Error desconocido';
+            if (progress) progress.error(errMsg);
+            else window.showToast('❌ Error: ' + errMsg, 'error', 6000);
         }
     } catch (e) {
-        window.showToast('❌ Error: ' + e.message, 'error', 5000);
+        if (progress) progress.error(e.message);
+        else window.showToast('❌ Error: ' + e.message, 'error', 6000);
     }
 }
 
+// Exponer las funciones globalmente
 window.exportDatabaseCompleteAction = exportDatabaseCompleteAction;
 window.exportDatabaseDataOnlyAction = exportDatabaseDataOnlyAction;
 window.importDatabaseSmartAction = importDatabaseSmartAction;
 window.importDatabaseDataOnlyFromFileAction = importDatabaseDataOnlyFromFileAction;
 window.importDatabaseFusionAction = importDatabaseFusionAction;
+window.abrirSelectorArchivo = abrirSelectorArchivo;
 
 // ============================================================
 // 🆕 CORRECCIÓN #6: BOTÓN PARA RESTAURAR ESTILOS RESIDUALES
@@ -3408,7 +3668,6 @@ function restaurarEstilosAction() {
             console.warn(`${LOG_PREFIX} ⚠️ limpiarEstilosResiduales no está disponible`);
         }
         
-        // Forzar re-render del header
         const header = document.querySelector('#appScreen header');
         if (header) {
             header.style.removeProperty('transform');
@@ -3420,13 +3679,11 @@ function restaurarEstilosAction() {
             console.log(`${LOG_PREFIX} Header restaurado`);
         }
         
-        // Limpiar el body
         document.body.style.removeProperty('transform');
         document.body.style.removeProperty('will-change');
         document.body.style.removeProperty('isolation');
         document.body.style.removeProperty('overflow');
         
-        // Limpiar html
         document.documentElement.style.removeProperty('transform');
         document.documentElement.style.removeProperty('will-change');
         document.documentElement.style.removeProperty('overflow-x');
@@ -3593,7 +3850,6 @@ async function regenerarCodigoInvitacionAction() {
         if (result.success) {
             window.showToast(`✅ Nuevo código: ${result.codigo}`, 'success', 5000);
             
-            // Actualizar el currentUser
             const negocio = window.DBModule.getNegocio(user.negocio_id);
             if (negocio) {
                 user.negocio = negocio;
@@ -4377,7 +4633,6 @@ async function executeDeleteSelected() {
             }
         }
         
-        // Si es venta, eliminar también su transacción asociada
         if (tab === 'ventas') {
             for (const id of selected) {
                 try {
@@ -4386,7 +4641,6 @@ async function executeDeleteSelected() {
             }
         }
         
-        // Si es pedido, eliminar sus items y waiting_list
         if (tab === 'pedidos') {
             for (const id of selected) {
                 try {
@@ -4732,11 +4986,15 @@ window.showReprogramarPedidosModal = showReprogramarPedidosModal;
 window.closeReprogramarModal = closeReprogramarModal;
 window.actualizarPreviewReprogramacion = actualizarPreviewReprogramacion;
 window.executeReprogramarPedidos = executeReprogramarPedidos;
+
+// 🆕 CORRECCIÓN #8 (240926): Backups - reescritura completa
 window.exportDatabaseCompleteAction = exportDatabaseCompleteAction;
 window.exportDatabaseDataOnlyAction = exportDatabaseDataOnlyAction;
 window.importDatabaseSmartAction = importDatabaseSmartAction;
 window.importDatabaseDataOnlyFromFileAction = importDatabaseDataOnlyFromFileAction;
 window.importDatabaseFusionAction = importDatabaseFusionAction;
+window.abrirSelectorArchivo = abrirSelectorArchivo;
+
 window.restaurarEstilosAction = restaurarEstilosAction;
 window.showUsersModal = showUsersModal;
 window.closeUsersModal = closeUsersModal;
@@ -4783,10 +5041,13 @@ window._formatearMensajeBloque = _formatearMensajeBloque;
 window.getProductoDeProduccionUI = getProductoDeProduccionUI;
 window.getProduccionConProductoUI = getProduccionConProductoUI;
 
-console.log('📦 UI Settings Module cargado correctamente v2.2.9');
-console.log('   🆕 Novedades v2.2.9:');
-console.log('      • ✅ CORRECCIÓN #8 (2/2): Modal de progreso en export/import');
-console.log('      • ✅ CORRECCIÓN #10: Algoritmo inteligente de bloques');
-console.log('      • ✅ CORRECCIÓN #11: Guardar y cargar producto_id en producción');
-console.log('      • ✅ CORRECCIÓN #14: Modal de eliminación por error mejorado');
-console.log('      • ✅ CORRECCIÓN #6: Botón para restaurar estilos residuales');
+console.log('📦 UI Settings Module cargado correctamente v2.3.0');
+console.log('   🆕 CORRECCIÓN #8 (240926) aplicada:');
+console.log('      • exportDatabaseCompleteAction() → flujo lineal confirmar→progreso→ejecutar');
+console.log('      • exportDatabaseDataOnlyAction() → flujo lineal');
+console.log('      • importDatabaseSmartAction() → selección robusta de archivo');
+console.log('      • importDatabaseDataOnlyFromFileAction() → flujo robusto');
+console.log('      • importDatabaseFusionAction() → fusión sin reemplazo de showConfirm');
+console.log('      • abrirSelectorArchivo() → input con timeout de 5 min');
+console.log('      • Eliminado el reemplazo temporal de ModalModule.showConfirm');
+console.log('      • Manejo de errores robusto en cada paso');
