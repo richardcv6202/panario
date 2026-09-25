@@ -82,6 +82,11 @@
 //   - ✅ Si el usuario elige "Entregar (sin deuda)" con un pedido que
 //     tenía saldo pendiente, se ignora el saldo y se marca como pagado.
 //   - ✅ Compatibilidad total con versiones anteriores.
+// 🆕 v2.2.7 (240926 v17): CORRECCIÓN #19 - FILTROS AL HACER CLIC EN TARJETAS
+//   - ✅ renderOrdersView() ahora lee window._pendingOrderFilters y
+//     aplica los filtros a los inputs (fechas, estado, búsqueda).
+//   - ✅ Se limpia window._pendingOrderFilters después de aplicarlo.
+//   - ✅ Compatible con navigateWithFilters() de app.js v2.2.3+.
 // ============================================================
 
 // ============================================================
@@ -865,6 +870,17 @@ async function eliminarClienteDeListaUI(orderId, clientName) {
         if (result.success) {
             window.showToast('✅ Cliente quitado de la lista', 'success', 3000);
             
+            // 🆕 CORRECCIÓN #13: Refrescar SIEMPRE el badge tras quitar de la lista
+            if (window.OrdersModule.getWaitingListCount) {
+                try {
+                    const count = await window.OrdersModule.getWaitingListCount();
+                    updateWaitingBadge(count);
+                    console.log(`🔄 [eliminarClienteDeListaUI] Badge actualizado: ${count} en lista de espera`);
+                } catch (e) {
+                    console.warn('⚠️ Error actualizando badge:', e);
+                }
+            }
+            
             await refrescarListaEsperaUI();
             
             if (typeof loadOrders === 'function') {
@@ -961,16 +977,9 @@ async function reporteListaEspera() {
 }
 
 // ============================================================
-// 🆕 v2.2.1 + v2.2.4: RENDER INFO DE PRODUCCIÓN EN TARJETA DE FECHA
-// (con soporte para bloque del día anterior Y formato de fecha consistente)
+// 🆕 v2.2.4: RENDER INFO DE PRODUCCIÓN EN TARJETA DE FECHA
+// (con badge CLICKEABLE - Corrección #3)
 // ============================================================
-// 
-// CAMBIO v2.2.1: El badge del día anterior ahora muestra la fecha real:
-//   ANTES: "🌙 Prod. ayer: 5:00 PM - 8:00 PM"
-//   AHORA: "🌙 Prod. ayer: 23/09 de 5:00 PM a 8:00 PM"
-// 
-// 🆕 v2.2.4: El badge es CLICKEABLE. Al hacer clic, se abre el modal
-// de configuración de producción para ese día.
 
 function renderProduccionInfoHTML(fechaISO) {
     try {
@@ -997,7 +1006,7 @@ function renderProduccionInfoHTML(fechaISO) {
         }
         
         // ============================================================
-        // 🆕 v2.2.4: Badge CLICKEABLE
+        // 🆕 v2.2.4: Badge CLICKEABLE (Corrección #3)
         // Al hacer clic, se abre el modal de configuración de producción
         // para el día correspondiente (showHorarioDetalle)
         // ============================================================
@@ -1049,10 +1058,19 @@ window.renderProduccionInfoHTML = renderProduccionInfoHTML;
 
 // ============================================================
 // RENDER ORDERS VIEW
+// 🆕 v2.2.7: Lee window._pendingOrderFilters (Corrección #19)
 // ============================================================
 
 function renderOrdersView() {
     const main = document.getElementById('mainContent');
+    
+    // ============================================================
+    // 🆕 v2.2.7: Leer filtros pendientes (Corrección #19)
+    // ============================================================
+    let filtros = window._pendingOrderFilters || {};
+    window._pendingOrderFilters = null;
+    
+    console.log('📋 [renderOrdersView] Filtros pendientes:', filtros);
     
     let waitingCount = 0;
     if (window.OrdersModule && window.OrdersModule.getWaitingListCount) {
@@ -1065,8 +1083,19 @@ function renderOrdersView() {
     const hoy = new Date();
     const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
     const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
-    const fechaInicioMes = primerDiaMes.toISOString().split('T')[0];
-    const fechaFinMes = ultimoDiaMes.toISOString().split('T')[0];
+    
+    // Aplicar filtros de fecha si vienen
+    let fechaInicioMes = primerDiaMes.toISOString().split('T')[0];
+    let fechaFinMes = ultimoDiaMes.toISOString().split('T')[0];
+    
+    if (filtros.from_date) fechaInicioMes = filtros.from_date;
+    if (filtros.to_date) fechaFinMes = filtros.to_date;
+    
+    // Aplicar filtro de estado si viene
+    let statusSeleccionado = filtros.status || 'pending';
+    
+    // Aplicar filtro de búsqueda si viene
+    let searchValue = filtros.search || '';
     
     main.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
@@ -1098,14 +1127,14 @@ function renderOrdersView() {
                         <label style="font-weight: 600; font-size: 12px; color: var(--text-label);">📌 Estado:</label>
                         <select id="filter-status" onchange="loadOrders()" style="padding: 6px 10px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-card); color: var(--text); font-size: 13px;">
                             <option value="">📋 Todos</option>
-                            <option value="pending" selected>⏳ Pendiente</option>
-                            <option value="confirmed">✅ Confirmado</option>
-                            <option value="production">🔨 En producción</option>
-                            <option value="ready">📦 Listo</option>
-                            <option value="delivered">🚚 Entregado</option>
-                            <option value="cancelled">❌ Cancelado</option>
-                            <option value="waiting">⏰ En lista de espera</option>
-                            <option value="waiting_bought">🔄 Compro por lista de espera</option>
+                            <option value="pending" ${statusSeleccionado === 'pending' ? 'selected' : ''}>⏳ Pendiente</option>
+                            <option value="confirmed" ${statusSeleccionado === 'confirmed' ? 'selected' : ''}>✅ Confirmado</option>
+                            <option value="production" ${statusSeleccionado === 'production' ? 'selected' : ''}>🔨 En producción</option>
+                            <option value="ready" ${statusSeleccionado === 'ready' ? 'selected' : ''}>📦 Listo</option>
+                            <option value="delivered" ${statusSeleccionado === 'delivered' ? 'selected' : ''}>🚚 Entregado</option>
+                            <option value="cancelled" ${statusSeleccionado === 'cancelled' ? 'selected' : ''}>❌ Cancelado</option>
+                            <option value="waiting" ${statusSeleccionado === 'waiting' ? 'selected' : ''}>⏰ En lista de espera</option>
+                            <option value="waiting_bought" ${statusSeleccionado === 'waiting_bought' ? 'selected' : ''}>🔄 Compro por lista de espera</option>
                         </select>
                     </div>
                 </div>
@@ -1138,6 +1167,7 @@ function renderOrdersView() {
                 <div style="display: flex; gap: 4px; align-items: center; flex: 1; min-width: 120px;">
                     <label style="font-weight: 600; font-size: 12px; color: var(--text-label);">🔍</label>
                     <input type="text" id="filter-search" placeholder="Buscar cliente..." 
+                           value="${searchValue}"
                            style="flex: 1; padding: 6px 10px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-card); color: var(--text); font-size: 13px; min-width: 100px;"
                            oninput="loadOrders()">
                 </div>
@@ -1440,6 +1470,15 @@ async function loadOrders() {
             const dateKey = order.delivery_date ? order.delivery_date.split('T')[0] : 'sin fecha';
             if (!grouped[dateKey]) grouped[dateKey] = [];
             grouped[dateKey].push(order);
+        });
+        
+        // 🆕 CORRECCIÓN #7: Ordenar los pedidos DENTRO de cada día por ID ascendente
+        Object.keys(grouped).forEach(dateKey => {
+            grouped[dateKey].sort((a, b) => {
+                const idA = parseInt(a.id) || 0;
+                const idB = parseInt(b.id) || 0;
+                return idA - idB;
+            });
         });
         
         const sortedDates = Object.keys(grouped).sort((a, b) => {
@@ -3061,10 +3100,6 @@ function onOrderDateChange() {
                 borderColor = '#f59e0b';
             }
             
-            // ============================================================
-            // 🆕 v2.2.1: Título según si es bloque de ayer
-            // AHORA el texto ya incluye la fecha real (bloqueTexto)
-            // ============================================================
             const tituloProduccion = esAyer
                 ? `<span style="font-weight: 700; color: #8b5cf6; font-size: 13px;">🌙 Prod. ayer: ${info.bloqueTexto}</span>`
                 : `<span style="font-weight: 700; color: #8b5cf6; font-size: 13px;">🔨 Horario de producción: ${info.bloqueTexto}</span>`;
@@ -3427,10 +3462,6 @@ async function viewOrder(id) {
         const corrienteSection = getSeccionCorrienteHTML(order.delivery_date.split('T')[0]);
         const auditoriaSection = renderAuditoriaHTML(order);
         
-        // ============================================================
-        // 🆕 v2.2.1: Info de producción con formato consistente
-        // (el texto ya incluye la fecha real del bloque en ambos casos)
-        // ============================================================
         const prodInfo = getProduccionInfo(order.delivery_date.split('T')[0]);
         const fmt = window.formatearCantidadProduccion || (v => String(v));
         
@@ -3507,10 +3538,8 @@ async function viewOrder(id) {
             statusButtons = statusOptions
                 .filter(opt => statusOrder.indexOf(opt.value) > currentIndex)
                 .map(opt => {
-                    // 🆕 v2.2.6: El botón "Entregado" ya no se muestra aquí.
-                    // Se reemplaza por los dos botones especializados más abajo.
                     if (opt.value === 'delivered') {
-                        return ''; // 🆕 v2.2.6: se gestiona con los botones de entrega
+                        return '';
                     }
                     const btnClass = opt.color === 'primary' ? 'btn primary' : 
                                     opt.color === 'success' ? 'btn success' : 'btn secondary';
@@ -3540,9 +3569,6 @@ async function viewOrder(id) {
             `;
         }
         
-        // ============================================================
-        // 🆕 v2.2.6: DOS BOTONES DE ENTREGA
-        // ============================================================
         let deliverButtons = '';
         if (!bloqueado && currentStatus !== 'delivered' && currentStatus !== 'waiting_bought' && currentStatus !== 'cancelled') {
             deliverButtons = `
@@ -3646,12 +3672,6 @@ async function abrirEdicionDesdeVista(orderId) {
 // ============================================================
 // 🆕 v2.2.6: updateOrderStatusAndReload AHORA ACEPTA `sinDeuda`
 // ============================================================
-// 
-// CAMBIO: Se añade un tercer parámetro `sinDeuda` (boolean, default false)
-// que se propaga a OrdersModule.updateOrderStatus().
-// 
-// - sinDeuda = true  → "Entregar (sin deuda)" → crea venta con is_debt=0, paid=1
-// - sinDeuda = false → "Entregar (con deuda)" → crea venta con is_debt=1, paid=0
 
 async function updateOrderStatusAndReload(orderId, status, sinDeuda = false) {
     if (!orderId) { window.showToast('❌ ID no válido', 'error'); return; }
@@ -3671,7 +3691,6 @@ async function updateOrderStatusAndReload(orderId, status, sinDeuda = false) {
     let icon = '📋';
     let confirmColor = 'var(--primary)';
     
-    // 🆕 v2.2.6: Diferenciar los dos botones de entrega
     if (status === 'delivered') {
         if (sinDeuda) {
             confirmTitle = '✅ Entregar (sin deuda)';
@@ -3745,7 +3764,6 @@ async function updateOrderStatusAndReload(orderId, status, sinDeuda = false) {
     
     try {
         window.showToast('⏳ Actualizando...', 'info', 2000);
-        // 🆕 v2.2.6: Se pasa `sinDeuda` a OrdersModule.updateOrderStatus()
         const result = await window.OrdersModule.updateOrderStatus(orderId, status, sinDeuda);
         
         if (!result.success) {
@@ -3758,10 +3776,19 @@ async function updateOrderStatusAndReload(orderId, status, sinDeuda = false) {
         if (status === 'delivered' || status === 'waiting_bought') {
             window.showToast('💰 Venta creada automáticamente', 'success', 4000);
         }
-        if (status === 'waiting' || status === 'waiting_bought') {
-            if (window.OrdersModule.getWaitingListCount) {
+        
+        // ============================================================
+        // 🆕 CORRECCIÓN #13: Refrescar SIEMPRE el badge de lista de espera
+        // cuando cambia el estado, porque puede haber entrado o salido
+        // de la lista de espera.
+        // ============================================================
+        if (window.OrdersModule.getWaitingListCount) {
+            try {
                 const count = await window.OrdersModule.getWaitingListCount();
                 updateWaitingBadge(count);
+                console.log(`🔄 [updateOrderStatusAndReload] Badge actualizado: ${count} en lista de espera`);
+            } catch (e) {
+                console.warn('⚠️ Error actualizando badge de lista de espera:', e);
             }
         }
         
@@ -4172,13 +4199,14 @@ window.selectDiasExcluidos = selectDiasExcluidos;
 window.limpiarDiasExcluidos = limpiarDiasExcluidos;
 window.updateExclusionSummary = updateExclusionSummary;
 
-console.log('📦 UI Orders Module v2.2.6 (CORRECCIÓN #17: dos botones de entrega)');
-console.log('   🆕 Novedades v2.2.6:');
-console.log('      • viewOrder(): DOS botones de entrega:');
-console.log('         ✅ "Entregar (sin deuda)" → is_debt=0, paid=1');
-console.log('         🚚 "Entregar (con deuda)" → is_debt=1, paid=0');
-console.log('      • updateOrderStatusAndReload(orderId, status, sinDeuda)');
-console.log('      • Contenedor visual destacado con bordes de colores diferenciados');
-console.log('      • Verde oscuro para "sin deuda", naranja para "con deuda"');
-console.log('      • Tooltips explicativos en cada botón');
+console.log('📦 UI Orders Module v2.2.7 (CORRECCIÓN #19: filtros al hacer clic en tarjetas)');
+console.log('   🆕 Novedades v2.2.7:');
+console.log('      • renderOrdersView() lee window._pendingOrderFilters');
+console.log('      • Aplica filtros a los inputs (fechas, estado, búsqueda)');
+console.log('      • Limpia window._pendingOrderFilters después de aplicarlo');
+console.log('      • Compatible con navigateWithFilters() de app.js v2.2.3+');
+console.log('   ✅ Correcciones incluidas:');
+console.log('      • #3: Badge de producción clickeable (v2.2.4)');
+console.log('      • #17: Dos botones de entrega "sin/con deuda" (v2.2.6)');
+console.log('      • #19: Filtros al hacer clic en tarjetas (v2.2.7)');
 console.log('   ✅ Compatibilidad total con versiones anteriores');

@@ -43,6 +43,23 @@
 //   - ✅ saveProduccionRango() ahora acepta y guarda producto_id
 //   - ✅ Compatibilidad total: si producto_id es null/undefined,
 //     se guarda como NULL sin romper nada
+// 🆕 v2.2.7 (240926 v16): CORRECCIÓN #11 REFORZADA
+//   - ✅ ensureProductoIdColumn() con logs de diagnóstico detallados.
+//   - ✅ saveProduccion() con logs detallados de producto_id.
+//   - ✅ getProduccionByFecha() con logs de producto_id.
+//   - ✅ saveProduccionRango() con logs de producto_id.
+//   - ✅ getProduccionRangoFechas() devuelve producto_id.
+//   - ✅ NUEVA función: getProductoDeProduccion(fechaISO)
+//     * Devuelve el objeto completo del producto asociado a una
+//       producción guardada, o null si no hay.
+//   - ✅ NUEVA función: getProduccionConProducto(fechaISO)
+//     * Devuelve la config de producción + el objeto del producto.
+//   - ✅ NUEVA función: validarProductoId(productoId)
+//     * Verifica que un producto_id existe y devuelve su info.
+//   - ✅ NUEVA función: contarProduccionConProducto(desde, hasta)
+//     * Cuenta cuántas producciones tienen producto_id definido.
+//   - ✅ Exportadas todas las nuevas funciones.
+//   - ✅ Se mantiene la compatibilidad total con versiones anteriores.
 // ============================================================
 
 let db = null;
@@ -387,28 +404,52 @@ function contarPedidosYVentasFecha(fechaISO) {
 }
 
 // ============================================================
-// 🆕 CORRECCIÓN #11: MIGRACIÓN PRODUCTO_ID EN CALENDARIO_PRODUCCION
+// 🆕 v2.2.7: CORRECCIÓN #11 REFORZADA - PRODUCTO_ID EN PRODUCCIÓN
 // ============================================================
 
+/**
+ * 🆕 v2.2.7: Migración idempotente de la columna producto_id.
+ * 
+ * Añade la columna `producto_id INTEGER` a la tabla
+ * `calendario_produccion` si no existe.
+ * 
+ * Incluye logs detallados para diagnóstico.
+ * 
+ * @param {Object} db - Instancia de SQL.js Database
+ */
 async function ensureProductoIdColumn(db) {
-    const LOG_PREFIX = '🔧 [ensureProductoIdColumn]';
+    const LOG_PREFIX = '🔧 [ensureProductoIdColumn v2.2.7]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
         
+        // 1. Verificar que la tabla existe
         const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='calendario_produccion'`);
         if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
             console.log(`${LOG_PREFIX} ℹ️ Tabla calendario_produccion no existe, se omite.`);
             return;
         }
         
+        // 2. Verificar columnas actuales
         const columns = db.exec('PRAGMA table_info(calendario_produccion)');
         const columnNames = columns[0]?.values?.map(row => row[1]) || [];
         
+        console.log(`${LOG_PREFIX} Columnas actuales (${columnNames.length}): ${columnNames.join(', ')}`);
+        
+        // 3. Añadir producto_id si no existe
         if (!columnNames.includes('producto_id')) {
             try {
                 db.run('ALTER TABLE calendario_produccion ADD COLUMN producto_id INTEGER');
-                console.log(`${LOG_PREFIX} ✅ Columna producto_id añadida`);
+                console.log(`${LOG_PREFIX} ✅ Columna producto_id AÑADIDA correctamente`);
+                
+                // Verificar que se añadió
+                const verifyColumns = db.exec('PRAGMA table_info(calendario_produccion)');
+                const verifyNames = verifyColumns[0]?.values?.map(row => row[1]) || [];
+                if (verifyNames.includes('producto_id')) {
+                    console.log(`${LOG_PREFIX} ✅ Verificación post-ALTER: producto_id presente`);
+                } else {
+                    console.warn(`${LOG_PREFIX} ⚠️ Verificación post-ALTER: producto_id NO presente`);
+                }
             } catch (e) {
                 console.warn(`${LOG_PREFIX} ⚠️ Error añadiendo columna:`, e.message);
             }
@@ -416,9 +457,190 @@ async function ensureProductoIdColumn(db) {
             console.log(`${LOG_PREFIX} ✓ Columna producto_id ya existe`);
         }
         
+        // 4. Crear índice para producto_id
+        try {
+            db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_producto ON calendario_produccion(producto_id)');
+            console.log(`${LOG_PREFIX} ✅ Índice idx_calendario_produccion_producto OK`);
+        } catch (e) {
+            console.warn(`${LOG_PREFIX} ⚠️ Error creando índice:`, e.message);
+        }
+        
+        // 5. Contar cuántas producciones tienen producto_id definido
+        try {
+            const countResult = db.exec(`SELECT COUNT(*) as total, SUM(CASE WHEN producto_id IS NOT NULL THEN 1 ELSE 0 END) as con_producto FROM calendario_produccion WHERE deleted_at IS NULL`);
+            const total = countResult[0]?.values?.[0]?.[0] || 0;
+            const conProducto = countResult[0]?.values?.[0]?.[1] || 0;
+            console.log(`${LOG_PREFIX} 📊 Producciones: ${total} total, ${conProducto} con producto_id definido`);
+        } catch (e) {
+            console.warn(`${LOG_PREFIX} ⚠️ Error contando producciones:`, e.message);
+        }
+        
         console.log(`${LOG_PREFIX} ========== FIN ==========`);
+        
     } catch (error) {
         console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+/**
+ * 🆕 v2.2.7: Obtiene el objeto completo del producto asociado a una
+ * producción guardada.
+ * 
+ * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
+ * @returns {object|null} - Objeto del producto o null si no hay
+ */
+function getProductoDeProduccion(fechaISO) {
+    const LOG_PREFIX = '🔍 [getProductoDeProduccion]';
+    
+    try {
+        if (!fechaISO) {
+            console.warn(`${LOG_PREFIX} ⚠️ Falta la fecha`);
+            return null;
+        }
+        
+        const prodConfig = getProduccionByFecha(fechaISO);
+        if (!prodConfig) {
+            console.log(`${LOG_PREFIX} ℹ️ No hay producción para ${fechaISO}`);
+            return null;
+        }
+        
+        const productoId = prodConfig.producto_id;
+        if (!productoId) {
+            console.log(`${LOG_PREFIX} ℹ️ Producción de ${fechaISO} no tiene producto_id`);
+            return null;
+        }
+        
+        const negocioId = getNegocioIdActual();
+        const result = query(
+            `SELECT p.*, r.name as receta_nombre 
+             FROM productos p
+             LEFT JOIN recipes r ON p.receta_id = r.id
+             WHERE p.id = ? AND p.negocio_id = ? AND p.deleted_at IS NULL`,
+            [productoId, negocioId]
+        );
+        
+        if (result.length === 0) {
+            console.log(`${LOG_PREFIX} ⚠️ Producto #${productoId} no encontrado (puede estar eliminado)`);
+            return null;
+        }
+        
+        console.log(`${LOG_PREFIX} ✅ Producto encontrado: "${result[0].nombre}" (ID: ${productoId})`);
+        return result[0];
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return null;
+    }
+}
+
+/**
+ * 🆕 v2.2.7: Devuelve la config de producción + el objeto del producto
+ * asociado (si existe).
+ * 
+ * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
+ * @returns {object|null} - Objeto con { config, producto } o null
+ */
+function getProduccionConProducto(fechaISO) {
+    try {
+        const config = getProduccionByFecha(fechaISO);
+        if (!config) {
+            return null;
+        }
+        
+        const producto = config.producto_id 
+            ? getProductoDeProduccion(fechaISO)
+            : null;
+        
+        return {
+            config: config,
+            producto: producto,
+            tieneProducto: !!producto,
+            productoId: config.producto_id || null
+        };
+        
+    } catch (e) {
+        console.error('❌ Error en getProduccionConProducto:', e);
+        return null;
+    }
+}
+
+/**
+ * 🆕 v2.2.7: Valida que un producto_id existe y devuelve su info.
+ * 
+ * @param {number} productoId - ID del producto
+ * @returns {object} - { valido: bool, producto: object|null, razon: string }
+ */
+function validarProductoId(productoId) {
+    try {
+        if (!productoId) {
+            return { valido: false, producto: null, razon: 'producto_id vacío o null' };
+        }
+        
+        const negocioId = getNegocioIdActual();
+        const result = query(
+            'SELECT id, nombre, precio_venta, capacidad_max_bloque FROM productos WHERE id = ? AND negocio_id = ? AND deleted_at IS NULL',
+            [productoId, negocioId]
+        );
+        
+        if (result.length === 0) {
+            return { valido: false, producto: null, razon: 'Producto no encontrado o eliminado' };
+        }
+        
+        return {
+            valido: true,
+            producto: result[0],
+            razon: 'OK'
+        };
+        
+    } catch (e) {
+        return { valido: false, producto: null, razon: e.message };
+    }
+}
+
+/**
+ * 🆕 v2.2.7: Cuenta cuántas producciones tienen producto_id definido
+ * en un rango de fechas.
+ * 
+ * @param {string} desde - Fecha ISO YYYY-MM-DD
+ * @param {string} hasta - Fecha ISO YYYY-MM-DD
+ * @returns {object} - { total, conProducto, sinProducto, detalles }
+ */
+function contarProduccionConProducto(desde, hasta) {
+    try {
+        const negocioId = getNegocioIdActual();
+        if (!negocioId || !desde || !hasta) {
+            return { total: 0, conProducto: 0, sinProducto: 0, detalles: [] };
+        }
+        
+        const result = query(
+            `SELECT fecha, producto_id, cantidad_produccion 
+             FROM calendario_produccion 
+             WHERE negocio_id = ? 
+               AND fecha >= ? 
+               AND fecha <= ? 
+               AND deleted_at IS NULL
+             ORDER BY fecha ASC`,
+            [negocioId, desde, hasta]
+        );
+        
+        const conProducto = result.filter(r => r.producto_id).length;
+        const sinProducto = result.filter(r => !r.producto_id).length;
+        
+        return {
+            total: result.length,
+            conProducto: conProducto,
+            sinProducto: sinProducto,
+            detalles: result.map(r => ({
+                fecha: r.fecha,
+                producto_id: r.producto_id,
+                cantidad: r.cantidad_produccion,
+                tieneProducto: !!r.producto_id
+            }))
+        };
+        
+    } catch (e) {
+        console.warn('⚠️ Error en contarProduccionConProducto:', e);
+        return { total: 0, conProducto: 0, sinProducto: 0, detalles: [] };
     }
 }
 
@@ -1813,7 +2035,7 @@ function getProduccionByFecha(fecha) {
         
         if (result.length > 0) {
             const reg = result[0];
-            console.log(`${LOG_PREFIX} ✅ Encontrado: id=${reg.id}, cantidad=${reg.cantidad_produccion}, bloque=${reg.bloque_index}, producto_id=${reg.producto_id}, es_dia_ant=${reg.es_bloque_dia_anterior}`);
+            console.log(`${LOG_PREFIX} ✅ Encontrado: id=${reg.id}, cantidad=${reg.cantidad_produccion}, bloque=${reg.bloque_index}, producto_id=${reg.producto_id || 'NULL'}, es_dia_ant=${reg.es_bloque_dia_anterior}`);
             return reg;
         }
         
@@ -1827,7 +2049,7 @@ function getProduccionByFecha(fecha) {
 }
 
 function saveProduccion(data) {
-    const LOG_PREFIX = '💾 [saveProduccion]';
+    const LOG_PREFIX = '💾 [saveProduccion v2.2.7]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -1867,18 +2089,23 @@ function saveProduccion(data) {
         const bloquesUsados = parseInt(data.bloques_usados) || 1;
         const distribucionBloques = data.distribucion_bloques || null;
         
-        // 🆕 CORRECCIÓN #11: producto_id
+        // 🆕 v2.2.7: producto_id con logs detallados
         let productoId = null;
         if (data.producto_id !== undefined && data.producto_id !== null && data.producto_id !== '') {
             const parsed = parseInt(data.producto_id);
             if (!isNaN(parsed) && parsed > 0) {
                 productoId = parsed;
+                console.log(`${LOG_PREFIX}   ✅ producto_id válido: ${productoId}`);
+            } else {
+                console.warn(`${LOG_PREFIX}   ⚠️ producto_id inválido: ${data.producto_id}`);
             }
+        } else {
+            console.log(`${LOG_PREFIX}   ℹ️ producto_id no proporcionado (se guardará NULL)`);
         }
         
         console.log(`${LOG_PREFIX}   ✅ Validaciones OK`);
         console.log(`${LOG_PREFIX}   📊 Cantidad parseada: ${cantidad}`);
-        console.log(`${LOG_PREFIX}   🏷️ Producto ID: ${productoId}`);
+        console.log(`${LOG_PREFIX}   🏷️ Producto ID: ${productoId || 'NULL'}`);
         console.log(`${LOG_PREFIX}   🔨 Es bloque día anterior: ${esBloqueDiaAnterior}`);
         console.log(`${LOG_PREFIX}   📅 Fecha bloque real: ${fechaBloqueReal || '(ninguna)'}`);
         console.log(`${LOG_PREFIX}   🔢 Bloques usados: ${bloquesUsados}`);
@@ -1892,6 +2119,15 @@ function saveProduccion(data) {
         }
         
         console.log(`${LOG_PREFIX}   ✅ Tabla existe`);
+        
+        // Verificar que la columna producto_id existe
+        const columnsCheck = db.exec('PRAGMA table_info(calendario_produccion)');
+        const columnNames = columnsCheck[0]?.values?.map(row => row[1]) || [];
+        if (!columnNames.includes('producto_id')) {
+            console.error(`${LOG_PREFIX} ❌ La columna producto_id NO EXISTE en la tabla`);
+            return { success: false, error: 'La columna producto_id no existe. Reinicia la app.' };
+        }
+        console.log(`${LOG_PREFIX}   ✅ Columna producto_id existe`);
         
         console.log(`${LOG_PREFIX} PASO 3: Buscando registro existente...`);
         const existing = getProduccionByFecha(data.fecha);
@@ -1925,8 +2161,9 @@ function saveProduccion(data) {
             ]);
             
             console.log(`${LOG_PREFIX} ✅ UPDATE ejecutado correctamente`);
+            console.log(`${LOG_PREFIX}   🏷️ producto_id guardado: ${productoId || 'NULL'}`);
             console.log(`${LOG_PREFIX} ========== FIN (actualizado) ==========`);
-            return { success: true, id: existing.id, updated: true };
+            return { success: true, id: existing.id, updated: true, productoId };
             
         } else {
             console.log(`${LOG_PREFIX} PASO 4B: Creando nuevo registro`);
@@ -1960,9 +2197,21 @@ function saveProduccion(data) {
             ]);
             
             console.log(`${LOG_PREFIX} ✅ INSERT ejecutado. lastId=${result.lastId}`);
+            console.log(`${LOG_PREFIX}   🏷️ producto_id guardado: ${productoId || 'NULL'}`);
+            
+            // Verificación post-INSERT
+            if (result.lastId) {
+                const verificacion = query(
+                    'SELECT id, producto_id, cantidad_produccion FROM calendario_produccion WHERE id = ?',
+                    [result.lastId]
+                );
+                if (verificacion.length > 0) {
+                    console.log(`${LOG_PREFIX} ✅ Verificación post-INSERT:`, JSON.stringify(verificacion[0]));
+                }
+            }
             
             console.log(`${LOG_PREFIX} ========== FIN (creado) ==========`);
-            return { success: true, id: result.lastId, updated: false };
+            return { success: true, id: result.lastId, updated: false, productoId };
         }
         
     } catch (e) {
@@ -2037,7 +2286,7 @@ function getProduccionRango(desde, hasta) {
 // ============================================================
 
 function saveProduccionRango(data) {
-    const LOG_PREFIX = '💾💾 [saveProduccionRango]';
+    const LOG_PREFIX = '💾💾 [saveProduccionRango v2.2.7]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -2069,7 +2318,7 @@ function saveProduccionRango(data) {
         const esBloqueDiaAnterior = data.es_bloque_dia_anterior ? 1 : 0;
         const fechaBloqueReal = data.fecha_bloque_real || null;
         
-        // 🆕 CORRECCIÓN #11: producto_id
+        // 🆕 v2.2.7: producto_id con logs detallados
         let productoId = null;
         if (data.producto_id !== undefined && data.producto_id !== null && data.producto_id !== '') {
             const parsed = parseInt(data.producto_id);
@@ -2079,7 +2328,7 @@ function saveProduccionRango(data) {
         }
         
         console.log(`${LOG_PREFIX} Procesando ${data.fechas.length} fechas...`);
-        console.log(`${LOG_PREFIX} Producto ID: ${productoId}`);
+        console.log(`${LOG_PREFIX} 🏷️ Producto ID: ${productoId || 'NULL'}`);
         
         const db = getDB();
         const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='calendario_produccion'`);
@@ -2158,12 +2407,14 @@ function saveProduccionRango(data) {
             saveAndNotify();
             
             console.log(`${LOG_PREFIX} ✅ Procesadas ${data.fechas.length} fechas: +${creados} nuevos, ~${actualizados} actualizados`);
+            console.log(`${LOG_PREFIX}   🏷️ producto_id propagado a TODAS las fechas: ${productoId || 'NULL'}`);
             
             return {
                 success: true,
                 creados: creados,
                 actualizados: actualizados,
                 total: data.fechas.length,
+                productoId: productoId,
                 fallidos: []
             };
             
@@ -2232,7 +2483,7 @@ function getProduccionRangoFechas(desde, hasta) {
                 bloque_index: reg.bloque_index,
                 es_bloque_dia_anterior: reg.es_bloque_dia_anterior === 1,
                 fecha_bloque_real: reg.fecha_bloque_real,
-                producto_id: reg.producto_id
+                producto_id: reg.producto_id || null
             };
         }
         return mapa;
@@ -2261,7 +2512,7 @@ function writeBackupMeta(db, backupType) {
         db.run(`INSERT INTO ${BACKUP_META_TABLE} 
             (backup_type, backup_date, backup_version, backup_negocio_id, backup_negocio_nombre, backup_user, backup_user_role)
             VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-            backupType, new Date().toISOString(), '2.2.3', negocioId,
+            backupType, new Date().toISOString(), '2.2.7', negocioId,
             negocio?.nombre || 'Desconocido', user?.username || 'Desconocido',
             user?.is_admin === 1 ? 'admin' : 'user'
         ]);
@@ -2383,7 +2634,7 @@ function exportRecetasProductosSalva() {
 
         const salva = {
             _meta: {
-                app: 'Panario', version: '2.2.3', type: 'salva_recetas_productos',
+                app: 'Panario', version: '2.2.7', type: 'salva_recetas_productos',
                 exportDate: new Date().toISOString(), negocio_id: negocioId,
                 negocio_nombre: getNombreNegocioDB(),
                 counts: {
@@ -2509,21 +2760,29 @@ function importRecetasProductosSalva(salvaData, mode = 'merge') {
                 let newRecetaId = null;
                 if (prod.receta_id && recipeIdMap[prod.receta_id]) newRecetaId = recipeIdMap[prod.receta_id];
 
+                let capacidadMax = null;
+                if (prod.capacidad_max_bloque !== undefined && prod.capacidad_max_bloque !== null && prod.capacidad_max_bloque !== '') {
+                    const parsed = parseFloat(prod.capacidad_max_bloque);
+                    if (!isNaN(parsed) && parsed > 0) capacidadMax = parsed;
+                }
+
                 if (existingProduct) {
                     db.run(`UPDATE productos SET descripcion = ?, precio_venta = ?, unidad_venta = ?,
-                            cantidad_por_unidad = ?, receta_id = ?, modified_by = ?, updated_at = CURRENT_TIMESTAMP
+                            cantidad_por_unidad = ?, receta_id = ?, capacidad_max_bloque = ?,
+                            modified_by = ?, updated_at = CURRENT_TIMESTAMP
                         WHERE id = ? AND negocio_id = ?`, [
                         prod.descripcion || null, prod.precio_venta || 0,
                         prod.unidad_venta || 'unidad', prod.cantidad_por_unidad || 1,
-                        newRecetaId, currentUserId, existingProduct.id, negocioId]);
+                        newRecetaId, capacidadMax, currentUserId, existingProduct.id, negocioId]);
                     skipped.productos++;
                 } else {
                     db.run(`INSERT INTO productos (user_id, negocio_id, nombre, descripcion, precio_venta, 
-                            unidad_venta, cantidad_por_unidad, receta_id, created_by, modified_by)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+                            unidad_venta, cantidad_por_unidad, receta_id, capacidad_max_bloque, created_by, modified_by)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
                         user.id, negocioId, prod.nombre, prod.descripcion || null,
                         prod.precio_venta || 0, prod.unidad_venta || 'unidad',
-                        prod.cantidad_por_unidad || 1, newRecetaId, currentUserId, currentUserId]);
+                        prod.cantidad_por_unidad || 1, newRecetaId, capacidadMax,
+                        currentUserId, currentUserId]);
                     imported.productos++;
                 }
             } catch (e) { errors.push(`Producto "${prod.nombre}": ${e.message}`); }
@@ -3746,6 +4005,11 @@ window.DBModule = {
     contarPedidosYVentasFecha,
     // 🆕 CORRECCIÓN #11
     ensureProductoIdColumn,
+    // 🆕 v2.2.7: NUEVAS funciones de producto_id
+    getProductoDeProduccion,
+    getProduccionConProducto,
+    validarProductoId,
+    contarProduccionConProducto,
     // Generales
     generateUuid, generateUuidForTable, ensureUuidColumns, migrateUuids,
     UUID_PREFIXES,
@@ -3786,12 +4050,15 @@ window.DBModule = {
     BACKUP_TYPE_COMPLETE, BACKUP_TYPE_DATA_ONLY
 };
 
-console.log('📦 DB Module cargado correctamente v2.2.3 (CORRECCIÓN #11: producto_id en producción)');
-console.log('   🆕 Novedades v2.2.3:');
-console.log('      • NUEVA columna: calendario_produccion.producto_id');
-console.log('      • NUEVA función: ensureProductoIdColumn(db)');
-console.log('      • saveProduccion() guarda producto_id');
-console.log('      • getProduccionByFecha() devuelve producto_id');
-console.log('      • saveProduccionRango() guarda producto_id');
+console.log('📦 DB Module cargado correctamente v2.2.7 (CORRECCIÓN #11 REFORZADA: producto_id en producción)');
+console.log('   🆕 Novedades v2.2.7:');
+console.log('      • ensureProductoIdColumn() con logs detallados');
+console.log('      • saveProduccion() con logs de producto_id');
+console.log('      • getProduccionByFecha() con logs de producto_id');
+console.log('      • saveProduccionRango() con logs de producto_id');
 console.log('      • getProduccionRangoFechas() devuelve producto_id');
+console.log('      • NUEVA: getProductoDeProduccion(fechaISO)');
+console.log('      • NUEVA: getProduccionConProducto(fechaISO)');
+console.log('      • NUEVA: validarProductoId(productoId)');
+console.log('      • NUEVA: contarProduccionConProducto(desde, hasta)');
 console.log('      • Compatibilidad total con versiones anteriores');

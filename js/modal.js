@@ -539,32 +539,74 @@ function showPrompt(options) {
 // MODAL DE PROGRESO
 // ============================================================
 
+// ============================================================
+// MODAL DE PROGRESO — v2.0.11 (CORRECCIÓN #8: REFORZADO)
+// ============================================================
+// Cambios en esta versión:
+//   - z-index verificado al máximo (2147483647) para garantizar
+//     que aparezca por encima de CUALQUIER otro modal.
+//   - Timeout de seguridad de 30s mantenido.
+//   - Cierre GARANTIZADO con triple fallback (250ms, 1000ms, 2000ms).
+//   - Logs de diagnóstico detallados con prefijo [ProgressModal].
+//   - Verificación de que las funciones estén exportadas a window.
+//   - El modal se añade al body con appendChild tras eliminar
+//     cualquier instancia previa.
+//   - Se fuerza isolation: isolate para evitar conflictos de stacking.
+// ============================================================
+
 function showProgressModal(options = {}) {
+    const LOG_PREFIX = '⏳ [ProgressModal]';
+    console.log(`${LOG_PREFIX} showProgressModal() llamado con:`, options);
+
     const {
         title = 'Procesando',
         message = 'Por favor, espera...',
         icon = '⏳'
     } = options;
 
+    // Eliminar cualquier instancia previa
     const existing = document.getElementById('progress-modal');
-    if (existing) existing.remove();
+    if (existing) {
+        console.log(`${LOG_PREFIX} Eliminando modal de progreso previo`);
+        try { existing.remove(); } catch (e) {}
+    }
 
+    // Limpiar timeout previo
     if (window._progressSafetyTimeout) {
         clearTimeout(window._progressSafetyTimeout);
         window._progressSafetyTimeout = null;
     }
 
+    // Eliminar cualquier modal de confirmación pendiente para evitar conflictos de z-index
+    try {
+        const customModal = document.getElementById('custom-modal');
+        if (customModal) {
+            console.log(`${LOG_PREFIX} Eliminando custom-modal pendiente para evitar conflicto`);
+            customModal.remove();
+            window._modalResolve = null;
+            window._modalResolved = false;
+        }
+    } catch (e) {}
+
     const modal = document.createElement('div');
     modal.id = 'progress-modal';
     modal.style.cssText = `
-        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
         background: rgba(0,0,0,0.7);
         backdrop-filter: blur(6px);
         -webkit-backdrop-filter: blur(6px);
-        display: flex; align-items: center; justify-content: center;
-        z-index: ${PROGRESS_Z_INDEX};
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 2147483647 !important;
         padding: 20px;
         animation: modalFadeIn 0.25s ease;
+        isolation: isolate;
+        pointer-events: auto;
     `;
 
     modal.innerHTML = `
@@ -581,7 +623,7 @@ function showProgressModal(options = {}) {
                 ${message}
             </p>
             
-            <div style="width: 100%; height: 6px; background: var(--border-color); border-radius: 3px; overflow: hidden; margin-bottom: 12px; position: relative;">
+            <div id="progress-bar-container" style="width: 100%; height: 6px; background: var(--border-color); border-radius: 3px; overflow: hidden; margin-bottom: 12px; position: relative;">
                 <div id="progress-bar" style="position: absolute; height: 100%; width: 40%; background: linear-gradient(90deg, var(--primary), #f59e0b, var(--primary)); border-radius: 3px; animation: progressSlide 1.5s ease-in-out infinite;"></div>
             </div>
             
@@ -606,10 +648,18 @@ function showProgressModal(options = {}) {
 
     document.body.appendChild(modal);
     window._progressModal = modal;
-    lockBodyScroll();
+    
+    try {
+        lockBodyScroll();
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} Error en lockBodyScroll:`, e);
+    }
 
+    console.log(`${LOG_PREFIX} Modal creado y añadido al DOM`);
+
+    // Timeout de seguridad
     window._progressSafetyTimeout = setTimeout(() => {
-        console.warn('⚠️ Progress modal: timeout de seguridad alcanzado (30s). Cerrando automáticamente.');
+        console.warn(`${LOG_PREFIX} Timeout de seguridad alcanzado (30s). Cerrando automáticamente.`);
         const stillThere = document.getElementById('progress-modal');
         if (stillThere) {
             closeProgressModal();
@@ -629,6 +679,8 @@ function showProgressModal(options = {}) {
 }
 
 function updateProgressModal(message, percent = null) {
+    const LOG_PREFIX = '⏳ [ProgressModal]';
+    
     const messageEl = document.getElementById('progress-message');
     const percentEl = document.getElementById('progress-percent');
     
@@ -646,9 +698,14 @@ function updateProgressModal(message, percent = null) {
             bar.style.transition = 'width 0.3s ease';
         }
     }
+    
+    console.log(`${LOG_PREFIX} update: ${message || '(sin cambio)'} ${percent !== null ? percent + '%' : ''}`);
 }
 
 function showProgressSuccess(message = 'Operación completada') {
+    const LOG_PREFIX = '⏳ [ProgressModal]';
+    console.log(`${LOG_PREFIX} showProgressSuccess(): ${message}`);
+    
     if (window._progressSafetyTimeout) {
         clearTimeout(window._progressSafetyTimeout);
         window._progressSafetyTimeout = null;
@@ -657,7 +714,7 @@ function showProgressSuccess(message = 'Operación completada') {
     const iconEl = document.getElementById('progress-icon');
     const titleEl = document.getElementById('progress-title');
     const messageEl = document.getElementById('progress-message');
-    const barContainer = document.querySelector('#progress-modal > div > div[style*="height: 6px"]');
+    const barContainer = document.getElementById('progress-bar-container');
     const successEl = document.getElementById('progress-success');
     const successMsgEl = document.getElementById('progress-success-message');
     const percentEl = document.getElementById('progress-percent');
@@ -676,6 +733,9 @@ function showProgressSuccess(message = 'Operación completada') {
 }
 
 function showProgressError(message = 'Ocurrió un error') {
+    const LOG_PREFIX = '⏳ [ProgressModal]';
+    console.log(`${LOG_PREFIX} showProgressError(): ${message}`);
+    
     if (window._progressSafetyTimeout) {
         clearTimeout(window._progressSafetyTimeout);
         window._progressSafetyTimeout = null;
@@ -684,7 +744,7 @@ function showProgressError(message = 'Ocurrió un error') {
     const iconEl = document.getElementById('progress-icon');
     const titleEl = document.getElementById('progress-title');
     const messageEl = document.getElementById('progress-message');
-    const barContainer = document.querySelector('#progress-modal > div > div[style*="height: 6px"]');
+    const barContainer = document.getElementById('progress-bar-container');
     const errorEl = document.getElementById('progress-error');
     const errorMsgEl = document.getElementById('progress-error-message');
     const percentEl = document.getElementById('progress-percent');
@@ -703,6 +763,9 @@ function showProgressError(message = 'Ocurrió un error') {
 }
 
 function closeProgressModal() {
+    const LOG_PREFIX = '⏳ [ProgressModal]';
+    console.log(`${LOG_PREFIX} closeProgressModal() llamado`);
+    
     if (window._progressSafetyTimeout) {
         clearTimeout(window._progressSafetyTimeout);
         window._progressSafetyTimeout = null;
@@ -712,23 +775,46 @@ function closeProgressModal() {
     if (modal) {
         modal.style.animation = 'modalFadeOut 0.25s ease forwards';
         
-        setTimeout(() => {
-            if (modal.parentNode) modal.remove();
-            window._progressModal = null;
-        }, 250);
-        
+        // Fallback 1: 250ms
         setTimeout(() => {
             const stillThere = document.getElementById('progress-modal');
             if (stillThere && stillThere.parentNode) {
                 stillThere.remove();
                 window._progressModal = null;
-                console.warn('⚠️ Progress modal forzado a cerrar (timeout seguridad)');
+                console.log(`${LOG_PREFIX} Modal eliminado en fallback 1 (250ms)`);
+            }
+        }, 250);
+        
+        // Fallback 2: 1000ms
+        setTimeout(() => {
+            const stillThere = document.getElementById('progress-modal');
+            if (stillThere && stillThere.parentNode) {
+                stillThere.remove();
+                window._progressModal = null;
+                console.warn(`${LOG_PREFIX} Modal forzado a cerrar en fallback 2 (1000ms)`);
             }
         }, 1000);
+        
+        // Fallback 3: 2000ms
+        setTimeout(() => {
+            const stillThere = document.getElementById('progress-modal');
+            if (stillThere && stillThere.parentNode) {
+                stillThere.remove();
+                window._progressModal = null;
+                console.warn(`${LOG_PREFIX} Modal forzado a cerrar en fallback 3 (2000ms)`);
+            }
+        }, 2000);
+    } else {
+        console.log(`${LOG_PREFIX} No hay modal de progreso abierto`);
     }
     
-    unlockBodyScroll();
-    limpiarEstilosResiduales();
+    try {
+        unlockBodyScroll();
+    } catch (e) {}
+    
+    try {
+        limpiarEstilosResiduales();
+    } catch (e) {}
 }
 
 // ============================================================

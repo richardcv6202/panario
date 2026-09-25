@@ -38,6 +38,21 @@
 //   - ✅ Compatibilidad total: si no se pasa diasExcluidos, se comporta igual que antes
 //   - ✅ Verificación en crearPedidosMultiples() para excluir fechas correctamente
 //   - ✅ Logs de diagnóstico de exclusión
+// 🆕 v2.2.6 (240926 v9): CORRECCIÓN #17 - BOTÓN "ENTREGAR (SIN DEUDA)"
+//   - ✅ NUEVO: updateOrderStatus(orderId, status, sinDeuda) acepta un
+//     tercer parámetro `sinDeuda` (boolean, default false).
+//   - ✅ NUEVO: Al entregar un pedido con sinDeuda=true, se pasa a
+//     registrarVentaDesdePedido() para forzar is_debt=0 y paid=1.
+//   - ✅ NUEVO: registrarVentaDesdePedido(orderId, cantidadOverride, sinDeuda)
+//     acepta un tercer parámetro `sinDeuda` (boolean, default false).
+//     * Si sinDeuda=true → la venta se crea con is_debt=0, paid=1
+//     * Si sinDeuda=true → la transacción se crea con paid=1
+//     * Si sinDeuda=true → se ignora cualquier saldo pendiente del pedido
+//   - ✅ El comportamiento previo se mantiene intacto cuando sinDeuda=false
+//     o no se pasa (compatibilidad total).
+//   - ✅ Se preserva la lógica de pago adelantado: si el pedido ya estaba
+//     pagado, la venta se crea sin deuda por defecto (sin necesidad de
+//     pasar sinDeuda=true).
 // ============================================================
 
 window.OrdersModule = {};
@@ -600,7 +615,9 @@ async function saveOrder(orderData) {
             try { await descontarStockPedido(orderId); } catch (e) {}
         }
         if (status === 'delivered') {
-            try { await registrarVentaDesdePedido(orderId); } catch (e) {}
+            // 🆕 v2.2.6: Si el estado se cambia a 'delivered' directamente desde el formulario,
+            // se entrega sin deuda por defecto (el usuario puede ajustarla después en Ventas).
+            try { await registrarVentaDesdePedido(orderId, null, true); } catch (e) {}
             try { await cancelarDeudaPedido(orderId); } catch (e) {}
         }
         if (status === 'waiting') {
@@ -874,10 +891,22 @@ async function crearPedidosMultiples(data) {
 }
 
 // ============================================================
-// REGISTRAR VENTA DESDE PEDIDO
+// 🆕 v2.2.6: REGISTRAR VENTA DESDE PEDIDO (con sinDeuda)
 // ============================================================
+// 
+// CAMBIO: Se añade un tercer parámetro `sinDeuda` (boolean, default false).
+// 
+// - sinDeuda = false → comportamiento original:
+//     * Si el pedido tiene pago adelantado completo → is_debt=0, paid=1
+//     * Si el pedido NO tiene pago adelantado completo → is_debt=1, paid=0
+// 
+// - sinDeuda = true → fuerza:
+//     * is_debt = 0
+//     * paid = 1
+//     * payment_method = 'cash' (o el que tenga el pedido, pero paid=1)
+//     * Ignora cualquier saldo pendiente del pedido.
 
-async function registrarVentaDesdePedido(orderId, cantidadOverride = null) {
+async function registrarVentaDesdePedido(orderId, cantidadOverride = null, sinDeuda = false) {
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
     
@@ -913,21 +942,54 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null) {
         `, [orderId]);
         const fromWaitingList = waitingItem.length > 0 ? 1 : 0;
 
+        // ============================================================
+        // 🆕 CORRECCIÓN #18: Fecha de venta desde lista de espera
+        // ============================================================
+        // REGLA: Si el cliente compró por lista de espera, la venta
+        //        SIEMPRE toma la fecha ACTUAL (nunca una fecha futura).
+        //
+        // Si NO viene de lista:
+        //   - Si el pedido es reciente (<24h) → fecha actual
+        //   - Si el pedido es antiguo → usar delivery_date
+        //     (pero nunca una fecha futura; si delivery_date > hoy,
+        //      usar hoy)
+        // ============================================================
+        
         let saleDate;
         const ahora = new Date();
+        const hoyISO = ahora.toISOString();
+        const hoyStr = hoyISO.split('T')[0];
         const createdDate = new Date(order.created_at);
         const horasDesdeCreacion = (ahora - createdDate) / (1000 * 60 * 60);
 
-        if (fromWaitingList || horasDesdeCreacion < 24) {
-            saleDate = ahora.toISOString();
+        if (fromWaitingList) {
+            // ✅ Compra por lista de espera → SIEMPRE fecha actual
+            saleDate = hoyISO;
+            console.log(`📅 [CORRECCIÓN #18] Venta desde lista de espera → fecha actual: ${hoyStr}`);
+        } else if (horasDesdeCreacion < 24) {
+            // Pedido reciente → fecha actual
+            saleDate = hoyISO;
+            console.log(`📅 [CORRECCIÓN #18] Pedido reciente (<24h) → fecha actual: ${hoyStr}`);
         } else {
-            saleDate = order.delivery_date || ahora.toISOString();
+            // Pedido antiguo → usar delivery_date, pero nunca futuro
+            const deliveryDate = order.delivery_date || hoyISO;
+            const deliveryDateStr = String(deliveryDate).split('T')[0];
+            
+            if (deliveryDateStr > hoyStr) {
+                // 🚫 delivery_date es FUTURO → usar hoy
+                saleDate = hoyISO;
+                console.log(`📅 [CORRECCIÓN #18] delivery_date (${deliveryDateStr}) es futuro → usando hoy: ${hoyStr}`);
+            } else {
+                // ✅ delivery_date es pasado o hoy → usarlo
+                saleDate = deliveryDate;
+                console.log(`📅 [CORRECCIÓN #18] Usando delivery_date: ${deliveryDateStr}`);
+            }
         }
 
         const notaListaEspera = fromWaitingList
             ? `Compró por lista de espera el día ${ahora.toLocaleDateString('es-ES')}`
             : null;
-
+            
         let ventasRegistradas = 0;
         let totalVenta = 0;
 
@@ -946,9 +1008,29 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null) {
 
             const totalPaid = order.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
             
+            // ============================================================
+            // 🆕 v2.2.6: LÓGICA DE DEUDA CON `sinDeuda`
+            // ============================================================
             let isDebt = 0;
-            if (!order.has_advance_payment && totalPaid < order.total) {
-                isDebt = 1;
+            
+            if (sinDeuda) {
+                // ✅ "Entregar (sin deuda)" → forzar pago inmediato
+                isDebt = 0;
+                console.log(`💰 [registrarVentaDesdePedido] sinDeuda=true → venta marcada como PAGADA (is_debt=0, paid=1)`);
+            } else {
+                // 🚚 Comportamiento original: si no hay pago adelantado completo, es deuda
+                if (!order.has_advance_payment && totalPaid < order.total) {
+                    isDebt = 1;
+                }
+            }
+            
+            // Si el pedido tenía pago adelantado, se respeta (no se cambia a deuda)
+            // Pero si sinDeuda=true, se fuerza a pagado incluso si había saldo pendiente
+            if (!sinDeuda && order.has_advance_payment && order.advance_amount > 0) {
+                // Si el adelanto cubre todo, no es deuda
+                if (order.advance_amount >= order.total) {
+                    isDebt = 0;
+                }
             }
             
             const productNameConNota = notaListaEspera ? `${productName} (${notaListaEspera})` : productName;
@@ -997,15 +1079,22 @@ async function registrarVentaDesdePedido(orderId, cantidadOverride = null) {
 
         window.DBModule.saveDatabase();
 
-        const mensaje = fromWaitingList
-            ? `🔄 Venta de $${totalVenta.toFixed(2)} registrada desde lista de espera (pedido #${orderId})`
-            : `💰 Venta de $${totalVenta.toFixed(2)} registrada desde pedido #${orderId}`;
+        let mensaje;
+        if (sinDeuda) {
+            mensaje = fromWaitingList
+                ? `✅ Venta SIN DEUDA de $${totalVenta.toFixed(2)} desde lista de espera (pedido #${orderId})`
+                : `✅ Venta SIN DEUDA de $${totalVenta.toFixed(2)} desde pedido #${orderId}`;
+        } else {
+            mensaje = fromWaitingList
+                ? `🔄 Venta de $${totalVenta.toFixed(2)} registrada desde lista de espera (pedido #${orderId})`
+                : `💰 Venta de $${totalVenta.toFixed(2)} registrada desde pedido #${orderId}`;
+        }
 
         if (ventasRegistradas > 0 && window.NotificationsModule) {
             window.NotificationsModule.addNotification(mensaje, 'success', 4000);
         }
 
-        return { success: true, ventas: ventasRegistradas, total: totalVenta, fromWaitingList, saleDate };
+        return { success: true, ventas: ventasRegistradas, total: totalVenta, fromWaitingList, saleDate, sinDeuda };
 
     } catch (e) {
         console.error('❌ Error registrando venta desde pedido:', e);
@@ -1225,10 +1314,16 @@ async function reponerStockPedido(orderId) {
 }
 
 // ============================================================
-// CAMBIAR ESTADO DEL PEDIDO
+// 🆕 v2.2.6: CAMBIAR ESTADO DEL PEDIDO (con sinDeuda)
 // ============================================================
+// 
+// CAMBIO: Se añade un tercer parámetro `sinDeuda` (boolean, default false)
+// que se propaga a registrarVentaDesdePedido() cuando se entrega el pedido.
+// 
+// - status = 'delivered' + sinDeuda = true  → venta creada sin deuda
+// - status = 'delivered' + sinDeuda = false → venta creada con deuda (si aplica)
 
-async function updateOrderStatus(orderId, status) {
+async function updateOrderStatus(orderId, status, sinDeuda = false) {
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
     
@@ -1280,8 +1375,12 @@ async function updateOrderStatus(orderId, status) {
                 }
             }
             
+            // ============================================================
+            // 🆕 v2.2.6: Se pasa `sinDeuda` a registrarVentaDesdePedido()
+            // ============================================================
             try {
-                const ventaResult = await registrarVentaDesdePedido(orderId);
+                console.log(`💰 [updateOrderStatus] Entregando pedido #${orderId} (sinDeuda=${sinDeuda})`);
+                const ventaResult = await registrarVentaDesdePedido(orderId, null, sinDeuda);
                 if (!ventaResult.success) {
                     return { success: false, error: 'Error al registrar la venta: ' + ventaResult.error };
                 }
@@ -1289,7 +1388,13 @@ async function updateOrderStatus(orderId, status) {
                 return { success: false, error: 'Error al registrar la venta: ' + e.message };
             }
             
-            try { await cancelarDeudaPedido(orderId); } catch (e) {}
+            // Cancelar deuda del pedido (si había pago adelantado parcial)
+            // NOTA: Si sinDeuda=true, la venta ya se creó como pagada.
+            //       Si sinDeuda=false, la venta puede quedar como deuda
+            //       (que se cobrará por separado desde Ventas → Deudas).
+            if (!sinDeuda) {
+                try { await cancelarDeudaPedido(orderId); } catch (e) {}
+            }
         }
 
         if (status === 'waiting' && oldStatus !== 'waiting') {
@@ -1307,6 +1412,35 @@ async function updateOrderStatus(orderId, status) {
             if (!attendResult.success) return { success: false, error: attendResult.error };
         }
 
+        // ============================================================
+        // 🆕 CORRECCIÓN #13: Si el pedido estaba en lista de espera y
+        // se cambia a OTRO estado (que no sea waiting/waiting_bought),
+        // eliminarlo de la lista y reindexar automáticamente.
+        // ============================================================
+        const estabaEnListaEspera = (oldStatus === 'waiting' || oldStatus === 'waiting_bought');
+        const nuevoEstadoNoEsEspera = (status !== 'waiting' && status !== 'waiting_bought');
+        
+        if (estabaEnListaEspera && nuevoEstadoNoEsEspera) {
+            console.log(`🔄 [updateOrderStatus] Pedido #${orderId} sale de lista de espera (${oldStatus} → ${status}). Reindexando...`);
+            
+            try {
+                // Marcar el item de la lista como removido (soft-delete)
+                window.DBModule.execute(`
+                    UPDATE waiting_list 
+                    SET status = 'removed', deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                    WHERE order_id = ? AND negocio_id = ? AND deleted_at IS NULL
+                `, [orderId, negocioId]);
+                
+                // Reindexar las posiciones restantes
+                window.DBModule.reindexWaitingList();
+                
+                console.log(`✅ [updateOrderStatus] Pedido #${orderId} removido de la lista de espera y posiciones reindexadas`);
+            } catch (e) {
+                console.warn(`⚠️ [updateOrderStatus] Error al remover de lista de espera:`, e.message);
+                // No bloqueamos el cambio de estado por un error en la lista
+            }
+        }
+
         const result = window.DBModule.execute(`
             UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP 
             WHERE id = ? AND negocio_id = ?
@@ -1319,12 +1453,13 @@ async function updateOrderStatus(orderId, status) {
         window.DBModule.saveAndNotify();
 
         if (window.NotificationsModule) {
+            const sufijoDeuda = (status === 'delivered') ? (sinDeuda ? ' (sin deuda)' : ' (con deuda)') : '';
             window.NotificationsModule.addNotification(
-                `📋 Pedido #${orderId} actualizado a: ${status}`, 'info', 3000
+                `📋 Pedido #${orderId} actualizado a: ${status}${sufijoDeuda}`, 'info', 3000
             );
         }
         
-        const response = { success: true };
+        const response = { success: true, sinDeuda };
         if (stockWarning) response.stockWarning = stockWarning;
         return response;
         
@@ -2074,7 +2209,12 @@ window.OrdersModule = {
     getDiasExcluidosDelPatron
 };
 
-console.log('📦 Orders Module v2.1.13 (ENTREGA C: corrección #4 - excluir días de la semana en rango)');
-console.log('   ✅ generarFechasPorPatron() acepta diasExcluidos para modo "rango"');
-console.log('   ✅ Nueva función getNombreDiaSemana(diaNumero, corto)');
-console.log('   ✅ Nueva función getDiasExcluidosDelPatron(patron)');
+console.log('📦 Orders Module v2.2.6 (CORRECCIÓN #17: botón "Entregar (sin deuda)")');
+console.log('   🆕 Novedades v2.2.6:');
+console.log('      • updateOrderStatus(orderId, status, sinDeuda=false)');
+console.log('      • registrarVentaDesdePedido(orderId, cantidadOverride, sinDeuda=false)');
+console.log('      • sinDeuda=true → fuerza is_debt=0, paid=1 en la venta creada');
+console.log('      • sinDeuda=true → ignora cualquier saldo pendiente del pedido');
+console.log('      • sinDeuda=false → comportamiento original (compatibilidad)');
+console.log('      • saveOrder() con status="delivered" ahora entrega SIN DEUDA por defecto');
+console.log('   ✅ Compatibilidad total con versiones anteriores');

@@ -1,82 +1,11 @@
 // ============================================================
 // 📦 UI SETTINGS - Panario (Configuración y Herramientas)
-// CORREGIDO: Botón "Hoy" del calendario, reporte PDF,
-// origen del pago en gastos, reporte de gastos
-// ACTUALIZADO: Backups diferenciados por rol + recarga con timestamp
-// ACTUALIZADO: Funciones wrapper para Salva Diferencial
-// ACTUALIZADO: Módulo de Usuarios (solo admin)
-// CORREGIDO FASE 1 (160926):
-//   - Exportar/Importar BD ahora usa reload(true) con ?refresh=
-// CORREGIDO FASE 2 (160926):
-//   - Modal de reporte de gastos unificado con el de pedidos
-// CORREGIDO FASE 4B (170926):
-//   - deleteUser() cierra el modal de usuarios ANTES del confirm
-// CORREGIDO FASE A.3 (170926 v2):
-//   - TODOS los flujos de export/import envueltos en try/catch/finally
-// AÑADIDO FASE B (170926 v3):
-//   - showCreateUserModal(), showEditUserModal(), showChangePasswordModal(),
-//     handleToggleAdmin()
-// AÑADIDO FASE E (180926):
-//   - showHorarioDetalle() muestra el día de la semana completo
-// AÑADIDO (180926 v2):
-//   - showDeleteSelectorModal() ahora muestra en las ventas:
-//     #ID, nombre del producto, total, método de pago, cliente, fecha, estado
-// AÑADIDO FASE 1.3.4 (190926):
-//   - importDatabaseFusionAction(): wrapper para la fusión
-// 🆕 FASE 2.3 (200926 v4):
-//   - NUEVA sección "⏰ Lista de espera" en Herramientas
-//   - NUEVA sección "🚨 Cancelación global de pedidos" (solo admin)
-// 🆕 FASE 6 (#11) (200926 v5):
-//   - El bloque "ℹ️ Información" LEE la versión desde meta tag
-// 🆕 FASE 7 (Entrega 5 - 200926 v6):
-//   - NUEVA sección "🔄 Reprogramar pedidos por rango" (solo admin)
-// 🆕 FASE 7.1 (210926 v7): FIX CRÍTICO - PRODUCCIÓN
-// 🆕 FASE 7.2 (210926 v8): CANTIDAD DE PRODUCCIÓN CON DECIMALES
-// 🆕 ENTREGA 6 (230926 v9): DIAGNÓSTICO DE PRODUCCIÓN
-// 🆕 CORRECCIÓN #6 (211026 v10): ÚLTIMO BLOQUE DEL DÍA ANTERIOR
-// 🆕 CORRECCIÓN #7 (211026 v11): PRODUCCIÓN POR RANGO DE FECHAS
-// 🆕 ENTREGA A - CORRECCIONES 220926 (221026 v12):
-//   - ✅ CORRECCIÓN #1: Botones ◀ ▶ de navegación entre días
-//   - ✅ CORRECCIÓN #2.A: Input de cantidad acepta CUALQUIER número real
-//   - ✅ GUARDADO AUTOMÁTICO al cambiar de día
-// 🆕 RESTAURACIÓN COMPLETA (221026 v13):
-//   - ✅ renderSettingsView() COMPLETA: restaurar TODAS las secciones
-// 🆕 ENTREGA B (221026 v14): ALGORITMO INTELIGENTE DE BLOQUES
-// 🆕 v2.2.1 (230926 v15): CORRECCIONES FINALES 220926
-// 🆕 v2.2.2 (230926 v16): CORRECCIÓN #9 - CONTEO PEDIDOS VS VENTAS
-// 🆕 v2.2.3 (230926 v17): CORRECCIÓN #11 - GUARDAR PRODUCTO EN PRODUCCIÓN
-// 🆕 v2.2.4 (240926 v18): CORRECCIÓN #11 COMPLETA - DROPDOWN CON TODOS LOS PRODUCTOS
-// 🆕 v2.2.5 (240926 v19): CORRECCIÓN #10 - ALGORITMO INTELIGENTE DE BLOQUES
-//   REGLA DEL AMANECER CORREGIDA
-//   - ✅ NUEVO: El umbral del amanecer se compara contra el INICIO del
-//     día de venta (00:00), no contra el inicio del bloque.
-//   - ✅ NUEVO: Un bloque es "del amanecer" si su hora de FIN es
-//     <= 09:00 AM del día de venta (día V).
-//   - ✅ NUEVO: Un bloque del día anterior (día V-1) es válido si su
-//     hora de FIN es <= 09:00 AM del día de venta (día V). Esto permite
-//     que bloques del día anterior que terminan en la noche del día V-1
-//     se consideren válidos (porque el pan estará listo para el desayuno
-//     del día V).
-//   - ✅ NUEVO: Se prioriza el bloque del día anterior si el primer
-//     bloque del día de venta comienza después de las 8:00 AM.
-//   - ✅ NUEVO: El mensaje del modal usa SIEMPRE el formato
-//     `Producción: DD/MM de HH:MM a HH:MM`, sin usar la palabra "ayer".
-//   - ✅ NUEVO: Logs detallados en consola para verificar el cálculo:
-//     * Muestra todos los candidatos con su hora de inicio/fin.
-//     * Muestra cuáles son considerados "amanecer".
-//     * Muestra el orden final de priorización.
-//   - ✅ NUEVO: Función auxiliar `_esBloqueDelAmanecer(horaFin, fechaVenta)`
-//     que determina si un bloque termina antes de las 9 AM del día de venta.
-//   - ✅ NUEVO: Función auxiliar `_formatearMensajeBloque(bloque)` que
-//     genera el mensaje con el formato correcto.
-//   - ✅ FIX: Antes, un bloque que comenzaba a las 8 AM y terminaba a
-//     las 11 AM era considerado "amanecer" incorrectamente. Ahora NO lo es.
-//   - ✅ FIX: Antes, el bloque del día anterior solo se usaba si su
-//     hora de fin era <= 8 AM del día de venta. Ahora se usa si su
-//     hora de fin es <= 9 AM del día de venta (tolerancia ampliada).
-//   - ✅ FIX: Antes, el mensaje usaba "ayer" para el bloque del día
-//     anterior. Ahora usa la fecha real: "Producción: 23/09 de 5:00 PM a 8:00 PM".
-//   - ✅ Sin cambios funcionales en el resto del módulo.
+// v2.2.9 (250926): CORRECCIONES FINALES
+//   - ✅ CORRECCIÓN #8 (2/2): Modal de progreso en export/import
+//   - ✅ CORRECCIÓN #10: Algoritmo inteligente de bloques (regla amanecer)
+//   - ✅ CORRECCIÓN #11: Guardar y cargar producto_id en producción
+//   - ✅ CORRECCIÓN #14: Modal de eliminación por error mejorado
+//   - ✅ CORRECCIÓN #6: Botón para restaurar estilos residuales
 // ============================================================
 
 // ============================================================
@@ -92,7 +21,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.2.5'; // 🆕 Fallback actualizado a 2.2.5
+    return '2.2.9';
 }
 
 window.getAppVersion = getAppVersion;
@@ -152,18 +81,13 @@ function getProduccionConfig(fechaISO) {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #9: Cuenta los pedidos y ventas de una fecha específica.
- */
 function contarPedidosYVentasFecha(fechaISO) {
     try {
         if (window.DBModule && typeof window.DBModule.contarPedidosYVentasFecha === 'function') {
-            const resultado = window.DBModule.contarPedidosYVentasFecha(fechaISO);
-            console.log(`📊 [ui-settings] Delegando en DBModule.contarPedidosYVentasFecha(${fechaISO}):`, resultado);
-            return resultado;
+            return window.DBModule.contarPedidosYVentasFecha(fechaISO);
         }
     } catch (e) {
-        console.warn('⚠️ [ui-settings] Error delegando en DBModule.contarPedidosYVentasFecha:', e);
+        console.warn('⚠️ Error delegando en DBModule.contarPedidosYVentasFecha:', e);
     }
     
     try {
@@ -201,9 +125,7 @@ function contarPedidosYVentasFecha(fechaISO) {
             : null;
         
         return { pedidos, ventas, disponibles, cantidadProduccion };
-        
     } catch (e) {
-        console.warn('⚠️ Error en fallback local de contarPedidosYVentasFecha:', e);
         return { pedidos: 0, ventas: 0, disponibles: 0, cantidadProduccion: 0 };
     }
 }
@@ -221,7 +143,7 @@ window.contarPedidosYVentasFecha = contarPedidosYVentasFecha;
 window.formatearCantidadProduccion = formatearCantidadProduccion;
 
 // ============================================================
-// 🆕 v2.2.4: HELPER PARA OBTENER TODOS LOS PRODUCTOS
+// HELPERS PARA PRODUCTOS
 // ============================================================
 
 function getTodosLosProductosParaDropdown() {
@@ -235,7 +157,31 @@ function getTodosLosProductosParaDropdown() {
     return [];
 }
 
+function getProductoDeProduccionUI(fechaISO) {
+    try {
+        if (typeof window.DBModule?.getProductoDeProduccion === 'function') {
+            return window.DBModule.getProductoDeProduccion(fechaISO);
+        }
+    } catch (e) {
+        console.warn('⚠️ Error en getProductoDeProduccionUI:', e);
+    }
+    return null;
+}
+
+function getProduccionConProductoUI(fechaISO) {
+    try {
+        if (typeof window.DBModule?.getProduccionConProducto === 'function') {
+            return window.DBModule.getProduccionConProducto(fechaISO);
+        }
+    } catch (e) {
+        console.warn('⚠️ Error en getProduccionConProductoUI:', e);
+    }
+    return null;
+}
+
 window.getTodosLosProductosParaDropdown = getTodosLosProductosParaDropdown;
+window.getProductoDeProduccionUI = getProductoDeProduccionUI;
+window.getProduccionConProductoUI = getProduccionConProductoUI;
 
 // ============================================================
 // HELPERS PARA BLOQUE DEL DÍA ANTERIOR
@@ -289,7 +235,6 @@ function sumarDiasISO(fechaISO, delta) {
         const d = String(fecha.getDate()).padStart(2, '0');
         return `${y}-${m}-${d}`;
     } catch (e) {
-        console.warn('⚠️ Error sumando días a', fechaISO, e);
         return fechaISO;
     }
 }
@@ -342,25 +287,9 @@ window.getFechaCortaConDia = getFechaCortaConDia;
 window.esHoyISO = esHoyISO;
 
 // ============================================================
-// 🆕 v2.2.5: HELPERS PARA EL ALGORITMO DE BLOQUES
+// 🆕 CORRECCIÓN #10: HELPERS DEL ALGORITMO DE BLOQUES
 // ============================================================
 
-/**
- * 🆕 v2.2.5: Determina si un bloque termina antes del umbral del amanecer
- * del día de venta.
- * 
- * Un bloque es "del amanecer" si su hora de FIN es <= 09:00 AM del día
- * de venta. Esto incluye:
- *   - Bloques del día V que terminan en la madrugada (00:00 - 09:00).
- *   - Bloques del día V-1 que terminan en la noche del V-1 (válidos porque
- *     el pan estará listo para el desayuno del día V).
- *   - Bloques del día V-1 que cruzan medianoche y terminan en la madrugada
- *     del día V (válidos).
- * 
- * @param {Date} horaFin - Hora de fin del bloque
- * @param {string} fechaVenta - Fecha ISO del día de venta (YYYY-MM-DD)
- * @returns {boolean}
- */
 function _esBloqueDelAmanecer(horaFin, fechaVenta) {
     try {
         const finDate = horaFin instanceof Date ? horaFin : new Date(horaFin);
@@ -372,17 +301,6 @@ function _esBloqueDelAmanecer(horaFin, fechaVenta) {
     }
 }
 
-/**
- * 🆕 v2.2.5: Formatea el mensaje de un bloque con el formato correcto.
- * 
- * Reglas:
- *   - SIEMPRE usa el formato `DD/MM de HH:MM a HH:MM`.
- *   - NO usa la palabra "ayer".
- *   - Usa la fecha real del bloque (fechaBloqueReal), no la fecha de venta.
- * 
- * @param {Object} bloque - Objeto bloque con horaInicioStr, horaFinStr, fechaBloqueReal
- * @returns {string} Mensaje formateado
- */
 function _formatearMensajeBloque(bloque) {
     try {
         const fechaParaTexto = bloque.fechaBloqueReal || bloque.fecha;
@@ -391,7 +309,6 @@ function _formatearMensajeBloque(bloque) {
         const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
         return `${dia}/${mes} de ${bloque.horaInicioStr} a ${bloque.horaFinStr}`;
     } catch (e) {
-        console.warn('⚠️ Error en _formatearMensajeBloque:', e);
         return `${bloque.horaInicioStr} a ${bloque.horaFinStr}`;
     }
 }
@@ -400,66 +317,23 @@ window._esBloqueDelAmanecer = _esBloqueDelAmanecer;
 window._formatearMensajeBloque = _formatearMensajeBloque;
 
 // ============================================================
-// 🆕 ENTREGA B + CORRECCIÓN #10: ALGORITMO INTELIGENTE DE BLOQUES
-// ============================================================
-// 
-// REGLAS DEL ALGORITMO (v2.2.5):
-// 
-// 1. RECOPILAR CANDIDATOS:
-//    - Todos los bloques del día V (día de venta).
-//    - El último bloque del día V-1 (día anterior), si existe.
-// 
-// 2. CLASIFICAR:
-//    - "Del amanecer": bloques cuya hora de FIN es <= 09:00 AM del día V.
-//    - "Restantes": el resto de bloques.
-// 
-// 3. ORDENAR (prioridad):
-//    a) Primero los "del amanecer".
-//    b) Entre los "del amanecer", priorizar el bloque del día V-1
-//       (porque el pan estará listo mucho antes del desayuno).
-//    c) Luego ordenar por cercanía al umbral ideal (08:00 AM del día V).
-//    d) Finalmente, los "restantes" ordenados por hora de inicio.
-// 
-// 4. CALCULAR:
-//    - numBloques = ceil(CPD / CMPBC).
-// 
-// 5. DISTRIBUIR:
-//    - Primer bloque: min(CPD, CMPBC).
-//    - Resto: repartir en bloques siguientes.
-// 
-// 6. VALIDAR:
-//    - Si CPD > CMPBC × bloques → error.
-// 
-// 7. MENSAJE:
-//    - SIEMPRE formato `Producción: DD/MM de HH:MM a HH:MM`.
-//    - NUNCA usar la palabra "ayer".
+// 🆕 CORRECCIÓN #10: ALGORITMO INTELIGENTE DE BLOQUES
 // ============================================================
 
 function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
-    const LOG_PREFIX = '🧠 [calcularBloquesIdeales v2.2.5]';
+    const LOG_PREFIX = '🧠 [calcularBloquesIdeales v2.2.9]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
-        console.log(`${LOG_PREFIX} Fecha venta: ${fechaVenta}`);
-        console.log(`${LOG_PREFIX} CPD: ${cpd}`);
-        console.log(`${LOG_PREFIX} CMPBC: ${cmpbc}`);
+        console.log(`${LOG_PREFIX} Fecha venta: ${fechaVenta}, CPD: ${cpd}, CMPBC: ${cmpbc}`);
         
-        if (!fechaVenta) {
-            return { success: false, error: 'Falta la fecha de venta' };
-        }
-        if (!cpd || cpd <= 0) {
-            return { success: false, error: 'La cantidad a producir debe ser mayor a 0' };
-        }
-        if (!cmpbc || cmpbc <= 0) {
-            return { success: false, error: 'El CMPBC debe ser mayor a 0' };
-        }
+        if (!fechaVenta) return { success: false, error: 'Falta la fecha de venta' };
+        if (!cpd || cpd <= 0) return { success: false, error: 'La cantidad a producir debe ser mayor a 0' };
+        if (!cmpbc || cmpbc <= 0) return { success: false, error: 'El CMPBC debe ser mayor a 0' };
         
-        // ============================================================
         // PASO 1: RECOPILAR CANDIDATOS
-        // ============================================================
         const candidatos = [];
         
-        // 1.1. Bloques del día V (todos)
         const bloquesHoy = window.CorrienteUtils.getBloques(fechaVenta);
         if (bloquesHoy && bloquesHoy.length > 0) {
             for (let i = 0; i < bloquesHoy.length; i++) {
@@ -480,7 +354,6 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
             }
         }
         
-        // 1.2. Último bloque del día V-1 (día anterior)
         const bloqueAyer = window.CorrienteUtils.getUltimoBloqueDiaAnterior(fechaVenta);
         if (bloqueAyer) {
             candidatos.push({
@@ -494,30 +367,15 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
                 horaFinStr24: bloqueAyer.finStr24,
                 duracionHoras: bloqueAyer.duracionHoras,
                 esBloqueAyer: true,
-                fechaBloqueReal: bloqueAyer.fechaBloqueReal,
-                etiquetaAyer: `🌙 Último bloque del ${bloqueAyer.fechaBloqueReal}`
+                fechaBloqueReal: bloqueAyer.fechaBloqueReal
             });
         }
         
         if (candidatos.length === 0) {
-            return {
-                success: false,
-                error: 'No hay bloques de corriente disponibles para esta fecha',
-                candidatos: []
-            };
+            return { success: false, error: 'No hay bloques de corriente disponibles', candidatos: [] };
         }
         
-        console.log(`${LOG_PREFIX} Candidatos encontrados: ${candidatos.length}`);
-        candidatos.forEach((c, i) => {
-            console.log(`${LOG_PREFIX}   [${i + 1}] ${c.esBloqueAyer ? '🌙' : '🔨'} ${c.fechaBloqueReal} ${c.horaInicioStr} - ${c.horaFinStr}`);
-        });
-        
-        // ============================================================
         // PASO 2: CLASIFICAR
-        // 🆕 v2.2.5: Un bloque es "del amanecer" si su hora de FIN es
-        // <= 09:00 AM del día de venta.
-        // ============================================================
-        const umbralAmanecer = new Date(fechaVenta + 'T09:00:00');
         const umbralIdeal = new Date(fechaVenta + 'T08:00:00');
         
         for (const c of candidatos) {
@@ -530,22 +388,11 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
         const amanecerValidos = candidatos.filter(c => c._esAmanecer);
         const restantes = candidatos.filter(c => !c._esAmanecer);
         
-        console.log(`${LOG_PREFIX} Del amanecer: ${amanecerValidos.length}`);
-        console.log(`${LOG_PREFIX} Restantes: ${restantes.length}`);
-        
-        // ============================================================
         // PASO 3: ORDENAR
-        // 🆕 v2.2.5: Priorizar bloque del día anterior si termina antes
-        // de las 8 AM (ideal) o antes de las 9 AM (tolerancia).
-        // ============================================================
         amanecerValidos.sort((a, b) => {
             const aEsAyer = a.esBloqueAyer ? 1 : 0;
             const bEsAyer = b.esBloqueAyer ? 1 : 0;
-            
-            // Prioridad 1: Bloque del día anterior primero
             if (aEsAyer !== bEsAyer) return bEsAyer - aEsAyer;
-            
-            // Prioridad 2: Cercanía al umbral ideal (08:00 AM)
             const diffA = Math.abs(a._finDate.getTime() - umbralIdeal.getTime());
             const diffB = Math.abs(b._finDate.getTime() - umbralIdeal.getTime());
             return diffA - diffB;
@@ -559,34 +406,22 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
         
         const candidatosOrdenados = [...amanecerValidos, ...restantes];
         
-        console.log(`${LOG_PREFIX} Orden final de priorización:`);
-        candidatosOrdenados.forEach((c, i) => {
-            const tipo = c._esAmanecer ? (c.esBloqueAyer ? '🌙 AMANECER (AYER)' : '🌅 AMANECER') : '🔨 RESTO';
-            console.log(`${LOG_PREFIX}   [${i + 1}] ${tipo} - ${c.fechaBloqueReal} ${c.horaInicioStr} - ${c.horaFinStr}`);
-        });
-        
-        // ============================================================
         // PASO 4: CALCULAR
-        // ============================================================
         const numBloquesNecesarios = Math.ceil(cpd / cmpbc);
         const capacidadTotal = candidatosOrdenados.length * cmpbc;
         
         if (numBloquesNecesarios > candidatosOrdenados.length) {
             return {
                 success: false,
-                error: `No es posible producir ${formatearCantidadProduccion(cpd)} unidades con solo ${candidatosOrdenados.length} bloque(s) disponible(s).`,
-                detalle: `Máximo posible: ${formatearCantidadProduccion(capacidadTotal)} unidades (CMPBC: ${formatearCantidadProduccion(cmpbc)} × ${candidatosOrdenados.length} bloques)`,
+                error: `No es posible producir ${formatearCantidadProduccion(cpd)} unidades con solo ${candidatosOrdenados.length} bloque(s).`,
+                detalle: `Máximo posible: ${formatearCantidadProduccion(capacidadTotal)} unidades`,
                 candidatos: candidatosOrdenados,
                 numBloquesNecesarios,
-                capacidadTotal,
-                cpd,
-                cmpbc
+                capacidadTotal
             };
         }
         
-        // ============================================================
         // PASO 5: DISTRIBUIR
-        // ============================================================
         const asignacion = [];
         let restante = cpd;
         
@@ -607,47 +442,29 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
                 cantidad: cantidad,
                 esBloqueAyer: candidato.esBloqueAyer,
                 fechaBloqueReal: candidato.fechaBloqueReal,
-                esAmanecer: candidato._esAmanecer,
-                etiqueta: candidato.esBloqueAyer
-                    ? `🌙 ${_formatearMensajeBloque(candidato)}`
-                    : `🔨 ${_formatearMensajeBloque(candidato)}`
+                esAmanecer: candidato._esAmanecer
             });
             
             restante -= cantidad;
         }
         
-        // ============================================================
         // PASO 7: MENSAJE
-        // 🆕 v2.2.5: SIEMPRE formato `Producción: DD/MM de HH:MM a HH:MM`.
-        // NUNCA usar la palabra "ayer".
-        // ============================================================
         let mensaje = '';
-        
         if (asignacion.length === 1) {
             const unico = asignacion[0];
             const formatoFecha = _formatearMensajeBloque(unico);
-            
-            if (unico.esAmanecer) {
-                mensaje = `Se horneará todo (${formatearCantidadProduccion(unico.cantidad)} uds) en el bloque del amanecer: ${formatoFecha}.`;
-            } else {
-                mensaje = `Se horneará todo (${formatearCantidadProduccion(unico.cantidad)} uds) en el bloque ${formatoFecha}.`;
-            }
+            mensaje = unico.esAmanecer
+                ? `Se horneará todo (${formatearCantidadProduccion(unico.cantidad)} uds) en el bloque del amanecer: ${formatoFecha}.`
+                : `Se horneará todo (${formatearCantidadProduccion(unico.cantidad)} uds) en el bloque ${formatoFecha}.`;
         } else {
             const partes = asignacion.map((a, i) => {
-                const num = i + 1;
                 const formatoFecha = _formatearMensajeBloque(a);
-                if (a.esAmanecer) {
-                    return `${num}º: ${formatearCantidadProduccion(a.cantidad)} uds en el bloque del amanecer (${formatoFecha})`;
-                } else {
-                    return `${num}º: ${formatearCantidadProduccion(a.cantidad)} uds (${formatoFecha})`;
-                }
+                return a.esAmanecer
+                    ? `${i + 1}º: ${formatearCantidadProduccion(a.cantidad)} uds en el bloque del amanecer (${formatoFecha})`
+                    : `${i + 1}º: ${formatearCantidadProduccion(a.cantidad)} uds (${formatoFecha})`;
             });
             mensaje = `Se horneará en ${asignacion.length} bloques → ` + partes.join(' · ');
         }
-        
-        console.log(`${LOG_PREFIX} ✅ Cálculo exitoso`);
-        console.log(`${LOG_PREFIX} Mensaje: ${mensaje}`);
-        console.log(`${LOG_PREFIX} ========== FIN ==========`);
         
         return {
             success: true,
@@ -661,7 +478,6 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
             usaBloqueAyer: asignacion.some(a => a.esBloqueAyer),
             usaSoloAmanecer: asignacion.every(a => a.esAmanecer)
         };
-        
     } catch (e) {
         console.error(`${LOG_PREFIX} ❌ Error:`, e);
         return { success: false, error: e.message };
@@ -677,161 +493,83 @@ window.calcularBloquesIdeales = calcularBloquesIdeales;
 async function runProductionDiagnostics() {
     const results = [];
     
-    console.log('🔍 ============================================');
-    console.log('🔍 DIAGNÓSTICO DE PRODUCCIÓN - Iniciando...');
-    console.log('🔍 ============================================');
-    
     try {
-        if (typeof window.DBModule === 'undefined') {
-            results.push({ name: '1. DBModule disponible', status: 'error', message: 'window.DBModule NO está definido', detail: '' });
-        } else if (typeof window.DBModule.getDB !== 'function') {
-            results.push({ name: '1. DBModule disponible', status: 'error', message: 'window.DBModule existe pero no tiene getDB()', detail: '' });
+        if (typeof window.DBModule === 'undefined' || typeof window.DBModule.getDB !== 'function') {
+            results.push({ name: '1. DBModule disponible', status: 'error', message: 'NO está definido', detail: '' });
         } else {
             let dbOk = false;
             try { const db = window.DBModule.getDB(); dbOk = !!db; } catch (e) {}
-            results.push({
-                name: '1. DBModule disponible',
-                status: dbOk ? 'ok' : 'error',
-                message: dbOk ? 'DBModule OK y getDB() devuelve instancia' : 'getDB() falla',
-                detail: ''
-            });
+            results.push({ name: '1. DBModule disponible', status: dbOk ? 'ok' : 'error', message: dbOk ? 'OK' : 'getDB() falla', detail: '' });
         }
     } catch (e) {
         results.push({ name: '1. DBModule disponible', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
     }
     
-    try {
-        if (typeof window.DBModule?.saveProduccion !== 'function') {
-            results.push({ name: '2. saveProduccion() existe', status: 'error', message: 'NO es una función', detail: '' });
-        } else {
-            results.push({ name: '2. saveProduccion() existe', status: 'ok', message: 'Disponible', detail: '' });
-        }
-    } catch (e) {
-        results.push({ name: '2. saveProduccion() existe', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
-    }
+    const funcs = [
+        { name: '2. saveProduccion()', fn: 'saveProduccion' },
+        { name: '3. getProduccionByFecha()', fn: 'getProduccionByFecha' },
+        { name: '4. saveProduccionRango()', fn: 'saveProduccionRango' },
+        { name: '5. getCMPBCProducto()', fn: 'getCMPBCProducto' },
+        { name: '6. contarPedidosYVentasFecha()', fn: 'contarPedidosYVentasFecha' }
+    ];
     
-    try {
-        if (typeof window.DBModule?.getProduccionByFecha !== 'function') {
-            results.push({ name: '3. getProduccionByFecha() existe', status: 'error', message: 'NO es una función', detail: '' });
-        } else {
-            results.push({ name: '3. getProduccionByFecha() existe', status: 'ok', message: 'Disponible', detail: '' });
+    for (const f of funcs) {
+        try {
+            if (typeof window.DBModule?.[f.fn] !== 'function') {
+                results.push({ name: f.name + ' existe', status: 'warning', message: 'NO es función', detail: '' });
+            } else {
+                results.push({ name: f.name + ' existe', status: 'ok', message: 'Disponible', detail: '' });
+            }
+        } catch (e) {
+            results.push({ name: f.name + ' existe', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
         }
-    } catch (e) {
-        results.push({ name: '3. getProduccionByFecha() existe', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
-    }
-    
-    try {
-        if (typeof window.DBModule?.saveProduccionRango !== 'function') {
-            results.push({ name: '4. saveProduccionRango() existe', status: 'error', message: 'NO es una función', detail: 'CORRECCIÓN #7 no disponible.' });
-        } else {
-            results.push({ name: '4. saveProduccionRango() existe', status: 'ok', message: 'Disponible (CORRECCIÓN #7)', detail: '' });
-        }
-    } catch (e) {
-        results.push({ name: '4. saveProduccionRango() existe', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
-    }
-    
-    try {
-        if (typeof window.DBModule?.getCMPBCProducto !== 'function') {
-            results.push({ name: '5. getCMPBCProducto() existe', status: 'error', message: 'NO es una función', detail: 'ENTREGA B no disponible.' });
-        } else {
-            results.push({ name: '5. getCMPBCProducto() existe', status: 'ok', message: 'Disponible (ENTREGA B)', detail: '' });
-        }
-    } catch (e) {
-        results.push({ name: '5. getCMPBCProducto() existe', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
-    }
-    
-    try {
-        if (typeof window.DBModule?.contarPedidosYVentasFecha !== 'function') {
-            results.push({ name: '6. contarPedidosYVentasFecha() existe', status: 'warning', message: 'NO es una función', detail: 'CORRECCIÓN #9 no disponible. Usando fallback local.' });
-        } else {
-            results.push({ name: '6. contarPedidosYVentasFecha() existe', status: 'ok', message: 'Disponible (CORRECCIÓN #9)', detail: '' });
-        }
-    } catch (e) {
-        results.push({ name: '6. contarPedidosYVentasFecha() existe', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
     }
     
     try {
         const db = window.DBModule.getDB();
         const pragma = db.exec('PRAGMA table_info(calendario_produccion)');
-        
         if (pragma.length === 0 || !pragma[0].values) {
-            results.push({ name: '7. Estructura calendario_produccion', status: 'error', message: 'No se pudo leer PRAGMA table_info', detail: '' });
+            results.push({ name: '7. Estructura calendario_produccion', status: 'error', message: 'No se pudo leer', detail: '' });
         } else {
-            const columnas = pragma[0].values.map(row => row[1]);
-            const requeridas = ['id', 'negocio_id', 'fecha', 'hora_inicio', 'hora_fin', 'bloque_index', 'cantidad_produccion', 'notas', 'es_bloque_dia_anterior', 'fecha_bloque_real', 'bloques_usados', 'distribucion_bloques', 'producto_id'];
-            const faltantes = requeridas.filter(c => !columnas.includes(c));
-            
+            const cols = pragma[0].values.map(row => row[1]);
+            const requeridas = ['id', 'negocio_id', 'fecha', 'hora_inicio', 'hora_fin', 'bloque_index', 'cantidad_produccion', 'producto_id'];
+            const faltantes = requeridas.filter(c => !cols.includes(c));
             if (faltantes.length > 0) {
-                results.push({ name: '7. Estructura calendario_produccion', status: 'error', message: `Faltan: ${faltantes.join(', ')}`, detail: '' });
+                results.push({ name: '7. Estructura', status: 'error', message: `Faltan: ${faltantes.join(', ')}`, detail: '' });
             } else {
-                results.push({ name: '7. Estructura calendario_produccion', status: 'ok', message: `OK (${columnas.length} columnas)`, detail: 'Incluye bloques_usados + distribucion_bloques + producto_id' });
+                results.push({ name: '7. Estructura', status: 'ok', message: `OK (${cols.length} columnas)`, detail: '' });
             }
         }
     } catch (e) {
-        results.push({ name: '7. Estructura calendario_produccion', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
+        results.push({ name: '7. Estructura', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
     }
     
     try {
         const db = window.DBModule.getDB();
         const pragma = db.exec('PRAGMA table_info(productos)');
-        
-        if (pragma.length === 0 || !pragma[0].values) {
-            results.push({ name: '8. Columna CMPBC en productos', status: 'error', message: 'No se pudo leer', detail: '' });
+        const cols = pragma[0]?.values?.map(row => row[1]) || [];
+        if (cols.includes('capacidad_max_bloque')) {
+            results.push({ name: '8. CMPBC en productos', status: 'ok', message: 'OK', detail: '' });
         } else {
-            const columnas = pragma[0].values.map(row => row[1]);
-            if (columnas.includes('capacidad_max_bloque')) {
-                results.push({ name: '8. Columna CMPBC en productos', status: 'ok', message: 'OK', detail: 'capacidad_max_bloque existe' });
-            } else {
-                results.push({ name: '8. Columna CMPBC en productos', status: 'error', message: 'Falta capacidad_max_bloque', detail: '' });
-            }
+            results.push({ name: '8. CMPBC en productos', status: 'error', message: 'Falta columna', detail: '' });
         }
     } catch (e) {
-        results.push({ name: '8. Columna CMPBC en productos', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
+        results.push({ name: '8. CMPBC en productos', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
     }
     
-    try {
-        const db = window.DBModule.getDB();
-        const pragma = db.exec('PRAGMA table_info(calendario_produccion)');
-        
-        if (pragma.length === 0 || !pragma[0].values) {
-            results.push({ name: '9. Columna producto_id en producción', status: 'error', message: 'No se pudo leer', detail: '' });
-        } else {
-            const columnas = pragma[0].values.map(row => row[1]);
-            if (columnas.includes('producto_id')) {
-                results.push({ name: '9. Columna producto_id en producción', status: 'ok', message: 'OK', detail: 'producto_id existe (CORRECCIÓN #11)' });
-            } else {
-                results.push({ name: '9. Columna producto_id en producción', status: 'error', message: 'Falta producto_id', detail: '' });
-            }
-        }
-    } catch (e) {
-        results.push({ name: '9. Columna producto_id en producción', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
-    }
-    
-    // 🆕 v2.2.5: Test 10 - Algoritmo de bloques
     try {
         if (typeof window.calcularBloquesIdeales !== 'function') {
-            results.push({ name: '10. Algoritmo calcularBloquesIdeales()', status: 'error', message: 'NO es una función', detail: 'CORRECCIÓN #10 no disponible.' });
+            results.push({ name: '9. Algoritmo bloques', status: 'error', message: 'NO es función', detail: '' });
         } else {
-            // Test funcional básico
-            const testResult = window.calcularBloquesIdeales('2026-12-31', 7, 7);
-            if (testResult && testResult.success === true) {
-                results.push({ name: '10. Algoritmo calcularBloquesIdeales()', status: 'ok', message: 'Disponible y funcional (CORRECCIÓN #10)', detail: `Test: 7 uds con CMPBC 7 → ${testResult.numBloques} bloque(s)` });
-            } else if (testResult && testResult.success === false) {
-                // Puede fallar por falta de configuración de corriente, lo cual es válido
-                results.push({ name: '10. Algoritmo calcularBloquesIdeales()', status: 'ok', message: 'Disponible (CORRECCIÓN #10)', detail: `Test no ejecutable: ${testResult.error}` });
-            } else {
-                results.push({ name: '10. Algoritmo calcularBloquesIdeales()', status: 'warning', message: 'Disponible pero comportamiento inesperado', detail: JSON.stringify(testResult) });
-            }
+            results.push({ name: '9. Algoritmo bloques', status: 'ok', message: 'Disponible', detail: '' });
         }
     } catch (e) {
-        results.push({ name: '10. Algoritmo calcularBloquesIdeales()', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
+        results.push({ name: '9. Algoritmo bloques', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
     }
     
     const okCount = results.filter(r => r.status === 'ok').length;
     const warnCount = results.filter(r => r.status === 'warning').length;
     const errorCount = results.filter(r => r.status === 'error').length;
-    
-    console.log(`🔍 RESULTADO: ${okCount} OK, ${warnCount} WARN, ${errorCount} ERROR`);
     
     return { results, summary: { ok: okCount, warning: warnCount, error: errorCount, total: results.length } };
 }
@@ -856,7 +594,7 @@ async function showProductionDiagnosticModal() {
     `;
     
     modal.innerHTML = `
-        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 640px; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); border: 1px solid var(--border-color);">
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 640px; width: 100%; max-height: 92vh; overflow-y: auto;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #8b5cf6;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 28px;">🔍</span>
@@ -865,26 +603,13 @@ async function showProductionDiagnosticModal() {
                         <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">Verifica el estado del sistema</p>
                     </div>
                 </div>
-                <button onclick="closeProductionDiagnosticModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+                <button onclick="closeProductionDiagnosticModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light);">✕</button>
             </div>
-            
-            <div style="background: var(--bg); border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; font-size: 11px;">
-                <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-                    <span style="color: var(--text-light);">📱 Versión app:</span>
-                    <strong>${getAppVersion()}</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-                    <span style="color: var(--text-light);">📅 Fecha:</span>
-                    <strong>${new Date().toLocaleString('es-ES')}</strong>
-                </div>
-            </div>
-            
             <div id="diag-results-container">
                 <div style="text-align: center; padding: 30px 20px;">
                     <p style="font-size: 14px; color: var(--text-light);">Ejecutando diagnóstico...</p>
                 </div>
             </div>
-            
             <div id="diag-buttons" style="display: none; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-color); flex-wrap: wrap;">
                 <button onclick="rerunDiagnostics()" class="btn secondary" style="flex: 1; min-width: 100px; padding: 10px 16px; font-size: 13px;">🔄 Re-ejecutar</button>
                 <button onclick="closeProductionDiagnosticModal()" class="btn secondary" style="flex: 1; min-width: 100px; padding: 10px 16px; font-size: 13px;">Cerrar</button>
@@ -908,7 +633,6 @@ function renderDiagnosticResults(result) {
     if (!container) return;
     
     const { results, summary } = result;
-    
     const cfg = {
         ok: { icon: '✅', color: '#10b981', bg: '#10b98115' },
         warning: { icon: '⚠️', color: '#f59e0b', bg: '#f59e0b15' },
@@ -965,7 +689,7 @@ window.renderDiagnosticResults = renderDiagnosticResults;
 window.rerunDiagnostics = rerunDiagnostics;
 
 // ============================================================
-// MÓDULO DE CORRIENTE — CONFIGURACIÓN
+// CONFIGURACIÓN DE CORRIENTE
 // ============================================================
 
 function saveCorrientePattern() {
@@ -984,11 +708,11 @@ function saveCorrientePattern() {
     const result = window.CorrienteUtils.saveConfig(config);
     
     if (result) {
-        window.showToast(`✅ Patrón guardado: ${horasCorriente}h corriente / ${horasApagon}h apagón`, 'success');
+        window.showToast(`✅ Patrón guardado: ${horasCorriente}h / ${horasApagon}h`, 'success');
         const cal = document.getElementById('corriente-calendario-content');
         if (cal && cal.style.display !== 'none') renderCorrienteCalendario();
     } else {
-        window.showToast('❌ Error al guardar el patrón', 'error');
+        window.showToast('❌ Error al guardar', 'error');
     }
 }
 
@@ -1010,7 +734,7 @@ function setCorrienteReference() {
     const result = window.CorrienteUtils.saveConfig(config);
 
     if (!result) {
-        window.showToast('❌ Error al guardar la referencia', 'error');
+        window.showToast('❌ Error al guardar', 'error');
         return;
     }
 
@@ -1025,11 +749,11 @@ function setCorrienteReference() {
         statusEl.innerHTML = `
             ✅ Referencia guardada: ${fecha} de ${inicio12} a ${fin12}
             ${cruzaMedianoche ? '<br>⚠️ El bloque cruza medianoche' : ''}
-            <br>📌 Ciclo: ${config.horasCorriente}h corriente / ${config.horasApagon}h apagón
+            <br>📌 Ciclo: ${config.horasCorriente}h / ${config.horasApagon}h
         `;
     }
 
-    window.showToast('✅ Referencia guardada correctamente', 'success');
+    window.showToast('✅ Referencia guardada', 'success');
 }
 
 // ============================================================
@@ -1057,11 +781,11 @@ function showCorrienteModal() {
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 16px 18px; max-width: 100%; width: 100%; max-height: 98vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid var(--border-color); overflow-y: auto; font-size: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
                 <h2 style="margin: 0; color: #f59e0b; font-size: 18px;">⚡ Horarios de Corriente</h2>
-                <button onclick="closeCorrienteModal()" style="background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+                <button onclick="closeCorrienteModal()" style="background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-light);">✕</button>
             </div>
             
             <div style="display: flex; gap: 3px; border-bottom: 2px solid var(--border-color); margin-bottom: 12px; flex-wrap: wrap;">
-                <button id="tab-corriente-config" onclick="switchCorrienteTab('config')" class="btn primary" style="padding: 4px 12px; font-size: 12px; width: auto; border-radius: 6px 6px 0 0; background: var(--primary); color: #fff; border: none;">⚙️ Config</button>
+                <button id="tab-corriente-config" onclick="switchCorrienteTab('config')" class="btn primary" style="padding: 4px 12px; font-size: 12px; width: auto; border-radius: 6px 6px 0 0;">⚙️ Config</button>
                 <button id="tab-corriente-calendario" onclick="switchCorrienteTab('calendario')" class="btn secondary" style="padding: 4px 12px; font-size: 12px; width: auto; border-radius: 6px 6px 0 0; background: transparent; color: var(--text); border: none;">📅 Calendario</button>
                 <button id="tab-corriente-reporte" onclick="switchCorrienteTab('reporte')" class="btn secondary" style="padding: 4px 12px; font-size: 12px; width: auto; border-radius: 6px 6px 0 0; background: transparent; color: var(--text); border: none;">📊 Reporte</button>
                 <button id="tab-corriente-consultar" onclick="switchCorrienteTab('consultar')" class="btn secondary" style="padding: 4px 12px; font-size: 12px; width: auto; border-radius: 6px 6px 0 0; background: transparent; color: var(--text); border: none;">🔍 Fecha</button>
@@ -1072,12 +796,12 @@ function showCorrienteModal() {
                     <h4 style="margin: 0 0 6px 0; font-size: 14px;">⚙️ Patrón</h4>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                         <div>
-                            <label style="font-size: 12px; font-weight: 500;">⏰ Corriente</label>
-                            <input type="number" id="config-horas-corriente" value="${config.horasCorriente || 3}" min="0.5" max="24" step="0.5" style="width: 100%; padding: 6px 10px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 14px;">
+                            <label style="font-size: 12px;">⏰ Corriente</label>
+                            <input type="number" id="config-horas-corriente" value="${config.horasCorriente || 3}" min="0.5" max="24" step="0.5" style="width: 100%; padding: 6px 10px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text);">
                         </div>
                         <div>
-                            <label style="font-size: 12px; font-weight: 500;">🌙 Apagón</label>
-                            <input type="number" id="config-horas-apagon" value="${config.horasApagon || 12}" min="0.5" max="48" step="0.5" style="width: 100%; padding: 6px 10px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 14px;">
+                            <label style="font-size: 12px;">🌙 Apagón</label>
+                            <input type="number" id="config-horas-apagon" value="${config.horasApagon || 12}" min="0.5" max="48" step="0.5" style="width: 100%; padding: 6px 10px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text);">
                         </div>
                     </div>
                     <button onclick="saveCorrientePattern()" class="btn primary" style="margin-top: 8px; padding: 4px 14px; font-size: 12px; width: auto;">💾 Guardar</button>
@@ -1087,15 +811,15 @@ function showCorrienteModal() {
                     <h4 style="margin: 0 0 6px 0; font-size: 14px;">📝 Referencia inicial</h4>
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
                         <div>
-                            <label style="font-size: 11px; font-weight: 500;">📅 Fecha</label>
+                            <label style="font-size: 11px;">📅 Fecha</label>
                             <input type="date" id="config-fecha-ref" value="${config.fechaReferencia || new Date().toISOString().split('T')[0]}" style="width: 100%; padding: 6px 8px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 12px;">
                         </div>
                         <div>
-                            <label style="font-size: 11px; font-weight: 500;">🟢 Inicio</label>
+                            <label style="font-size: 11px;">🟢 Inicio</label>
                             <input type="time" id="config-inicio-ref" value="${config.horaInicioReferencia || '10:00'}" style="width: 100%; padding: 6px 8px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 12px;">
                         </div>
                         <div>
-                            <label style="font-size: 11px; font-weight: 500;">🔴 Fin</label>
+                            <label style="font-size: 11px;">🔴 Fin</label>
                             <input type="time" id="config-fin-ref" value="${config.horaFinReferencia || '13:00'}" style="width: 100%; padding: 6px 8px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 12px;">
                         </div>
                     </div>
@@ -1197,7 +921,7 @@ function showCorrienteModal() {
             const fin12 = convertirA12Horas(config.horaFinReferencia);
             statusEl.innerHTML = `
                 ✅ Referencia guardada: ${config.fechaReferencia} de ${inicio12} a ${fin12}
-                <br>📌 Ciclo: ${config.horasCorriente}h corriente / ${config.horasApagon}h apagón
+                <br>📌 Ciclo: ${config.horasCorriente}h / ${config.horasApagon}h
             `;
         }
     }
@@ -1212,7 +936,7 @@ function irAHoyCorriente() {
 }
 
 // ============================================================
-// RENDER CALENDARIO
+// RENDER CALENDARIO DE CORRIENTE
 // ============================================================
 
 function renderCorrienteCalendario() {
@@ -1296,8 +1020,7 @@ function changeCorrienteMonth(delta) {
 }
 
 // ============================================================
-// SHOW HORARIO DETALLE
-// 🆕 v2.2.4: dropdown con TODOS los productos (con o sin CMPBC)
+// SHOW HORARIO DETALLE (CORRECCIÓN #11 COMPLETADA)
 // ============================================================
 
 window._horarioDetalleFechaActual = null;
@@ -1312,6 +1035,15 @@ function showHorarioDetalle(dateStr) {
     const bloqueAyer = window.CorrienteUtils.getUltimoBloqueDiaAnterior(dateStr);
     const prodConfig = getProduccionConfig(dateStr);
     const conteo = contarPedidosYVentasFecha(dateStr);
+    
+    let productoSeleccionado = null;
+    try {
+        if (prodConfig && prodConfig.producto_id) {
+            if (typeof window.DBModule?.getProducto === 'function') {
+                productoSeleccionado = window.DBModule.getProducto(prodConfig.producto_id);
+            }
+        }
+    } catch (e) {}
     
     const dateObj = new Date(dateStr + 'T00:00:00');
     const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -1341,27 +1073,15 @@ function showHorarioDetalle(dateStr) {
     let todosLosProductos = [];
     try {
         todosLosProductos = getTodosLosProductosParaDropdown();
-    } catch (e) {
-        console.warn('⚠️ Error cargando productos para dropdown:', e);
-    }
-    
-    let productoSeleccionado = null;
-    try {
-        if (prodConfig && prodConfig.producto_id) {
-            productoSeleccionado = window.DBModule.getProducto(prodConfig.producto_id);
-        }
     } catch (e) {}
     
     let produccionHtml = '';
-    
     const hayBloquesDisponibles = (bloquesHoy && bloquesHoy.length > 0) || !!bloqueAyer;
     
     if (hayBloquesDisponibles) {
         const opcionesHoy = (bloquesHoy || []).map((b, i) => {
             const bloqueIndexHoy = i + 1;
-            const isSelected = bloqueActual && 
-                              !bloqueActual.esDiaAnterior && 
-                              bloqueActual.bloqueIndex === bloqueIndexHoy;
+            const isSelected = bloqueActual && !bloqueActual.esDiaAnterior && bloqueActual.bloqueIndex === bloqueIndexHoy;
             const label = `🔨 Hoy — ${b.inicioStr} a ${b.finStr} (${b.duracionHoras.toFixed(1)}h)`;
             return `<option value="hoy_${bloqueIndexHoy}"${isSelected ? ' selected' : ''}>${label}</option>`;
         }).join('');
@@ -1404,11 +1124,6 @@ function showHorarioDetalle(dateStr) {
                     ${opcionesProductos}
                 </select>
                 <div id="producto-cmpbc-info" style="margin-top: 6px; font-size: 11px; color: #3b82f6; min-height: 16px;"></div>
-                ${todosLosProductos.length === 0 ? `
-                    <div style="margin-top: 6px; padding: 6px 10px; background: #fef9e7; border-left: 3px solid #f59e0b; border-radius: 6px; font-size: 11px; color: #92400e;">
-                        ⚠️ No hay productos registrados. Ve a 🏷️ Productos para crear uno.
-                    </div>
-                ` : ''}
             </div>
         `;
         
@@ -1424,7 +1139,6 @@ function showHorarioDetalle(dateStr) {
                 </div>
                 
                 ${avisoBloqueAyer}
-                
                 ${bloqueProductoHTML}
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
@@ -1444,9 +1158,7 @@ function showHorarioDetalle(dateStr) {
                                min="0.01" 
                                step="any"
                                style="width: 100%; padding: 6px 8px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 12px;">
-                        <small style="font-size: 10px; color: var(--text-light); display: block; margin-top: 2px;">
-                            💡 Acepta cualquier número: 6, 6.5, 6.123
-                        </small>
+                        <small style="font-size: 10px; color: var(--text-light); display: block; margin-top: 2px;">💡 Acepta cualquier número: 6, 6.5, 6.123</small>
                     </div>
                 </div>
                 
@@ -1548,9 +1260,7 @@ function showHorarioDetalle(dateStr) {
 
         const bloquesHtml = bloquesHoy.map((h, i) => {
             const bloqueIndexHoy = i + 1;
-            const esProduccionHoy = bloqueActual && 
-                                    !bloqueActual.esDiaAnterior && 
-                                    bloqueActual.bloqueIndex === bloqueIndexHoy;
+            const esProduccionHoy = bloqueActual && !bloqueActual.esDiaAnterior && bloqueActual.bloqueIndex === bloqueIndexHoy;
             return `
                 <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: ${esProduccionHoy ? '#8b5cf620' : 'var(--bg)'}; border-radius: 8px; border-left: 4px solid ${esProduccionHoy ? '#8b5cf6' : '#f59e0b'}; margin-bottom: 6px;">
                     <span style="font-size: 18px; font-weight: 700; color: ${esProduccionHoy ? '#8b5cf6' : '#f59e0b'}; min-width: 24px;">${i + 1}</span>
@@ -1650,8 +1360,7 @@ function showHorarioDetalle(dateStr) {
 }
 
 // ============================================================
-// 🆕 ENTREGA B: CALLBACK AL CAMBIAR EL PRODUCTO EN EL MODAL
-// 🆕 v2.2.4: muestra aviso si el producto no tiene CMPBC
+// CALLBACK AL CAMBIAR EL PRODUCTO EN EL MODAL
 // ============================================================
 
 window.onProductoProduccionChange = function() {
@@ -1675,15 +1384,11 @@ window.onProductoProduccionChange = function() {
     const nombreProducto = selectedOption?.dataset?.nombre || 'Producto';
     
     if (isNaN(cmpbc) || cmpbc <= 0) {
-        cmpbcInfo.innerHTML = `
-            <span style="color: #f59e0b;">⚠️ Este producto no tiene CMPBC configurado. Edítalo en 🏷️ Productos para usar el cálculo automático.</span>
-        `;
+        cmpbcInfo.innerHTML = `<span style="color: #f59e0b;">⚠️ Este producto no tiene CMPBC configurado.</span>`;
         return;
     }
     
-    cmpbcInfo.innerHTML = `
-        ✅ CMPBC: <strong>${window.formatearCMPBC ? window.formatearCMPBC(cmpbc) : cmpbc} unidades</strong> por bloque
-    `;
+    cmpbcInfo.innerHTML = `✅ CMPBC: <strong>${window.formatearCMPBC ? window.formatearCMPBC(cmpbc) : cmpbc} unidades</strong> por bloque`;
     
     calculoContainer.innerHTML = `
         <button onclick="calcularYMostrarSugerencia('${window._horarioDetalleFechaActual}', ${cmpbc}, '${nombreProducto.replace(/'/g, "\\'")}')" 
@@ -1695,7 +1400,7 @@ window.onProductoProduccionChange = function() {
 };
 
 // ============================================================
-// 🆕 ENTREGA B: CALCULAR Y MOSTRAR SUGERENCIA
+// CALCULAR Y MOSTRAR SUGERENCIA
 // ============================================================
 
 window.calcularYMostrarSugerencia = function(fechaVenta, cmpbc, nombreProducto) {
@@ -1712,8 +1417,6 @@ window.calcularYMostrarSugerencia = function(fechaVenta, cmpbc, nombreProducto) 
         window.showToast('⚠️ Fecha no válida', 'error', 3000);
         return;
     }
-    
-    console.log(`🧠 Calculando bloques para ${fechaVenta}, CPD=${cpd}, CMPBC=${cmpbc}`);
     
     const resultado = calcularBloquesIdeales(fechaVenta, cpd, cmpbc);
     
@@ -1732,7 +1435,7 @@ window.calcularYMostrarSugerencia = function(fechaVenta, cmpbc, nombreProducto) 
 };
 
 // ============================================================
-// 🆕 ENTREGA B: MODAL DE SUGERENCIA DE BLOQUES
+// MODAL DE SUGERENCIA DE BLOQUES
 // ============================================================
 
 function showCalculoBloquesModal(resultado, fechaVenta, nombreProducto) {
@@ -1768,7 +1471,7 @@ function showCalculoBloquesModal(resultado, fechaVenta, nombreProducto) {
                 </div>
                 <div style="text-align: right; flex-shrink: 0;">
                     <div style="font-size: 18px; font-weight: 700; color: ${etiquetaColor};">
-                        ${window.formatearCMPBC ? window.formatearCMPBC(b.cantidad) : b.cantidad}
+                        ${formatearCantidadProduccion(b.cantidad)}
                     </div>
                     <div style="font-size: 10px; color: var(--text-light);">unidades</div>
                 </div>
@@ -1777,7 +1480,7 @@ function showCalculoBloquesModal(resultado, fechaVenta, nombreProducto) {
     }).join('');
     
     modal.innerHTML = `
-        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 22px; max-width: 580px; width: 100%; max-height: 95vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); border: 2px solid #8b5cf6;">
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 22px; max-width: 580px; width: 100%; max-height: 95vh; overflow-y: auto; border: 2px solid #8b5cf6;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #8b5cf6;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 28px;">✨</span>
@@ -1786,17 +1489,17 @@ function showCalculoBloquesModal(resultado, fechaVenta, nombreProducto) {
                         <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">${nombreProducto || 'Producto'}</p>
                     </div>
                 </div>
-                <button onclick="closeCalculoBloquesModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+                <button onclick="closeCalculoBloquesModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light);">✕</button>
             </div>
             
             <div style="background: var(--bg); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px;">
                 <div style="display: flex; justify-content: space-between; padding: 3px 0;">
                     <span style="color: var(--text-light);">📦 Cantidad total:</span>
-                    <strong style="color: #3b82f6;">${window.formatearCMPBC ? window.formatearCMPBC(resultado.cpd) : resultado.cpd} uds</strong>
+                    <strong style="color: #3b82f6;">${formatearCantidadProduccion(resultado.cpd)} uds</strong>
                 </div>
                 <div style="display: flex; justify-content: space-between; padding: 3px 0;">
                     <span style="color: var(--text-light);">🏭 Capacidad por bloque:</span>
-                    <strong style="color: #8b5cf6;">${window.formatearCMPBC ? window.formatearCMPBC(resultado.cmpbc) : resultado.cmpbc} uds</strong>
+                    <strong style="color: #8b5cf6;">${formatearCantidadProduccion(resultado.cmpbc)} uds</strong>
                 </div>
                 <div style="display: flex; justify-content: space-between; padding: 3px 0; border-top: 1px solid var(--border-color); margin-top: 4px; padding-top: 6px;">
                     <span style="color: var(--text-light);">🔢 Bloques necesarios:</span>
@@ -1805,19 +1508,17 @@ function showCalculoBloquesModal(resultado, fechaVenta, nombreProducto) {
             </div>
             
             <div style="background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;">
-                <div style="font-size: 13px; font-weight: 700; color: #3b82f6; margin-bottom: 8px;">
-                    📋 Distribución sugerida
-                </div>
+                <div style="font-size: 13px; font-weight: 700; color: #3b82f6; margin-bottom: 8px;">📋 Distribución sugerida</div>
                 ${bloquesHtml}
             </div>
             
-            <div style="background: linear-gradient(135deg, #8b5cf615 0%, #8b5cf608 100%); border-left: 4px solid #8b5cf6; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; color: var(--text);">
+            <div style="background: linear-gradient(135deg, #8b5cf615 0%, #8b5cf608 100%); border-left: 4px solid #8b5cf6; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px;">
                 💬 <strong>${resultado.mensaje}</strong>
             </div>
             
             ${resultado.usaBloqueAyer ? `
                 <div style="background: #fef9e7; border-left: 3px solid #f59e0b; border-radius: 6px; padding: 8px 12px; margin-bottom: 14px; font-size: 11px; color: #92400e;">
-                    ℹ️ Este cálculo usa el <strong>último bloque del día anterior</strong>. Asegúrate de que la producción realmente se puede hacer en ese bloque.
+                    ℹ️ Este cálculo usa el <strong>último bloque del día anterior</strong>.
                 </div>
             ` : ''}
             
@@ -1830,10 +1531,6 @@ function showCalculoBloquesModal(resultado, fechaVenta, nombreProducto) {
                         style="flex: 1; padding: 12px; font-size: 14px;">
                     ❌ Cancelar
                 </button>
-            </div>
-            
-            <div style="text-align: center; margin-top: 10px; font-size: 11px; color: var(--text-light);">
-                💡 Puedes ajustar el bloque y la cantidad manualmente si lo prefieres.
             </div>
         </div>
     `;
@@ -1852,21 +1549,12 @@ function showCalculoBloquesModal(resultado, fechaVenta, nombreProducto) {
     };
     
     modal.addEventListener('click', (e) => { if (e.target === modal) closeCalculoBloquesModal(); });
-    
-    const escHandler = function(e) {
-        if (e.key === 'Escape') {
-            closeCalculoBloquesModal();
-            document.removeEventListener('keydown', escHandler);
-        }
-    };
-    document.addEventListener('keydown', escHandler);
 }
 
 window.showCalculoBloquesModal = showCalculoBloquesModal;
 
 // ============================================================
-// 🆕 ENTREGA B: CONFIRMAR CÁLCULO DE BLOQUES
-// 🆕 CORRECCIÓN #11: incluye producto_id
+// CONFIRMAR CÁLCULO DE BLOQUES
 // ============================================================
 
 window.confirmarCalculoBloques = async function(fechaVenta) {
@@ -1874,7 +1562,6 @@ window.confirmarCalculoBloques = async function(fechaVenta) {
     if (!state || !state.resultado) return;
     
     const resultado = state.resultado;
-    
     const bloquePrincipal = resultado.bloques[0];
     
     const distribucion = resultado.bloques.map(b => ({
@@ -1892,13 +1579,11 @@ window.confirmarCalculoBloques = async function(fechaVenta) {
         const productoSelect = document.getElementById('produccion-producto');
         if (productoSelect && productoSelect.value) {
             const parsed = parseInt(productoSelect.value);
-            if (!isNaN(parsed) && parsed > 0) {
-                productoId = parsed;
-            }
+            if (!isNaN(parsed) && parsed > 0) productoId = parsed;
         }
-    } catch (e) {
-        console.warn('⚠️ No se pudo leer producto_id del dropdown:', e);
-    }
+    } catch (e) {}
+    
+    const notas = document.getElementById('produccion-notas')?.value?.trim() || null;
     
     const dataGuardar = {
         fecha: fechaVenta,
@@ -1906,7 +1591,7 @@ window.confirmarCalculoBloques = async function(fechaVenta) {
         hora_fin: bloquePrincipal.horaFinStr24,
         bloque_index: bloquePrincipal.bloqueIndex,
         cantidad_produccion: resultado.cpd,
-        notas: null,
+        notas: notas,
         es_bloque_dia_anterior: bloquePrincipal.esBloqueAyer ? 1 : 0,
         fecha_bloque_real: bloquePrincipal.fechaBloqueReal,
         bloques_usados: resultado.numBloques,
@@ -1914,13 +1599,11 @@ window.confirmarCalculoBloques = async function(fechaVenta) {
         producto_id: productoId
     };
     
-    console.log('💾 Guardando producción con distribución:', dataGuardar);
-    
     const result = window.DBModule.saveProduccion(dataGuardar);
     
     if (result.success) {
         window.showToast(
-            `✅ Producción guardada · ${resultado.numBloques} bloque${resultado.numBloques > 1 ? 's' : ''} · ${window.formatearCMPBC ? window.formatearCMPBC(resultado.cpd) : resultado.cpd} uds`,
+            `✅ Producción guardada · ${resultado.numBloques} bloque${resultado.numBloques > 1 ? 's' : ''} · ${formatearCantidadProduccion(resultado.cpd)} uds`,
             'success',
             5000
         );
@@ -1933,7 +1616,7 @@ window.confirmarCalculoBloques = async function(fechaVenta) {
             showHorarioDetalle(fechaVenta);
         }, 300);
     } else {
-        window.showToast('❌ Error al guardar: ' + (result.error || 'Desconocido'), 'error', 6000);
+        window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 6000);
     }
 };
 
@@ -1981,13 +1664,9 @@ async function guardarProduccionAutoSiHayCambios(fechaISO) {
         
         const bloqueActualBD = prodConfig?.bloque_index || null;
         const esAyerBD = prodConfig?.es_bloque_dia_anterior === 1;
-        const cantidadBD = prodConfig?.cantidad_produccion != null 
-            ? String(parseFloat(prodConfig.cantidad_produccion)) 
-            : '';
+        const cantidadBD = prodConfig?.cantidad_produccion != null ? String(parseFloat(prodConfig.cantidad_produccion)) : '';
         const notasBD = prodConfig?.notas || '';
-        const productoBD = prodConfig?.producto_id != null 
-            ? String(prodConfig.producto_id) 
-            : '';
+        const productoBD = prodConfig?.producto_id != null ? String(prodConfig.producto_id) : '';
         
         let bloqueActualSelect = null;
         let esAyerSelect = false;
@@ -2008,15 +1687,13 @@ async function guardarProduccionAutoSiHayCambios(fechaISO) {
         
         if (!hayCambios) return true;
         
-        console.log(`💾 [Navegación] Guardando cambios para ${fechaISO}...`);
-        
         if (!bloqueSelectValue) {
             if (cantidadActual) {
                 const confirm = await window.ModalModule.showConfirm({
                     title: '⚠️ Cambios sin guardar',
-                    message: `Has escrito una cantidad (${cantidadActual}) pero no has seleccionado un bloque.\n\n¿Descartar y continuar navegando?`,
-                    confirmText: '🗑️ Descartar y continuar',
-                    cancelText: '↩️ Volver al formulario',
+                    message: `Has escrito una cantidad pero no has seleccionado un bloque.\n\n¿Descartar y continuar?`,
+                    confirmText: '🗑️ Descartar',
+                    cancelText: '↩️ Volver',
                     icon: '⚠️',
                     confirmColor: '#f59e0b'
                 });
@@ -2028,7 +1705,6 @@ async function guardarProduccionAutoSiHayCambios(fechaISO) {
         const resultado = await ejecutarGuardadoProduccion(fechaISO, bloqueSelectValue, cantidadActual, notasActual, productoActual);
         
         if (resultado.success) {
-            console.log(`✅ [Navegación] Cambios guardados`);
             return true;
         } else {
             window.showToast(`❌ No se pudieron guardar: ${resultado.error}`, 'error', 4000);
@@ -2054,9 +1730,7 @@ async function ejecutarGuardadoProduccion(fechaISO, bloqueSelectValue, cantidadR
         let productoId = null;
         if (productoRaw !== undefined && productoRaw !== null && productoRaw !== '') {
             const parsed = parseInt(productoRaw);
-            if (!isNaN(parsed) && parsed > 0) {
-                productoId = parsed;
-            }
+            if (!isNaN(parsed) && parsed > 0) productoId = parsed;
         }
         
         let esBloqueDiaAnterior = false;
@@ -2108,7 +1782,7 @@ window.ejecutarGuardadoProduccion = ejecutarGuardadoProduccion;
 
 function guardarProduccion(fechaISO) {
     if (!window.DBModule || typeof window.DBModule.saveProduccion !== 'function') {
-        window.showToast('❌ Error: función de guardado no disponible', 'error', 6000);
+        window.showToast('❌ Error: función no disponible', 'error', 6000);
         return;
     }
     
@@ -2120,19 +1794,20 @@ function guardarProduccion(fechaISO) {
     const productoSelect = document.getElementById('produccion-producto');
     const productoRaw = productoSelect ? productoSelect.value : '';
     
-    if (!bloqueSelectValue) { window.showToast('⚠️ Selecciona un bloque de producción', 'warning'); return; }
-    if (isNaN(cantidad) || cantidad <= 0) { window.showToast('⚠️ La cantidad debe ser mayor a 0', 'warning'); return; }
+    if (!bloqueSelectValue) { window.showToast('⚠️ Selecciona un bloque', 'warning'); return; }
+    if (isNaN(cantidad) || cantidad <= 0) { window.showToast('⚠️ Cantidad debe ser > 0', 'warning'); return; }
     
     ejecutarGuardadoProduccion(fechaISO, bloqueSelectValue, cantidadRaw, notas, productoRaw).then(result => {
         if (result.success) {
             const match = bloqueSelectValue.match(/^(hoy|ayer)_(\d+)$/);
             const esAyer = match && match[1] === 'ayer';
-            const sufijo = esAyer ? ' en el último bloque de ayer' : ` en el bloque ${match ? match[2] : '?'} de hoy`;
-            window.showToast(`✅ Producción guardada: ${formatearCantidadProduccion(cantidad)} unidades${sufijo}`, 'success', 4000);
+            const sufijo = esAyer ? ' en el bloque de ayer' : ` en el bloque ${match ? match[2] : '?'} de hoy`;
+            const sufijoProducto = productoRaw ? ' · 🏷️ producto' : '';
+            window.showToast(`✅ Producción guardada: ${formatearCantidadProduccion(cantidad)} uds${sufijo}${sufijoProducto}`, 'success', 4000);
             closeHorarioDetalleModal();
             setTimeout(() => { renderCorrienteCalendario(); showHorarioDetalle(fechaISO); }, 300);
         } else {
-            window.showToast('❌ Error al guardar: ' + (result.error || 'Desconocido'), 'error', 6000);
+            window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 6000);
         }
     });
 }
@@ -2166,7 +1841,7 @@ window.guardarProduccion = guardarProduccion;
 window.eliminarProduccion = eliminarProduccion;
 
 // ============================================================
-// PRODUCCIÓN POR RANGO (CORRECCIÓN #7 + #11)
+// PRODUCCIÓN POR RANGO
 // ============================================================
 
 function showProduccionRangoModal(fechaBase) {
@@ -2183,6 +1858,12 @@ function showProduccionRangoModal(fechaBase) {
     const bloqueSelectBase = document.getElementById('produccion-bloque')?.value || '';
     const productoSelectBase = document.getElementById('produccion-producto');
     const productoIdBase = productoSelectBase ? (productoSelectBase.value || '') : '';
+    
+    let productoNombreBase = '—';
+    if (productoIdBase && productoSelectBase) {
+        const selectedOption = productoSelectBase.options[productoSelectBase.selectedIndex];
+        productoNombreBase = selectedOption?.textContent || '—';
+    }
     
     const fechaInicioDefault = fechaBase;
     const fechaFinDefaultObj = new Date(fechaBase + 'T00:00:00');
@@ -2214,7 +1895,7 @@ function showProduccionRangoModal(fechaBase) {
     `;
     
     modal.innerHTML = `
-        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 22px; max-width: 580px; width: 100%; max-height: 95vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); border: 2px solid #3b82f6;">
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 22px; max-width: 580px; width: 100%; max-height: 95vh; overflow-y: auto; border: 2px solid #3b82f6;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #3b82f6;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 28px;">📅</span>
@@ -2223,13 +1904,13 @@ function showProduccionRangoModal(fechaBase) {
                         <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">Misma cantidad para varios días</p>
                     </div>
                 </div>
-                <button onclick="closeProduccionRangoModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+                <button onclick="closeProduccionRangoModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light);">✕</button>
             </div>
             
             <div style="background: #eff6ff; border: 1px solid #3b82f6; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12px; color: #1e40af;">
                 💡 Se aplicará la misma cantidad a TODAS las fechas del rango.
                 <br>Los días con producción existente serán <strong>sobrescritos</strong>.
-                ${productoIdBase ? `<br>🏷️ <strong>Producto:</strong> ${productoSelectBase.options[productoSelectBase.selectedIndex]?.textContent || ''}` : ''}
+                ${productoIdBase ? `<br>🏷️ <strong>Producto:</strong> ${productoNombreBase}` : '<br>🏷️ <strong>Producto:</strong> — Sin producto específico —'}
             </div>
             
             <form id="produccion-rango-form" style="display: flex; flex-direction: column; gap: 12px;">
@@ -2254,11 +1935,11 @@ function showProduccionRangoModal(fechaBase) {
                 <div style="background: #fef9e7; padding: 10px 12px; border-radius: 8px; border: 1px solid #f59e0b;">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
                         <input type="checkbox" id="pr-excluir-domingos" onchange="previewProduccionRango()" style="width: 16px; height: 16px; cursor: pointer; accent-color: #f59e0b;">
-                        <label for="pr-excluir-domingos" style="font-size: 13px; cursor: pointer; font-weight: 600;">🚫 Excluir los domingos del rango</label>
+                        <label for="pr-excluir-domingos" style="font-size: 13px; cursor: pointer; font-weight: 600;">🚫 Excluir los domingos</label>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <input type="checkbox" id="pr-excluir-dias-sin-corriente" onchange="previewProduccionRango()" style="width: 16px; height: 16px; cursor: pointer; accent-color: #f59e0b;">
-                        <label for="pr-excluir-dias-sin-corriente" style="font-size: 13px; cursor: pointer; font-weight: 600;">🌙 Excluir los días sin corriente</label>
+                        <label for="pr-excluir-dias-sin-corriente" style="font-size: 13px; cursor: pointer; font-weight: 600;">🌙 Excluir días sin corriente</label>
                     </div>
                 </div>
                 
@@ -2270,7 +1951,7 @@ function showProduccionRangoModal(fechaBase) {
                         <small style="font-size: 11px; color: var(--text-light);">Acepta cualquier número: 6, 6.5, 6.123</small>
                     </div>
                     <div class="form-group">
-                        <label style="font-size: 12px;">📝 Notas (se aplicarán a todos los días)</label>
+                        <label style="font-size: 12px;">📝 Notas</label>
                         <input type="text" id="pr-notas" class="input-field" value="${notasBase}" placeholder="Ej: Producción semanal">
                     </div>
                 </div>
@@ -2287,7 +1968,7 @@ function showProduccionRangoModal(fechaBase) {
                         </label>
                         <label style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;">
                             <input type="radio" name="pr-bloque-tipo" value="fijo" onchange="previewProduccionRango()">
-                            <span style="font-size: 13px;">📌 <strong>Bloque fijo del día base</strong> — Mismas horas exactas</span>
+                            <span style="font-size: 13px;">📌 <strong>Bloque fijo del día base</strong></span>
                         </label>
                     </div>
                 </div>
@@ -2317,11 +1998,6 @@ function showProduccionRangoModal(fechaBase) {
     form.addEventListener('submit', async (e) => { e.preventDefault(); await submitProduccionRango(); });
     
     modal.addEventListener('click', (e) => { if (e.target === modal) closeProduccionRangoModal(); });
-    
-    const escHandler = function(e) {
-        if (e.key === 'Escape') { closeProduccionRangoModal(); document.removeEventListener('keydown', escHandler); }
-    };
-    document.addEventListener('keydown', escHandler);
     
     setTimeout(previewProduccionRango, 100);
 }
@@ -2424,7 +2100,7 @@ async function previewProduccionRango() {
     const produccionesAfectadas = produccionesExistentes.fechas.filter(f => fechasSet.has(f));
     
     if (warningEl && produccionesAfectadas.length > 0) {
-        warningEl.innerHTML = `⚠️ <strong>Atención:</strong> ${produccionesAfectadas.length} día(s) del rango ya tienen producción programada. Serán <strong>sobrescritos</strong>.`;
+        warningEl.innerHTML = `⚠️ <strong>Atención:</strong> ${produccionesAfectadas.length} día(s) del rango ya tienen producción. Serán <strong>sobrescritos</strong>.`;
         warningEl.style.display = 'block';
     }
     
@@ -2433,12 +2109,23 @@ async function previewProduccionRango() {
         ? `${bloqueInfoBase.inicioStr} - ${bloqueInfoBase.finStr} (${bloqueInfoBase.duracionHoras.toFixed(1)}h)`
         : 'Sin bloque definido';
     
+    const productoIdBase = window._prState?.productoIdBase;
+    let productoTexto = '— Sin producto específico —';
+    if (productoIdBase) {
+        const productoSelect = document.getElementById('produccion-producto');
+        if (productoSelect) {
+            const selectedOption = productoSelect.options[productoSelect.selectedIndex];
+            productoTexto = selectedOption?.textContent || '—';
+        }
+    }
+    
     let previewHtml = `
         <div style="background: var(--bg); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; font-size: 11px;">
             <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span>📅 Días afectados:</span><strong style="color: #3b82f6;">${fechas.length}</strong></div>
             <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span>📦 Cantidad por día:</span><strong style="color: #10b981;">${formatearCantidadProduccion(cantidad)}</strong></div>
             <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span>🔨 Bloque:</span><strong style="color: #8b5cf6;">${bloqueInfoTexto}</strong></div>
             <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span>🎯 Modo:</span><strong style="color: #f59e0b;">${bloqueTipo === 'relativo' ? 'Relativo' : 'Fijo'}</strong></div>
+            <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span>🏷️ Producto:</span><strong style="color: #3b82f6;">${productoTexto}</strong></div>
             ${produccionesAfectadas.length > 0 ? `<div style="display: flex; justify-content: space-between; padding: 2px 0; border-top: 1px dashed #ef4444; margin-top: 4px; padding-top: 4px;"><span style="color: #ef4444;">⚠️ A sobrescribir:</span><strong style="color: #ef4444;">${produccionesAfectadas.length} día(s)</strong></div>` : ''}
         </div>
         <div style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">📋 Detalle (${fechas.length}):</div>
@@ -2498,7 +2185,7 @@ async function previewProduccionRango() {
         }
         
         const prodBadge = prodExistente 
-            ? `<span style="background: #ef444420; color: #ef4444; font-size: 9px; padding: 1px 6px; border-radius: 6px; margin-left: 4px;">Ya tiene: ${formatearCantidadProduccion(prodExistente.cantidad_produccion)}</span>` 
+            ? `<span style="background: #ef444420; color: #ef4444; font-size: 9px; padding: 1px 6px; border-radius: 6px; margin-left: 4px;">Ya: ${formatearCantidadProduccion(prodExistente.cantidad_produccion)}</span>` 
             : '';
         
         previewHtml += `
@@ -2514,7 +2201,7 @@ async function previewProduccionRango() {
     previewHtml += '</div>';
     
     if (fechasSinBloque > 0) {
-        previewHtml += `<div style="margin-top: 8px; padding: 6px 10px; background: #f59e0b15; border-left: 3px solid #f59e0b; border-radius: 6px; font-size: 11px; color: #92400e;">⚠️ ${fechasSinBloque} día(s) serán omitidos por no tener bloque equivalente.</div>`;
+        previewHtml += `<div style="margin-top: 8px; padding: 6px 10px; background: #f59e0b15; border-left: 3px solid #f59e0b; border-radius: 6px; font-size: 11px; color: #92400e;">⚠️ ${fechasSinBloque} día(s) serán omitidos.</div>`;
     }
     
     container.innerHTML = previewHtml;
@@ -2527,12 +2214,12 @@ async function submitProduccionRango() {
     const notas = document.getElementById('pr-notas')?.value?.trim() || null;
     const bloqueTipo = document.querySelector('input[name="pr-bloque-tipo"]:checked')?.value || 'relativo';
     
-    if (!inicio || !fin) { window.showToast('⚠️ Debes especificar fecha inicio y fin', 'error'); return; }
-    if (inicio > fin) { window.showToast('⚠️ La fecha "desde" debe ser anterior a "hasta"', 'error'); return; }
-    if (isNaN(cantidad) || cantidad <= 0) { window.showToast('⚠️ La cantidad debe ser mayor a 0', 'error'); return; }
+    if (!inicio || !fin) { window.showToast('⚠️ Especifica fecha inicio y fin', 'error'); return; }
+    if (inicio > fin) { window.showToast('⚠️ La fecha "desde" debe ser anterior', 'error'); return; }
+    if (isNaN(cantidad) || cantidad <= 0) { window.showToast('⚠️ Cantidad debe ser > 0', 'error'); return; }
     
     const fechas = getFechasDelRango();
-    if (fechas.length === 0) { window.showToast('⚠️ El rango no genera fechas válidas', 'warning'); return; }
+    if (fechas.length === 0) { window.showToast('⚠️ El rango no genera fechas', 'warning'); return; }
     
     const bloqueInfoBase = window._prState?.bloqueInfoBase;
     const bloqueSelectBase = window._prState?.bloqueSelectBase || '';
@@ -2545,9 +2232,7 @@ async function submitProduccionRango() {
     let productoId = null;
     if (productoIdBase !== undefined && productoIdBase !== null && productoIdBase !== '') {
         const parsed = parseInt(productoIdBase);
-        if (!isNaN(parsed) && parsed > 0) {
-            productoId = parsed;
-        }
+        if (!isNaN(parsed) && parsed > 0) productoId = parsed;
     }
     
     let produccionesExistentes = { total: 0, fechas: [] };
@@ -2560,11 +2245,9 @@ async function submitProduccionRango() {
     const fechasSet = new Set(fechas);
     const produccionesAfectadas = produccionesExistentes.fechas.filter(f => fechasSet.has(f));
     
-    const msgConfirm = `¿Aplicar producción a ${fechas.length} día(s)?\n\n📅 Rango: ${inicio} → ${fin}\n📦 Cantidad por día: ${formatearCantidadProduccion(cantidad)}\n🔨 Bloque: ${bloqueInfoBase ? `${bloqueInfoBase.inicioStr} - ${bloqueInfoBase.finStr}` : 'según cada día'}\n🎯 Modo: ${bloqueTipo === 'relativo' ? 'Relativo' : 'Fijo'}\n${notas ? `📝 Notas: ${notas}\n` : ''}${productoId ? `🏷️ Producto ID: ${productoId}\n` : ''}${produccionesAfectadas.length > 0 ? `\n⚠️ Se sobrescribirán ${produccionesAfectadas.length} producción(es).\n` : ''}\n¿Confirmas?`;
-    
     const confirm = await window.ModalModule.showConfirm({
         title: '📅 Aplicar a rango',
-        message: msgConfirm,
+        message: `¿Aplicar producción a ${fechas.length} día(s)?\n\n📅 ${inicio} → ${fin}\n📦 ${formatearCantidadProduccion(cantidad)} por día\n${produccionesAfectadas.length > 0 ? `\n⚠️ Se sobrescribirán ${produccionesAfectadas.length} producción(es).\n` : ''}\n¿Confirmas?`,
         confirmText: `✅ SÍ, APLICAR A ${fechas.length} DÍAS`,
         cancelText: '❌ Cancelar',
         icon: '📅',
@@ -2597,7 +2280,7 @@ async function submitProduccionRango() {
                 const bloques = window.CorrienteUtils.getBloques(fecha);
                 if (!bloques || bloques.length === 0) { fallidos.push(`${fecha}: sin corriente`); continue; }
                 const bloqueEq = bloques.find(b => b.inicioStr24 === bloqueInfoBase.inicioStr24 && b.finStr24 === bloqueInfoBase.finStr24);
-                if (!bloqueEq) { fallidos.push(`${fecha}: sin bloque en horario ${bloqueInfoBase.inicioStr24}-${bloqueInfoBase.finStr24}`); continue; }
+                if (!bloqueEq) { fallidos.push(`${fecha}: sin bloque equivalente`); continue; }
                 bloqueParaFecha = bloqueEq;
             }
             
@@ -2635,7 +2318,7 @@ async function submitProduccionRango() {
     }
     
     try {
-        window.showToast(`⏳ Aplicando producción a ${exitos.length} día(s)...`, 'info', 3000);
+        window.showToast(`⏳ Aplicando a ${exitos.length} día(s)...`, 'info', 3000);
         
         const grupos = {};
         for (const ex of exitos) {
@@ -2655,7 +2338,6 @@ async function submitProduccionRango() {
         
         let totalCreados = 0;
         let totalActualizados = 0;
-        const errores = [];
         
         for (const key in grupos) {
             const grupo = grupos[key];
@@ -2673,14 +2355,10 @@ async function submitProduccionRango() {
             if (result.success) {
                 totalCreados += result.creados || 0;
                 totalActualizados += result.actualizados || 0;
-            } else {
-                errores.push(result.error || 'Error desconocido');
             }
         }
         
-        if (errores.length > 0) window.showToast(`⚠️ Algunos grupos fallaron: ${errores.length}`, 'warning', 5000);
-        
-        let msgFinal = `✅ Producción aplicada: ${totalCreados} nuevo(s)`;
+        let msgFinal = `✅ Aplicado: ${totalCreados} nuevo(s)`;
         if (totalActualizados > 0) msgFinal += `, ${totalActualizados} actualizado(s)`;
         if (fallidos.length > 0) msgFinal += ` · ${fallidos.length} omitido(s)`;
         window.showToast(msgFinal, 'success', 6000);
@@ -2773,6 +2451,8 @@ function consultarHorariosFecha() {
     `;
 }
 
+window.consultarHorariosFecha = consultarHorariosFecha;
+
 // ============================================================
 // GENERAR REPORTE PDF DE CORRIENTE
 // ============================================================
@@ -2781,8 +2461,8 @@ function generarReportePDF(tipo) {
     const desde = document.getElementById('reporte-fecha-desde').value;
     const hasta = document.getElementById('reporte-fecha-hasta').value;
 
-    if (!desde || !hasta) { window.showToast('⚠️ Selecciona un rango de fechas', 'error'); return; }
-    if (desde > hasta) { window.showToast('⚠️ La fecha "desde" debe ser anterior a "hasta"', 'error'); return; }
+    if (!desde || !hasta) { window.showToast('⚠️ Selecciona un rango', 'error'); return; }
+    if (desde > hasta) { window.showToast('⚠️ Fecha "desde" debe ser anterior', 'error'); return; }
 
     const startDate = new Date(desde + 'T00:00:00');
     const endDate = new Date(hasta + 'T00:00:00');
@@ -2817,8 +2497,7 @@ function generarReportePDF(tipo) {
             bloqueAyerTexto: bloqueAyer ? `${bloqueAyer.inicioStr} - ${bloqueAyer.finStr}` : null,
             produccion: prodConfig ? formatearCantidadProduccion(prodConfig.cantidad_produccion) : null,
             esBloqueAyer: prodConfig ? (prodConfig.es_bloque_dia_anterior === 1) : false,
-            bloquesUsados: prodConfig ? (prodConfig.bloques_usados || 1) : 0,
-            productoId: prodConfig ? prodConfig.producto_id : null
+            bloquesUsados: prodConfig ? (prodConfig.bloques_usados || 1) : 0
         });
     }
 
@@ -2908,11 +2587,9 @@ function generarReportePDF(tipo) {
             </table>
 
             <div class="nota">
-                💡 Los horarios se generan automáticamente basados en el patrón configurado.
-                <br>🔄 Ciclo: ${config.horasCorriente || 3}h corriente / ${config.horasApagon || 12}h apagón
-                <br>🔨 = Día con producción programada
-                <br>🌙 = Producción programada en el último bloque del día anterior
-                <br>🔢 = Día con múltiples bloques de producción (ver tooltip en la app)
+                💡 Los horarios se generan automáticamente.
+                <br>🔄 Ciclo: ${config.horasCorriente || 3}h / ${config.horasApagon || 12}h
+                <br>🌙 = Producción en bloque del día anterior
             </div>
 
             <div class="footer">
@@ -2931,6 +2608,8 @@ function generarReportePDF(tipo) {
 
     window.showToast('✅ Reporte generado', 'success');
 }
+
+window.generarReportePDF = generarReportePDF;
 
 // ============================================================
 // REPORTE DE GASTOS
@@ -2959,7 +2638,7 @@ function showExpensesReportModal() {
         <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                 <h2 style="margin: 0;">📊 Reporte de Gastos</h2>
-                <button onclick="closeExpensesReportModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+                <button onclick="closeExpensesReportModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light);">✕</button>
             </div>
             
             <form id="expenses-report-form" style="display: flex; flex-direction: column; gap: 12px;">
@@ -3053,7 +2732,6 @@ function generateExpensesReportFromForm() {
     });
 
     const categoriaLabels = { 'insumos': '🛒 Insumos', 'materiales': '📦 Materiales', 'transporte': '🚗 Transporte', 'inversion': '💼 Inversión', 'otros': '🔄 Otros', 'gasto': '📤 General' };
-    const origenLabels = { 'cash': '💵 Efectivo', 'transfer': '🏦 Transferencia', 'other': '🔄 Otra' };
     const periodo = filters.from_date && filters.to_date ? `${new Date(filters.from_date).toLocaleDateString('es-ES')} al ${new Date(filters.to_date).toLocaleDateString('es-ES')}` : 'Todos los períodos';
 
     const html = `
@@ -3103,6 +2781,9 @@ function closeExpensesReportModal() {
     }
 }
 
+window.showExpensesReportModal = showExpensesReportModal;
+window.closeExpensesReportModal = closeExpensesReportModal;
+
 // ============================================================
 // LISTA DE ESPERA EN HERRAMIENTAS
 // ============================================================
@@ -3129,6 +2810,9 @@ async function reporteListaEsperaFromSettings() {
     }
 }
 
+window.showWaitingListFromSettings = showWaitingListFromSettings;
+window.reporteListaEsperaFromSettings = reporteListaEsperaFromSettings;
+
 // ============================================================
 // CANCELACIÓN GLOBAL DE PEDIDOS
 // ============================================================
@@ -3136,7 +2820,7 @@ async function reporteListaEsperaFromSettings() {
 function showGlobalCancelModal() {
     const user = window.AuthModule.getCurrentUser();
     if (!user || user.is_admin !== 1) {
-        window.showToast('🔒 Solo el administrador puede cancelar pedidos globalmente', 'warning', 4000);
+        window.showToast('🔒 Solo el administrador', 'warning', 4000);
         return;
     }
     
@@ -3159,21 +2843,20 @@ function showGlobalCancelModal() {
     `;
     
     modal.innerHTML = `
-        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 520px; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); border: 2px solid #dc2626;">
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 520px; width: 100%; max-height: 92vh; overflow-y: auto; border: 2px solid #dc2626;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #dc2626;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 32px;">🚨</span>
                     <div>
                         <h2 style="margin: 0; font-size: 18px; color: #dc2626;">Cancelación Global</h2>
-                        <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">Cancela pedidos por rango de fechas</p>
+                        <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">Cancela pedidos por rango</p>
                     </div>
                 </div>
-                <button onclick="closeGlobalCancelModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+                <button onclick="closeGlobalCancelModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light);">✕</button>
             </div>
             
             <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 12px; color: #991b1b;">
-                ⚠️ <strong>ATENCIÓN:</strong> Esta acción cancelará TODOS los pedidos <strong>Pendientes, Confirmados, En producción y Listos</strong> dentro del rango de fechas.
-                <br>✅ Se repondrá el stock. ✅ Los ENTREGADOS no se ven afectados.
+                ⚠️ <strong>ATENCIÓN:</strong> Esta acción cancelará TODOS los pedidos activos en el rango. Se repondrá el stock.
             </div>
             
             <form id="global-cancel-form" style="display: flex; flex-direction: column; gap: 14px;">
@@ -3231,7 +2914,7 @@ async function executeGlobalCancel() {
     const nota = document.getElementById('global-cancel-nota')?.value?.trim() || '';
     
     if (!fechaDesde || !fechaHasta) { window.showToast('⚠️ Especifica fecha desde y hasta', 'error'); return; }
-    if (fechaDesde > fechaHasta) { window.showToast('⚠️ Fecha "desde" debe ser anterior a "hasta"', 'error'); return; }
+    if (fechaDesde > fechaHasta) { window.showToast('⚠️ Fecha "desde" debe ser anterior', 'error'); return; }
     
     const negocioId = window.DBModule.getNegocioIdActual();
     const pedidosEnRango = window.DBModule.query(`
@@ -3242,11 +2925,11 @@ async function executeGlobalCancel() {
     `, [negocioId, fechaDesde, fechaHasta]);
     
     const count = pedidosEnRango[0]?.n || 0;
-    if (count === 0) { window.showToast(`ℹ️ No hay pedidos cancelables en el rango`, 'info', 5000); return; }
+    if (count === 0) { window.showToast(`ℹ️ No hay pedidos cancelables`, 'info', 5000); return; }
     
     const confirm1 = await window.ModalModule.showConfirm({
         title: '⚠️ Confirmar cancelación',
-        message: `Se cancelarán ${count} pedido(s) entre ${fechaDesde} y ${fechaHasta}.\n\n📌 Causa: ${causa}\n${nota ? `📝 Nota: ${nota}\n\n` : ''}¿Continuar?`,
+        message: `Se cancelarán ${count} pedido(s).\n\n📌 Causa: ${causa}\n\n¿Continuar?`,
         confirmText: '⚠️ CONTINUAR', cancelText: '❌ Cancelar',
         icon: '⚠️', confirmColor: '#f59e0b'
     });
@@ -3255,7 +2938,7 @@ async function executeGlobalCancel() {
     const confirm2 = await window.ModalModule.showConfirm({
         title: '🚨 CONFIRMACIÓN FINAL',
         message: `ÚLTIMA advertencia.\n\nSe cancelarán ${count} pedido(s).\n\n¿Confirmas?`,
-        confirmText: '🚨 SÍ, CANCELAR TODO', cancelText: '❌ NO, volver',
+        confirmText: '🚨 SÍ, CANCELAR TODO', cancelText: '❌ NO',
         icon: '🚨', confirmColor: '#dc2626'
     });
     if (!confirm2) { window.showToast('❌ Cancelación abortada', 'info', 2000); return; }
@@ -3269,8 +2952,8 @@ async function executeGlobalCancel() {
         if (!result.success) { window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 6000); return; }
         
         await window.ModalModule.showAlert({
-            title: '✅ Cancelación global exitosa',
-            message: `✅ Cancelación completada.\n\n🚫 Pedidos cancelados: ${result.cancelados}\n🔄 Items reiniciados: ${result.reiniciados}\n⏰ Items preservados: ${result.preservados}\n\n📌 Causa: ${result.notaFinal}`,
+            title: '✅ Cancelación exitosa',
+            message: `🚫 Pedidos cancelados: ${result.cancelados}\n🔄 Items reiniciados: ${result.reiniciados}\n⏰ Items preservados: ${result.preservados}`,
             icon: '✅', type: 'success'
         });
         
@@ -3283,13 +2966,17 @@ async function executeGlobalCancel() {
     }
 }
 
+window.showGlobalCancelModal = showGlobalCancelModal;
+window.closeGlobalCancelModal = closeGlobalCancelModal;
+window.executeGlobalCancel = executeGlobalCancel;
+
 // ============================================================
 // REPROGRAMAR PEDIDOS POR RANGO
 // ============================================================
 
 function showReprogramarPedidosModal() {
     const user = window.AuthModule.getCurrentUser();
-    if (!user || user.is_admin !== 1) { window.showToast('🔒 Solo el administrador', 'warning', 4000); return; }
+    if (!user || user.is_admin !== 1) { window.showToast('🔒 Solo admin', 'warning', 4000); return; }
     
     if (window.ModalModule?.cerrarTodosLosModales) window.ModalModule.cerrarTodosLosModales();
     
@@ -3310,7 +2997,7 @@ function showReprogramarPedidosModal() {
     `;
     
     modal.innerHTML = `
-        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 560px; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); border: 2px solid #8b5cf6;">
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 560px; width: 100%; max-height: 92vh; overflow-y: auto; border: 2px solid #8b5cf6;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #8b5cf6;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 32px;">🔄</span>
@@ -3319,11 +3006,7 @@ function showReprogramarPedidosModal() {
                         <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">Mueve pedidos de una fecha a otra</p>
                     </div>
                 </div>
-                <button onclick="closeReprogramarModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
-            </div>
-            
-            <div style="background: #f5f3ff; border: 1px solid #c4b5fd; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 12px; color: #5b21b6;">
-                💡 Los pedidos en el rango de origen se moverán a la fecha destino. La causa y nota se añadirán a cada pedido.
+                <button onclick="closeReprogramarModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light);">✕</button>
             </div>
             
             <form id="reprogramar-form" style="display: flex; flex-direction: column; gap: 14px;">
@@ -3358,7 +3041,9 @@ function showReprogramarPedidosModal() {
                 </div>
                 
                 <div id="reprogramar-preview" style="background: #f0f9ff; padding: 12px; border-radius: 8px; border: 2px solid #3b82f6; font-size: 12px;">
-                    <div style="text-align: center; color: var(--text-light);">Cargando vista previa...</div>
+                    <div style="text-align: center; color: var(--text-light); padding: 6px;">
+                        ℹ️ Selecciona un rango y una fecha destino para ver la vista previa.
+                    </div>
                 </div>
                 
                 <div style="display: flex; gap: 8px;">
@@ -3370,15 +3055,6 @@ function showReprogramarPedidosModal() {
     `;
     
     document.body.appendChild(modal);
-    
-    const previewEl = document.getElementById('reprogramar-preview');
-    if (previewEl) {
-        previewEl.innerHTML = `
-            <div style="text-align: center; color: var(--text-light); padding: 6px;">
-                ℹ️ Selecciona un rango de fechas y una fecha destino para ver la vista previa.
-            </div>
-        `;
-    }
     
     const form = document.getElementById('reprogramar-form');
     form.addEventListener('submit', async (e) => { e.preventDefault(); await executeReprogramarPedidos(); });
@@ -3438,8 +3114,8 @@ async function executeReprogramarPedidos() {
     const nota = document.getElementById('reprogramar-nota')?.value?.trim() || '';
     
     if (!fechaDesde || !fechaHasta || !fechaDestino) { window.showToast('⚠️ Completa todas las fechas', 'error'); return; }
-    if (fechaDesde > fechaHasta) { window.showToast('⚠️ Fecha "desde" debe ser anterior a "hasta"', 'error'); return; }
-    if (fechaDestino >= fechaDesde && fechaDestino <= fechaHasta) { window.showToast('⚠️ Fecha destino no puede estar en rango origen', 'error'); return; }
+    if (fechaDesde > fechaHasta) { window.showToast('⚠️ Fecha "desde" debe ser anterior', 'error'); return; }
+    if (fechaDestino >= fechaDesde && fechaDestino <= fechaHasta) { window.showToast('⚠️ Fecha destino no puede estar en rango', 'error'); return; }
     
     const negocioId = window.DBModule.getNegocioIdActual();
     let countSql = `SELECT COUNT(*) as n FROM orders WHERE negocio_id = ? AND deleted_at IS NULL AND status IN ('pending', 'confirmed', 'production', 'ready') AND DATE(delivery_date) >= DATE(?) AND DATE(delivery_date) <= DATE(?)`;
@@ -3449,27 +3125,27 @@ async function executeReprogramarPedidos() {
     const countResult = window.DBModule.query(countSql, countParams);
     const count = countResult[0]?.n || 0;
     
-    if (count === 0) { window.showToast('ℹ️ No hay pedidos para reprogramar', 'info', 4000); return; }
+    if (count === 0) { window.showToast('ℹ️ No hay pedidos', 'info', 4000); return; }
     
-    const confirm1 = await window.ModalModule.showConfirm({
+    const confirm = await window.ModalModule.showConfirm({
         title: '🔄 Confirmar reprogramación',
-        message: `Se moverán ${count} pedido(s):\n📅 ${fechaDesde} → ${fechaHasta}\n\nHacia:\n🎯 ${fechaDestino}\n\n📌 Causa: ${causa}\n${nota ? `📝 Nota: ${nota}\n` : ''}\n¿Continuar?`,
+        message: `Se moverán ${count} pedido(s) al ${fechaDestino}.\n\n¿Continuar?`,
         confirmText: '🔄 CONTINUAR', cancelText: '❌ Cancelar',
         icon: '🔄', confirmColor: '#8b5cf6'
     });
-    if (!confirm1) return;
+    if (!confirm) return;
     
     closeReprogramarModal();
     
     try {
         window.showToast('⏳ Reprogramando...', 'info', 3000);
-        const result = await window.OrdersModule.rpZEAWYtiB6bJ16NuLbGCc6CZ6jJdKfb63(fechaDesde, fechaHasta, fechaDestino, causa, nota, clienteFiltro);
+        const result = await window.OrdersModule.reprogramarPedidosPorRango(fechaDesde, fechaHasta, fechaDestino, causa, nota, clienteFiltro);
         
         if (!result.success) { window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 6000); return; }
         
         await window.ModalModule.showAlert({
             title: '✅ Reprogramación exitosa',
-            message: `Se reprogramaron ${result.reprogramados} pedido(s).\n\n📅 Nueva fecha: ${fechaDestino}\n📌 Causa: ${causa}`,
+            message: `Se reprogramaron ${result.reprogramados} pedido(s).\n\n📅 Nueva fecha: ${fechaDestino}`,
             icon: '✅', type: 'success'
         });
         
@@ -3481,6 +3157,1269 @@ async function executeReprogramarPedidos() {
         window.showToast('❌ Error: ' + error.message, 'error', 6000);
     }
 }
+
+window.showReprogramarPedidosModal = showReprogramarPedidosModal;
+window.closeReprogramarModal = closeReprogramarModal;
+window.actualizarPreviewReprogramacion = actualizarPreviewReprogramacion;
+window.executeReprogramarPedidos = executeReprogramarPedidos;
+
+// ============================================================
+// ACCIONES DE BACKUP CON MODAL DE PROGRESO (CORRECCIÓN #8)
+// ============================================================
+
+function exportDatabaseCompleteAction() {
+    const LOG_PREFIX = '📦 [exportDatabaseComplete]';
+    console.log(`${LOG_PREFIX} Iniciando...`);
+    
+    const user = window.AuthModule.getCurrentUser();
+    if (!user || user.is_admin !== 1) {
+        window.showToast('⚠️ Solo el administrador puede exportar la copia completa', 'warning', 4000);
+        return;
+    }
+    
+    let progress = null;
+    try {
+        progress = window.ModalModule.showProgressModal({
+            title: 'Exportando copia completa',
+            message: 'Preparando datos...',
+            icon: '📦'
+        });
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} No se pudo mostrar modal:`, e);
+    }
+    
+    setTimeout(() => {
+        try {
+            if (progress) progress.update('Serializando base de datos...', 30);
+            const result = window.DBModule.downloadDatabase(window.DBModule.BACKUP_TYPE_COMPLETE);
+            
+            if (result && result.success) {
+                console.log(`${LOG_PREFIX} ✅ Completado:`, result.filename);
+                if (progress) progress.update('Generando archivo...', 80);
+                setTimeout(() => {
+                    if (progress) progress.success(`✅ Copia completa exportada (${(result.size / 1024).toFixed(1)} KB)`);
+                }, 300);
+            } else {
+                console.error(`${LOG_PREFIX} ❌ Error:`, result?.error);
+                if (progress) progress.error(result?.error || 'Error al exportar');
+                else window.showToast('❌ Error: ' + (result?.error || 'Desconocido'), 'error', 5000);
+            }
+        } catch (e) {
+            console.error(`${LOG_PREFIX} ❌ Excepción:`, e);
+            if (progress) progress.error(e.message);
+            else window.showToast('❌ Error: ' + e.message, 'error', 5000);
+        }
+    }, 150);
+}
+
+function exportDatabaseDataOnlyAction() {
+    const LOG_PREFIX = '📊 [exportDatabaseDataOnly]';
+    console.log(`${LOG_PREFIX} Iniciando...`);
+    
+    let progress = null;
+    try {
+        progress = window.ModalModule.showProgressModal({
+            title: 'Exportando datos',
+            message: 'Preparando datos operativos...',
+            icon: '📊'
+        });
+    } catch (e) {}
+    
+    setTimeout(() => {
+        try {
+            if (progress) progress.update('Serializando...', 30);
+            const result = window.DBModule.downloadDatabase(window.DBModule.BACKUP_TYPE_DATA_ONLY);
+            
+            if (result && result.success) {
+                if (progress) progress.update('Generando archivo...', 80);
+                setTimeout(() => {
+                    if (progress) progress.success(`✅ Copia de datos exportada (${(result.size / 1024).toFixed(1)} KB)`);
+                }, 300);
+            } else {
+                if (progress) progress.error(result?.error || 'Error');
+                else window.showToast('❌ Error: ' + (result?.error || 'Desconocido'), 'error', 5000);
+            }
+        } catch (e) {
+            if (progress) progress.error(e.message);
+            else window.showToast('❌ Error: ' + e.message, 'error', 5000);
+        }
+    }, 150);
+}
+
+async function importDatabaseSmartAction() {
+    const user = window.AuthModule.getCurrentUser();
+    if (!user || user.is_admin !== 1) {
+        window.showToast('⚠️ Solo el administrador puede importar copias completas', 'warning', 4000);
+        return;
+    }
+    
+    try {
+        let progress = null;
+        const originalShowConfirm = window.ModalModule.showConfirm;
+        
+        window.ModalModule.showConfirm = async function(options) {
+            const confirm = await originalShowConfirm.call(this, options);
+            if (confirm) {
+                try {
+                    progress = window.ModalModule.showProgressModal({
+                        title: 'Importando copia',
+                        message: 'Leyendo archivo...',
+                        icon: '📥'
+                    });
+                } catch (e) {}
+            }
+            window.ModalModule.showConfirm = originalShowConfirm;
+            return confirm;
+        };
+        
+        const result = await window.DBModule.importDatabaseFromFile();
+        
+        if (result && result.success) {
+            if (progress) progress.update('Aplicando cambios...', 90);
+            setTimeout(() => {
+                if (progress) progress.success(`✅ Importados ${result.tables?.length || 0} tablas`);
+            }, 300);
+            
+            setTimeout(() => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('refresh', Date.now());
+                window.location.href = url.toString();
+            }, 1500);
+        } else if (result && result.error) {
+            if (progress) progress.error(result.error);
+        }
+    } catch (e) {
+        window.showToast('❌ Error: ' + e.message, 'error', 5000);
+    }
+}
+
+async function importDatabaseDataOnlyFromFileAction() {
+    try {
+        let progress = null;
+        const originalShowConfirm = window.ModalModule.showConfirm;
+        
+        window.ModalModule.showConfirm = async function(options) {
+            const confirm = await originalShowConfirm.call(this, options);
+            if (confirm) {
+                try {
+                    progress = window.ModalModule.showProgressModal({
+                        title: 'Importando datos',
+                        message: 'Reemplazando datos operativos...',
+                        icon: '📊'
+                    });
+                } catch (e) {}
+            }
+            window.ModalModule.showConfirm = originalShowConfirm;
+            return confirm;
+        };
+        
+        const result = await window.DBModule.importDatabaseDataOnlyFromFile();
+        
+        if (result && result.success) {
+            if (progress) progress.update('Aplicando cambios...', 90);
+            setTimeout(() => {
+                if (progress) progress.success(`✅ Datos importados`);
+            }, 300);
+            
+            setTimeout(() => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('refresh', Date.now());
+                window.location.href = url.toString();
+            }, 1500);
+        } else if (result && result.error) {
+            if (progress) progress.error(result.error);
+        }
+    } catch (e) {
+        window.showToast('❌ Error: ' + e.message, 'error', 5000);
+    }
+}
+
+async function importDatabaseFusionAction() {
+    const user = window.AuthModule.getCurrentUser();
+    if (!user || user.is_admin !== 1) {
+        window.showToast('⚠️ Solo el administrador puede fusionar', 'warning', 4000);
+        return;
+    }
+    
+    try {
+        let progress = null;
+        const originalShowConfirm = window.ModalModule.showConfirm;
+        
+        window.ModalModule.showConfirm = async function(options) {
+            const confirm = await originalShowConfirm.call(this, options);
+            if (confirm) {
+                try {
+                    progress = window.ModalModule.showProgressModal({
+                        title: 'Fusionando bases de datos',
+                        message: 'Analizando registros...',
+                        icon: '🔀'
+                    });
+                } catch (e) {}
+            }
+            window.ModalModule.showConfirm = originalShowConfirm;
+            return confirm;
+        };
+        
+        const result = await window.DBModule.importDatabaseDataOnlyFromFile();
+        
+        if (result && result.success) {
+            if (progress) progress.update('Consolidando cambios...', 90);
+            setTimeout(() => {
+                if (progress) {
+                    const insertados = result.inserted || 0;
+                    const actualizados = result.updated || 0;
+                    const omitidos = result.skipped || 0;
+                    progress.success(`✅ Fusión: +${insertados}, ~${actualizados}, =${omitidos}`);
+                }
+            }, 300);
+            
+            setTimeout(() => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('refresh', Date.now());
+                window.location.href = url.toString();
+            }, 2000);
+        } else if (result && result.error) {
+            if (progress) progress.error(result.error);
+        }
+    } catch (e) {
+        window.showToast('❌ Error: ' + e.message, 'error', 5000);
+    }
+}
+
+window.exportDatabaseCompleteAction = exportDatabaseCompleteAction;
+window.exportDatabaseDataOnlyAction = exportDatabaseDataOnlyAction;
+window.importDatabaseSmartAction = importDatabaseSmartAction;
+window.importDatabaseDataOnlyFromFileAction = importDatabaseDataOnlyFromFileAction;
+window.importDatabaseFusionAction = importDatabaseFusionAction;
+
+// ============================================================
+// 🆕 CORRECCIÓN #6: BOTÓN PARA RESTAURAR ESTILOS RESIDUALES
+// ============================================================
+
+function restaurarEstilosAction() {
+    const LOG_PREFIX = '🎨 [restaurarEstilos]';
+    console.log(`${LOG_PREFIX} Restaurando estilos residuales...`);
+    
+    try {
+        if (typeof window.limpiarEstilosResiduales === 'function') {
+            const limpiados = window.limpiarEstilosResiduales();
+            console.log(`${LOG_PREFIX} ✅ limpiarEstilosResiduales() ejecutado. Propiedades limpiadas: ${limpiados}`);
+        } else {
+            console.warn(`${LOG_PREFIX} ⚠️ limpiarEstilosResiduales no está disponible`);
+        }
+        
+        // Forzar re-render del header
+        const header = document.querySelector('#appScreen header');
+        if (header) {
+            header.style.removeProperty('transform');
+            header.style.removeProperty('will-change');
+            header.style.removeProperty('isolation');
+            header.style.position = 'sticky';
+            header.style.top = '0';
+            header.style.zIndex = '200';
+            console.log(`${LOG_PREFIX} Header restaurado`);
+        }
+        
+        // Limpiar el body
+        document.body.style.removeProperty('transform');
+        document.body.style.removeProperty('will-change');
+        document.body.style.removeProperty('isolation');
+        document.body.style.removeProperty('overflow');
+        
+        // Limpiar html
+        document.documentElement.style.removeProperty('transform');
+        document.documentElement.style.removeProperty('will-change');
+        document.documentElement.style.removeProperty('overflow-x');
+        
+        window.showToast('✅ Estilos restaurados correctamente', 'success', 3000);
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        window.showToast('❌ Error al restaurar: ' + e.message, 'error', 5000);
+    }
+}
+
+window.restaurarEstilosAction = restaurarEstilosAction;
+
+// ============================================================
+// MÓDULO DE USUARIOS (SOLO ADMIN)
+// ============================================================
+
+async function showUsersModal() {
+    const user = window.AuthModule.getCurrentUser();
+    if (!user || user.is_admin !== 1) {
+        window.showToast('🔒 Solo el administrador puede gestionar usuarios', 'warning', 4000);
+        return;
+    }
+    
+    const existingModal = document.getElementById('users-modal');
+    if (existingModal) existingModal.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'users-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 999999999; padding: 15px;
+    `;
+    
+    document.body.appendChild(modal);
+    window._usersModal = modal;
+    
+    await renderUsersContent();
+    
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeUsersModal(); });
+}
+
+async function renderUsersContent() {
+    const modal = document.getElementById('users-modal');
+    if (!modal) return;
+    
+    try {
+        const usuarios = window.AuthModule.getUsuariosDelNegocio();
+        const negocio = window.AuthModule.getCurrentNegocio();
+        const currentUser = window.AuthModule.getCurrentUser();
+        
+        const totalUsuarios = usuarios.length;
+        const totalAdmins = usuarios.filter(u => u.is_admin === 1).length;
+        
+        modal.innerHTML = `
+            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 20px; max-width: 700px; width: 100%; max-height: 92vh; display: flex; flex-direction: column; border: 2px solid #f59e0b;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 2px solid #f59e0b;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 28px;">👥</span>
+                        <div>
+                            <h2 style="margin: 0; font-size: 18px; color: #f59e0b;">Gestión de Usuarios</h2>
+                            <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">${negocio?.nombre || 'Negocio'}</p>
+                        </div>
+                    </div>
+                    <button onclick="closeUsersModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light);">✕</button>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px;">
+                    <div style="background: #f59e0b15; border-left: 3px solid #f59e0b; padding: 8px 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 20px; font-weight: 700; color: #f59e0b;">${totalUsuarios}</div>
+                        <div style="font-size: 11px; color: var(--text-light);">👥 Total</div>
+                    </div>
+                    <div style="background: #8b5cf615; border-left: 3px solid #8b5cf6; padding: 8px 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 20px; font-weight: 700; color: #8b5cf6;">${totalAdmins}</div>
+                        <div style="font-size: 11px; color: var(--text-light);">👑 Admins</div>
+                    </div>
+                    <div style="background: #3b82f615; border-left: 3px solid #3b82f6; padding: 8px 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 20px; font-weight: 700; color: #3b82f6;">${negocio?.codigo_invitacion || '—'}</div>
+                        <div style="font-size: 11px; color: var(--text-light);">🔑 Código</div>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+                    <button onclick="showCreateUserModal()" class="btn primary" style="padding: 6px 14px; font-size: 12px; width: auto; background: #10b981; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">➕ Crear usuario</button>
+                    <button onclick="copiarCodigoInvitacion('${negocio?.codigo_invitacion || ''}')" class="btn secondary" style="padding: 6px 14px; font-size: 12px; width: auto;">📋 Copiar código</button>
+                    <button onclick="regenerarCodigoInvitacionAction()" class="btn secondary" style="padding: 6px 14px; font-size: 12px; width: auto; color: #ef4444; border-color: #ef4444;">🔄 Regenerar código</button>
+                </div>
+                
+                <div style="flex: 1; overflow-y: auto; max-height: 450px;">
+                    ${usuarios.map(u => {
+                        const esYo = u.id === currentUser.id;
+                        const esAdmin = u.is_admin === 1;
+                        return `
+                            <div style="background: var(--bg); border-radius: 10px; padding: 12px; margin-bottom: 8px; border-left: 4px solid ${esAdmin ? '#f59e0b' : '#3b82f6'}; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="font-weight: 700; font-size: 14px;">
+                                        ${esAdmin ? '👑 ' : '👤 '} ${u.name || u.username}
+                                        ${esYo ? '<span style="font-size: 10px; background: #10b98120; color: #10b981; padding: 1px 6px; border-radius: 6px; margin-left: 6px;">TÚ</span>' : ''}
+                                    </div>
+                                    <div style="font-size: 12px; color: var(--text-light);">@${u.username}</div>
+                                    ${u.email ? `<div style="font-size: 11px; color: var(--text-light);">📧 ${u.email}</div>` : ''}
+                                </div>
+                                ${!esYo ? `
+                                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                        <button onclick="showEditUserModal(${u.id})" class="btn secondary" style="padding: 4px 10px; font-size: 11px; width: auto;">✏️</button>
+                                        <button onclick="showChangePasswordModal(${u.id})" class="btn secondary" style="padding: 4px 10px; font-size: 11px; width: auto;">🔒</button>
+                                        <button onclick="handleToggleAdmin(${u.id}, ${esAdmin ? 0 : 1})" class="btn secondary" style="padding: 4px 10px; font-size: 11px; width: auto; color: ${esAdmin ? '#ef4444' : '#10b981'}; border-color: ${esAdmin ? '#ef4444' : '#10b981'};">${esAdmin ? '⬇️' : '👑'}</button>
+                                        <button onclick="handleDeleteUser(${u.id})" class="btn secondary" style="padding: 4px 10px; font-size: 11px; width: auto; color: #ef4444; border-color: #ef4444;">🗑️</button>
+                                    </div>
+                                ` : `
+                                    <div style="font-size: 11px; color: var(--text-light); font-style: italic;">(no puedes modificarte)</div>
+                                `}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--border-color);">
+                    <button onclick="closeUsersModal()" class="btn secondary" style="padding: 10px 20px; font-size: 14px; width: auto;">Cerrar</button>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error renderizando usuarios:', error);
+        modal.innerHTML = `
+            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; text-align: center;">
+                <span style="font-size: 48px;">❌</span>
+                <h2 style="margin: 12px 0 8px;">Error</h2>
+                <p style="color: var(--text-light); font-size: 13px;">${error.message}</p>
+                <button onclick="closeUsersModal()" class="btn secondary" style="margin-top: 12px; padding: 8px 20px; width: auto;">Cerrar</button>
+            </div>
+        `;
+    }
+}
+
+function closeUsersModal() {
+    const modal = document.getElementById('users-modal');
+    if (modal) {
+        modal.style.animation = 'modalFadeOut 0.2s ease forwards';
+        setTimeout(() => { if (modal.parentNode) modal.remove(); }, 200);
+    }
+    window._usersModal = null;
+}
+
+async function regenerarCodigoInvitacionAction() {
+    const confirm = await window.ModalModule.showConfirm({
+        title: '🔄 Regenerar código',
+        message: 'Se generará un nuevo código de invitación.\n\n⚠️ El código anterior dejará de funcionar.\n\n¿Continuar?',
+        confirmText: '🔄 Regenerar', cancelText: 'Cancelar',
+        icon: '🔄', confirmColor: '#f59e0b'
+    });
+    
+    if (!confirm) return;
+    
+    try {
+        const user = window.AuthModule.getCurrentUser();
+        if (!user.negocio_id) { window.showToast('❌ No hay negocio', 'error'); return; }
+        
+        const result = window.DBModule.regenerarCodigoInvitacion(user.negocio_id);
+        
+        if (result.success) {
+            window.showToast(`✅ Nuevo código: ${result.codigo}`, 'success', 5000);
+            
+            // Actualizar el currentUser
+            const negocio = window.DBModule.getNegocio(user.negocio_id);
+            if (negocio) {
+                user.negocio = negocio;
+                window.AuthModule.setCurrentUser(user);
+            }
+            
+            await renderUsersContent();
+        } else {
+            window.showToast('❌ Error: ' + result.error, 'error');
+        }
+    } catch (e) {
+        window.showToast('❌ Error: ' + e.message, 'error');
+    }
+}
+
+function showCreateUserModal() {
+    const modal = document.createElement('div');
+    modal.id = 'create-user-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 9999999999; padding: 20px;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 440px; width: 100%; max-height: 90vh; overflow-y: auto; border: 2px solid #10b981;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #10b981;">
+                <h2 style="margin: 0; font-size: 18px; color: #10b981;">➕ Crear Usuario</h2>
+                <button onclick="closeCreateUserModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light);">✕</button>
+            </div>
+            
+            <form id="create-user-form" style="display: flex; flex-direction: column; gap: 12px;">
+                <div class="form-group">
+                    <label>👤 Usuario</label>
+                    <input type="text" id="create-user-username" class="input-field" placeholder="nombre_usuario" required>
+                </div>
+                <div class="form-group">
+                    <label>🔒 Contraseña</label>
+                    <input type="password" id="create-user-password" class="input-field" placeholder="Mínimo 4 caracteres" required>
+                </div>
+                <div class="form-group">
+                    <label>📛 Nombre completo</label>
+                    <input type="text" id="create-user-name" class="input-field" placeholder="Nombre completo" required>
+                </div>
+                <div class="form-group">
+                    <label>📧 Email (opcional)</label>
+                    <input type="email" id="create-user-email" class="input-field" placeholder="correo@ejemplo.com">
+                </div>
+                <div class="form-group">
+                    <label>📞 Teléfono (opcional)</label>
+                    <input type="tel" id="create-user-phone" class="input-field" placeholder="+53 5555 5555">
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border-color);">
+                    <span style="font-size: 18px;">👑</span>
+                    <span style="flex: 1; font-size: 13px;">Es administrador</span>
+                    <input type="checkbox" id="create-user-is-admin" style="width: 20px; height: 20px; cursor: pointer; accent-color: #f59e0b;">
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button type="submit" class="btn primary" style="flex: 1; background: #10b981; color: #fff; border: none; border-radius: 8px; padding: 12px; cursor: pointer; font-weight: 600;">💾 Crear</button>
+                    <button type="button" onclick="closeCreateUserModal()" class="btn secondary" style="flex: 1;">❌ Cancelar</button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const form = document.getElementById('create-user-form');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const data = {
+            username: document.getElementById('create-user-username').value.trim(),
+            password: document.getElementById('create-user-password').value.trim(),
+            name: document.getElementById('create-user-name').value.trim(),
+            email: document.getElementById('create-user-email').value.trim(),
+            phone: document.getElementById('create-user-phone').value.trim(),
+            isAdmin: document.getElementById('create-user-is-admin').checked
+        };
+        
+        try {
+            const result = await window.AuthModule.createUserAsAdmin(data);
+            
+            if (result.success) {
+                window.showToast(`✅ Usuario ${result.username} creado`, 'success');
+                closeCreateUserModal();
+                await renderUsersContent();
+            } else {
+                window.showToast('❌ ' + result.error, 'error');
+            }
+        } catch (e) {
+            window.showToast('❌ Error: ' + e.message, 'error');
+        }
+    });
+    
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeCreateUserModal(); });
+}
+
+function closeCreateUserModal() {
+    const modal = document.getElementById('create-user-modal');
+    if (modal) { modal.style.animation = 'modalFadeOut 0.2s ease forwards'; setTimeout(() => { if (modal.parentNode) modal.remove(); }, 200); }
+}
+
+function showEditUserModal(userId) {
+    const usuarios = window.AuthModule.getUsuariosDelNegocio();
+    const targetUser = usuarios.find(u => u.id === userId);
+    if (!targetUser) { window.showToast('❌ Usuario no encontrado', 'error'); return; }
+    
+    const modal = document.createElement('div');
+    modal.id = 'edit-user-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 9999999999; padding: 20px;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 440px; width: 100%; border: 2px solid #3b82f6;">
+            <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #3b82f6;">✏️ Editar Usuario</h2>
+            <form id="edit-user-form" style="display: flex; flex-direction: column; gap: 12px;">
+                <div class="form-group">
+                    <label>👤 Usuario (no editable)</label>
+                    <input type="text" class="input-field" value="${targetUser.username}" disabled style="opacity: 0.6;">
+                </div>
+                <div class="form-group">
+                    <label>📛 Nombre completo</label>
+                    <input type="text" id="edit-user-name" class="input-field" value="${targetUser.name || ''}" required>
+                </div>
+                <div class="form-group">
+                    <label>📧 Email</label>
+                    <input type="email" id="edit-user-email" class="input-field" value="${targetUser.email || ''}">
+                </div>
+                <div class="form-group">
+                    <label>📞 Teléfono</label>
+                    <input type="tel" id="edit-user-phone" class="input-field" value="${targetUser.phone || ''}">
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button type="submit" class="btn primary" style="flex: 1; background: #3b82f6; color: #fff; border: none; border-radius: 8px; padding: 12px; cursor: pointer; font-weight: 600;">💾 Guardar</button>
+                    <button type="button" onclick="closeEditUserModal()" class="btn secondary" style="flex: 1;">❌ Cancelar</button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const form = document.getElementById('edit-user-form');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const data = {
+            name: document.getElementById('edit-user-name').value.trim(),
+            email: document.getElementById('edit-user-email').value.trim(),
+            phone: document.getElementById('edit-user-phone').value.trim()
+        };
+        
+        const result = await window.AuthModule.updateUserDataByAdmin(userId, data);
+        
+        if (result.success) {
+            window.showToast('✅ Usuario actualizado', 'success');
+            closeEditUserModal();
+            await renderUsersContent();
+        } else {
+            window.showToast('❌ ' + result.error, 'error');
+        }
+    });
+    
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeEditUserModal(); });
+}
+
+function closeEditUserModal() {
+    const modal = document.getElementById('edit-user-modal');
+    if (modal) { modal.style.animation = 'modalFadeOut 0.2s ease forwards'; setTimeout(() => { if (modal.parentNode) modal.remove(); }, 200); }
+}
+
+function showChangePasswordModal(userId) {
+    const modal = document.createElement('div');
+    modal.id = 'change-password-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 9999999999; padding: 20px;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 400px; width: 100%; border: 2px solid #f59e0b;">
+            <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #f59e0b;">🔒 Cambiar Contraseña</h2>
+            <form id="change-password-form" style="display: flex; flex-direction: column; gap: 12px;">
+                <div class="form-group">
+                    <label>Nueva contraseña</label>
+                    <input type="password" id="change-password-new" class="input-field" placeholder="Mínimo 4 caracteres" required>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button type="submit" class="btn primary" style="flex: 1; background: #f59e0b; color: #fff; border: none; border-radius: 8px; padding: 12px; cursor: pointer; font-weight: 600;">💾 Cambiar</button>
+                    <button type="button" onclick="closeChangePasswordModal()" class="btn secondary" style="flex: 1;">❌ Cancelar</button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const form = document.getElementById('change-password-form');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newPassword = document.getElementById('change-password-new').value.trim();
+        
+        const result = await window.AuthModule.updateUserPassword(userId, newPassword);
+        
+        if (result.success) {
+            window.showToast('✅ Contraseña actualizada', 'success');
+            closeChangePasswordModal();
+        } else {
+            window.showToast('❌ ' + result.error, 'error');
+        }
+    });
+    
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeChangePasswordModal(); });
+}
+
+function closeChangePasswordModal() {
+    const modal = document.getElementById('change-password-modal');
+    if (modal) { modal.style.animation = 'modalFadeOut 0.2s ease forwards'; setTimeout(() => { if (modal.parentNode) modal.remove(); }, 200); }
+}
+
+async function handleToggleAdmin(userId, newIsAdmin) {
+    const accion = newIsAdmin ? 'promover a administrador' : 'quitar admin';
+    const confirm = await window.ModalModule.showConfirm({
+        title: `👑 ${newIsAdmin ? 'Promover' : 'Degradar'} usuario`,
+        message: `¿${accion.charAt(0).toUpperCase() + accion.slice(1)}?`,
+        confirmText: '✅ Sí',
+        cancelText: 'Cancelar',
+        icon: '👑',
+        confirmColor: newIsAdmin ? '#f59e0b' : '#ef4444'
+    });
+    
+    if (!confirm) return;
+    
+    const result = await window.AuthModule.toggleUserAdmin(userId, newIsAdmin);
+    
+    if (result.success) {
+        window.showToast(`✅ Usuario ${newIsAdmin ? 'promovido' : 'degradado'}`, 'success');
+        await renderUsersContent();
+    } else {
+        window.showToast('❌ ' + result.error, 'error');
+    }
+}
+
+async function handleDeleteUser(userId) {
+    const confirm = await window.ModalModule.showConfirm({
+        title: '🗑️ Eliminar usuario',
+        message: '¿Seguro que quieres eliminar este usuario?\n\n⚠️ Esta acción aplica soft-delete.',
+        confirmText: '🗑️ Sí, eliminar',
+        cancelText: 'Cancelar',
+        icon: '🗑️',
+        confirmColor: '#ef4444'
+    });
+    
+    if (!confirm) return;
+    
+    const result = await window.AuthModule.deleteUserByAdmin(userId);
+    
+    if (result.success) {
+        window.showToast(`✅ Usuario ${result.username} eliminado`, 'success');
+        await renderUsersContent();
+    } else {
+        window.showToast('❌ ' + result.error, 'error');
+    }
+}
+
+window.showUsersModal = showUsersModal;
+window.closeUsersModal = closeUsersModal;
+window.renderUsersContent = renderUsersContent;
+window.regenerarCodigoInvitacionAction = regenerarCodigoInvitacionAction;
+window.showCreateUserModal = showCreateUserModal;
+window.closeCreateUserModal = closeCreateUserModal;
+window.showEditUserModal = showEditUserModal;
+window.closeEditUserModal = closeEditUserModal;
+window.showChangePasswordModal = showChangePasswordModal;
+window.closeChangePasswordModal = closeChangePasswordModal;
+window.handleToggleAdmin = handleToggleAdmin;
+window.handleDeleteUser = handleDeleteUser;
+
+// ============================================================
+// SALVA DIFERENCIAL
+// ============================================================
+
+function exportSalvaRecetasProductos() {
+    try {
+        const result = window.DBModule.exportRecetasProductosSalva();
+        
+        if (result.success) {
+            window.showToast(`✅ Salva exportada: ${result.filename} (${result.sizeKB} KB)`, 'success', 5000);
+        } else {
+            window.showToast('❌ Error: ' + result.error, 'error', 5000);
+        }
+    } catch (e) {
+        window.showToast('❌ Error: ' + e.message, 'error', 5000);
+    }
+}
+
+async function importSalvaRecetasProductos() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.style.display = 'none';
+    
+    input.onchange = async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const confirm = await window.ModalModule.showConfirm({
+            title: '📥 Importar salva',
+            message: `¿Importar "${file.name}"?\n\nSe importarán recetas y productos.`,
+            confirmText: '📥 Importar', cancelText: 'Cancelar',
+            icon: '🧩', confirmColor: '#8b5cf6'
+        });
+        
+        if (!confirm) return;
+        
+        try {
+            const salvaData = await window.DBModule.readSalvaFile(file);
+            const result = window.DBModule.importRecetasProductosSalva(salvaData, 'merge');
+            
+            if (result.success) {
+                const imported = result.imported;
+                window.showToast(`✅ Salva importada: ${imported.recipes} recetas, ${imported.productos} productos`, 'success', 5000);
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                window.showToast('❌ Error: ' + result.error, 'error', 5000);
+            }
+        } catch (err) {
+            window.showToast('❌ Error: ' + err.message, 'error', 5000);
+        }
+    };
+    
+    document.body.appendChild(input);
+    input.click();
+    document.body.removeChild(input);
+}
+
+window.exportSalvaRecetasProductos = exportSalvaRecetasProductos;
+window.importSalvaRecetasProductos = importSalvaRecetasProductos;
+
+// ============================================================
+// LIMPIAR ÚLTIMO USUARIO
+// ============================================================
+
+function clearLastUserAction() {
+    window.ModalModule.showConfirm({
+        title: '🗑️ Olvidar usuario',
+        message: '¿Olvidar el último usuario recordado?',
+        confirmText: '🗑️ Sí',
+        cancelText: 'Cancelar',
+        icon: '🗑️',
+        confirmColor: '#ef4444'
+    }).then(confirm => {
+        if (confirm) {
+            window.AuthModule.clearLastUser();
+            window.showToast('✅ Usuario olvidado', 'success');
+        }
+    });
+}
+
+window.clearLastUserAction = clearLastUserAction;
+
+// ============================================================
+// LIMPIAR DATOS ELIMINADOS
+// ============================================================
+
+async function cleanDeletedData() {
+    const confirm = await window.ModalModule.showConfirm({
+        title: '🧹 Limpiar datos eliminados',
+        message: '¿Eliminar PERMANENTEMENTE todos los registros con soft-delete?\n\n⚠️ Esta acción no se puede deshacer.',
+        confirmText: '🧹 Sí, limpiar',
+        cancelText: 'Cancelar',
+        icon: '🧹',
+        confirmColor: '#ef4444'
+    });
+    
+    if (!confirm) return;
+    
+    try {
+        const negocioId = window.DBModule.getNegocioIdActual();
+        const tablas = [
+            'insumos', 'recipes', 'productos', 'orders', 'sales', 'transactions',
+            'clients', 'waiting_list', 'bank_accounts', 'corriente_config',
+            'premios_config', 'dias_sin_ventas', 'calendario_produccion'
+        ];
+        
+        let totalLimpiados = 0;
+        for (const tabla of tablas) {
+            try {
+                const result = window.DBModule.execute(`DELETE FROM ${tabla} WHERE negocio_id = ? AND deleted_at IS NOT NULL`, [negocioId]);
+                totalLimpiados++;
+            } catch (e) {
+                console.warn(`⚠️ Error limpiando ${tabla}:`, e.message);
+            }
+        }
+        
+        window.showToast(`✅ ${totalLimpiados} tablas limpiadas`, 'success', 5000);
+    } catch (e) {
+        window.showToast('❌ Error: ' + e.message, 'error', 5000);
+    }
+}
+
+window.cleanDeletedData = cleanDeletedData;
+
+// ============================================================
+// REINICIAR BASE DE DATOS
+// ============================================================
+
+async function resetDatabaseWithPassword() {
+    const password = await window.ModalModule.showPrompt({
+        title: '🚨 Reiniciar Base de Datos',
+        message: 'Escribe "panario" para confirmar:',
+        placeholder: 'Contraseña',
+        icon: '🚨'
+    });
+    
+    if (password !== 'panario') {
+        window.showToast('❌ Contraseña incorrecta', 'error');
+        return;
+    }
+    
+    const confirm = await window.ModalModule.showConfirm({
+        title: '⚠️ CONFIRMACIÓN FINAL',
+        message: 'Se eliminarán TODOS los datos excepto usuarios y temas.\n\n¿Continuar?',
+        confirmText: '🚨 SÍ, REINICIAR',
+        cancelText: '❌ Cancelar',
+        icon: '⚠️',
+        confirmColor: '#dc2626'
+    });
+    
+    if (!confirm) return;
+    
+    try {
+        const negocioId = window.DBModule.getNegocioIdActual();
+        const tablas = [
+            'insumos', 'recipes', 'recipe_ingredients', 'receta_insumos', 'productos',
+            'orders', 'order_items', 'payments', 'waiting_list', 'sales', 'transactions',
+            'inventory', 'inventory_movements', 'clients', 'bank_accounts', 'corriente_config',
+            'premios_config', 'dias_sin_ventas', 'calendario_produccion', 'notifications'
+        ];
+        
+        for (const tabla of tablas) {
+            try {
+                window.DBModule.execute(`DELETE FROM ${tabla} WHERE negocio_id = ?`, [negocioId]);
+            } catch (e) {}
+        }
+        
+        window.showToast('✅ Base de datos reiniciada', 'success', 5000);
+        setTimeout(() => window.location.reload(), 1500);
+    } catch (e) {
+        window.showToast('❌ Error: ' + e.message, 'error', 5000);
+    }
+}
+
+window.resetDatabaseWithPassword = resetDatabaseWithPassword;
+
+// ============================================================
+// 🆕 CORRECCIÓN #14: MODAL DE ELIMINACIÓN POR ERROR (MEJORADO)
+// ============================================================
+
+async function showDeleteSelectorModal() {
+    const user = window.AuthModule.getCurrentUser();
+    if (!user || user.is_admin !== 1) {
+        window.showToast('🔒 Solo el administrador', 'warning', 4000);
+        return;
+    }
+    
+    if (window.ModalModule?.cerrarTodosLosModales) window.ModalModule.cerrarTodosLosModales();
+    
+    const existingModal = document.getElementById('delete-selector-modal');
+    if (existingModal) existingModal.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'delete-selector-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 999999999; padding: 15px;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 20px; max-width: 750px; width: 100%; max-height: 92vh; display: flex; flex-direction: column; border: 2px solid #dc2626;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 2px solid #dc2626;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 28px;">🚨</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 18px; color: #dc2626;">Eliminación por Error</h2>
+                        <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">Elimina registros creados por error</p>
+                    </div>
+                </div>
+                <button onclick="closeDeleteSelectorModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light);">✕</button>
+            </div>
+            
+            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; font-size: 12px; color: #991b1b;">
+                ⚠️ <strong>ADVERTENCIA:</strong> Los registros eliminados aquí se borran PERMANENTEMENTE de la base de datos. Esta acción NO se puede deshacer.
+            </div>
+            
+            <div style="display: flex; gap: 6px; margin-bottom: 12px; background: var(--bg); padding: 6px; border-radius: 8px; border: 1px solid var(--border-color);">
+                <button id="del-tab-pedidos" onclick="switchDeleteTab('pedidos')" class="btn primary" style="flex: 1; padding: 10px; font-size: 13px; border-radius: 6px;">📋 Pedidos</button>
+                <button id="del-tab-ventas" onclick="switchDeleteTab('ventas')" class="btn secondary" style="flex: 1; padding: 10px; font-size: 13px; border-radius: 6px; background: transparent; color: var(--text); border: none;">💰 Ventas</button>
+            </div>
+            
+            <div style="background: var(--bg); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 12px;">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <div style="flex: 1; min-width: 100px;">
+                        <label style="font-size: 11px; font-weight: 600;">📅 Desde</label>
+                        <input type="date" id="del-filter-from" onchange="renderDeleteList()" style="width: 100%; padding: 6px 8px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 12px;">
+                    </div>
+                    <div style="flex: 1; min-width: 100px;">
+                        <label style="font-size: 11px; font-weight: 600;">📅 Hasta</label>
+                        <input type="date" id="del-filter-to" onchange="renderDeleteList()" style="width: 100%; padding: 6px 8px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 12px;">
+                    </div>
+                    <div style="flex: 2; min-width: 120px;">
+                        <label style="font-size: 11px; font-weight: 600;">🔍 Buscar</label>
+                        <input type="text" id="del-filter-search" oninput="renderDeleteList()" placeholder="Cliente, producto..." style="width: 100%; padding: 6px 8px; border: 2px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 12px;">
+                    </div>
+                    <button onclick="clearDeleteFilters()" class="btn secondary" style="padding: 6px 10px; font-size: 11px; width: auto; margin-top: 14px;">🗑️</button>
+                </div>
+            </div>
+            
+            <div id="delete-list-container" style="flex: 1; overflow-y: auto; max-height: 400px; padding-right: 4px; margin-bottom: 12px;">
+                <div style="text-align: center; padding: 40px; color: var(--text-light);">
+                    <span style="font-size: 32px;">⏳</span>
+                    <p style="font-size: 13px;">Cargando...</p>
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 8px;">
+                <div style="font-size: 12px; color: var(--text-light);">
+                    Seleccionados: <strong id="del-selected-count" style="color: #dc2626;">0</strong>
+                </div>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <button onclick="selectAllDeleteItems()" class="btn secondary" style="padding: 8px 14px; font-size: 12px; width: auto;">☑️ Todos</button>
+                    <button onclick="deselectAllDeleteItems()" class="btn secondary" style="padding: 8px 14px; font-size: 12px; width: auto;">☐ Ninguno</button>
+                    <button onclick="executeDeleteSelected()" class="btn" style="padding: 8px 16px; font-size: 13px; background: #dc2626; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;">🗑️ ELIMINAR SELECCIONADOS</button>
+                    <button onclick="closeDeleteSelectorModal()" class="btn secondary" style="padding: 8px 14px; font-size: 12px; width: auto;">❌ Cerrar</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    window._deleteTab = 'pedidos';
+    window._deleteSelection = new Set();
+    
+    await renderDeleteList();
+    
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeDeleteSelectorModal(); });
+}
+
+function closeDeleteSelectorModal() {
+    const modal = document.getElementById('delete-selector-modal');
+    if (modal) { modal.style.animation = 'modalFadeOut 0.2s ease forwards'; setTimeout(() => { if (modal.parentNode) modal.remove(); }, 200); }
+    window._deleteTab = null;
+    window._deleteSelection = null;
+}
+
+function switchDeleteTab(tab) {
+    window._deleteTab = tab;
+    window._deleteSelection.clear();
+    
+    const tabPedidos = document.getElementById('del-tab-pedidos');
+    const tabVentas = document.getElementById('del-tab-ventas');
+    
+    if (tab === 'pedidos') {
+        tabPedidos.className = 'btn primary';
+        tabPedidos.style.background = 'var(--primary)';
+        tabPedidos.style.color = '#fff';
+        tabVentas.className = 'btn secondary';
+        tabVentas.style.background = 'transparent';
+        tabVentas.style.color = 'var(--text)';
+    } else {
+        tabVentas.className = 'btn primary';
+        tabVentas.style.background = 'var(--primary)';
+        tabVentas.style.color = '#fff';
+        tabPedidos.className = 'btn secondary';
+        tabPedidos.style.background = 'transparent';
+        tabPedidos.style.color = 'var(--text)';
+    }
+    
+    renderDeleteList();
+}
+
+function clearDeleteFilters() {
+    document.getElementById('del-filter-from').value = '';
+    document.getElementById('del-filter-to').value = '';
+    document.getElementById('del-filter-search').value = '';
+    renderDeleteList();
+}
+
+async function renderDeleteList() {
+    const container = document.getElementById('delete-list-container');
+    if (!container) return;
+    
+    const tab = window._deleteTab || 'pedidos';
+    const negocioId = window.DBModule.getNegocioIdActual();
+    
+    const fromDate = document.getElementById('del-filter-from')?.value || '';
+    const toDate = document.getElementById('del-filter-to')?.value || '';
+    const search = document.getElementById('del-filter-search')?.value?.trim() || '';
+    
+    try {
+        let items = [];
+        
+        if (tab === 'pedidos') {
+            let sql = `SELECT o.id, o.client_name, o.total, o.status, o.delivery_date, o.created_at,
+                       (SELECT GROUP_CONCAT(DISTINCT p.nombre) FROM order_items oi LEFT JOIN productos p ON oi.producto_id = p.id WHERE oi.order_id = o.id AND oi.deleted_at IS NULL) as productos
+                       FROM orders o WHERE o.negocio_id = ? AND o.deleted_at IS NULL`;
+            let params = [negocioId];
+            
+            if (fromDate) { sql += ' AND DATE(o.delivery_date) >= DATE(?)'; params.push(fromDate); }
+            if (toDate) { sql += ' AND DATE(o.delivery_date) <= DATE(?)'; params.push(toDate); }
+            if (search) { sql += ' AND (o.client_name LIKE ? OR o.id LIKE ?)'; params.push('%' + search + '%', '%' + search + '%'); }
+            sql += ' ORDER BY o.delivery_date DESC, o.id DESC LIMIT 200';
+            
+            items = window.DBModule.query(sql, params);
+        } else {
+            let sql = `SELECT id, product_name, buyer, total, payment_method, sale_date, is_debt, paid, voided
+                       FROM sales WHERE negocio_id = ? AND deleted_at IS NULL`;
+            let params = [negocioId];
+            
+            if (fromDate) { sql += ' AND DATE(sale_date) >= DATE(?)'; params.push(fromDate); }
+            if (toDate) { sql += ' AND DATE(sale_date) <= DATE(?)'; params.push(toDate); }
+            if (search) { sql += ' AND (buyer LIKE ? OR product_name LIKE ? OR id LIKE ?)'; params.push('%' + search + '%', '%' + search + '%', '%' + search + '%'); }
+            sql += ' ORDER BY sale_date DESC, id DESC LIMIT 200';
+            
+            items = window.DBModule.query(sql, params);
+        }
+        
+        if (items.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: var(--text-light);">
+                    <span style="font-size: 48px;">📭</span>
+                    <p style="font-size: 13px; margin-top: 8px;">No hay registros que coincidan</p>
+                </div>
+            `;
+            updateDeleteSelectionCount();
+            return;
+        }
+        
+        if (tab === 'pedidos') {
+            container.innerHTML = items.map(item => `
+                <div style="background: var(--bg-card); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; border-left: 3px solid #3b82f6; display: flex; gap: 10px; align-items: flex-start;">
+                    <input type="checkbox" class="del-checkbox" value="${item.id}" onchange="toggleDeleteSelection(${item.id})" ${window._deleteSelection.has(item.id) ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer; accent-color: #dc2626; margin-top: 3px; flex-shrink: 0;">
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <span style="font-weight: 700; font-size: 13px; color: #3b82f6;">#${item.id}</span>
+                            <span style="font-weight: 600; font-size: 13px;">👤 ${item.client_name}</span>
+                            <span style="font-size: 11px; background: #3b82f620; color: #3b82f6; padding: 1px 8px; border-radius: 10px;">${item.status}</span>
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 3px; font-size: 11px; color: var(--text-light);">
+                            <span>📅 ${item.delivery_date?.split('T')[0] || '—'}</span>
+                            ${item.productos ? `<span>📦 ${item.productos}</span>` : ''}
+                            <span>💰 $${parseFloat(item.total || 0).toFixed(2)}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            const paymentIcons = { 'cash': '💵', 'transfer': '🏦', 'debt': '💳', 'other': '🔄' };
+            container.innerHTML = items.map(item => `
+                <div style="background: var(--bg-card); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; border-left: 3px solid ${item.is_debt && !item.paid ? '#ef4444' : '#10b981'}; display: flex; gap: 10px; align-items: flex-start;">
+                    <input type="checkbox" class="del-checkbox" value="${item.id}" onchange="toggleDeleteSelection(${item.id})" ${window._deleteSelection.has(item.id) ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer; accent-color: #dc2626; margin-top: 3px; flex-shrink: 0;">
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <span style="font-weight: 700; font-size: 13px; color: #10b981;">#${item.id}</span>
+                            <span style="font-weight: 600; font-size: 13px;">👤 ${item.buyer || 'Cliente ocasional'}</span>
+                            ${item.is_debt && !item.paid ? '<span style="font-size: 11px; background: #ef444420; color: #ef4444; padding: 1px 8px; border-radius: 10px;">DEUDA</span>' : ''}
+                            ${item.voided === 1 ? '<span style="font-size: 11px; background: #94a3b820; color: #94a3b8; padding: 1px 8px; border-radius: 10px;">ANULADA</span>' : ''}
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 3px; font-size: 11px; color: var(--text-light);">
+                            <span>📅 ${item.sale_date?.split('T')[0] || '—'}</span>
+                            <span>📦 ${item.product_name}</span>
+                            <span>${paymentIcons[item.payment_method] || '💵'} ${item.payment_method}</span>
+                            <span>💰 $${parseFloat(item.total || 0).toFixed(2)}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        updateDeleteSelectionCount();
+        
+    } catch (error) {
+        console.error('Error renderizando lista de eliminación:', error);
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #ef4444;">
+                <span style="font-size: 32px;">❌</span>
+                <p style="font-size: 13px;">Error: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function toggleDeleteSelection(id) {
+    if (window._deleteSelection.has(id)) {
+        window._deleteSelection.delete(id);
+    } else {
+        window._deleteSelection.add(id);
+    }
+    updateDeleteSelectionCount();
+}
+
+function updateDeleteSelectionCount() {
+    const el = document.getElementById('del-selected-count');
+    if (el) el.textContent = window._deleteSelection.size;
+}
+
+function selectAllDeleteItems() {
+    document.querySelectorAll('.del-checkbox').forEach(cb => {
+        cb.checked = true;
+        window._deleteSelection.add(parseInt(cb.value));
+    });
+    updateDeleteSelectionCount();
+}
+
+function deselectAllDeleteItems() {
+    document.querySelectorAll('.del-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
+    window._deleteSelection.clear();
+    updateDeleteSelectionCount();
+}
+
+async function executeDeleteSelected() {
+    const selected = Array.from(window._deleteSelection);
+    if (selected.length === 0) {
+        window.showToast('⚠️ No hay registros seleccionados', 'warning');
+        return;
+    }
+    
+    const tab = window._deleteTab;
+    const tipo = tab === 'pedidos' ? 'pedido(s)' : 'venta(s)';
+    
+    const confirm1 = await window.ModalModule.showConfirm({
+        title: '🚨 Confirmar eliminación',
+        message: `¿Eliminar PERMANENTEMENTE ${selected.length} ${tipo}?\n\n⚠️ Esta acción NO se puede deshacer.`,
+        confirmText: '⚠️ CONTINUAR',
+        cancelText: '❌ Cancelar',
+        icon: '🚨',
+        confirmColor: '#ef4444'
+    });
+    
+    if (!confirm1) return;
+    
+    const confirm2 = await window.ModalModule.showConfirm({
+        title: '🚨 ÚLTIMA ADVERTENCIA',
+        message: `Se eliminarán ${selected.length} ${tipo} de la base de datos.\n\nNo hay vuelta atrás.\n\n¿Confirmas?`,
+        confirmText: '🗑️ SÍ, ELIMINAR',
+        cancelText: '❌ NO, cancelar',
+        icon: '🚨',
+        confirmColor: '#dc2626'
+    });
+    
+    if (!confirm2) {
+        window.showToast('❌ Eliminación cancelada', 'info', 2000);
+        return;
+    }
+    
+    try {
+        window.showToast('⏳ Eliminando...', 'info', 2000);
+        
+        const tabla = tab === 'pedidos' ? 'orders' : 'sales';
+        let eliminados = 0;
+        
+        for (const id of selected) {
+            try {
+                window.DBModule.execute(`DELETE FROM ${tabla} WHERE id = ?`, [id]);
+                eliminados++;
+            } catch (e) {
+                console.warn(`⚠️ Error eliminando #${id}:`, e.message);
+            }
+        }
+        
+        // Si es venta, eliminar también su transacción asociada
+        if (tab === 'ventas') {
+            for (const id of selected) {
+                try {
+                    window.DBModule.execute(`DELETE FROM transactions WHERE sale_id = ?`, [id]);
+                } catch (e) {}
+            }
+        }
+        
+        // Si es pedido, eliminar sus items y waiting_list
+        if (tab === 'pedidos') {
+            for (const id of selected) {
+                try {
+                    window.DBModule.execute(`DELETE FROM order_items WHERE order_id = ?`, [id]);
+                    window.DBModule.execute(`DELETE FROM waiting_list WHERE order_id = ?`, [id]);
+                } catch (e) {}
+            }
+        }
+        
+        window.DBModule.saveAndNotify();
+        
+        window.showToast(`✅ ${eliminados} registro(s) eliminado(s)`, 'success', 5000);
+        
+        window._deleteSelection.clear();
+        await renderDeleteList();
+        
+        if (typeof window.loadDashboardData === 'function') setTimeout(window.loadDashboardData, 500);
+        
+    } catch (e) {
+        window.showToast('❌ Error: ' + e.message, 'error', 5000);
+    }
+}
+
+window.showDeleteSelectorModal = showDeleteSelectorModal;
+window.closeDeleteSelectorModal = closeDeleteSelectorModal;
+window.switchDeleteTab = switchDeleteTab;
+window.clearDeleteFilters = clearDeleteFilters;
+window.renderDeleteList = renderDeleteList;
+window.toggleDeleteSelection = toggleDeleteSelection;
+window.updateDeleteSelectionCount = updateDeleteSelectionCount;
+window.selectAllDeleteItems = selectAllDeleteItems;
+window.deselectAllDeleteItems = deselectAllDeleteItems;
+window.executeDeleteSelected = executeDeleteSelected;
 
 // ============================================================
 // RENDER SETTINGS VIEW - COMPLETA
@@ -3530,7 +4469,7 @@ function renderSettingsView() {
         </div>
         
         ${isAdmin ? `
-        <div class="card" style="border-left: 4px solid #f59e0b; border: 2px solid #f59e0b; background: linear-gradient(135deg, #f59e0b10 0%, #f59e0b05 100%);">
+        <div class="card" style="border-left: 4px solid #f59e0b; border: 2px solid #f59e0b;">
             <h3 style="margin: 0 0 8px 0; color: #f59e0b;">👥 Gestión de Usuarios</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
                 Administra los usuarios de tu negocio, regenera el código de invitación y gestiona accesos.
@@ -3563,7 +4502,7 @@ function renderSettingsView() {
         <div class="card" style="border-left: 4px solid #dc2626; border: 2px solid #dc2626;">
             <h3 style="margin: 0 0 8px 0; color: #dc2626;">🚨 Cancelación Global de Pedidos</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
-                Cancela todos los pedidos en un rango de fechas. Útil para apagones prolongados, falta de insumos o cierres temporales.
+                Cancela todos los pedidos en un rango de fechas. Útil para apagones, falta de insumos o cierres.
                 <br><strong style="color: #dc2626;">Solo administradores.</strong>
             </p>
             <button onclick="showGlobalCancelModal()" class="btn" style="padding: 10px 16px; font-size: 14px; width: auto; background: #dc2626; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;">
@@ -3571,10 +4510,10 @@ function renderSettingsView() {
             </button>
         </div>
         
-        <div class="card" style="border-left: 4px solid #8b5cf6; border: 2px solid #8b5cf6; background: linear-gradient(135deg, #8b5cf610 0%, #8b5cf605 100%);">
+        <div class="card" style="border-left: 4px solid #8b5cf6; border: 2px solid #8b5cf6;">
             <h3 style="margin: 0 0 8px 0; color: #8b5cf6;">🔄 Reprogramar Pedidos por Rango</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
-                Mueve todos los pedidos de un rango de fechas a una fecha destino. La causa y nota se añaden automáticamente a cada pedido.
+                Mueve todos los pedidos de un rango a una fecha destino.
                 <br><strong style="color: #8b5cf6;">Solo administradores.</strong>
             </p>
             <button onclick="showReprogramarPedidosModal()" class="btn" style="padding: 10px 16px; font-size: 14px; width: auto; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 700;">
@@ -3587,35 +4526,39 @@ function renderSettingsView() {
             <h3 style="margin: 0 0 8px 0; color: #f59e0b;">⚡ Horarios de Producción (Corriente)</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
                 Gestiona los horarios de corriente eléctrica para planificar tu producción.
-                <br>🆕 <strong>Navega entre días con ◀ ▶</strong> dentro del modal sin cerrarlo.
-                <br>🆕 Acepta <strong>cualquier número decimal</strong>: 6, 6.5, 6.123.
-                <br>🆕 Selecciona un <strong>producto</strong> y usa el <strong>cálculo automático de bloques</strong> (✨).
-                <br>🆕 Programa la producción en el <strong>último bloque de ayer</strong>.
-                <br>🆕 Aplica la misma producción a un <strong>rango de fechas</strong>.
-                <br>🆕 El conteo de pedidos vs ventas ahora es <strong>correcto</strong> (Corrección #9).
-                <br>🆕 El <strong>producto seleccionado</strong> se guarda y se carga al reabrir el modal (Corrección #11).
-                <br>🆕 El <strong>algoritmo de bloques</strong> respeta la regla del amanecer: solo bloques que terminan antes de las 9 AM (Corrección #10).
+                <br>🆕 Navega entre días con ◀ ▶ dentro del modal.
+                <br>🆕 Acepta cualquier número decimal: 6, 6.5, 6.123.
+                <br>🆕 Selecciona un producto y usa el cálculo automático de bloques (✨).
             </p>
             <button onclick="showCorrienteModal()" class="btn primary" style="padding: 8px 16px; font-size: 14px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
                 ⚡ Gestionar Horarios
             </button>
         </div>
         
-        <div class="card" style="border-left: 4px solid #8b5cf6; border: 2px dashed #8b5cf6; background: linear-gradient(135deg, #8b5cf608 0%, #8b5cf604 100%);">
+        <div class="card" style="border-left: 4px solid #8b5cf6; border: 2px dashed #8b5cf6;">
             <h3 style="margin: 0 0 8px 0; color: #8b5cf6;">🔍 Diagnóstico de Producción</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
-                ¿El guardado de producción no funciona? Ejecuta un diagnóstico técnico para identificar el problema.
-                <br>Verifica las 10 comprobaciones clave del sistema (incluye CMPBC, conteo #9, producto_id #11 y algoritmo #10).
+                ¿El guardado de producción no funciona? Ejecuta un diagnóstico técnico.
             </p>
             <button onclick="showProductionDiagnosticModal()" class="btn" style="padding: 8px 16px; font-size: 14px; width: auto; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                 🔍 Ejecutar diagnóstico
             </button>
         </div>
         
+        <div class="card" style="border-left: 4px solid #06b6d4; border: 2px solid #06b6d4;">
+            <h3 style="margin: 0 0 8px 0; color: #06b6d4;">🎨 Restaurar Estilos</h3>
+            <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
+                Si la barra superior (header) se ve deformada o los modales no se muestran correctamente, usa este botón para restaurar los estilos.
+            </p>
+            <button onclick="restaurarEstilosAction()" class="btn" style="padding: 8px 16px; font-size: 14px; width: auto; background: #06b6d4; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                🎨 Restaurar estilos
+            </button>
+        </div>
+        
         <div class="card" style="border-left: 4px solid #ef4444; border: 2px solid #ef4444;">
             <h3 style="margin: 0 0 8px 0; color: #ef4444;">📊 Reporte de Gastos</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
-                Genera un reporte parametrizable de todos los gastos por rango de fechas, categoría y origen del pago.
+                Genera un reporte parametrizable de todos los gastos.
             </p>
             <button onclick="showExpensesReportModal()" class="btn primary" style="padding: 8px 16px; font-size: 14px; width: auto; background: #ef4444; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
                 📊 Generar Reporte de Gastos
@@ -3626,8 +4569,8 @@ function renderSettingsView() {
             <h3 style="margin: 0 0 8px 0; color: #10b981;">📤 Exportar copia de seguridad</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
                 ${isAdmin 
-                    ? 'Como administrador, puedes crear dos tipos de copia: <strong>completa</strong> (incluye usuarios y negocio) o <strong>solo datos</strong> (solo datos operativos).'
-                    : 'Puedes crear una copia de <strong>solo datos</strong> (insumos, recetas, productos, ventas, pedidos). Tus usuarios y el código de invitación no se incluyen.'
+                    ? 'Como administrador, puedes crear dos tipos de copia: <strong>completa</strong> o <strong>solo datos</strong>.'
+                    : 'Puedes crear una copia de <strong>solo datos</strong>.'
                 }
             </p>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -3645,39 +4588,35 @@ function renderSettingsView() {
         <div class="card" style="border-left: 4px solid #f59e0b; border: 2px solid #f59e0b;">
             <h3 style="margin: 0 0 8px 0; color: #f59e0b;">📥 Importar copia de seguridad</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
-                Elige cómo quieres importar el archivo <code>.db</code> de otro dispositivo:
-                <br>• <strong>Importar copia:</strong> reemplaza TODOS los datos (incluye usuarios si eres admin).
-                <br>• <strong>Importar solo datos:</strong> reemplaza los datos operativos, conserva usuarios.
-                <br>• <strong>🔀 Fusionar:</strong> <span style="color: #8b5cf6; font-weight: 600;">combina</span> los datos del backup con los actuales. Los registros nuevos se añaden, los existentes se comparan por uuid (gana el más reciente).
+                Elige cómo importar el archivo <code>.db</code>:
+                <br>• <strong>Importar copia:</strong> reemplaza TODOS los datos.
+                <br>• <strong>Importar solo datos:</strong> reemplaza los datos operativos.
+                <br>• <strong>🔀 Fusionar:</strong> combina los datos del backup.
             </p>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <button onclick="importDatabaseSmartAction()" class="btn primary" style="padding: 10px 16px; font-size: 14px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                    📥 Importar copia (detección automática)
+                    📥 Importar copia
                 </button>
                 <button onclick="importDatabaseDataOnlyFromFileAction()" class="btn secondary" style="padding: 10px 16px; font-size: 14px; width: auto; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                    📊 Importar solo datos (reemplaza)
+                    📊 Importar solo datos
                 </button>
                 <button onclick="importDatabaseFusionAction()" class="btn primary" style="padding: 10px 16px; font-size: 14px; width: auto; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                    🔀 Fusionar bases de datos
+                    🔀 Fusionar bases
                 </button>
             </div>
-            <p style="font-size: 12px; color: var(--text-light); margin-top: 8px;">
-                💡 <strong>Recomendado:</strong> usa "🔀 Fusionar" para integrar cambios de otro dispositivo sin perder datos locales.
-            </p>
         </div>
         
         <div class="card" style="border-left: 4px solid #8b5cf6; border: 2px solid #8b5cf6;">
             <h3 style="margin: 0 0 8px 0; color: #8b5cf6;">🧩 Salva diferencial (Recetas y Productos)</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
-                Exporta o importa <strong>solo las recetas y productos</strong>. Esta salva NO afecta a ventas, pedidos, insumos, clientes ni transacciones.
-                <br>💡 La exportación genera un archivo <code>.json</code> con nombre <code>panario_salva_recetas_productos_YYYY-MM-DD.json</code>.
+                Exporta o importa <strong>solo las recetas y productos</strong>. No afecta ventas, pedidos, insumos ni clientes.
             </p>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <button onclick="exportSalvaRecetasProductos()" class="btn primary" style="padding: 8px 16px; font-size: 14px; width: auto; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                    📤 Exportar recetas y productos
+                    📤 Exportar
                 </button>
                 <button onclick="importSalvaRecetasProductos()" class="btn secondary" style="padding: 8px 16px; font-size: 14px; width: auto; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-                    📥 Importar recetas y productos
+                    📥 Importar
                 </button>
             </div>
         </div>
@@ -3695,7 +4634,7 @@ function renderSettingsView() {
         <div class="card" style="border-left: 4px solid #ef4444;">
             <h3 style="margin: 0 0 8px 0;">🧹 Limpiar datos eliminados</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
-                Elimina permanentemente todos los registros marcados como eliminados.
+                Elimina permanentemente todos los registros con soft-delete.
                 <br><strong style="color: #ef4444;">⚠️ Esta acción no se puede deshacer.</strong>
             </p>
             <button onclick="cleanDeletedData()" class="btn danger" style="padding: 8px 16px; font-size: 14px; width: auto;">
@@ -3704,26 +4643,24 @@ function renderSettingsView() {
         </div>
         
         ${isAdmin ? `
-        <div class="card" style="border-left: 4px solid #dc2626; border: 2px solid #dc2626; background: var(--bg);">
+        <div class="card" style="border-left: 4px solid #dc2626; border: 2px solid #dc2626;">
             <h3 style="margin: 0 0 8px 0; color: #dc2626;">🚨 Eliminación por error</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
                 <strong style="color: #dc2626;">⚠️ ¡ADVERTENCIA!</strong><br>
                 Elimina <strong>PERMANENTEMENTE</strong> pedidos y ventas creados por error.
-                <br><span style="color: #dc2626;">Los datos eliminados NO se pueden recuperar.</span>
+                <br>Selector mejorado con tipo, ID, cliente, fecha, producto y precio.
             </p>
             <button onclick="showDeleteSelectorModal()" class="btn danger" style="padding: 10px 20px; font-size: 15px; width: auto; background: #dc2626; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                 🗑️ SELECCIONAR Y ELIMINAR
             </button>
         </div>
         
-        <div class="card" style="border-left: 4px solid #dc2626; border: 2px solid #dc2626; background: var(--bg);">
+        <div class="card" style="border-left: 4px solid #dc2626; border: 2px solid #dc2626;">
             <h3 style="margin: 0 0 8px 0; color: #dc2626;">🚨 Reiniciar Base de Datos</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
                 <strong style="color: #dc2626;">⚠️ ¡ADVERTENCIA!</strong><br>
-                Elimina <strong>TODOS</strong> los datos de la aplicación.
-                <br><span style="color: #10b981;">✅ Se conservan usuarios y temas.</span>
-                <br><br>
-                <strong style="color: #dc2626;">Contraseña: "panario"</strong>
+                Elimina <strong>TODOS</strong> los datos. Se conservan usuarios y temas.
+                <br><br><strong style="color: #dc2626;">Contraseña: "panario"</strong>
             </p>
             <button onclick="resetDatabaseWithPassword()" class="btn danger" style="padding: 10px 20px; font-size: 15px; width: auto; background: #dc2626; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                 🚨 REINICIAR BASE DE DATOS
@@ -3743,957 +4680,7 @@ function renderSettingsView() {
         </div>
     `;
     
-    console.log(`✅ renderSettingsView() completado (versión mostrada: ${appVersion})`);
-}
-
-// ============================================================
-// MÓDULO DE USUARIOS (SOLO ADMIN)
-// ============================================================
-
-async function showUsersModal() {
-    if (window.ModalModule?.cerrarTodosLosModales) window.ModalModule.cerrarTodosLosModales();
-    
-    const existingModal = document.getElementById('users-modal');
-    if (existingModal) existingModal.remove();
-    
-    const user = window.AuthModule.getCurrentUser();
-    if (!user || user.is_admin !== 1) { window.showToast('⚠️ Solo admin', 'warning'); return; }
-    
-    const negocioId = window.DBModule.getNegocioIdActual();
-    const negocio = window.DBModule.getNegocio(negocioId);
-    if (!negocio) { window.showToast('❌ No hay negocio activo', 'error'); return; }
-    
-    const usuarios = window.DBModule.query(`SELECT id, username, name, email, phone, photo, is_admin, created_at FROM users WHERE negocio_id = ? AND deleted_at IS NULL ORDER BY is_admin DESC, created_at ASC`, [negocioId]);
-    
-    const modal = document.createElement('div');
-    modal.id = 'users-modal';
-    modal.style.cssText = `
-        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
-        display: flex; align-items: center; justify-content: center;
-        z-index: 99999999; padding: 15px;
-    `;
-    
-    const usuariosHtml = usuarios.map(u => {
-        const isCurrentUser = u.id === user.id;
-        const isAdminUser = u.is_admin === 1;
-        const avatar = u.photo && u.photo.startsWith('data:image')
-            ? `<img src="${u.photo}" style="width: 100%; height: 100%; object-fit: cover;">`
-            : `<span style="font-size: 20px;">${isAdminUser ? '👑' : '👤'}</span>`;
-        
-        const fechaRegistro = u.created_at 
-            ? new Date(u.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
-            : '—';
-        
-        return `
-            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); border-radius: 10px; margin-bottom: 6px; border-left: 4px solid ${isAdminUser ? '#f59e0b' : '#3b82f6'}; flex-wrap: wrap;">
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--bg-card); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; border: 2px solid ${isAdminUser ? '#f59e0b' : '#3b82f6'};">${avatar}</div>
-                <div style="flex: 1; min-width: 150px;">
-                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                        <span style="font-weight: 600; font-size: 14px;">${u.name || u.username}</span>
-                        ${isAdminUser ? '<span style="font-size: 10px; background: #f59e0b20; color: #f59e0b; padding: 1px 6px; border-radius: 8px; font-weight: 600;">👑 ADMIN</span>' : ''}
-                        ${isCurrentUser ? '<span style="font-size: 10px; background: #10b98120; color: #10b981; padding: 1px 6px; border-radius: 8px; font-weight: 600;">TÚ</span>' : ''}
-                    </div>
-                    <div style="font-size: 12px; color: var(--text-light); margin-top: 2px;">@${u.username}</div>
-                    <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">
-                        📅 ${fechaRegistro}
-                        ${u.email ? ` · 📧 ${u.email}` : ''}
-                        ${u.phone ? ` · 📞 ${u.phone}` : ''}
-                    </div>
-                </div>
-                <div style="display: flex; gap: 4px; flex-wrap: wrap; flex-shrink: 0;">
-                    <button onclick="event.stopPropagation(); showEditUserModal(${u.id})" class="btn secondary" style="padding: 6px 10px; font-size: 12px; width: auto;">✏️</button>
-                    <button onclick="event.stopPropagation(); showChangePasswordModal(${u.id}, '${u.username.replace(/'/g, "\\'")}')" class="btn secondary" style="padding: 6px 10px; font-size: 12px; width: auto;">🔑</button>
-                    ${!isCurrentUser ? `
-                        <button onclick="event.stopPropagation(); handleToggleAdmin(${u.id}, ${isAdminUser ? 'false' : 'true'}, '${u.username.replace(/'/g, "\\'")}')" class="btn secondary" style="padding: 6px 10px; font-size: 12px; width: auto; color: ${isAdminUser ? '#94a3b8' : '#f59e0b'}; border-color: ${isAdminUser ? '#94a3b8' : '#f59e0b'};">${isAdminUser ? '👤' : '👑'}</button>
-                        <button onclick="event.stopPropagation(); deleteUser(${u.id}, '${u.username.replace(/'/g, "\\'")}')" class="btn secondary" style="padding: 6px 10px; font-size: 12px; width: auto; color: #ef4444; border-color: #ef4444;">🗑️</button>
-                    ` : `<span style="font-size: 11px; color: var(--text-light); padding: 6px 4px;">—</span>`}
-                </div>
-            </div>
-        `;
-    }).join('');
-    
-    modal.innerHTML = `
-        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 20px; max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid var(--border-color);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid var(--border-color);">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 28px;">👥</span>
-                    <div>
-                        <h2 style="margin: 0; font-size: 18px;">Usuarios del Negocio</h2>
-                        <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">${negocio.nombre}</p>
-                    </div>
-                </div>
-                <button onclick="closeUsersModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
-            </div>
-            
-            <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 100px; background: #f59e0b15; padding: 10px 12px; border-radius: 8px; text-align: center; border-left: 3px solid #f59e0b;">
-                    <div style="font-size: 20px; font-weight: 700; color: #f59e0b;">${usuarios.length}</div>
-                    <div style="font-size: 11px; color: var(--text-light);">Total</div>
-                </div>
-                <div style="flex: 1; min-width: 100px; background: #3b82f615; padding: 10px 12px; border-radius: 8px; text-align: center; border-left: 3px solid #3b82f6;">
-                    <div style="font-size: 20px; font-weight: 700; color: #3b82f6;">${usuarios.filter(u => u.is_admin === 1).length}</div>
-                    <div style="font-size: 11px; color: var(--text-light);">Admins</div>
-                </div>
-                <div style="flex: 1; min-width: 100px; background: #10b98115; padding: 10px 12px; border-radius: 8px; text-align: center; border-left: 3px solid #10b981;">
-                    <div style="font-size: 20px; font-weight: 700; color: #10b981;">${usuarios.filter(u => u.is_admin !== 1).length}</div>
-                    <div style="font-size: 11px; color: var(--text-light);">Regulares</div>
-                </div>
-            </div>
-            
-            <div style="background: linear-gradient(135deg, #f59e0b15 0%, #f59e0b05 100%); border: 2px solid #f59e0b; border-radius: 10px; padding: 14px; margin-bottom: 16px;">
-                <div style="font-weight: 700; font-size: 14px; color: #f59e0b; margin-bottom: 8px;">🔑 Código de invitación</div>
-                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 150px; background: var(--bg-card); padding: 10px 14px; border-radius: 8px; text-align: center; border: 1px solid var(--border-color);">
-                        <span style="font-family: monospace; font-size: 20px; font-weight: 700; letter-spacing: 3px; color: #f59e0b;">${negocio.codigo_invitacion || '—'}</span>
-                    </div>
-                    <button onclick="copiarCodigoInvitacion('${negocio.codigo_invitacion}')" class="btn primary" style="padding: 10px 16px; font-size: 13px; width: auto; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">📋 Copiar</button>
-                    <button onclick="regenerarCodigoAction()" class="btn primary" style="padding: 10px 16px; font-size: 13px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">🔄 Regenerar</button>
-                </div>
-            </div>
-            
-            <button onclick="showCreateUserModal()" class="btn primary" style="width: 100%; padding: 12px; font-size: 14px; background: #10b981; color: #fff; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; margin-bottom: 12px;">➕ Crear nuevo usuario directamente</button>
-            
-            <div style="max-height: 400px; overflow-y: auto; padding-right: 4px; margin-bottom: 12px;">
-                ${usuariosHtml}
-            </div>
-            
-            <div style="display: flex; justify-content: flex-end; padding-top: 12px; border-top: 1px solid var(--border-color);">
-                <button onclick="closeUsersModal()" class="btn secondary" style="padding: 10px 20px; font-size: 14px; width: auto;">Cerrar</button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    window.closeUsersModal = function() {
-        const m = document.getElementById('users-modal');
-        if (m) { m.style.animation = 'modalFadeOut 0.2s ease forwards'; setTimeout(() => { if (m.parentNode) m.remove(); }, 200); }
-    };
-    
-    modal.addEventListener('click', function(e) { if (e.target === this) closeUsersModal(); });
-}
-
-async function showCreateUserModal() {
-    const user = window.AuthModule.getCurrentUser();
-    if (!user || user.is_admin !== 1) { window.showToast('⚠️ Solo admin', 'warning'); return; }
-    
-    const existingModal = document.getElementById('create-user-modal');
-    if (existingModal) existingModal.remove();
-    
-    const modal = document.createElement('div');
-    modal.id = 'create-user-modal';
-    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 999999999; padding: 15px;`;
-    
-    modal.innerHTML = `
-        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 480px; width: 100%; max-height: 95vh; overflow-y: auto; border: 1px solid var(--border-color);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid var(--border-color);">
-                <h2 style="margin: 0; font-size: 18px; color: #10b981;">➕ Crear Nuevo Usuario</h2>
-                <button onclick="closeCreateUserModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
-            </div>
-            <form id="create-user-form" style="display: flex; flex-direction: column; gap: 12px;">
-                <div class="form-group"><label>👤 Nombre de usuario</label><input type="text" id="create-user-username" placeholder="Ej: juan_perez" required oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9_]/g, '')"></div>
-                <div class="form-group"><label>🔒 Contraseña temporal</label><input type="text" id="create-user-password" placeholder="Mínimo 4 caracteres" required minlength="4"></div>
-                <div class="form-group"><label>📛 Nombre completo</label><input type="text" id="create-user-name" placeholder="Ej: Juan Pérez" required></div>
-                <div class="form-group"><label>📧 Email (opcional)</label><input type="email" id="create-user-email"></div>
-                <div class="form-group"><label>📞 Teléfono (opcional)</label><input type="tel" id="create-user-phone"></div>
-                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border-color);">
-                    <span style="font-size: 20px;">👑</span>
-                    <span style="flex: 1; font-size: 14px;">Rol de administrador</span>
-                    <input type="checkbox" id="create-user-isadmin" style="width: 20px; height: 20px;">
-                </div>
-                <div style="display: flex; gap: 8px; margin-top: 8px;">
-                    <button type="submit" class="btn primary" style="flex: 1; background: #10b981; color: #fff; border: none; border-radius: 8px; padding: 12px; cursor: pointer; font-weight: 600;">✅ Crear usuario</button>
-                    <button type="button" onclick="closeCreateUserModal()" class="btn secondary" style="flex: 1;">❌ Cancelar</button>
-                </div>
-            </form>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    const form = document.getElementById('create-user-form');
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const username = document.getElementById('create-user-username').value.trim();
-        const password = document.getElementById('create-user-password').value.trim();
-        const name = document.getElementById('create-user-name').value.trim();
-        const email = document.getElementById('create-user-email').value.trim();
-        const phone = document.getElementById('create-user-phone').value.trim();
-        const isAdmin = document.getElementById('create-user-isadmin').checked;
-        
-        if (!username || !password || !name) { window.showToast('⚠️ Completa los campos obligatorios', 'error'); return; }
-        if (password.length < 4) { window.showToast('⚠️ Contraseña mínimo 4 caracteres', 'error'); return; }
-        
-        try {
-            const result = await window.AuthModule.createUserAsAdmin({ username, password, name, email, phone, isAdmin });
-            if (result.success) {
-                window.showToast(`✅ Usuario "${username}" creado`, 'success', 4000);
-                closeCreateUserModal();
-                setTimeout(() => showUsersModal(), 500);
-            } else {
-                window.showToast('❌ ' + result.error, 'error', 5000);
-            }
-        } catch (error) {
-            window.showToast('❌ Error: ' + error.message, 'error', 5000);
-        }
-    });
-    
-    modal.addEventListener('click', (e) => { if (e.target === modal) closeCreateUserModal(); });
-    
-    window.closeCreateUserModal = function() {
-        const m = document.getElementById('create-user-modal');
-        if (m) { m.style.animation = 'modalFadeOut 0.2s ease forwards'; setTimeout(() => { if (m.parentNode) m.remove(); }, 200); }
-    };
-}
-
-async function showEditUserModal(userId) {
-    const currentUser = window.AuthModule.getCurrentUser();
-    if (!currentUser || currentUser.is_admin !== 1) { window.showToast('⚠️ Solo admin', 'warning'); return; }
-    
-    const targetUser = window.DBModule.query('SELECT id, username, name, email, phone FROM users WHERE id = ? AND deleted_at IS NULL', [userId]);
-    if (targetUser.length === 0) { window.showToast('⚠️ Usuario no encontrado', 'warning'); return; }
-    const u = targetUser[0];
-    
-    const existingModal = document.getElementById('edit-user-modal');
-    if (existingModal) existingModal.remove();
-    
-    const modal = document.createElement('div');
-    modal.id = 'edit-user-modal';
-    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 999999999; padding: 15px;`;
-    
-    modal.innerHTML = `
-        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 480px; width: 100%; max-height: 95vh; overflow-y: auto; border: 1px solid var(--border-color);">
-            <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #3b82f6;">✏️ Editar Usuario @${u.username}</h2>
-            <form id="edit-user-form" style="display: flex; flex-direction: column; gap: 12px;">
-                <div class="form-group"><label>📛 Nombre completo</label><input type="text" id="edit-user-name" value="${u.name || ''}" required></div>
-                <div class="form-group"><label>📧 Email</label><input type="email" id="edit-user-email" value="${u.email || ''}"></div>
-                <div class="form-group"><label>📞 Teléfono</label><input type="tel" id="edit-user-phone" value="${u.phone || ''}"></div>
-                <div style="display: flex; gap: 8px; margin-top: 8px;">
-                    <button type="submit" class="btn primary" style="flex: 1; background: #3b82f6; color: #fff; border: none; border-radius: 8px; padding: 12px; cursor: pointer; font-weight: 600;">💾 Guardar</button>
-                    <button type="button" onclick="closeEditUserModal()" class="btn secondary" style="flex: 1;">❌ Cancelar</button>
-                </div>
-            </form>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    const form = document.getElementById('edit-user-form');
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const name = document.getElementById('edit-user-name').value.trim();
-        const email = document.getElementById('edit-user-email').value.trim();
-        const phone = document.getElementById('edit-user-phone').value.trim();
-        
-        if (!name) { window.showToast('⚠️ Nombre obligatorio', 'error'); return; }
-        
-        try {
-            const result = await window.AuthModule.updateUserDataByAdmin(userId, { name, email, phone });
-            if (result.success) {
-                window.showToast('✅ Usuario actualizado', 'success', 3000);
-                closeEditUserModal();
-                setTimeout(() => showUsersModal(), 500);
-            } else {
-                window.showToast('❌ ' + result.error, 'error', 5000);
-            }
-        } catch (error) {
-            window.showToast('❌ Error: ' + error.message, 'error', 5000);
-        }
-    });
-    
-    modal.addEventListener('click', (e) => { if (e.target === modal) closeEditUserModal(); });
-    
-    window.closeEditUserModal = function() {
-        const m = document.getElementById('edit-user-modal');
-        if (m) { m.style.animation = 'modalFadeOut 0.2s ease forwards'; setTimeout(() => { if (m.parentNode) m.remove(); }, 200); }
-    };
-}
-
-async function showChangePasswordModal(userId, username) {
-    const currentUser = window.AuthModule.getCurrentUser();
-    if (!currentUser) return;
-    const isOwnUser = currentUser.id === userId;
-    const isAdmin = currentUser.is_admin === 1;
-    if (!isOwnUser && !isAdmin) { window.showToast('⚠️ Sin permiso', 'warning'); return; }
-    
-    const existingModal = document.getElementById('change-password-modal');
-    if (existingModal) existingModal.remove();
-    
-    const modal = document.createElement('div');
-    modal.id = 'change-password-modal';
-    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 999999999; padding: 15px;`;
-    
-    modal.innerHTML = `
-        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 440px; width: 100%; border: 1px solid var(--border-color);">
-            <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #f59e0b;">🔑 Cambiar Contraseña @${username}</h2>
-            <form id="change-password-form" style="display: flex; flex-direction: column; gap: 12px;">
-                <div class="form-group"><label>🔒 Nueva contraseña</label><input type="text" id="change-pass-new" required minlength="4"></div>
-                <div class="form-group"><label>🔒 Confirmar</label><input type="text" id="change-pass-confirm" required minlength="4"></div>
-                <div id="change-pass-error" style="display: none; background: #ef444420; color: #ef4444; padding: 8px 12px; border-radius: 6px; font-size: 13px;"></div>
-                <div style="display: flex; gap: 8px; margin-top: 8px;">
-                    <button type="submit" class="btn primary" style="flex: 1; background: #f59e0b; color: #fff; border: none; border-radius: 8px; padding: 12px; cursor: pointer; font-weight: 600;">🔑 Cambiar</button>
-                    <button type="button" onclick="closeChangePasswordModal()" class="btn secondary" style="flex: 1;">❌ Cancelar</button>
-                </div>
-            </form>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    const form = document.getElementById('change-password-form');
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const newPass = document.getElementById('change-pass-new').value.trim();
-        const confirmPass = document.getElementById('change-pass-confirm').value.trim();
-        const errorEl = document.getElementById('change-pass-error');
-        errorEl.style.display = 'none';
-        
-        if (newPass.length < 4) { errorEl.textContent = '⚠️ Mínimo 4 caracteres'; errorEl.style.display = 'block'; return; }
-        if (newPass !== confirmPass) { errorEl.textContent = '⚠️ No coinciden'; errorEl.style.display = 'block'; return; }
-        
-        try {
-            const result = await window.AuthModule.updateUserPassword(userId, newPass);
-            if (result.success) {
-                window.showToast('✅ Contraseña actualizada', 'success', 4000);
-                closeChangePasswordModal();
-            } else {
-                errorEl.textContent = '❌ ' + result.error;
-                errorEl.style.display = 'block';
-            }
-        } catch (error) {
-            errorEl.textContent = '❌ ' + error.message;
-            errorEl.style.display = 'block';
-        }
-    });
-    
-    modal.addEventListener('click', (e) => { if (e.target === modal) closeChangePasswordModal(); });
-    
-    window.closeChangePasswordModal = function() {
-        const m = document.getElementById('change-password-modal');
-        if (m) { m.style.animation = 'modalFadeOut 0.2s ease forwards'; setTimeout(() => { if (m.parentNode) m.remove(); }, 200); }
-    };
-}
-
-async function handleToggleAdmin(userId, promoteToAdmin, username) {
-    const confirm = await window.ModalModule.showConfirm({
-        title: promoteToAdmin ? '👑 Promover a admin' : '👤 Quitar admin',
-        message: `¿Seguro que quieres ${promoteToAdmin ? 'promover' : 'quitar admin'} a "@${username}"?`,
-        confirmText: promoteToAdmin ? '👑 Sí, promover' : '👤 Sí, quitar',
-        cancelText: '❌ Cancelar',
-        icon: promoteToAdmin ? '👑' : '👤',
-        confirmColor: promoteToAdmin ? '#f59e0b' : '#94a3b8'
-    });
-    if (!confirm) return;
-    
-    try {
-        const result = await window.AuthModule.toggleUserAdmin(userId, promoteToAdmin);
-        if (result.success) {
-            window.showToast(promoteToAdmin ? `✅ @${username} es ADMIN` : `✅ @${username} ya no es admin`, 'success', 4000);
-            setTimeout(() => showUsersModal(), 500);
-        } else {
-            window.showToast('❌ ' + result.error, 'error', 5000);
-            setTimeout(() => showUsersModal(), 500);
-        }
-    } catch (error) {
-        window.showToast('❌ Error: ' + error.message, 'error', 5000);
-    }
-}
-
-async function deleteUser(userId, username) {
-    const currentUser = window.AuthModule.getCurrentUser();
-    if (userId === currentUser.id) { window.showToast('⚠️ No puedes eliminarte a ti mismo', 'warning'); return; }
-    
-    closeUsersModal();
-    await new Promise(r => setTimeout(r, 250));
-    
-    const confirm = await window.ModalModule.showConfirm({
-        title: '🗑️ Eliminar usuario',
-        message: `¿Eliminar a "@${username}"?\n\n⚠️ Perderá acceso a Panario.\n✅ Los datos que creó se mantienen.`,
-        confirmText: '🗑️ Sí, eliminar', cancelText: '❌ Cancelar',
-        icon: '🗑️', confirmColor: '#ef4444'
-    });
-    
-    if (!confirm) { setTimeout(() => showUsersModal(), 300); return; }
-    
-    try {
-        const result = await window.AuthModule.deleteUserByAdmin(userId);
-        if (result.success) {
-            window.showToast(`✅ Usuario "@${username}" eliminado`, 'success', 3000);
-            setTimeout(() => showUsersModal(), 800);
-        } else {
-            window.showToast('❌ ' + result.error, 'error', 5000);
-            setTimeout(() => showUsersModal(), 500);
-        }
-    } catch (error) {
-        window.showToast('❌ Error: ' + error.message, 'error', 5000);
-        setTimeout(() => showUsersModal(), 500);
-    }
-}
-
-async function regenerarCodigoAction() {
-    closeUsersModal();
-    await new Promise(r => setTimeout(r, 250));
-    
-    const confirm = await window.ModalModule.showConfirm({
-        title: '🔄 Regenerar código',
-        message: '¿Regenerar el código de invitación?\n\n⚠️ El código actual dejará de funcionar.',
-        confirmText: '🔄 Sí, regenerar', cancelText: '❌ Cancelar',
-        icon: '🔄', confirmColor: '#f59e0b'
-    });
-    
-    if (!confirm) { setTimeout(() => showUsersModal(), 300); return; }
-    
-    const negocioId = window.DBModule.getNegocioIdActual();
-    const result = window.DBModule.regenerarCodigoInvitacion(negocioId);
-    
-    if (result.success) {
-        window.showToast(`✅ Nuevo código: ${result.codigo}`, 'success', 5000);
-        setTimeout(() => showUsersModal(), 500);
-    } else {
-        window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 5000);
-        setTimeout(() => showUsersModal(), 500);
-    }
-}
-
-// ============================================================
-// SALVA DIFERENCIAL
-// ============================================================
-
-async function exportSalvaRecetasProductos() {
-    if (typeof window.DBModule.exportRecetasProductosSalva !== 'function') {
-        window.showToast('❌ Función no disponible', 'error', 6000);
-        return;
-    }
-    
-    let progress = null;
-    try {
-        progress = window.ModalModule.showProgressModal({ title: 'Exportando salva', message: 'Preparando...', icon: '🧩' });
-        progress.update('Recopilando...', 30);
-        await new Promise(r => setTimeout(r, 300));
-        progress.update('Empaquetando JSON...', 70);
-        await new Promise(r => setTimeout(r, 300));
-        
-        const result = window.DBModule.exportRecetasProductosSalva();
-        
-        if (result && result.success) {
-            const counts = result.counts || { recipes: 0, productos: 0 };
-            progress.success(`Salva exportada: ${counts.recipes} recetas, ${counts.productos} productos`);
-            window.showToast(`✅ Salva exportada (${result.sizeKB || 0} KB)`, 'success', 3000);
-        } else {
-            const errorMsg = (result && result.error) ? result.error : 'Error desconocido';
-            progress.error(errorMsg);
-        }
-    } catch (error) {
-        if (progress) { try { progress.error(error.message); } catch (e) {} }
-    } finally {
-        setTimeout(() => {
-            const stillThere = document.getElementById('progress-modal');
-            if (stillThere) { try { window.ModalModule.closeProgressModal(); } catch (e) {} }
-        }, 4000);
-    }
-}
-
-async function importSalvaRecetasProductos() {
-    if (typeof window.DBModule.importRecetasProductosSalva !== 'function' || typeof window.DBModule.readSalvaFile !== 'function') {
-        window.showToast('❌ Función no disponible', 'error', 6000);
-        return;
-    }
-    
-    try {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        input.style.display = 'none';
-        
-        input.onchange = async function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            try {
-                const salvaData = await window.DBModule.readSalvaFile(file);
-                if (!salvaData._meta || salvaData._meta.type !== 'salva_recetas_productos') {
-                    await window.ModalModule.showAlert({ title: '❌ Archivo inválido', message: 'No es una salva válida.', icon: '❌', type: 'error' });
-                    return;
-                }
-                
-                const counts = salvaData._meta.counts || {};
-                const resumen = `📖 Recetas: ${counts.recipes || 0}\n🏷️ Productos: ${counts.productos || 0}`;
-                
-                const modo = await window.ModalModule.showPrompt({
-                    title: '📥 Importar salva',
-                    message: `${resumen}\n\nEscribe "fusionar" o "reemplazar":`,
-                    defaultValue: 'fusionar',
-                    icon: '📥'
-                });
-                
-                if (!modo) return;
-                const modoLimpio = String(modo).trim().toLowerCase();
-                if (modoLimpio !== 'fusionar' && modoLimpio !== 'reemplazar') return;
-                
-                const confirm = await window.ModalModule.showConfirm({
-                    title: modoLimpio === 'reemplazar' ? '⚠️ Reemplazar' : '📥 Fusionar',
-                    message: modoLimpio === 'reemplazar' ? '¿REEMPLAZAR todas las recetas y productos?' : '¿FUSIONAR con los actuales?',
-                    confirmText: modoLimpio === 'reemplazar' ? '⚠️ SÍ, REEMPLAZAR' : '✅ SÍ, FUSIONAR',
-                    cancelText: '❌ Cancelar',
-                    icon: modoLimpio === 'reemplazar' ? '⚠️' : '📥',
-                    confirmColor: modoLimpio === 'reemplazar' ? '#ef4444' : '#10b981'
-                });
-                if (!confirm) return;
-                
-                const result = window.DBModule.importRecetasProductosSalva(salvaData, modoLimpio);
-                
-                if (result && result.success) {
-                    window.showToast('✅ Salva importada correctamente', 'success', 3000);
-                    setTimeout(() => { if (typeof window.refreshCurrentView === 'function') window.refreshCurrentView(); }, 2000);
-                } else {
-                    window.showToast('❌ ' + (result.error || 'Error'), 'error', 5000);
-                }
-            } catch (error) {
-                window.showToast('❌ ' + error.message, 'error', 5000);
-            }
-        };
-        
-        document.body.appendChild(input);
-        input.click();
-        document.body.removeChild(input);
-    } catch (error) {
-        window.showToast('❌ Error: ' + error.message, 'error');
-    }
-}
-
-// ============================================================
-// ACCIONES DE BACKUP
-// ============================================================
-
-async function exportDatabaseCompleteAction() {
-    let progress = null;
-    try {
-        progress = window.ModalModule.showProgressModal({ title: 'Exportando copia completa', message: 'Preparando...', icon: '📦' });
-        progress.update('Recopilando...', 30);
-        await new Promise(r => setTimeout(r, 300));
-        progress.update('Incluyendo usuarios...', 60);
-        await new Promise(r => setTimeout(r, 300));
-        progress.update('Generando .db...', 90);
-        await new Promise(r => setTimeout(r, 300));
-        
-        const result = window.DBModule.downloadDatabase('complete');
-        if (result && result.success) {
-            progress.success('Copia completa exportada');
-            window.showToast('✅ Copia completa exportada', 'success', 3000);
-        } else {
-            progress.error((result && result.error) ? result.error : 'No se pudo exportar');
-        }
-    } catch (error) {
-        if (progress) { try { progress.error(error.message); } catch (e) {} }
-    } finally {
-        setTimeout(() => {
-            const stillThere = document.getElementById('progress-modal');
-            if (stillThere) { try { window.ModalModule.closeProgressModal(); } catch (e) {} }
-        }, 5000);
-    }
-}
-
-async function exportDatabaseDataOnlyAction() {
-    let progress = null;
-    try {
-        progress = window.ModalModule.showProgressModal({ title: 'Exportando copia de datos', message: 'Preparando...', icon: '📊' });
-        progress.update('Recopilando datos...', 30);
-        await new Promise(r => setTimeout(r, 300));
-        progress.update('Excluyendo usuarios...', 60);
-        await new Promise(r => setTimeout(r, 300));
-        progress.update('Generando .db...', 90);
-        await new Promise(r => setTimeout(r, 300));
-        
-        const result = window.DBModule.downloadDatabase('data_only');
-        if (result && result.success) {
-            progress.success('Copia de datos exportada');
-            window.showToast('✅ Copia de datos exportada', 'success', 3000);
-        } else {
-            progress.error((result && result.error) ? result.error : 'No se pudo exportar');
-        }
-    } catch (error) {
-        if (progress) { try { progress.error(error.message); } catch (e) {} }
-    } finally {
-        setTimeout(() => {
-            const stillThere = document.getElementById('progress-modal');
-            if (stillThere) { try { window.ModalModule.closeProgressModal(); } catch (e) {} }
-        }, 5000);
-    }
-}
-
-async function importDatabaseSmartAction() {
-    try {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.db,.sqlite,.sqlite3';
-        input.style.display = 'none';
-        
-        input.onchange = async function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            const user = window.AuthModule.getCurrentUser();
-            const isAdmin = user && user.is_admin === 1;
-            
-            const confirm = await window.ModalModule.showConfirm({
-                title: '📥 Importar copia',
-                message: `¿Importar "${file.name}"?\n\n⚠️ Reemplazará TODOS los datos${isAdmin ? ' (incluyendo usuarios)' : ''}.`,
-                confirmText: 'Sí, importar',
-                cancelText: 'Cancelar',
-                icon: '⚠️',
-                confirmColor: '#ef4444'
-            });
-            
-            if (!confirm) return;
-            
-            try {
-                const result = await window.DBModule.importDatabase(file);
-                if (result.success) {
-                    window.showToast('✅ Copia importada. Recargando...', 'success', 3000);
-                    setTimeout(() => {
-                        const url = window.location.href.split('?')[0];
-                        window.location.href = url + '?refresh=' + Date.now();
-                        setTimeout(() => window.location.reload(true), 100);
-                    }, 500);
-                } else {
-                    window.showToast('❌ ' + (result.error || 'Error'), 'error', 5000);
-                }
-            } catch (error) {
-                window.showToast('❌ ' + error.message, 'error', 5000);
-            }
-        };
-        
-        document.body.appendChild(input);
-        input.click();
-        document.body.removeChild(input);
-    } catch (error) {
-        window.showToast('❌ Error: ' + error.message, 'error');
-    }
-}
-
-async function importDatabaseDataOnlyFromFileAction() {
-    try {
-        const result = await window.DBModule.importDatabaseDataOnlyFromFile();
-        if (result && result.success) {
-            window.showToast('✅ Datos importados. Recargando...', 'success', 5000);
-            setTimeout(() => {
-                const url = window.location.href.split('?')[0];
-                window.location.href = url + '?refresh=' + Date.now();
-                setTimeout(() => window.location.reload(true), 100);
-            }, 500);
-        } else if (result && result.error && result.error !== 'Cancelado') {
-            window.showToast('❌ ' + result.error, 'error', 5000);
-        }
-    } catch (error) {
-        window.showToast('❌ ' + error.message, 'error');
-    }
-}
-
-async function importDatabaseFusionAction() {
-    if (typeof window.DBModule.importDatabaseDataOnlyFromFile !== 'function') {
-        window.showToast('❌ Función no disponible', 'error', 6000);
-        return;
-    }
-    
-    try {
-        const result = await window.DBModule.importDatabaseDataOnlyFromFile();
-        if (!result) return;
-        if (result.success === false && result.error === 'Cancelado') return;
-        if (!result.success) { window.showToast('❌ ' + (result.error || 'Error'), 'error', 6000); return; }
-        
-        const inserted = result.inserted || 0;
-        const updated = result.updated || 0;
-        const skipped = result.skipped || 0;
-        
-        await window.ModalModule.showAlert({
-            title: '🔀 Fusión completada',
-            message: `✅ Fusión completada.\n\n📥 Nuevos: ${inserted}\n🔄 Actualizados: ${updated}\n⏭️ Sin cambios: ${skipped}`,
-            icon: '🔀', type: 'success'
-        });
-        
-        window.showToast(`✅ Fusión: +${inserted} nuevos, ~${updated} actualizados`, 'success', 5000);
-        
-        setTimeout(() => {
-            if (typeof window.refreshCurrentView === 'function') window.refreshCurrentView();
-            else if (typeof window.renderSettingsView === 'function') window.renderSettingsView();
-        }, 1500);
-    } catch (error) {
-        window.showToast('❌ Error: ' + (error.message || 'Desconocido'), 'error', 6000);
-    }
-}
-
-async function clearLastUserAction() {
-    const confirm = await window.ModalModule.showConfirm({
-        title: 'Olvidar usuario',
-        message: '¿Olvidar el último usuario guardado?',
-        confirmText: 'Sí, olvidar', cancelText: 'Cancelar',
-        icon: '🗑️', confirmColor: '#ef4444'
-    });
-    if (confirm) {
-        window.AuthModule.clearLastUser();
-        window.showToast('✅ Último usuario olvidado', 'success');
-        renderSettingsView();
-    }
-}
-
-async function cleanDeletedData() {
-    const confirm = await window.ModalModule.showConfirm({
-        title: '🧹 Limpiar datos eliminados',
-        message: '¿Eliminar permanentemente todos los registros marcados como eliminados?\n\n⚠️ No se puede deshacer.',
-        confirmText: 'Sí, limpiar', cancelText: 'Cancelar',
-        icon: '⚠️', confirmColor: '#ef4444'
-    });
-    if (!confirm) return;
-    
-    let progress = null;
-    try {
-        progress = window.ModalModule.showProgressModal({ title: 'Limpiando', message: 'Eliminando...', icon: '🧹' });
-        
-        const tables = ['sales', 'transactions', 'orders', 'order_items', 'payments', 'recipes', 'recipe_ingredients', 'clients', 'products', 'dias_sin_ventas', 'calendario_produccion'];
-        let deletedCount = 0;
-        
-        for (let i = 0; i < tables.length; i++) {
-            const table = tables[i];
-            progress.update(`Limpiando ${table}...`, Math.round(((i + 1) / tables.length) * 90));
-            
-            const checkResult = window.DBModule.query(`SELECT name FROM sqlite_master WHERE type='table' AND name='${table}'`);
-            if (checkResult.length === 0) continue;
-            
-            const columns = window.DBModule.query(`PRAGMA table_info(${table})`);
-            const hasDeletedAt = columns.some(col => col.name === 'deleted_at');
-            if (!hasDeletedAt) continue;
-            
-            const countResult = window.DBModule.query(`SELECT COUNT(*) as count FROM ${table} WHERE deleted_at IS NOT NULL`);
-            const count = countResult[0]?.count || 0;
-            
-            if (count > 0) {
-                window.DBModule.execute(`DELETE FROM ${table} WHERE deleted_at IS NOT NULL`);
-                deletedCount += count;
-            }
-            await new Promise(r => setTimeout(r, 100));
-        }
-        
-        progress.update('Guardando...', 95);
-        window.DBModule.saveDatabase();
-        await new Promise(r => setTimeout(r, 200));
-        
-        progress.success(`${deletedCount} registros eliminados`);
-        window.showToast(`✅ ${deletedCount} registros eliminados`, 'success', 3000);
-        setTimeout(() => renderSettingsView(), 2500);
-    } catch (error) {
-        if (progress) { try { progress.error(error.message); } catch (e) {} }
-    } finally {
-        setTimeout(() => {
-            const stillThere = document.getElementById('progress-modal');
-            if (stillThere) { try { window.ModalModule.closeProgressModal(); } catch (e) {} }
-        }, 5000);
-    }
-}
-
-async function resetDatabaseWithPassword() {
-    const password = await window.ModalModule.showPrompt({
-        title: '🔒 Verificación',
-        message: 'Escribe la contraseña de seguridad:',
-        placeholder: 'Contraseña', icon: '🔒', inputType: 'password'
-    });
-    
-    if (password === null || password === undefined) { window.showToast('❌ Cancelado', 'info', 2000); return; }
-    if (String(password).trim() !== 'panario') {
-        await window.ModalModule.showAlert({ title: '❌ Contraseña incorrecta', message: 'La contraseña es: "panario"', icon: '❌', type: 'error' });
-        return;
-    }
-    
-    const confirm = await window.ModalModule.showConfirm({
-        title: '⚠️ ¡ADVERTENCIA!',
-        message: 'Se eliminarán TODOS los datos.\n✅ Se conservan usuarios.\n\n¿Seguro?',
-        confirmText: '⚠️ SÍ, REINICIAR', cancelText: '❌ Cancelar',
-        icon: '🚨', confirmColor: '#dc2626'
-    });
-    if (!confirm) return;
-    
-    let progress = null;
-    try {
-        progress = window.ModalModule.showProgressModal({ title: 'Reiniciando', message: 'Eliminando datos...', icon: '🚨' });
-        
-        const db = window.DBModule.getDB();
-        const users = window.DBModule.query('SELECT * FROM users WHERE deleted_at IS NULL');
-        const tables = ['inventory_movements', 'inventory', 'order_items', 'payments', 'orders', 'recipe_ingredients', 'recipes', 'sales', 'transactions', 'clients', 'products', 'notifications', 'units', 'corriente_config', 'dias_sin_ventas', 'calendario_produccion'];
-        
-        for (let i = 0; i < tables.length; i++) {
-            progress.update(`Eliminando ${tables[i]}...`, Math.round(((i + 1) / tables.length) * 80));
-            try { db.run(`DELETE FROM ${tables[i]}`); } catch (e) {}
-            await new Promise(r => setTimeout(r, 80));
-        }
-        
-        progress.update('Guardando...', 90);
-        window.DBModule.saveDatabase();
-        await new Promise(r => setTimeout(r, 300));
-        
-        progress.success(`BD reiniciada. ${users.length} usuario(s) conservado(s)`);
-        window.showToast('✅ BD reiniciada', 'success', 2000);
-        setTimeout(() => window.location.reload(true), 3000);
-    } catch (error) {
-        if (progress) { try { progress.error(error.message); } catch (e) {} }
-    } finally {
-        setTimeout(() => {
-            const stillThere = document.getElementById('progress-modal');
-            if (stillThere) { try { window.ModalModule.closeProgressModal(); } catch (e) {} }
-        }, 5000);
-    }
-}
-
-async function showDeleteSelectorModal() {
-    const existingModal = document.getElementById('delete-selector-modal');
-    if (existingModal) existingModal.remove();
-    
-    const negocioId = window.DBModule.getNegocioIdActual();
-    if (!negocioId) { window.showToast('❌ No hay negocio activo', 'error'); return; }
-    
-    const orders = window.DBModule.query(`SELECT id, client_name, total, status FROM orders WHERE negocio_id = ? AND deleted_at IS NULL AND status != 'delivered' AND status != 'cancelled' ORDER BY created_at DESC`, [negocioId]);
-    const sales = window.DBModule.query(`SELECT id, product_name, total, payment_method, sale_date, buyer FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0 ORDER BY created_at DESC`, [negocioId]);
-    
-    const modal = document.createElement('div');
-    modal.id = 'delete-selector-modal';
-    modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 999999998; padding: 10px;`;
-    
-    modal.innerHTML = `
-        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 16px 18px; max-width: 100%; width: 100%; max-height: 95vh; overflow-y: auto; border: 1px solid var(--border-color);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h2 style="margin: 0; color: #dc2626; font-size: 18px;">🚨 Eliminación por error</h2>
-                <button onclick="closeDeleteSelectorModal()" style="background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-light);">✕</button>
-            </div>
-            
-            <p style="font-size: 13px; color: var(--text-light); margin-bottom: 12px;">
-                Selecciona pedidos y ventas para eliminar <strong style="color: #dc2626;">PERMANENTEMENTE</strong>.
-            </p>
-            
-            <div style="background: var(--bg); padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 13px;">
-                📋 Pedidos: <strong id="selected-orders-count">0</strong> · 💰 Ventas: <strong id="selected-sales-count">0</strong> · 🗑️ Total: <strong id="selected-total">0</strong>
-            </div>
-            
-            <div style="margin-bottom: 12px;">
-                <div style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">📋 Pedidos (${orders.length})</div>
-                <div style="max-height: 200px; overflow-y: auto;">
-                    ${orders.map(o => `
-                        <div style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; background: var(--bg); border-radius: 4px; margin-bottom: 3px; font-size: 12px;">
-                            <input type="checkbox" class="delete-order-checkbox" data-id="${o.id}">
-                            <span style="flex: 1;">#${o.id} - ${o.client_name}</span>
-                            <span>$${parseFloat(o.total).toFixed(2)}</span>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-            
-            <div style="margin-bottom: 12px;">
-                <div style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">💰 Ventas (${sales.length})</div>
-                <div style="max-height: 200px; overflow-y: auto;">
-                    ${sales.map(s => `
-                        <div style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; background: var(--bg); border-radius: 4px; margin-bottom: 3px; font-size: 12px;">
-                            <input type="checkbox" class="delete-sale-checkbox" data-id="${s.id}">
-                            <span style="flex: 1;">#${s.id} - ${s.product_name}</span>
-                            <span>$${parseFloat(s.total).toFixed(2)}</span>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-            
-            <div style="display: flex; gap: 6px; justify-content: flex-end;">
-                <button onclick="selectAllDeleteItems()" class="btn secondary" style="padding: 4px 12px; font-size: 12px; width: auto;">✅ Todos</button>
-                <button onclick="deselectAllDeleteItems()" class="btn secondary" style="padding: 4px 12px; font-size: 12px; width: auto;">❌ Ninguno</button>
-                <button onclick="confirmDeleteSelected()" class="btn danger" style="padding: 6px 16px; font-size: 13px; width: auto; background: #dc2626; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">🗑️ ELIMINAR</button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    window._deleteSelectedOrders = new Set();
-    window._deleteSelectedSales = new Set();
-    
-    window.closeDeleteSelectorModal = function() {
-        const m = document.getElementById('delete-selector-modal');
-        if (m) { m.style.animation = 'modalFadeOut 0.2s ease forwards'; setTimeout(() => { if (m.parentNode) m.remove(); }, 200); }
-    };
-    
-    document.querySelectorAll('.delete-order-checkbox').forEach(cb => {
-        cb.addEventListener('change', function() {
-            const id = parseInt(this.dataset.id);
-            if (this.checked) window._deleteSelectedOrders.add(id); else window._deleteSelectedOrders.delete(id);
-            updateDeleteSelectionCount();
-        });
-    });
-    
-    document.querySelectorAll('.delete-sale-checkbox').forEach(cb => {
-        cb.addEventListener('change', function() {
-            const id = parseInt(this.dataset.id);
-            if (this.checked) window._deleteSelectedSales.add(id); else window._deleteSelectedSales.delete(id);
-            updateDeleteSelectionCount();
-        });
-    });
-    
-    window.updateDeleteSelectionCount = function() {
-        document.getElementById('selected-orders-count').textContent = window._deleteSelectedOrders.size;
-        document.getElementById('selected-sales-count').textContent = window._deleteSelectedSales.size;
-        document.getElementById('selected-total').textContent = window._deleteSelectedOrders.size + window._deleteSelectedSales.size;
-    };
-    
-    window.selectAllDeleteItems = function() {
-        document.querySelectorAll('.delete-order-checkbox').forEach(cb => { cb.checked = true; window._deleteSelectedOrders.add(parseInt(cb.dataset.id)); });
-        document.querySelectorAll('.delete-sale-checkbox').forEach(cb => { cb.checked = true; window._deleteSelectedSales.add(parseInt(cb.dataset.id)); });
-        updateDeleteSelectionCount();
-    };
-    
-    window.deselectAllDeleteItems = function() {
-        document.querySelectorAll('.delete-order-checkbox').forEach(cb => { cb.checked = false; });
-        document.querySelectorAll('.delete-sale-checkbox').forEach(cb => { cb.checked = false; });
-        window._deleteSelectedOrders.clear();
-        window._deleteSelectedSales.clear();
-        updateDeleteSelectionCount();
-    };
-    
-    window.confirmDeleteSelected = async function() {
-        const orderIds = Array.from(window._deleteSelectedOrders);
-        const saleIds = Array.from(window._deleteSelectedSales);
-        
-        if (orderIds.length === 0 && saleIds.length === 0) { window.showToast('⚠️ Nada seleccionado', 'warning'); return; }
-        
-        closeDeleteSelectorModal();
-        await new Promise(r => setTimeout(r, 250));
-        
-        const confirm = await window.ModalModule.showConfirm({
-            title: '⚠️ ¿Eliminar permanentemente?',
-            message: `Eliminarás:\n📋 ${orderIds.length} pedidos\n💰 ${saleIds.length} ventas\n\n⚠️ NO se puede deshacer.`,
-            confirmText: '🗑️ ELIMINAR', cancelText: '❌ Cancelar',
-            icon: '🚨', confirmColor: '#dc2626'
-        });
-        if (!confirm) return;
-        
-        try {
-            const db = window.DBModule.getDB();
-            for (const orderId of orderIds) {
-                db.run('DELETE FROM order_items WHERE order_id = ?', [orderId]);
-                db.run('DELETE FROM payments WHERE order_id = ?', [orderId]);
-                db.run('DELETE FROM orders WHERE id = ?', [orderId]);
-            }
-            for (const saleId of saleIds) {
-                db.run('DELETE FROM transactions WHERE sale_id = ?', [saleId]);
-                db.run('DELETE FROM sales WHERE id = ?', [saleId]);
-            }
-            window.DBModule.saveDatabase();
-            
-            await window.ModalModule.showAlert({
-                title: '✅ Eliminados',
-                message: `📋 ${orderIds.length} pedidos\n💰 ${saleIds.length} ventas`,
-                icon: '✅', type: 'success'
-            });
-            renderSettingsView();
-        } catch (error) {
-            window.showToast('❌ Error: ' + error.message, 'error');
-        }
-    };
-    
-    modal.addEventListener('click', function(e) { if (e.target === this) closeDeleteSelectorModal(); });
+    console.log(`✅ renderSettingsView() completado (versión: ${appVersion})`);
 }
 
 // ============================================================
@@ -4703,13 +4690,24 @@ async function showDeleteSelectorModal() {
 window.renderSettingsView = renderSettingsView;
 window.showCorrienteModal = showCorrienteModal;
 window.irAHoyCorriente = irAHoyCorriente;
+window.saveCorrientePattern = saveCorrientePattern;
+window.setCorrienteReference = setCorrienteReference;
+window.renderCorrienteCalendario = renderCorrienteCalendario;
+window.changeCorrienteMonth = changeCorrienteMonth;
+window.showHorarioDetalle = showHorarioDetalle;
+window.closeHorarioDetalleModal = closeHorarioDetalleModal;
+window.consultarHorariosFecha = consultarHorariosFecha;
+window.generarReportePDF = generarReportePDF;
 window.showProductionDiagnosticModal = showProductionDiagnosticModal;
 window.closeProductionDiagnosticModal = closeProductionDiagnosticModal;
 window.runProductionDiagnostics = runProductionDiagnostics;
 window.renderDiagnosticResults = renderDiagnosticResults;
 window.rerunDiagnostics = rerunDiagnostics;
-window.showHorarioDetalle = showHorarioDetalle;
-window.navegarHorarioDetalle = navegarHorarioDetalle;
+window.calcularBloquesIdeales = calcularBloquesIdeales;
+window.showCalculoBloquesModal = showCalculoBloquesModal;
+window.confirmarCalculoBloques = confirmarCalculoBloques;
+window.onProductoProduccionChange = onProductoProduccionChange;
+window.calcularYMostrarSugerencia = calcularYMostrarSugerencia;
 window.guardarProduccion = guardarProduccion;
 window.eliminarProduccion = eliminarProduccion;
 window.showProduccionRangoModal = showProduccionRangoModal;
@@ -4719,39 +4717,9 @@ window.submitProduccionRango = submitProduccionRango;
 window.setRangoRapido = setRangoRapido;
 window.setRangoMesActual = setRangoMesActual;
 window.getFechasDelRango = getFechasDelRango;
-window.getProduccionConfig = getProduccionConfig;
-window.contarPedidosYVentasFecha = contarPedidosYVentasFecha;
-window.formatearCantidadProduccion = formatearCantidadProduccion;
-window.esMismaFechaISO = esMismaFechaISO;
-window.esBloqueDelDiaAnterior = esBloqueDelDiaAnterior;
-window.getBloqueSeleccionadoActual = getBloqueSeleccionadoActual;
-window.sumarDiasISO = sumarDiasISO;
-window.getDiaSemanaCorto = getDiaSemanaCorto;
-window.getFechaCortaConDia = getFechaCortaConDia;
-window.esHoyISO = esHoyISO;
-window.getAppVersion = getAppVersion;
-window.MOTIVOS_REPROGRAMACION = MOTIVOS_REPROGRAMACION;
-window.getTodosLosProductosParaDropdown = getTodosLosProductosParaDropdown;
-window._esBloqueDelAmanecer = _esBloqueDelAmanecer;
-window._formatearMensajeBloque = _formatearMensajeBloque;
-window.showUsersModal = showUsersModal;
-window.showCreateUserModal = showCreateUserModal;
-window.showEditUserModal = showEditUserModal;
-window.showChangePasswordModal = showChangePasswordModal;
-window.handleToggleAdmin = handleToggleAdmin;
-window.deleteUser = deleteUser;
-window.regenerarCodigoAction = regenerarCodigoAction;
-window.exportSalvaRecetasProductos = exportSalvaRecetasProductos;
-window.importSalvaRecetasProductos = importSalvaRecetasProductos;
-window.exportDatabaseCompleteAction = exportDatabaseCompleteAction;
-window.exportDatabaseDataOnlyAction = exportDatabaseDataOnlyAction;
-window.importDatabaseSmartAction = importDatabaseSmartAction;
-window.importDatabaseDataOnlyFromFileAction = importDatabaseDataOnlyFromFileAction;
-window.importDatabaseFusionAction = importDatabaseFusionAction;
-window.clearLastUserAction = clearLastUserAction;
-window.cleanDeletedData = cleanDeletedData;
-window.resetDatabaseWithPassword = resetDatabaseWithPassword;
-window.showDeleteSelectorModal = showDeleteSelectorModal;
+window.navegarHorarioDetalle = navegarHorarioDetalle;
+window.guardarProduccionAutoSiHayCambios = guardarProduccionAutoSiHayCambios;
+window.ejecutarGuardadoProduccion = ejecutarGuardadoProduccion;
 window.showExpensesReportModal = showExpensesReportModal;
 window.closeExpensesReportModal = closeExpensesReportModal;
 window.generateExpensesReportFromForm = generateExpensesReportFromForm;
@@ -4764,19 +4732,61 @@ window.showReprogramarPedidosModal = showReprogramarPedidosModal;
 window.closeReprogramarModal = closeReprogramarModal;
 window.actualizarPreviewReprogramacion = actualizarPreviewReprogramacion;
 window.executeReprogramarPedidos = executeReprogramarPedidos;
-window.calcularBloquesIdeales = calcularBloquesIdeales;
-window.showCalculoBloquesModal = showCalculoBloquesModal;
-window.confirmarCalculoBloques = confirmarCalculoBloques;
-window.onProductoProduccionChange = onProductoProduccionChange;
-window.calcularYMostrarSugerencia = calcularYMostrarSugerencia;
+window.exportDatabaseCompleteAction = exportDatabaseCompleteAction;
+window.exportDatabaseDataOnlyAction = exportDatabaseDataOnlyAction;
+window.importDatabaseSmartAction = importDatabaseSmartAction;
+window.importDatabaseDataOnlyFromFileAction = importDatabaseDataOnlyFromFileAction;
+window.importDatabaseFusionAction = importDatabaseFusionAction;
+window.restaurarEstilosAction = restaurarEstilosAction;
+window.showUsersModal = showUsersModal;
+window.closeUsersModal = closeUsersModal;
+window.renderUsersContent = renderUsersContent;
+window.regenerarCodigoInvitacionAction = regenerarCodigoInvitacionAction;
+window.showCreateUserModal = showCreateUserModal;
+window.closeCreateUserModal = closeCreateUserModal;
+window.showEditUserModal = showEditUserModal;
+window.closeEditUserModal = closeEditUserModal;
+window.showChangePasswordModal = showChangePasswordModal;
+window.closeChangePasswordModal = closeChangePasswordModal;
+window.handleToggleAdmin = handleToggleAdmin;
+window.handleDeleteUser = handleDeleteUser;
+window.exportSalvaRecetasProductos = exportSalvaRecetasProductos;
+window.importSalvaRecetasProductos = importSalvaRecetasProductos;
+window.clearLastUserAction = clearLastUserAction;
+window.cleanDeletedData = cleanDeletedData;
+window.resetDatabaseWithPassword = resetDatabaseWithPassword;
+window.showDeleteSelectorModal = showDeleteSelectorModal;
+window.closeDeleteSelectorModal = closeDeleteSelectorModal;
+window.switchDeleteTab = switchDeleteTab;
+window.clearDeleteFilters = clearDeleteFilters;
+window.renderDeleteList = renderDeleteList;
+window.toggleDeleteSelection = toggleDeleteSelection;
+window.updateDeleteSelectionCount = updateDeleteSelectionCount;
+window.selectAllDeleteItems = selectAllDeleteItems;
+window.deselectAllDeleteItems = deselectAllDeleteItems;
+window.executeDeleteSelected = executeDeleteSelected;
+window.getAppVersion = getAppVersion;
+window.MOTIVOS_REPROGRAMACION = MOTIVOS_REPROGRAMACION;
+window.getTodosLosProductosParaDropdown = getTodosLosProductosParaDropdown;
+window.getProduccionConfig = getProduccionConfig;
+window.contarPedidosYVentasFecha = contarPedidosYVentasFecha;
+window.formatearCantidadProduccion = formatearCantidadProduccion;
+window.esMismaFechaISO = esMismaFechaISO;
+window.esBloqueDelDiaAnterior = esBloqueDelDiaAnterior;
+window.getBloqueSeleccionadoActual = getBloqueSeleccionadoActual;
+window.sumarDiasISO = sumarDiasISO;
+window.getDiaSemanaCorto = getDiaSemanaCorto;
+window.getFechaCortaConDia = getFechaCortaConDia;
+window.esHoyISO = esHoyISO;
+window._esBloqueDelAmanecer = _esBloqueDelAmanecer;
+window._formatearMensajeBloque = _formatearMensajeBloque;
+window.getProductoDeProduccionUI = getProductoDeProduccionUI;
+window.getProduccionConProductoUI = getProduccionConProductoUI;
 
-console.log('📦 UI Settings Module cargado correctamente v2.2.5 (CORRECCIÓN #10: algoritmo de bloques - regla del amanecer)');
-console.log('   🆕 Novedades v2.2.5:');
-console.log('      • _esBloqueDelAmanecer() determina si un bloque termina antes de las 9 AM del día de venta');
-console.log('      • _formatearMensajeBloque() usa SIEMPRE formato "DD/MM de HH:MM a HH:MM"');
-console.log('      • El bloque del día anterior se considera válido si termina antes de las 9 AM del día de venta');
-console.log('      • Priorización: bloque de ayer > bloques de hoy que terminan cerca de las 8 AM');
-console.log('      • Un bloque que comienza a las 8 AM y termina a las 11 AM YA NO es del amanecer');
-console.log('      • El mensaje NO usa la palabra "ayer", usa la fecha real: "23/09 de 5:00 PM a 8:00 PM"');
-console.log('      • Logs detallados en consola para verificar el cálculo');
-console.log('      • Diagnóstico ampliado a 10 tests (incluye test funcional del algoritmo)');
+console.log('📦 UI Settings Module cargado correctamente v2.2.9');
+console.log('   🆕 Novedades v2.2.9:');
+console.log('      • ✅ CORRECCIÓN #8 (2/2): Modal de progreso en export/import');
+console.log('      • ✅ CORRECCIÓN #10: Algoritmo inteligente de bloques');
+console.log('      • ✅ CORRECCIÓN #11: Guardar y cargar producto_id en producción');
+console.log('      • ✅ CORRECCIÓN #14: Modal de eliminación por error mejorado');
+console.log('      • ✅ CORRECCIÓN #6: Botón para restaurar estilos residuales');

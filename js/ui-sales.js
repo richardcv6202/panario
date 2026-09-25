@@ -20,24 +20,14 @@
 // 🆕 FASE 5 (#20) (200926 v7): UI DE DÍAS SIN VENTAS
 // 🆕 ENTREGA 2 (230926 v8): ANULAR VENTA + VENDEDOR
 // 🆕 v2.1.12 (210926 v9): CORRECCIÓN #2 - BLOQUEO POR RECETAS NO COMPARTIDAS
-//   - ✅ NUEVO helper local: checkSalePermission(saleOrId)
-//   - ✅ NUEVO helper local: renderBadgeSoloLecturaVenta()
-//   - ✅ loadSalesAndExpenses(): muestra badge "🔒 Solo lectura" en ventas
-//     bloqueadas y NO las oculta (para que el usuario sepa que existen)
-//   - ✅ renderSalesGroupedByDay(): oculta botones ✏️ y 🚫 en ventas bloqueadas
-//     y muestra borde gris + opacidad reducida
-//   - ✅ Vista de DEUDAS: filtra deudas bloqueadas (no las muestra para
-//     que el usuario no-admin no intente cobrarlas). Muestra aviso con
-//     contador de deudas ocultas.
-//   - ✅ viewSale(): muestra aviso rojo "🔒 Solo lectura" y oculta los
-//     botones ✏️ Editar y 🚫 Anular. Solo deja 🔄 Restaurar si estaba
-//     anulada y Cerrar.
-//   - ✅ showSaleForm(): bloquea si la venta está bloqueada (aviso)
-//   - ✅ voidSale(): verifica permisos ANTES del confirm
-//   - ✅ unvoidSale(): verifica permisos ANTES del confirm
-//   - ✅ registerSalePayment(): verifica permisos ANTES del confirm
-//   - ✅ Los GASTOS NO se ven afectados (no tienen receta)
-//   - ✅ Los usuarios ADMIN ven todo normalmente sin cambios
+// 🆕 v2.1.13 (250926 v10): CORRECCIÓN #15 - FILTRO POR VENDEDOR
+//   - ✅ NUEVO: Selector "👤 Vendedor" en el header de filtros de Ventas
+//   - ✅ NUEVO: Solo aparece si hay más de 1 usuario en el negocio
+//   - ✅ NUEVO: Filtra las ventas por user_id (= created_by)
+//   - ✅ NUEVO: Selector de vendedor también en el modal de Reporte
+//   - ✅ NUEVO: El filtro se propaga a reports.js (filters.created_by)
+//   - ✅ NUEVO: clearFilters() limpia el selector de vendedor
+//   - ✅ NUEVA función: poblarSelectorVendedores()
 // ============================================================
 
 // ============================================================
@@ -73,16 +63,6 @@ function normalizarFechaVenta(fechaInput) {
 // 🆕 v2.1.12: HELPERS DE BLOQUEO POR RECETAS NO COMPARTIDAS
 // ============================================================
 
-/**
- * Verifica si el usuario actual puede procesar (editar, anular,
- * restaurar, cobrar) una venta.
- * 
- * Delega a SalesModule._puedeUsuarioActualProcesarVenta() si existe,
- * o a OrdersModule.puedeUsuarioActualProcesarVenta() como fallback.
- * 
- * @param {number|Object} saleOrId
- * @returns {Object} { puede, razon, recetaBloqueada }
- */
 function checkSalePermission(saleOrId) {
     try {
         if (typeof window.SalesModule?._puedeUsuarioActualProcesarVenta === 'function') {
@@ -91,7 +71,6 @@ function checkSalePermission(saleOrId) {
         if (typeof window.OrdersModule?.puedeUsuarioActualProcesarVenta === 'function') {
             return window.OrdersModule.puedeUsuarioActualProcesarVenta(saleOrId);
         }
-        // Fallback: permitir
         return { puede: true, razon: '', recetaBloqueada: null };
     } catch (e) {
         console.warn('⚠️ Error verificando permisos de venta:', e);
@@ -99,9 +78,6 @@ function checkSalePermission(saleOrId) {
     }
 }
 
-/**
- * Renderiza el badge visual "🔒 Solo lectura" para ventas bloqueadas.
- */
 function renderBadgeSoloLecturaVenta() {
     return `<span style="font-size: 10px; background: #94a3b820; color: #94a3b8; padding: 2px 8px; border-radius: 10px; font-weight: 600; border: 1px solid #94a3b8;">🔒 Solo lectura</span>`;
 }
@@ -301,6 +277,16 @@ function renderSalesView() {
     
     const showLiberated = getShowLiberatedSales();
     
+    // 🆕 CORRECCIÓN #15: Determinar si hay más de un vendedor en el negocio
+    let hayMultiplesVendedores = false;
+    try {
+        const usuarios = window.AuthModule?.getUsuariosDelNegocio?.() || [];
+        hayMultiplesVendedores = usuarios.length > 1;
+        console.log(`👤 [Filtro Vendedor] Usuarios en negocio: ${usuarios.length}. Mostrar filtro: ${hayMultiplesVendedores}`);
+    } catch (e) {
+        console.warn('⚠️ Error detectando vendedores:', e);
+    }
+    
     main.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
             <h2 style="margin: 0;">💰 Ventas y Finanzas</h2>
@@ -437,6 +423,15 @@ function renderSalesView() {
                     <option value="other">🔄 Otra</option>
                 </select>
                 
+                <!-- 🆕 CORRECCIÓN #15: Selector de vendedor (solo si hay más de 1 usuario) -->
+                <div id="filter-vendedor-container" style="display: none; align-items: center; gap: 4px;">
+                    <label style="font-weight: 600; font-size: 12px; color: var(--text-label);">👤 Vendedor:</label>
+                    <select id="filter-sales-vendedor" onchange="loadSalesAndExpenses()" 
+                            style="padding: 6px 10px; border: 2px solid var(--border-color); border-radius: 8px; background: var(--bg-card); color: var(--text); font-size: 13px; min-width: 120px;">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                
                 <div style="display: flex; gap: 4px; align-items: center; flex: 1; min-width: 120px;">
                     <label style="font-weight: 600; font-size: 12px; color: var(--text-label);">🔍</label>
                     <input type="text" id="filter-sales-search" placeholder="Buscar producto o cliente..." 
@@ -472,6 +467,12 @@ function renderSalesView() {
     `;
     
     window._currentFilterType = 'sales';
+    
+    // 🆕 CORRECCIÓN #15: Poblar el selector de vendedores si hay más de uno
+    if (hayMultiplesVendedores) {
+        setTimeout(() => poblarSelectorVendedores(), 50);
+    }
+    
     loadSalesAndExpenses();
     updateSummary();
     
@@ -485,6 +486,52 @@ function renderSalesView() {
         }
     }, 100);
 }
+
+// ============================================================
+// 🆕 CORRECCIÓN #15: POBLAR EL SELECTOR DE VENDEDORES
+// ============================================================
+
+function poblarSelectorVendedores() {
+    try {
+        const container = document.getElementById('filter-vendedor-container');
+        const select = document.getElementById('filter-sales-vendedor');
+        if (!container || !select) return;
+        
+        const usuarios = window.AuthModule?.getUsuariosDelNegocio?.() || [];
+        
+        if (usuarios.length <= 1) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        const currentValue = select.value;
+        let optionsHtml = '<option value="">Todos</option>';
+        
+        const usuariosOrdenados = [...usuarios].sort((a, b) => {
+            if (a.is_admin !== b.is_admin) return (b.is_admin || 0) - (a.is_admin || 0);
+            return (a.name || a.username).localeCompare(b.name || b.username);
+        });
+        
+        usuariosOrdenados.forEach(u => {
+            const label = u.is_admin === 1 
+                ? `👑 ${u.name || u.username}` 
+                : `👤 ${u.name || u.username}`;
+            optionsHtml += `<option value="${u.id}">${label}</option>`;
+        });
+        
+        select.innerHTML = optionsHtml;
+        
+        if (currentValue) select.value = currentValue;
+        
+        container.style.display = 'flex';
+        
+        console.log(`✅ [Filtro Vendedor] Selector poblado con ${usuarios.length} usuarios`);
+    } catch (e) {
+        console.warn('⚠️ Error poblando selector de vendedores:', e);
+    }
+}
+
+window.poblarSelectorVendedores = poblarSelectorVendedores;
 
 window._currentFilterType = 'sales';
 
@@ -594,6 +641,14 @@ function setFilterType(type) {
         toggleLiberadas.style.display = (type === 'sales' || type === 'all') ? 'flex' : 'none';
     }
     
+    // 🆕 CORRECCIÓN #15: Ocultar filtro de vendedor en vistas que no son de ventas
+    const vendedorContainer = document.getElementById('filter-vendedor-container');
+    if (vendedorContainer) {
+        const usuarios = window.AuthModule?.getUsuariosDelNegocio?.() || [];
+        const mostrarVendedor = usuarios.length > 1 && (type === 'sales' || type === 'all' || type === 'debts');
+        vendedorContainer.style.display = mostrarVendedor ? 'flex' : 'none';
+    }
+    
     loadSalesAndExpenses();
 }
 
@@ -603,6 +658,10 @@ function clearFilters() {
     document.getElementById('filter-payment').value = '';
     document.getElementById('filter-expense-category').value = '';
     document.getElementById('filter-sales-search').value = '';
+    
+    // 🆕 CORRECCIÓN #15: Limpiar también el filtro de vendedor
+    const vendedorSelect = document.getElementById('filter-sales-vendedor');
+    if (vendedorSelect) vendedorSelect.value = '';
     
     const checkbox = document.getElementById('filter-current-month-sales');
     if (checkbox) {
@@ -718,7 +777,7 @@ if (typeof window.getSeccionCorrienteHTML !== 'function') {
 }
 
 // ============================================================
-// 🆕 v2.1.12: LOAD SALES AND EXPENSES - CON VERIFICACIÓN DE PERMISOS
+// 🆕 v2.1.12 + v2.1.13: LOAD SALES AND EXPENSES
 // ============================================================
 
 async function loadSalesAndExpenses() {
@@ -730,6 +789,9 @@ async function loadSalesAndExpenses() {
     const payment = document.getElementById('filter-payment')?.value || '';
     const search = document.getElementById('filter-sales-search')?.value?.trim() || '';
     const filterType = window._currentFilterType || 'sales';
+    
+    // 🆕 CORRECCIÓN #15: Leer el filtro de vendedor
+    const vendedorId = document.getElementById('filter-sales-vendedor')?.value || '';
     
     const showLiberated = getShowLiberatedSales();
     
@@ -745,7 +807,6 @@ async function loadSalesAndExpenses() {
     try {
         // ============================================================
         // VISTA DE DEUDAS
-        // 🆕 v2.1.12: Filtra deudas bloqueadas para no-admin
         // ============================================================
         if (filterType === 'debts') {
             let debtQuery = `
@@ -755,9 +816,16 @@ async function loadSalesAndExpenses() {
                 AND paid = 0 
                 AND deleted_at IS NULL 
                 AND voided = 0
-                ORDER BY sale_date ASC, id ASC
             `;
             let debtParams = [negocioId];
+            
+            // 🆕 CORRECCIÓN #15: Filtrar deudas por vendedor
+            if (vendedorId) {
+                debtQuery += ' AND user_id = ?';
+                debtParams.push(parseInt(vendedorId));
+            }
+            
+            debtQuery += ' ORDER BY sale_date ASC, id ASC';
             
             const debtSales = window.DBModule.query(debtQuery, debtParams);
             
@@ -771,7 +839,6 @@ async function loadSalesAndExpenses() {
                 return;
             }
             
-            // 🆕 v2.1.12: Separar deudas accesibles de las bloqueadas
             const deudasAccesibles = [];
             const deudasBloqueadas = [];
             
@@ -788,7 +855,6 @@ async function loadSalesAndExpenses() {
             
             let html = '';
             
-            // Aviso de deudas bloqueadas
             if (deudasBloqueadas.length > 0) {
                 const totalBloqueado = deudasBloqueadas.reduce((sum, s) => sum + s.total, 0);
                 html += `
@@ -879,6 +945,13 @@ async function loadSalesAndExpenses() {
                 params.push(searchTerm, searchTerm);
             }
             
+            // 🆕 CORRECCIÓN #15: Filtrar por vendedor (user_id = created_by)
+            if (vendedorId) {
+                query += ' AND user_id = ?';
+                params.push(parseInt(vendedorId));
+                console.log(`👤 [Filtro Vendedor] Filtrando ventas por user_id=${vendedorId}`);
+            }
+            
             if (!showLiberated) {
                 query += ' AND is_liberated = 0';
             }
@@ -959,6 +1032,9 @@ async function loadSalesAndExpenses() {
                 if (fromDate) { checkQuery += ' AND DATE(sale_date, "localtime") >= DATE(?)'; checkParams.push(fromDate); }
                 if (toDate) { checkQuery += ' AND DATE(sale_date, "localtime") <= DATE(?)'; checkParams.push(toDate); }
                 
+                // 🆕 CORRECCIÓN #15: Aplicar filtro de vendedor también al contador
+                if (vendedorId) { checkQuery += ' AND user_id = ?'; checkParams.push(parseInt(vendedorId)); }
+                
                 try {
                     const checkResult = window.DBModule.query(checkQuery, checkParams);
                     const hiddenCount = checkResult[0]?.count || 0;
@@ -1032,7 +1108,6 @@ async function loadSalesAndExpenses() {
                 const isVoid = item.voided === 1;
                 
                 if (item._type === 'sale') {
-                    // 🆕 v2.1.12: Verificar permisos
                     const permisos = checkSalePermission(item.id);
                     const bloqueado = !permisos.puede;
                     
@@ -1119,6 +1194,7 @@ async function loadSalesAndExpenses() {
             let checkParams = [negocioId];
             if (fromDate) { checkQuery += ' AND DATE(sale_date, "localtime") >= DATE(?)'; checkParams.push(fromDate); }
             if (toDate) { checkQuery += ' AND DATE(sale_date, "localtime") <= DATE(?)'; checkParams.push(toDate); }
+            if (vendedorId) { checkQuery += ' AND user_id = ?'; checkParams.push(parseInt(vendedorId)); }
             
             try {
                 const checkResult = window.DBModule.query(checkQuery, checkParams);
@@ -1127,12 +1203,10 @@ async function loadSalesAndExpenses() {
                 if (hiddenCount > 0) {
                     const aviso = document.createElement('div');
                     aviso.style.cssText = 'margin-top: 12px; padding: 10px 14px; background: #8b5cf615; border-left: 4px solid #8b5cf6; border-radius: 8px; font-size: 13px; color: #8b5cf6; text-align: center;';
-                    aviso.innerHTML = `🚀 <strong>${hiddenCount} venta${hiddenCount > 1 ? 's' : ''} liberada${hiddenCount > 1 ? 's' : ''} oculta${hiddenCount > 1 ? 's' : ''}</strong> — Activa el interruptor para verlas`;
+                    aviso.innerHTML = `🚀 <strong>${hiddenCount} venta${hiddenCount > 1 ? 's' : ''} liberada${hiddenCount > 1 ? 's' : ''} oculta${hiddenCount > 1 ? 's' : ''}</strong>`;
                     container.appendChild(aviso);
                 }
-            } catch (e) {
-                console.warn('⚠️ Error comprobando ventas liberadas ocultas:', e);
-            }
+            } catch (e) {}
         }
         
     } catch (error) {
@@ -1147,7 +1221,7 @@ async function loadSalesAndExpenses() {
 }
 
 // ============================================================
-// 🆕 v2.1.12: RENDER SALES GROUPED BY DAY CON BLOQUEO
+// RENDER SALES GROUPED BY DAY
 // ============================================================
 
 function renderSalesGroupedByDay(container, sales) {
@@ -1196,7 +1270,6 @@ function renderSalesGroupedByDay(container, sales) {
         const fechaLarga = formatearFechaLarga(date);
         const badgeCorriente = getBadgeCorriente(date);
         
-        // 🆕 v2.1.12: Contar ventas bloqueadas del día
         const bloqueadosDelDia = daySales.filter(s => !checkSalePermission(s.id).puede).length;
         const badgeBloqueados = bloqueadosDelDia > 0 
             ? `<span style="font-size: 11px; background: #94a3b820; color: #94a3b8; padding: 2px 8px; border-radius: 10px; font-weight: 600; border: 1px solid #94a3b8;">🔒 ${bloqueadosDelDia} bloqueada${bloqueadosDelDia > 1 ? 's' : ''}</span>`
@@ -1248,7 +1321,6 @@ function renderSalesGroupedByDay(container, sales) {
                     const isVoid = sale.voided === 1;
                     const isDebt = sale.is_debt === 1 && sale.paid === 0;
                     
-                    // 🆕 v2.1.12: Verificar permisos
                     const permisos = checkSalePermission(sale.id);
                     const bloqueado = !permisos.puede;
                     
@@ -1325,7 +1397,6 @@ function renderSalesGroupedByDay(container, sales) {
                             const isVoid = sale.voided === 1;
                             const sesionBadge = sale.session ? getBadgeSesion(sale.session) : '';
                             
-                            // 🆕 v2.1.12: Verificar permisos
                             const permisos = checkSalePermission(sale.id);
                             const bloqueado = !permisos.puede;
                             
@@ -2143,7 +2214,6 @@ function closeLiberatedSaleModal() {
 
 // ============================================================
 // FORMULARIO: NUEVA VENTA
-// 🆕 v2.1.12: Bloquea si la venta está en modo solo-lectura
 // ============================================================
 
 async function showSaleForm(saleId = null) {
@@ -2152,7 +2222,6 @@ async function showSaleForm(saleId = null) {
     
     const isEdit = !!saleId;
     
-    // 🆕 v2.1.12: Verificar permisos ANTES de cargar
     if (isEdit) {
         const permisos = checkSalePermission(saleId);
         if (!permisos.puede) {
@@ -2508,7 +2577,6 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
 
 // ============================================================
 // VER VENTA
-// 🆕 v2.1.12: Modo solo-lectura si el usuario no puede procesar
 // ============================================================
 
 async function viewSale(id) {
@@ -2516,7 +2584,6 @@ async function viewSale(id) {
         const sale = await window.SalesModule.getSale(id);
         if (!sale) { window.showToast('❌ Venta no encontrada', 'error'); return; }
         
-        // 🆕 v2.1.12: Verificar permisos
         const permisos = checkSalePermission(sale);
         const bloqueado = !permisos.puede;
         
@@ -2554,7 +2621,6 @@ async function viewSale(id) {
             `;
         }
         
-        // 🆕 v2.1.12: Aviso de bloqueo
         let avisoBloqueo = '';
         if (bloqueado) {
             const recetaInfo = permisos.recetaBloqueada
@@ -2659,14 +2725,13 @@ async function viewSale(id) {
 }
 
 // ============================================================
-// 🆕 v2.1.12: ANULAR VENTA CON VERIFICACIÓN DE PERMISOS
+// ANULAR VENTA
 // ============================================================
 
 async function voidSale(id) {
     console.log('🚫 [voidSale] ========== INICIO ==========');
     console.log('🚫 [voidSale] Anulando venta #' + id);
     
-    // 🆕 v2.1.12: Verificar permisos ANTES de todo
     const permisos = checkSalePermission(id);
     if (!permisos.puede) {
         console.warn('🔒 [voidSale] Bloqueado:', permisos.razon);
@@ -2674,7 +2739,6 @@ async function voidSale(id) {
         return;
     }
     
-    // PASO 0: Verificar que no haya modales huérfanos
     const modalHuerfano = document.getElementById('custom-modal');
     if (modalHuerfano) {
         console.warn('🚫 [voidSale] Modal huérfano detectado, eliminando...');
@@ -2683,9 +2747,6 @@ async function voidSale(id) {
         window._modalResolved = false;
         await new Promise(r => setTimeout(r, 200));
     }
-    
-    // PASO 1: Confirmación
-    console.log('🚫 [voidSale] Paso 1: Mostrando confirmación...');
     
     let confirm = false;
     try {
@@ -2703,29 +2764,18 @@ async function voidSale(id) {
         return;
     }
     
-    console.log('🚫 [voidSale] Confirmación recibida:', confirm);
-    
     if (!confirm) {
-        console.log('🚫 [voidSale] Usuario canceló en el paso 1');
         window.showToast('❌ Anulación cancelada', 'info', 2000);
         return;
     }
-    
-    // PASO 2: Esperar a que el confirm-modal se elimine del DOM
-    console.log('🚫 [voidSale] Paso 2: Esperando a que el confirm-modal se cierre...');
     
     await waitForCustomModalRemoval(800);
     
     for (let i = 0; i < 3; i++) {
         const stillThere = document.getElementById('custom-modal');
-        if (!stillThere) {
-            console.log(`🚫 [voidSale] Confirm-modal cerrado (verificación ${i + 1}/3)`);
-            break;
-        }
-        console.warn(`🚫 [voidSale] Confirm-modal aún presente (verificación ${i + 1}/3), esperando 200ms más...`);
+        if (!stillThere) break;
         await new Promise(r => setTimeout(r, 200));
         if (i === 2 && stillThere) {
-            console.warn('🚫 [voidSale] Forzando eliminación del confirm-modal');
             stillThere.remove();
             window._modalResolve = null;
             window._modalResolved = false;
@@ -2733,9 +2783,6 @@ async function voidSale(id) {
     }
     
     await new Promise(r => setTimeout(r, 150));
-    
-    // PASO 3: Prompt de motivo
-    console.log('🚫 [voidSale] Paso 3: Mostrando prompt de motivo...');
     
     let reason = null;
     try {
@@ -2746,39 +2793,24 @@ async function voidSale(id) {
             icon: '📝'
         });
     } catch (err) {
-        console.error('🚫 [voidSale] Error en showPrompt:', err);
         reason = null;
     }
     
-    console.log('🚫 [voidSale] Motivo recibido:', reason);
-    
     const motivoFinal = (reason && String(reason).trim()) ? String(reason).trim() : 'Anulación manual';
-    
-    // PASO 4: Ejecutar la anulación
-    console.log('🚫 [voidSale] Paso 4: Ejecutando anulación con motivo:', motivoFinal);
     
     try {
         const result = await window.SalesModule.voidSale(id, motivoFinal);
         
-        console.log('🚫 [voidSale] Resultado:', result);
-        
         if (result && result.success) {
             window.showToast('✅ Venta anulada correctamente', 'success', 3000);
-            console.log('✅ [voidSale] Venta anulada correctamente');
-            
-            try {
-                loadSalesAndExpenses();
-                updateSummary();
-                if (typeof window.loadDashboardData === 'function') {
-                    setTimeout(window.loadDashboardData, 500);
-                }
-            } catch (e) {
-                console.warn('🚫 [voidSale] Error refrescando vistas:', e);
+            loadSalesAndExpenses();
+            updateSummary();
+            if (typeof window.loadDashboardData === 'function') {
+                setTimeout(window.loadDashboardData, 500);
             }
         } else {
             const errorMsg = (result && result.error) ? result.error : 'Desconocido';
             window.showToast('❌ Error: ' + errorMsg, 'error', 6000);
-            console.error('❌ [voidSale] Error:', errorMsg);
         }
     } catch (error) {
         console.error('❌ [voidSale] Excepción:', error);
@@ -2790,13 +2822,11 @@ async function voidSale(id) {
 
 // ============================================================
 // RESTAURAR VENTA
-// 🆕 v2.1.12: Verifica permisos antes del confirm
 // ============================================================
 
 async function unvoidSale(id) {
     console.log('🔄 [unvoidSale] Iniciando restauración de venta #' + id);
     
-    // 🆕 v2.1.12: Verificar permisos ANTES de todo
     const permisos = checkSalePermission(id);
     if (!permisos.puede) {
         console.warn('🔒 [unvoidSale] Bloqueado:', permisos.razon);
@@ -2823,7 +2853,6 @@ async function unvoidSale(id) {
             confirmColor: '#10b981'
         });
     } catch (err) {
-        console.error('🔄 [unvoidSale] Error en showConfirm:', err);
         return;
     }
     
@@ -2854,7 +2883,6 @@ async function unvoidSale(id) {
 
 // ============================================================
 // COBRAR DEUDA
-// 🆕 v2.1.12: Verifica permisos antes del confirm
 // ============================================================
 
 async function registerSalePayment(saleId) {
@@ -2863,7 +2891,6 @@ async function registerSalePayment(saleId) {
         if (!sale) { window.showToast('❌ Venta no encontrada', 'error'); return; }
         if (sale.paid === 1) { window.showToast('✅ Ya está pagada', 'info'); return; }
         
-        // 🆕 v2.1.12: Verificar permisos
         const permisos = checkSalePermission(sale);
         if (!permisos.puede) {
             console.warn('🔒 [registerSalePayment] Bloqueado:', permisos.razon);
@@ -3158,7 +3185,6 @@ async function voidExpense(id) {
             icon: '🚫', confirmColor: '#ef4444'
         });
     } catch (err) {
-        console.error('🚫 [voidExpense] Error en showConfirm:', err);
         return;
     }
     
@@ -3402,6 +3428,14 @@ function showSalesReportModal() {
                         </select>
                     </div>
                     
+                    <!-- 🆕 CORRECCIÓN #15: Selector de vendedor (solo si hay más de 1 usuario) -->
+                    <div class="form-group" style="margin-bottom: 8px; display: none;" id="report-sales-vendedor-container">
+                        <label style="font-size: 12px;">👤 Vendedor</label>
+                        <select id="report-sales-vendedor" class="input-select">
+                            <option value="">Todos los vendedores</option>
+                        </select>
+                    </div>
+                    
                     <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
                         <label style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); cursor: pointer;">
                             <input type="checkbox" id="report-sales-liberated" style="width: 16px; height: 16px; cursor: pointer; accent-color: #8b5cf6;">
@@ -3428,6 +3462,33 @@ function showSalesReportModal() {
     
     document.body.appendChild(modal);
     
+    // 🆕 CORRECCIÓN #15: Poblar el selector de vendedores en el reporte
+    try {
+        const usuarios = window.AuthModule?.getUsuariosDelNegocio?.() || [];
+        const container = document.getElementById('report-sales-vendedor-container');
+        const select = document.getElementById('report-sales-vendedor');
+        
+        if (usuarios.length > 1 && container && select) {
+            const usuariosOrdenados = [...usuarios].sort((a, b) => {
+                if (a.is_admin !== b.is_admin) return (b.is_admin || 0) - (a.is_admin || 0);
+                return (a.name || a.username).localeCompare(b.name || b.username);
+            });
+            
+            let optionsHtml = '<option value="">Todos los vendedores</option>';
+            usuariosOrdenados.forEach(u => {
+                const label = u.is_admin === 1 
+                    ? `👑 ${u.name || u.username}` 
+                    : `👤 ${u.name || u.username}`;
+                optionsHtml += `<option value="${u.id}">${label}</option>`;
+            });
+            
+            select.innerHTML = optionsHtml;
+            container.style.display = 'block';
+        }
+    } catch (e) {
+        console.warn('⚠️ Error poblando vendedores en reporte:', e);
+    }
+    
     const form = document.getElementById('sales-report-form');
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -3448,6 +3509,13 @@ function generateSalesReportFromForm() {
         payment_method: document.getElementById('report-sales-payment')?.value || '',
         session: document.getElementById('report-sales-session')?.value || ''
     };
+    
+    // 🆕 CORRECCIÓN #15: Añadir filtro de vendedor si existe
+    const vendedorId = document.getElementById('report-sales-vendedor')?.value || '';
+    if (vendedorId) {
+        filters.created_by = parseInt(vendedorId);
+        console.log(`👤 [Reporte Ventas] Filtrando por vendedor: ${vendedorId}`);
+    }
     
     if (document.getElementById('report-sales-liberated')?.checked) {
         filters.is_liberated = true;
@@ -3563,15 +3631,19 @@ window.reporteDiasSinVentas = reporteDiasSinVentas;
 window.getMotivoDiaSinVenta = getMotivoDiaSinVenta;
 window.MOTIVOS_DIAS_SIN_VENTAS = MOTIVOS_DIAS_SIN_VENTAS;
 
-// 🆕 v2.1.12: Helpers de bloqueo
 window.checkSalePermission = checkSalePermission;
 window.renderBadgeSoloLecturaVenta = renderBadgeSoloLecturaVenta;
 
-console.log('📦 UI Sales Module v2.1.12 (ENTREGA B: corrección #2 - bloqueo por recetas no compartidas)');
-console.log('   ✅ checkSalePermission() y renderBadgeSoloLecturaVenta() añadidos');
-console.log('   ✅ loadSalesAndExpenses(): badge 🔒 y filtro de deudas bloqueadas');
-console.log('   ✅ renderSalesGroupedByDay(): oculta botones en ventas bloqueadas');
-console.log('   ✅ viewSale(): modo solo-lectura con aviso explicativo');
-console.log('   ✅ showSaleForm(): bloquea si la venta está bloqueada');
-console.log('   ✅ voidSale()/unvoidSale()/registerSalePayment(): verifican permisos');
-console.log('   ✅ Gastos NO se bloquean (no tienen receta)');
+// 🆕 CORRECCIÓN #15
+window.poblarSelectorVendedores = poblarSelectorVendedores;
+
+console.log('📦 UI Sales Module v2.1.13 (CORRECCIÓN #15: filtro por vendedor)');
+console.log('   🆕 Novedades v2.1.13:');
+console.log('      • ✅ NUEVO: Selector "👤 Vendedor" en Ventas');
+console.log('      • ✅ Solo aparece si hay más de 1 usuario en el negocio');
+console.log('      • ✅ Filtra las ventas por user_id (= created_by)');
+console.log('      • ✅ Selector también en el modal de Reporte');
+console.log('      • ✅ El filtro se propaga a reports.js (filters.created_by)');
+console.log('      • ✅ clearFilters() limpia el selector');
+console.log('      • ✅ NUEVA función: poblarSelectorVendedores()');
+console.log('   ✅ Compatibilidad total con versiones anteriores');

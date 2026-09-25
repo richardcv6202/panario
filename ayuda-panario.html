@@ -1043,13 +1043,6 @@
 <body>
 
 <!-- ============================================================
-     BOTÓN FLOTANTE DE CERRAR (solo modo NO-embedded)
-     ============================================================ -->
-<button class="help-close-fab" id="help-close-fab" onclick="cerrarAyuda()" title="Cerrar ayuda (Esc)">
-    ✕
-</button>
-
-<!-- ============================================================
      HEADER
      ============================================================ -->
 <header class="help-header">
@@ -2700,51 +2693,90 @@ const urlParams = parseUrlParams();
 //   - Tecla Escape
 // ============================================================
 
+// ============================================================
+// 🆕 CORRECCIÓN #5 + #12 + #16: CERRAR AYUDA (REESCRITO)
+// ============================================================
+// 
+// PROBLEMA ANTERIOR:
+//   Cuando el iframe (dentro del modal de ayuda) ejecutaba
+//   window.close(), cerraba TODA la pestaña del navegador,
+//   incluyendo la app principal. Esto sucedía porque el iframe
+//   comparte el contexto de la pestaña padre.
+//
+// SOLUCIÓN:
+//   - Si estamos en un iframe → SOLO enviar postMessage al padre.
+//     NO llamar a window.close() NUNCA. El padre (help.js) se
+//     encarga de cerrar el modal correctamente.
+//   - Si NO estamos en iframe (pestaña independiente) → el usuario
+//     abrió la ayuda en pestaña nueva. Intentar window.close() y,
+//     si falla, navegar a index.html.
+//
+// Esta función se llama desde:
+//   - Botón "← Volver a Panario" (header)
+//   - Tecla Escape (listener global)
+//   - Botón flotante ✕ (que ELIMINAMOS en #16)
+// ============================================================
+
 function cerrarAyuda() {
     try {
-        // Detectar si estamos dentro de un iframe
         const enIframe = (window.self !== window.top);
         
         console.log('📖 cerrarAyuda() llamado. En iframe:', enIframe);
         
         if (enIframe) {
-            // Estamos embebidos: avisar al padre para que cierre el modal
+            // ============================================================
+            // CASO 1: Estamos DENTRO de un iframe (modal de ayuda)
+            // ============================================================
+            // NO llamar a window.close() jamás. Solo enviar postMessage
+            // al padre para que él cierre el modal correctamente.
+            // ============================================================
+            
             try {
-                // Mensaje estándar que el modal de ayuda (help.js) puede escuchar
-                window.parent.postMessage({ type: 'CLOSE_HELP' }, '*');
-                console.log('📖 Mensaje CLOSE_HELP enviado al padre');
+                window.parent.postMessage(
+                    { type: 'CLOSE_HELP', source: 'ayuda-panario-iframe' },
+                    '*'
+                );
+                console.log('📖 [CORRECCIÓN #5] Mensaje CLOSE_HELP enviado al padre (sin window.close)');
             } catch (e) {
                 console.warn('⚠️ No se pudo enviar mensaje al padre:', e);
-            }
-            
-            // Fallback: intentar cerrar la ventana por si el padre no responde
-            setTimeout(() => {
+                // Como último recurso, si no podemos comunicarnos con el padre,
+                // intentamos navegar a index.html dentro del propio iframe.
+                // Esto hará que el iframe cargue la app dentro de sí mismo,
+                // pero al menos no cierra la pestaña completa.
                 try {
-                    window.close();
-                } catch (e) {
-                    // Si tampoco funciona, no hacer nada (el padre debería cerrar)
-                }
-            }, 300);
+                    window.location.href = './index.html';
+                } catch (e2) {}
+            }
             
             return;
         }
         
-        // NO estamos en iframe: intentar cerrar la pestaña
+        // ============================================================
+        // CASO 2: NO estamos en iframe (pestaña independiente)
+        // ============================================================
+        // El usuario abrió la ayuda en una pestaña nueva (típicamente
+        // en móvil). Intentar window.close() y, si falla, navegar
+        // a index.html.
+        // ============================================================
+        
+        console.log('📖 [CORRECCIÓN #5] Ayuda en pestaña independiente. Intentando cerrar...');
+        
         try {
             window.close();
         } catch (e) {
-            console.warn('⚠️ No se pudo cerrar la ventana:', e);
+            console.warn('⚠️ window.close() falló:', e);
         }
         
-        // Fallback: navegar al index.html después de un pequeño delay
-        // (si window.close() no funcionó, seguimos aquí)
+        // Fallback: navegar a index.html si window.close() no funcionó
+        // (después de un pequeño delay para dar tiempo al cierre)
         setTimeout(() => {
-            window.location.href = './index.html';
+            try {
+                window.location.href = './index.html';
+            } catch (e2) {}
         }, 200);
         
     } catch (e) {
         console.error('❌ Error en cerrarAyuda():', e);
-        // Último recurso: intentar ir al index
         try {
             window.location.href = './index.html';
         } catch (e2) {}
@@ -2951,6 +2983,17 @@ function initEmbeddedMode() {
 // padre no envía mensajes.
 // ============================================================
 
+// ============================================================
+// 🆕 CORRECCIÓN #5 + #12: LISTENER DE MENSAJES DEL PADRE
+// ============================================================
+// 
+// El padre (help.js) puede enviar mensajes:
+//   - NAVIGATE: navegar a una sección específica.
+//   - CLOSE_HELP: cerrar la ayuda (el padre ya lo hará, aquí solo
+//                 confirmamos).
+//   - PING: verificar que el iframe está vivo (responde con PONG).
+// ============================================================
+
 function initParentMessageListener() {
     window.addEventListener('message', function(event) {
         if (!event.data || typeof event.data !== 'object') return;
@@ -2958,17 +3001,25 @@ function initParentMessageListener() {
         const tipo = event.data.type;
         
         if (tipo === 'NAVIGATE' && event.data.section) {
-            console.log('📖 Navegando a sección por mensaje:', event.data.section);
+            console.log('📖 [CORRECCIÓN #5] Navegando a sección por mensaje:', event.data.section);
             scrollToSection(event.data.section);
         }
         
         if (tipo === 'CLOSE_HELP') {
-            console.log('📖 Cerrando ayuda por mensaje del padre');
+            // El padre ya está cerrando el modal. Aquí NO hacemos
+            // window.close() porque eso cerraría toda la pestaña.
+            // Solo logueamos para diagnóstico.
+            console.log('📖 [CORRECCIÓN #5] Confirmación CLOSE_HELP recibida del padre');
+        }
+        
+        if (tipo === 'PING') {
+            // Responder al padre para confirmar que estamos vivos.
             try {
-                window.close();
-            } catch (e) {
-                // Si no se puede cerrar, no pasa nada (el padre lo hará)
-            }
+                window.parent.postMessage({
+                    type: 'PONG',
+                    source: 'ayuda-panario-iframe'
+                }, '*');
+            } catch (e) {}
         }
     });
 }
@@ -2977,21 +3028,46 @@ function initParentMessageListener() {
 // 🆕 ATAJO DE TECLADO: ESCAPE PARA CERRAR AYUDA
 // ============================================================
 
+// ============================================================
+// 🆕 CORRECCIÓN #5 + #12: LISTENER DE ESCAPE (REESCRITO)
+// ============================================================
+// 
+// Ahora, la tecla Escape SIEMPRE envía postMessage al padre
+// cuando estamos en iframe. El padre (help.js) se encarga de
+// cerrar el modal correctamente.
+// 
+// Si NO estamos en iframe, llamamos a cerrarAyuda() que cierra
+// la pestaña o navega a index.html.
+// ============================================================
+
 function initEscapeKey() {
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
-            // Solo actuar si NO estamos dentro de un iframe
-            // (si estamos en iframe, el padre se encarga de cerrar)
             const enIframe = (window.self !== window.top);
             
-            if (!enIframe) {
-                console.log('📖 Escape pulsado → cerrando ayuda');
-                cerrarAyuda();
-            } else {
-                // Estamos en iframe: avisar al padre
+            if (enIframe) {
+                // ============================================================
+                // CASO 1: Estamos en iframe
+                // ============================================================
+                // Enviar postMessage al padre. NO llamar a cerrarAyuda()
+                // porque eso también enviaría el mismo mensaje, pero por
+                // claridad lo dejamos explícito aquí.
+                // ============================================================
+                console.log('📖 [CORRECCIÓN #5] Escape pulsado en iframe → enviando CLOSE_HELP al padre');
                 try {
-                    window.parent.postMessage({ type: 'CLOSE_HELP' }, '*');
-                } catch (e) {}
+                    window.parent.postMessage(
+                        { type: 'CLOSE_HELP', source: 'ayuda-panario-iframe-escape' },
+                        '*'
+                    );
+                } catch (err) {
+                    console.warn('⚠️ No se pudo enviar CLOSE_HELP:', err);
+                }
+            } else {
+                // ============================================================
+                // CASO 2: Pestaña independiente
+                // ============================================================
+                console.log('📖 [CORRECCIÓN #5] Escape pulsado en pestaña independiente → cerrando');
+                cerrarAyuda();
             }
         }
     });

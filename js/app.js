@@ -62,6 +62,16 @@
 //   - ✅ Se llama a limpiarEstilosResiduales() al inicio de showApp()
 //   - ✅ Se llama a limpiarEstilosResiduales() después de renderizar el dashboard
 //   - ✅ Sin cambios funcionales adicionales
+// 🆕 v2.2.3 (240926 v12): CORRECCIÓN #4 + CORRECCIÓN #19
+//   - ✅ CORRECCIÓN #4: Alturas homogéneas de tarjetas en móvil
+//     * CARD_STYLE_BASE ahora incluye height: 100% + box-sizing: border-box
+//     * min-height de tarjetas subió a 100px
+//     * Grids usan align-items: stretch
+//     * Se creó GRID_STYLE como constante reutilizable
+//   - ✅ CORRECCIÓN #19: Filtros al hacer clic en tarjetas del Dashboard
+//     * NUEVA función navigateWithFilters(section, filters)
+//     * renderTarjetaPedidosHoy() usa navigateWithFilters con filtros
+//     * mananaYYYYMMDD() exportada globalmente
 // ============================================================
 
 let currentUser = null;
@@ -150,7 +160,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.2.2'; // 🆕 Fallback actualizado a 2.2.2
+    return '2.2.3';
 }
 
 window.getAppVersion = getAppVersion;
@@ -209,6 +219,12 @@ function fechaLocalYYYYMMDD(fechaUTC) {
 
 function hoyYYYYMMDD() {
     return fechaLocalYYYYMMDD(new Date());
+}
+
+function mananaYYYYMMDD() {
+    const manana = new Date();
+    manana.setDate(manana.getDate() + 1);
+    return fechaLocalYYYYMMDD(manana);
 }
 
 function formatearFechaConDiaSemana(date = new Date()) {
@@ -322,6 +338,7 @@ function formatearFechaInteligente(fecha, horaStr = null) {
 
 window.fechaLocalYYYYMMDD = fechaLocalYYYYMMDD;
 window.hoyYYYYMMDD = hoyYYYYMMDD;
+window.mananaYYYYMMDD = mananaYYYYMMDD;
 window.formatearFechaConDiaSemana = formatearFechaConDiaSemana;
 window.formatearFechaYYYYMMDD = formatearFechaYYYYMMDD;
 window.formatearFechaInteligente = formatearFechaInteligente;
@@ -370,7 +387,7 @@ function cerrarTodosLosModalesRespaldo() {
 }
 
 // ============================================================
-// 🆕 FASE 5 (#2): ABRIR AYUDA DETALLADA
+// FASE 5 (#2): ABRIR AYUDA DETALLADA
 // ============================================================
 
 function openDetailedHelp() {
@@ -392,6 +409,29 @@ function openDetailedHelp() {
 window.openDetailedHelp = openDetailedHelp;
 
 // ============================================================
+// 🆕 v2.2.3: NAVEGACIÓN CON FILTROS (Corrección #19)
+// ============================================================
+
+function navigateWithFilters(section, filters) {
+    try {
+        console.log(`🧭 navigateWithFilters('${section}',`, filters, `)`);
+        
+        if (section === 'orders') {
+            window._pendingOrderFilters = filters || {};
+        } else if (section === 'sales') {
+            window._pendingSalesFilters = filters || {};
+        }
+        
+        navigate(section);
+    } catch (e) {
+        console.error('❌ Error en navigateWithFilters:', e);
+        navigate(section);
+    }
+}
+
+window.navigateWithFilters = navigateWithFilters;
+
+// ============================================================
 // INICIALIZACIÓN
 // ============================================================
 
@@ -400,7 +440,6 @@ async function initApp() {
         const version = getAppVersion();
         console.log(`🚀 Iniciando Panario v${version}...`);
         
-        // 🆕 v2.2.2: Limpiar estilos residuales al arrancar
         if (typeof window.limpiarEstilosResiduales === 'function') {
             window.limpiarEstilosResiduales();
         }
@@ -498,7 +537,6 @@ async function initApp() {
         createScrollButtons();
         setupDbSavedListener();
         
-        // 🆕 v2.2.2: Listener de visibilitychange para limpiar estilos residuales
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 console.log('👁️ [app] App vuelve a primer plano → limpiando estilos');
@@ -522,7 +560,7 @@ async function initApp() {
 }
 
 // ============================================================
-// 🆕 FASE 1.4: LISTENER PARA 'db-saved' CON DEBOUNCE
+// FASE 1.4: LISTENER PARA 'db-saved' CON DEBOUNCE
 // ============================================================
 
 function setupDbSavedListener() {
@@ -957,7 +995,6 @@ function updateTopBarAvatar(photoData) {
 function showApp(user) {
     console.log('👤 Mostrando app para:', user.username);
     
-    // 🆕 v2.2.2: Limpiar estilos residuales al mostrar la app
     if (typeof window.limpiarEstilosResiduales === 'function') {
         window.limpiarEstilosResiduales();
     }
@@ -1002,7 +1039,6 @@ function showApp(user) {
     
     navigate('dashboard');
     
-    // 🆕 v2.2.2: Limpiar estilos residuales después de renderizar
     setTimeout(() => {
         if (typeof window.limpiarEstilosResiduales === 'function') {
             window.limpiarEstilosResiduales();
@@ -1058,12 +1094,10 @@ window.updateAppHeader = updateAppHeader;
 function navigate(section) {
     console.log('🧭 Navegando a:', section);
     
-    // 🆕 v2.2.2: Limpiar estilos residuales al navegar entre módulos
     if (typeof window.limpiarEstilosResiduales === 'function') {
         window.limpiarEstilosResiduales();
     }
     
-    // Cerrar el popover de ayuda si está abierto
     if (window.HelpModule && window.HelpModule.cerrarPopoverAyuda) {
         try { window.HelpModule.cerrarPopoverAyuda(); } catch (e) {}
     }
@@ -1183,7 +1217,6 @@ function navigate(section) {
     
     setTimeout(adjustForSafeArea, 300);
     
-    // 🆕 v2.2.2: Limpiar estilos residuales después de renderizar la nueva vista
     setTimeout(() => {
         if (typeof window.limpiarEstilosResiduales === 'function') {
             window.limpiarEstilosResiduales();
@@ -1294,40 +1327,33 @@ function renderTarjetaCorrienteHoy() {
 }
 
 // ============================================================
-// 🆕 ENTREGA 5: TARJETA DE PEDIDOS HOY / MAÑANA / LISTA DE ESPERA
-// ============================================================
-// 
-// Muestra 3 columnas equilibradas:
-//   1. 📋 Pedidos hoy
-//   2. 📅 Pedidos mañana (NUEVO)
-//   3. ⏰ En lista de espera
-// 
-// - Grid responsivo: 3 cols en desktop, 1 col en móvil
-// - Alturas homogéneas (min-height: 100px)
-// - Colores diferenciados: azul, púrpura, naranja
-// - Fallback: si ordersTomorrowCount no existe, muestra "—"
-// - Click en cada columna navega a Pedidos
+// 🆕 v2.2.3: TARJETA DE PEDIDOS HOY / MAÑANA / LISTA DE ESPERA
+// CON FILTROS AL HACER CLIC (Corrección #19)
 // ============================================================
 
 function renderTarjetaPedidosHoy(stats) {
     if (!stats) return '';
     
     const pedidosHoy = stats.ordersTodayCount || 0;
-    // 🆕 ENTREGA 5: Nuevo campo ordersTomorrowCount
     const pedidosManana = (typeof stats.ordersTomorrowCount === 'number') 
         ? stats.ordersTomorrowCount 
         : null;
     const waiting = stats.waitingListCount || 0;
     
-    // Si todo está en 0 y no hay mañana, no mostrar la tarjeta
     if (pedidosHoy === 0 && waiting === 0 && (pedidosManana === 0 || pedidosManana === null)) {
         return '';
     }
     
-    // 🆕 ENTREGA 5: Mostrar "—" si el campo no existe (BD vieja)
     const pedidosMananaDisplay = (pedidosManana === null) 
         ? '—' 
         : pedidosManana;
+    
+    const hoyStr = hoyYYYYMMDD();
+    const mananaStr = mananaYYYYMMDD();
+    
+    const filtrosHoy = JSON.stringify({ from_date: hoyStr, to_date: hoyStr });
+    const filtrosManana = JSON.stringify({ from_date: mananaStr, to_date: mananaStr });
+    const filtrosEspera = JSON.stringify({ status: 'waiting' });
     
     return `
         <div class="card" style="border-left: 4px solid #3b82f6; padding: 14px; margin-bottom: 16px;">
@@ -1346,11 +1372,10 @@ function renderTarjetaPedidosHoy(stats) {
                 </button>
             </div>
             
-            <!-- 🆕 ENTREGA 5: Grid de 3 columnas con alturas homogéneas -->
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
                 
-                <!-- 📋 Pedidos HOY -->
-                <div onclick="window.navigate('orders')" 
+                <!-- 📋 Pedidos HOY (con filtro de hoy) -->
+                <div onclick='navigateWithFilters("orders", ${filtrosHoy})' 
                      style="background: #3b82f615; border: 1px solid #3b82f6; border-radius: 10px; padding: 12px 8px; text-align: center; min-height: 100px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;"
                      onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(59,130,246,0.25)';"
                      onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
@@ -1361,8 +1386,8 @@ function renderTarjetaPedidosHoy(stats) {
                     </div>
                 </div>
                 
-                <!-- 📅 Pedidos MAÑANA (NUEVO) -->
-                <div onclick="window.navigate('orders')" 
+                <!-- 📅 Pedidos MAÑANA (con filtro de mañana) -->
+                <div onclick='navigateWithFilters("orders", ${filtrosManana})' 
                      style="background: #8b5cf615; border: 1px solid #8b5cf6; border-radius: 10px; padding: 12px 8px; text-align: center; min-height: 100px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;"
                      onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(139,92,246,0.25)';"
                      onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
@@ -1373,8 +1398,8 @@ function renderTarjetaPedidosHoy(stats) {
                     </div>
                 </div>
                 
-                <!-- ⏰ Lista de ESPERA -->
-                <div onclick="window.navigate('orders')" 
+                <!-- ⏰ Lista de ESPERA (con filtro de waiting) -->
+                <div onclick='navigateWithFilters("orders", ${filtrosEspera})' 
                      style="background: #f59e0b15; border: 1px solid #f59e0b; border-radius: 10px; padding: 12px 8px; text-align: center; min-height: 100px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;"
                      onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(245,158,11,0.25)';"
                      onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
@@ -1387,7 +1412,6 @@ function renderTarjetaPedidosHoy(stats) {
                 
             </div>
             
-            <!-- Ajuste responsivo: 1 columna en móvil -->
             <style>
                 @media (max-width: 500px) {
                     #dashboard-orders-today-container > div > div:last-child {
@@ -1401,6 +1425,7 @@ function renderTarjetaPedidosHoy(stats) {
 
 // ============================================================
 // RENDER DASHBOARD VIEW
+// 🆕 v2.2.3: Alturas homogéneas de tarjetas (Corrección #4)
 // ============================================================
 
 function renderDashboardView() {
@@ -1451,10 +1476,12 @@ function renderDashboardView() {
     
     const tarjetaCorriente = dashConfig.show_corriente ? renderTarjetaCorrienteHoy() : '';
     
-    const CARD_STYLE_BASE = 'padding: 14px; text-align: center; min-height: 100px; display: flex; flex-direction: column; justify-content: center; align-items: center;';
+    const CARD_STYLE_BASE = 'padding: 14px; text-align: center; min-height: 100px; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; box-sizing: border-box;';
     const CARD_VALUE_STYLE = 'font-size: 22px; font-weight: 700; line-height: 1.1;';
     const CARD_LABEL_STYLE = 'font-size: 11px; color: var(--text-light); margin-top: 4px;';
     const CARD_ICON_STYLE = 'font-size: 22px; margin-bottom: 4px; line-height: 1;';
+    
+    const GRID_STYLE = 'display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; align-items: stretch;';
     
     main.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
@@ -1478,8 +1505,7 @@ function renderDashboardView() {
         
         ${dashConfig.show_orders_today ? `<div id="dashboard-orders-today-container"></div>` : ''}
         
-        <!-- Tarjetas de estadísticas principales -->
-        <div id="dashboard-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
+        <div id="dashboard-stats" style="${GRID_STYLE}">
             <div class="card" style="${CARD_STYLE_BASE}">
                 <div style="${CARD_LABEL_STYLE}">🛒 Ventas totales</div>
                 <div style="${CARD_VALUE_STYLE} color: var(--primary);" id="stat-total-sales">-</div>
@@ -1520,9 +1546,8 @@ function renderDashboardView() {
             </div>
         </div>
         
-        <!-- Tarjetas de ventas liberadas + mejor/peor día -->
         ${(dashConfig.show_released_sales || dashConfig.show_best_worst_day) ? `
-        <div id="dashboard-new-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
+        <div id="dashboard-new-stats" style="${GRID_STYLE}">
             
             ${dashConfig.show_released_sales ? `
             <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #8b5cf6;">
@@ -1561,8 +1586,7 @@ function renderDashboardView() {
         </div>
         ` : ''}
         
-        <!-- Estadísticas avanzadas con alturas homogéneas -->
-        <div id="dashboard-advanced-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
+        <div id="dashboard-advanced-stats" style="${GRID_STYLE}">
             <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #8b5cf6;">
                 <div style="${CARD_ICON_STYLE}">📅</div>
                 <div style="${CARD_LABEL_STYLE}">Días con ventas</div>
@@ -1585,7 +1609,6 @@ function renderDashboardView() {
             </div>
         </div>
         
-        <!-- Gráfico de ventas con selector de modo -->
         <div class="card" style="padding: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
                 <h3 style="margin: 0; font-size: 14px;">📈 Ventas diarias</h3>
@@ -1640,7 +1663,7 @@ function renderDashboardView() {
         
         ${dashConfig.show_funds_analysis ? `
         <div id="funds-analysis" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; align-items: stretch;">
-            <div class="card" style="border-left: 4px solid #10b981; display: flex; flex-direction: column; min-height: 220px; padding: 14px;">
+            <div class="card" style="border-left: 4px solid #10b981; display: flex; flex-direction: column; min-height: 220px; padding: 14px; height: 100%; box-sizing: border-box;">
                 <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #10b981;">💵 Análisis de Efectivo</h4>
                 <div style="flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 6px;">
                     <div style="display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px dashed var(--border-color);">
@@ -1662,7 +1685,7 @@ function renderDashboardView() {
                 </div>
             </div>
             
-            <div class="card" style="border-left: 4px solid #3b82f6; display: flex; flex-direction: column; min-height: 220px; padding: 14px;">
+            <div class="card" style="border-left: 4px solid #3b82f6; display: flex; flex-direction: column; min-height: 220px; padding: 14px; height: 100%; box-sizing: border-box;">
                 <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #3b82f6;">🏦 Análisis de Banco</h4>
                 <div style="flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 6px;">
                     <div style="display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px dashed var(--border-color);">
@@ -1765,7 +1788,6 @@ function renderDashboardView() {
     loadDashboardData();
     setTimeout(adjustForSafeArea, 300);
     
-    // 🆕 v2.2.2: Limpiar estilos residuales después de renderizar
     setTimeout(() => {
         if (typeof window.limpiarEstilosResiduales === 'function') {
             window.limpiarEstilosResiduales();
@@ -3203,6 +3225,7 @@ function previewNegocio(codigo) {
 window.Panario = { initApp, navigate, handleLogin, handleRegister };
 
 window.navigate = navigate;
+window.navigateWithFilters = navigateWithFilters;
 window.initApp = initApp;
 window.loadDashboardData = loadDashboardData;
 window.refreshDashboard = refreshDashboard;
@@ -3233,6 +3256,7 @@ window.refreshCurrentView = refreshCurrentView;
 window.setupDbSavedListener = setupDbSavedListener;
 window.fechaLocalYYYYMMDD = fechaLocalYYYYMMDD;
 window.hoyYYYYMMDD = hoyYYYYMMDD;
+window.mananaYYYYMMDD = mananaYYYYMMDD;
 window.formatearFechaConDiaSemana = formatearFechaConDiaSemana;
 window.cerrarTodosLosModalesRespaldo = cerrarTodosLosModalesRespaldo;
 window.getNombreNegocio = getNombreNegocio;
@@ -3245,7 +3269,7 @@ window.renderSalesByEmployee = renderSalesByEmployee;
 window.openDetailedHelp = openDetailedHelp;
 window.getAppVersion = getAppVersion;
 
-console.log('📦 App Controller v' + getAppVersion() + ' (v2.2.2: Corrección #1 - limpieza de estilos en navegación + fallback 2.2.2)');
+console.log('📦 App Controller v' + getAppVersion() + ' (v2.2.3: Corrección #4 alturas homogéneas + Corrección #19 filtros en tarjetas)');
 
 // ============================================================
 // INICIALIZACIÓN AUTOMÁTICA
