@@ -84,6 +84,23 @@
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
 }
 
+/* 🆕 v2.3.1: Bloquear completamente transform/will-change/isolation/filter
+   en html, body y #appScreen. Estas son las propiedades que rompen el
+   `position: sticky` del header en móvil. Se fuerza su reset global para
+   evitar que cualquier código (modal, animación, etc.) las aplique. */
+html, body, #appScreen {
+    transform: none !important;
+    will-change: auto !important;
+    isolation: auto !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    perspective: none !important;
+    backface-visibility: visible !important;
+    -webkit-backface-visibility: visible !important;
+    contain: none !important;
+    content-visibility: visible !important;
+}
+
 body {
     background: var(--bg);
     color: var(--text);
@@ -94,17 +111,8 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    /* 🆕 v2.2.2: Prevenir que transform residual del body rompa el sticky header */
-    will-change: auto;
-    isolation: auto;
 }
 
-/* 🆕 v2.2.2: Regla defensiva - resetear transform/will-change residuales
-   que puedan haber quedado en html, body o #appScreen y que rompan
-   `position: sticky` del header en móvil. */
-html, body, #appScreen {
-    /* No usar transform en estos elementos */
-}
 html {
     will-change: auto;
 }
@@ -353,7 +361,8 @@ html {
 
 /* ============================================================
    APP HEADER - MODO OSCURO MEJORADO
-   🆕 v2.2.2: FIX BUG #1 - Forzar position: sticky con reglas defensivas
+   🆕 v2.3.1: FIX BUG #1 (Corrección #5) - Forzar position: sticky
+   con reglas defensivas reforzadas + contain aislado.
    ============================================================ */
 
 header {
@@ -366,17 +375,30 @@ header {
     box-shadow: var(--shadow);
     flex-shrink: 0;
     border-bottom: 1px solid var(--border-color);
-    /* 🆕 v2.2.2: FIX BUG #1 - Forzar position sticky con z-index alto */
-    position: sticky;
-    top: 0;
-    z-index: 200;
+    
+    /* 🆕 v2.3.1: FIX DEFINITIVO - Forzar position: sticky con z-index alto */
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 200 !important;
+    
     padding-top: calc(12px + var(--safe-area-inset-top, 0px));
     padding-left: calc(16px + var(--safe-area-inset-left, 0px));
     padding-right: calc(16px + var(--safe-area-inset-right, 0px));
-    /* 🆕 v2.2.2: Evitar transform en el header */
-    transform: none;
-    will-change: auto;
-    /* 🆕 v2.2.2: Forzar que el header sea el containing block de sus hijos */
+    
+    /* 🆕 v2.3.1: Resetear TODAS las propiedades que rompen sticky */
+    transform: none !important;
+    -webkit-transform: none !important;
+    will-change: auto !important;
+    isolation: auto !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    perspective: none !important;
+    -webkit-perspective: none !important;
+    backface-visibility: visible !important;
+    -webkit-backface-visibility: visible !important;
+    
+    /* 🆕 v2.3.1: contain: layout style permite que el header sea su propio
+       containing block sin romper el sticky. NO usar paint. */
     contain: layout style;
 }
 
@@ -475,8 +497,12 @@ main {
     width: 100%;
     max-width: 800px;
     margin: 0 auto;
-    /* 🆕 v2.2.2: Evitar transform en el main */
-    will-change: auto;
+    
+    /* 🆕 v2.3.1: Resetear transform/will-change en main para no romper sticky */
+    transform: none !important;
+    -webkit-transform: none !important;
+    will-change: auto !important;
+    isolation: auto !important;
 }
 
 @supports not (padding-bottom: env(safe-area-inset-bottom)) {
@@ -778,44 +804,118 @@ hr {
 }
 
 /* ============================================================
-   🆕 v2.2.2: REGLAS DEFENSIVAS CONTRA DEFORMACIÓN DEL HEADER
+   🆕 v2.3.1: CORRECCIÓN #5 - REGLAS DEFENSIVAS REFORZADAS
+   ============================================================
+   Estas reglas son la PRIMERA línea de defensa contra la
+   deformación del header. Se aplican SIEMPRE y con !important
+   para que ningún modal o animación las pueda sobrescribir.
+   
+   La SEGUNDA línea de defensa es forzarStickyHeader() en app.js,
+   que aplica estilos inline con !important.
+   
+   La TERCERA línea de defensa es limpiarEstilosResiduales() en
+   modal.js, que se ejecuta en múltiples eventos.
+   
+   Con las 3 capas, el header debería mantenerse sticky SIEMPRE.
    ============================================================ */
-/* Estas reglas previenen que transforms residuales de modales
-   rompan el `position: sticky` del header en móvil. */
 
-/* Asegurar que el header siempre esté por encima del contenido
-   y con position: sticky forzado. */
+/* 1) Header: siempre sticky, siempre arriba, siempre sin transform */
 #appScreen > header,
+#appScreen header,
 header {
     position: sticky !important;
     top: 0 !important;
     z-index: 200 !important;
     transform: none !important;
+    -webkit-transform: none !important;
     will-change: auto !important;
+    isolation: auto !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    perspective: none !important;
+    -webkit-perspective: none !important;
+    backface-visibility: visible !important;
+    -webkit-backface-visibility: visible !important;
 }
 
-/* Resetear transforms en el body si algún modal los dejó huérfanos.
+/* 2) Resetear transform en el body si algún modal los dejó huérfanos.
    La clase `modal-open` se añade al body cuando un modal está abierto,
    así que solo reseteamos cuando NO hay modal abierto. */
 body:not(.modal-open) {
     transform: none !important;
+    -webkit-transform: none !important;
     will-change: auto !important;
+    isolation: auto !important;
+    filter: none !important;
+    -webkit-filter: none !important;
 }
 
-/* Asegurar que #appScreen nunca tenga transform residual. */
+/* 3) Resetear #appScreen siempre (nunca debe tener transform) */
 #appScreen {
     transform: none !important;
+    -webkit-transform: none !important;
+    will-change: auto !important;
+    isolation: auto !important;
 }
 
-/* Asegurar que html y body no tengan transform residual. */
+/* 4) Resetear html y body siempre (nunca deben tener transform) */
 html, body {
     transform: none !important;
+    -webkit-transform: none !important;
+    will-change: auto !important;
+    isolation: auto !important;
 }
 
-/* Asegurar que el main no rompa el sticky del header. */
+/* 5) Resetear main siempre (nunca debe tener transform) */
 main {
     transform: none !important;
+    -webkit-transform: none !important;
     will-change: auto !important;
+    isolation: auto !important;
+}
+
+/* 6) Resetear el contenedor del header y sus hijos directos.
+   El header en sí es un flex container; sus hijos directos (h1, div)
+   tampoco deben tener transform. */
+#appScreen > header > * {
+    transform: none !important;
+    -webkit-transform: none !important;
+    will-change: auto !important;
+}
+
+/* 7) Prevenir que cualquier elemento con position:fixed cree un
+   nuevo stacking context que afecte al header. */
+.bottom-nav {
+    /* El bottom-nav es fixed, pero no debe afectar al sticky del header
+       porque tiene un z-index menor (100 < 200) */
+    transform: none !important;
+    -webkit-transform: none !important;
+}
+
+/* 8) Cuando un modal está abierto, NO forzar transform en el body,
+   porque algunos modales SÍ necesitan transform para animarse.
+   Pero cuando el modal se cierra, la clase se quita y se resetea. */
+body.modal-open {
+    /* No aplicar transform: none aquí para permitir animaciones de modales */
+    /* La limpieza se hace cuando se quita la clase modal-open */
+}
+
+/* 9) Fix específico para Samsung Internet, que aplica transform
+   residual al body después de usar modales. */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+    body:not(.modal-open) {
+        transform: none !important;
+    }
+}
+
+/* 10) Fix específico para iOS Safari, que aplica -webkit-transform
+   residual al body. */
+@supports (-webkit-touch-callout: none) {
+    body:not(.modal-open),
+    html,
+    #appScreen {
+        -webkit-transform: none !important;
+    }
 }
 
 /* ============================================================

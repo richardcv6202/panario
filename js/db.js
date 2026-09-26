@@ -36,17 +36,19 @@
 // 🆕 v2.2.3 (230926 v15): CORRECCIÓN #11 - GUARDAR PRODUCTO EN PRODUCCIÓN
 // 🆕 v2.2.7 (240926 v16): CORRECCIÓN #11 REFORZADA
 // 🆕 v2.3.0 (250926 v17): 🎯 CORRECCIÓN #1 (250926) - CONTEO DE UNIDADES
-//   - ✅ contarPedidosYVentasFecha() ahora cuenta UNIDADES (order_items.quantity)
-//     en lugar de CONTAR FILAS de pedidos (COUNT(o.id)).
-//   - ✅ Solo cuenta unidades de productos con CMPBC definido (> 0).
-//   - ✅ Los productos sin CMPBC se reservan libremente (no consumen cupo).
-//   - ✅ Las ventas directas también suman UNIDADES (sales.quantity).
-//   - ✅ Se añade un objeto detalle con el desglose por producto para
-//     facilitar la depuración y la visualización.
-//   - ✅ Mantiene retrocompatibilidad total: los campos `pedidos` y `ventas`
-//     siguen existiendo (ahora como números decimales que representan unidades).
-//   - ✅ Nueva función auxiliar contarPedidosYVentasFechaDetallado() que
-//     devuelve el desglose por pedido/producto.
+// 🆕 v2.3.3 (260926 v18): 🎯 CORRECCIÓN #16 (240926) - PERMISOS BANCARIOS
+// 🆕 v2.3.4 (260926 v19): 🎯 CORRECCIÓN #17 (240926) - CONFIGURACIONES INDIVIDUALES
+//   - ✅ NUEVAS COLUMNAS en users:
+//     * sound_enabled INTEGER DEFAULT 1
+//     * sound_id TEXT DEFAULT 'beep'
+//     * guia_rapida_activa INTEGER DEFAULT 1
+//   - ✅ NUEVAS FUNCIONES:
+//     * getUserSoundConfig(userId) → { enabled, soundId }
+//     * updateUserSoundConfig(userId, config)
+//     * getUserGuiaRapidaActiva(userId) → boolean
+//     * updateUserGuiaRapida(userId, activa)
+//   - ✅ Migración automática: copia los valores de localStorage
+//     a la BD del usuario actual (solo la primera vez).
 // ============================================================
 
 let db = null;
@@ -246,6 +248,18 @@ function getUsuarioNombre(userId) {
     }
 }
 
+/**
+ * 🆕 CORRECCIÓN #16: Devuelve true si el usuario actual es admin.
+ */
+function esUsuarioActualAdmin() {
+    try {
+        const user = window.AuthModule?.getCurrentUser();
+        return user && user.is_admin === 1;
+    } catch (e) {
+        return false;
+    }
+}
+
 // ============================================================
 // INICIALIZACIÓN
 // ============================================================
@@ -316,6 +330,12 @@ async function initDB() {
         await ensureUuidColumns(db);
         await migrateUuids(db);
         await migrateToNewStructure(db);
+        // 🆕 CORRECCIÓN #16: Nuevas tablas de permisos bancarios
+        await ensureBankDefaultUserTable(db);
+        await ensureConfigBancariaTable(db);
+        // 🆕 CORRECCIÓN #17: Nuevas columnas de preferencias individuales
+        await ensureUserPreferencesColumns(db);
+        await migratePreferencesFromLocalStorage(db);
         await seedDefaultUnits(db);
         await seedDefaultProducts(db);
         await seedDefaultInsumos(db);
@@ -333,35 +353,563 @@ async function initDB() {
 }
 
 // ============================================================
-// 🆕 CORRECCIÓN #1 (250926): CONTEO UNIFICADO DE UNIDADES
+// 🆕 CORRECCIÓN #17 (240926): PREFERENCIAS INDIVIDUALES
 // ============================================================
 // 
-// CAMBIO CLAVE:
-//   Antes contábamos FILAS de pedidos (COUNT(o.id)).
-//   Ahora sumamos UNIDADES (SUM(oi.quantity)) de productos con CMPBC.
+// CONTEXTO:
+//   Antes de esta corrección, las preferencias de SONIDO de
+//   notificaciones y GUÍA RÁPIDA se guardaban en localStorage,
+//   lo cual las hacía GLOBALES (compartidas entre usuarios).
 //
-// REGLAS:
-//   1. Solo cuentan los productos con CMPBC definido (> 0).
-//   2. Los productos sin CMPBC se reservan libremente (no consumen cupo).
-//   3. Los pedidos cancelados NO cuentan.
-//   4. Los pedidos entregados SÍ cuentan (el cupo se reservó).
-//   5. Los pedidos en lista de espera SÍ cuentan.
-//   6. Los pedidos "waiting_bought" NO cuentan (ya se convirtieron en venta).
-//   7. Las ventas directas (sin order_id) también suman unidades.
+// CAMBIOS:
+//   1. NUEVAS COLUMNAS en users:
+//      - sound_enabled (INTEGER, default 1)
+//      - sound_id (TEXT, default 'beep')
+//      - guia_rapida_activa (INTEGER, default 1)
 //
-// FÓRMULA:
-//   disponibles = cantidad_produccion - unidades_reservadas - ventas_directas
+//   2. NUEVAS FUNCIONES:
+//      - getUserSoundConfig(userId)
+//      - updateUserSoundConfig(userId, config)
+//      - getUserGuiaRapidaActiva(userId)
+//      - updateUserGuiaRapida(userId, activa)
+//
+//   3. MIGRACIÓN AUTOMÁTICA:
+//      Al inicializar, si existen valores en localStorage
+//      (sonido + guía), se copian a la BD del usuario actual
+//      (solo la primera vez). Después se eliminan del localStorage
+//      para no confundir.
 // ============================================================
 
 /**
- * 🆕 CORRECCIÓN #1: Cuenta UNIDADES reservadas en pedidos para una fecha.
- * 
- * Solo cuenta productos con CMPBC definido (> 0).
- * 
- * @param {number} negocioId - ID del negocio
- * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
- * @returns {number} Total de unidades reservadas
+ * 🆕 CORRECCIÓN #17: Añade las columnas de preferencias individuales
+ * a la tabla users.
  */
+async function ensureUserPreferencesColumns(db) {
+    const LOG_PREFIX = '🔧 [ensureUserPreferencesColumns]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='users'`);
+        if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ La tabla users no existe todavía.`);
+            return;
+        }
+        
+        const columns = db.exec('PRAGMA table_info(users)');
+        const columnNames = columns[0]?.values?.map(row => row[1]) || [];
+        
+        const requiredColumns = [
+            { name: 'sound_enabled', type: 'INTEGER DEFAULT 1' },
+            { name: 'sound_id', type: "TEXT DEFAULT 'beep'" },
+            { name: 'guia_rapida_activa', type: 'INTEGER DEFAULT 1' }
+        ];
+        
+        let addedCount = 0;
+        for (const col of requiredColumns) {
+            if (!columnNames.includes(col.name)) {
+                try {
+                    db.run(`ALTER TABLE users ADD COLUMN ${col.name} ${col.type}`);
+                    console.log(`${LOG_PREFIX} ✅ Columna añadida: ${col.name}`);
+                    addedCount++;
+                } catch (e) {
+                    console.warn(`${LOG_PREFIX} ⚠️ Error añadiendo ${col.name}:`, e.message);
+                }
+            } else {
+                console.log(`${LOG_PREFIX} ✓ Columna ${col.name} ya existe`);
+            }
+        }
+        
+        console.log(`${LOG_PREFIX} ✅ ${addedCount} columnas nuevas añadidas`);
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+        
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #17: Migración automática desde localStorage.
+ * 
+ * Si existen valores de sonido o guía rápida en localStorage,
+ * se copian a la BD del usuario actual (solo la primera vez).
+ * Después se eliminan del localStorage.
+ * 
+ * Esto preserva la configuración del usuario que ya tenía la app
+ * abierta antes de la corrección.
+ */
+async function migratePreferencesFromLocalStorage(db) {
+    const LOG_PREFIX = '🔄 [migratePreferencesFromLocalStorage]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        // Verificar si hay usuario actual
+        const userId = getCurrentUserId();
+        if (!userId) {
+            console.log(`${LOG_PREFIX} ℹ️ No hay usuario actual, se omite migración.`);
+            return;
+        }
+        
+        // Verificar si ya se migró (usando una flag en localStorage)
+        const migrado = localStorage.getItem('panario_preferences_migrated_v17');
+        if (migrado === 'true') {
+            console.log(`${LOG_PREFIX} ℹ️ Ya se migró anteriormente. Se omite.`);
+            return;
+        }
+        
+        // Leer valores antiguos de localStorage
+        let soundConfig = null;
+        let guiaDeshabilitada = false;
+        
+        try {
+            const saved = localStorage.getItem('panario_notification_sound_config');
+            if (saved) {
+                soundConfig = JSON.parse(saved);
+                console.log(`${LOG_PREFIX} 📖 Sonido encontrado en localStorage:`, soundConfig);
+            }
+        } catch (e) {}
+        
+        try {
+            guiaDeshabilitada = localStorage.getItem('panario_guia_deshabilitada') === 'true';
+            console.log(`${LOG_PREFIX} 📖 Guía rápida deshabilitada en localStorage: ${guiaDeshabilitada}`);
+        } catch (e) {}
+        
+        // Migrar sonido si existe
+        if (soundConfig) {
+            const enabled = soundConfig.enabled ? 1 : 0;
+            const soundId = soundConfig.soundId || 'beep';
+            try {
+                db.run(`UPDATE users SET sound_enabled = ?, sound_id = ? WHERE id = ?`, [enabled, soundId, userId]);
+                console.log(`${LOG_PREFIX} ✅ Sonido migrado a BD: enabled=${enabled}, soundId=${soundId}`);
+            } catch (e) {
+                console.warn(`${LOG_PREFIX} ⚠️ Error migrando sonido:`, e.message);
+            }
+        }
+        
+        // Migrar guía rápida
+        const guiaActiva = guiaDeshabilitada ? 0 : 1;
+        try {
+            db.run(`UPDATE users SET guia_rapida_activa = ? WHERE id = ?`, [guiaActiva, userId]);
+            console.log(`${LOG_PREFIX} ✅ Guía rápida migrada a BD: activa=${guiaActiva}`);
+        } catch (e) {
+            console.warn(`${LOG_PREFIX} ⚠️ Error migrando guía:`, e.message);
+        }
+        
+        // Marcar como migrado
+        try {
+            localStorage.setItem('panario_preferences_migrated_v17', 'true');
+        } catch (e) {}
+        
+        // NOTA: NO eliminamos los valores de localStorage por si acaso.
+        // Los dejamos como respaldo. La nueva lógica usa la BD.
+        
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+        
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #17: Obtiene la configuración de sonido del usuario.
+ * 
+ * @param {number} userId - ID del usuario (default: usuario actual)
+ * @returns {object} - { enabled: boolean, soundId: string }
+ */
+function getUserSoundConfig(userId) {
+    try {
+        const uid = userId || getCurrentUserId();
+        if (!uid) {
+            return { enabled: true, soundId: 'beep' };
+        }
+        
+        const result = query(
+            'SELECT sound_enabled, sound_id FROM users WHERE id = ? AND deleted_at IS NULL',
+            [uid]
+        );
+        
+        if (result.length === 0) {
+            return { enabled: true, soundId: 'beep' };
+        }
+        
+        return {
+            enabled: result[0].sound_enabled !== 0,
+            soundId: result[0].sound_id || 'beep'
+        };
+    } catch (e) {
+        console.warn('⚠️ Error en getUserSoundConfig:', e);
+        return { enabled: true, soundId: 'beep' };
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #17: Guarda la configuración de sonido del usuario.
+ * 
+ * @param {number} userId - ID del usuario
+ * @param {object} config - { enabled, soundId }
+ * @returns {object} - { success, error? }
+ */
+function updateUserSoundConfig(userId, config) {
+    const LOG_PREFIX = '🔊 [updateUserSoundConfig]';
+    
+    try {
+        const uid = userId || getCurrentUserId();
+        if (!uid) return { success: false, error: 'No hay usuario activo' };
+        
+        const enabled = config.enabled ? 1 : 0;
+        const soundId = config.soundId || 'beep';
+        
+        execute(
+            'UPDATE users SET sound_enabled = ?, sound_id = ? WHERE id = ?',
+            [enabled, soundId, uid]
+        );
+        
+        console.log(`${LOG_PREFIX} ✅ Sonido actualizado para user #${uid}: enabled=${enabled}, soundId=${soundId}`);
+        return { success: true };
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #17: Obtiene si la guía rápida está activa para el usuario.
+ * 
+ * @param {number} userId - ID del usuario (default: usuario actual)
+ * @returns {boolean} - true si está activa
+ */
+function getUserGuiaRapidaActiva(userId) {
+    try {
+        const uid = userId || getCurrentUserId();
+        if (!uid) return true;
+        
+        const result = query(
+            'SELECT guia_rapida_activa FROM users WHERE id = ? AND deleted_at IS NULL',
+            [uid]
+        );
+        
+        if (result.length === 0) return true;
+        return result[0].guia_rapida_activa !== 0;
+    } catch (e) {
+        console.warn('⚠️ Error en getUserGuiaRapidaActiva:', e);
+        return true;
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #17: Guarda si la guía rápida está activa para el usuario.
+ * 
+ * @param {number} userId - ID del usuario
+ * @param {boolean} activa - Nuevo valor
+ * @returns {object} - { success, error? }
+ */
+function updateUserGuiaRapida(userId, activa) {
+    const LOG_PREFIX = '🚀 [updateUserGuiaRapida]';
+    
+    try {
+        const uid = userId || getCurrentUserId();
+        if (!uid) return { success: false, error: 'No hay usuario activo' };
+        
+        const value = activa ? 1 : 0;
+        
+        execute(
+            'UPDATE users SET guia_rapida_activa = ? WHERE id = ?',
+            [value, uid]
+        );
+        
+        console.log(`${LOG_PREFIX} ✅ Guía rápida actualizada para user #${uid}: activa=${value}`);
+        return { success: true };
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return { success: false, error: e.message };
+    }
+}
+
+// ============================================================
+// 🆕 CORRECCIÓN #16 (240926): PERMISOS BANCARIOS
+// ============================================================
+
+async function ensureBankDefaultUserTable(db) {
+    const LOG_PREFIX = '🔧 [ensureBankDefaultUserTable]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        db.run(`
+            CREATE TABLE IF NOT EXISTS bank_default_user (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE,
+                bank_account_id INTEGER NOT NULL,
+                negocio_id INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id)
+            )
+        `);
+        
+        try {
+            db.run('CREATE INDEX IF NOT EXISTS idx_bank_default_user_user ON bank_default_user(user_id)');
+            db.run('CREATE INDEX IF NOT EXISTS idx_bank_default_user_negocio ON bank_default_user(negocio_id)');
+        } catch (e) {}
+        
+        console.log(`${LOG_PREFIX} ✅ Tabla bank_default_user verificada`);
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+async function ensureConfigBancariaTable(db) {
+    const LOG_PREFIX = '🔧 [ensureConfigBancariaTable]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        db.run(`
+            CREATE TABLE IF NOT EXISTS config_bancaria_negocio (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                negocio_id INTEGER NOT NULL UNIQUE,
+                permitir_ver_qr_otros INTEGER DEFAULT 0,
+                permitir_cambiar_default INTEGER DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (negocio_id) REFERENCES negocios(id)
+            )
+        `);
+        
+        try {
+            db.run('CREATE INDEX IF NOT EXISTS idx_config_bancaria_negocio ON config_bancaria_negocio(negocio_id)');
+        } catch (e) {}
+        
+        console.log(`${LOG_PREFIX} ✅ Tabla config_bancaria_negocio verificada`);
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+function getConfigBancaria() {
+    const LOG_PREFIX = '🏦 [getConfigBancaria]';
+    const defaults = {
+        permitir_ver_qr_otros: false,
+        permitir_cambiar_default: true
+    };
+    
+    try {
+        const negocioId = getNegocioIdActual();
+        if (!negocioId) return defaults;
+        
+        const result = query(
+            'SELECT * FROM config_bancaria_negocio WHERE negocio_id = ? LIMIT 1',
+            [negocioId]
+        );
+        
+        if (result.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ Sin config, usando defaults`);
+            return defaults;
+        }
+        
+        const row = result[0];
+        return {
+            permitir_ver_qr_otros: row.permitir_ver_qr_otros === 1,
+            permitir_cambiar_default: row.permitir_cambiar_default === 1
+        };
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} ⚠️ Error:`, e);
+        return defaults;
+    }
+}
+
+function saveConfigBancaria(config) {
+    const LOG_PREFIX = '🏦 [saveConfigBancaria]';
+    
+    try {
+        if (!esUsuarioActualAdmin()) {
+            return { success: false, error: 'Solo el administrador puede modificar la configuración' };
+        }
+        
+        const negocioId = getNegocioIdActual();
+        if (!negocioId) return { success: false, error: 'No hay negocio activo' };
+        
+        const verQR = config.permitir_ver_qr_otros ? 1 : 0;
+        const cambiarDefault = config.permitir_cambiar_default ? 1 : 0;
+        
+        const existing = query(
+            'SELECT id FROM config_bancaria_negocio WHERE negocio_id = ? LIMIT 1',
+            [negocioId]
+        );
+        
+        if (existing.length > 0) {
+            execute(`
+                UPDATE config_bancaria_negocio 
+                SET permitir_ver_qr_otros = ?, permitir_cambiar_default = ?, 
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE negocio_id = ?
+            `, [verQR, cambiarDefault, negocioId]);
+            console.log(`${LOG_PREFIX} ✅ Config actualizada`);
+        } else {
+            execute(`
+                INSERT INTO config_bancaria_negocio 
+                (negocio_id, permitir_ver_qr_otros, permitir_cambiar_default)
+                VALUES (?, ?, ?)
+            `, [negocioId, verQR, cambiarDefault]);
+            console.log(`${LOG_PREFIX} ✅ Config creada`);
+        }
+        
+        return { success: true };
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return { success: false, error: e.message };
+    }
+}
+
+function getCuentaDefaultUsuario(userId) {
+    const LOG_PREFIX = '🏦 [getCuentaDefaultUsuario]';
+    
+    try {
+        const uid = userId || getCurrentUserId();
+        if (!uid) return null;
+        
+        const negocioId = getNegocioIdActual();
+        
+        const userDefault = query(`
+            SELECT ba.* FROM bank_default_user bdu
+            INNER JOIN bank_accounts ba ON ba.id = bdu.bank_account_id
+            WHERE bdu.user_id = ? 
+              AND ba.deleted_at IS NULL
+              AND ba.negocio_id = ?
+            LIMIT 1
+        `, [uid, negocioId]);
+        
+        if (userDefault.length > 0) {
+            console.log(`${LOG_PREFIX} ✅ Cuenta individual del usuario #${uid}: ${userDefault[0].bank}`);
+            return userDefault[0];
+        }
+        
+        const adminDefault = query(`
+            SELECT * FROM bank_accounts 
+            WHERE negocio_id = ? AND is_default = 1 AND deleted_at IS NULL
+            ORDER BY created_at DESC LIMIT 1
+        `, [negocioId]);
+        
+        if (adminDefault.length > 0) {
+            console.log(`${LOG_PREFIX} ✅ Cuenta por defecto del admin: ${adminDefault[0].bank}`);
+            return adminDefault[0];
+        }
+        
+        const primera = query(`
+            SELECT * FROM bank_accounts 
+            WHERE negocio_id = ? AND deleted_at IS NULL
+            ORDER BY created_at ASC LIMIT 1
+        `, [negocioId]);
+        
+        if (primera.length > 0) {
+            console.log(`${LOG_PREFIX} ✅ Primera cuenta disponible: ${primera[0].bank}`);
+            return primera[0];
+        }
+        
+        console.log(`${LOG_PREFIX} ℹ️ No hay cuentas disponibles`);
+        return null;
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return null;
+    }
+}
+
+function setCuentaDefaultUsuario(userId, accountId) {
+    const LOG_PREFIX = '🏦 [setCuentaDefaultUsuario]';
+    
+    try {
+        const uid = userId || getCurrentUserId();
+        if (!uid) return { success: false, error: 'No hay usuario activo' };
+        
+        const negocioId = getNegocioIdActual();
+        const esAdmin = esUsuarioActualAdmin();
+        const config = getConfigBancaria();
+        
+        if (!esAdmin && !config.permitir_cambiar_default) {
+            return { success: false, error: 'El administrador no permite cambiar la cuenta por defecto' };
+        }
+        
+        const cuenta = query(`
+            SELECT * FROM bank_accounts 
+            WHERE id = ? AND negocio_id = ? AND deleted_at IS NULL
+        `, [accountId, negocioId]);
+        
+        if (cuenta.length === 0) {
+            return { success: false, error: 'Cuenta bancaria no encontrada' };
+        }
+        
+        if (!esAdmin && !config.permitir_ver_qr_otros) {
+            if (cuenta[0].user_id !== uid) {
+                return { success: false, error: 'No tienes acceso a esta cuenta' };
+            }
+        }
+        
+        const existing = query(
+            'SELECT id FROM bank_default_user WHERE user_id = ?',
+            [uid]
+        );
+        
+        if (existing.length > 0) {
+            execute(`
+                UPDATE bank_default_user 
+                SET bank_account_id = ?, updated_at = CURRENT_TIMESTAMP 
+                WHERE user_id = ?
+            `, [accountId, uid]);
+        } else {
+            execute(`
+                INSERT INTO bank_default_user (user_id, bank_account_id, negocio_id)
+                VALUES (?, ?, ?)
+            `, [uid, accountId, negocioId]);
+        }
+        
+        console.log(`${LOG_PREFIX} ✅ Cuenta #${accountId} establecida como default para usuario #${uid}`);
+        return { success: true };
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return { success: false, error: e.message };
+    }
+}
+
+function puedeUsuarioVerCuenta(account) {
+    try {
+        if (!account) return false;
+        
+        const user = window.AuthModule?.getCurrentUser();
+        if (!user) return false;
+        
+        if (user.is_admin === 1) return true;
+        if (account.user_id === user.id) return true;
+        
+        const config = getConfigBancaria();
+        return config.permitir_ver_qr_otros === true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function puedeUsuarioEditarCuenta(account) {
+    try {
+        if (!account) return false;
+        
+        const user = window.AuthModule?.getCurrentUser();
+        if (!user) return false;
+        
+        if (user.is_admin === 1) return true;
+        
+        return account.user_id === user.id;
+    } catch (e) {
+        return false;
+    }
+}
+
+// ============================================================
+// 🆕 CORRECCIÓN #1 (250926): CONTEO UNIFICADO DE UNIDADES
+// ============================================================
+
 function _contarUnidadesPedidos(negocioId, fechaISO) {
     const LOG_PREFIX = '📊 [contarUnidadesPedidos]';
     
@@ -391,16 +939,6 @@ function _contarUnidadesPedidos(negocioId, fechaISO) {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #1: Cuenta UNIDADES de ventas directas para una fecha.
- * 
- * Solo cuenta productos con CMPBC definido (> 0).
- * Ventas directas = ventas sin order_id (no vienen de pedido).
- * 
- * @param {number} negocioId - ID del negocio
- * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
- * @returns {number} Total de unidades vendidas directamente
- */
 function _contarUnidadesVentasDirectas(negocioId, fechaISO) {
     const LOG_PREFIX = '📊 [contarUnidadesVentasDirectas]';
     
@@ -429,24 +967,8 @@ function _contarUnidadesVentasDirectas(negocioId, fechaISO) {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #1 (250926): Conteo unificado de pedidos y ventas en UNIDADES.
- * 
- * Esta función reemplaza la lógica anterior que contaba FILAS de pedidos.
- * Ahora suma UNIDADES de productos con CMPBC definido.
- * 
- * RETORNA:
- *   - pedidos: unidades reservadas en pedidos (decimal)
- *   - ventas: unidades vendidas directamente (decimal)
- *   - disponibles: cupos disponibles (decimal o null si no hay producción)
- *   - cantidadProduccion: total programado para ese día
- *   - unidadesReservadas: pedidos + ventas
- * 
- * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
- * @returns {object} Objeto con el conteo detallado
- */
 function contarPedidosYVentasFecha(fechaISO) {
-    const LOG_PREFIX = '📊 [contarPedidosYVentasFecha v2.3.0]';
+    const LOG_PREFIX = '📊 [contarPedidosYVentasFecha v2.3.4]';
     
     try {
         const negocioId = getNegocioIdActual();
@@ -462,11 +984,9 @@ function contarPedidosYVentasFecha(fechaISO) {
         
         console.log(`${LOG_PREFIX} Contando UNIDADES para fecha=${fechaISO}, negocio=${negocioId}`);
         
-        // 🆕 CORRECCIÓN #1: Sumar UNIDADES en lugar de contar filas
         const unidadesPedidos = _contarUnidadesPedidos(negocioId, fechaISO);
         const unidadesVentas = _contarUnidadesVentasDirectas(negocioId, fechaISO);
         
-        // Obtener producción programada
         const prodConfig = getProduccionByFecha(fechaISO);
         const cantidadProduccion = parseFloat(prodConfig?.cantidad_produccion) || 0;
         
@@ -498,15 +1018,6 @@ function contarPedidosYVentasFecha(fechaISO) {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #1 (250926): Conteo detallado por producto.
- * 
- * Devuelve un desglose por producto para facilitar depuración
- * y visualización en UI (ej: modal de producción).
- * 
- * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
- * @returns {object} Objeto con el desglose
- */
 function contarPedidosYVentasFechaDetallado(fechaISO) {
     const LOG_PREFIX = '📊 [contarPedidosYVentasFechaDetallado]';
     
@@ -516,7 +1027,6 @@ function contarPedidosYVentasFechaDetallado(fechaISO) {
             return { productos: [], resumen: { pedidos: 0, ventas: 0, total: 0 } };
         }
         
-        // Desglose de pedidos por producto
         const pedidosPorProducto = query(`
             SELECT 
                 p.id as producto_id,
@@ -537,7 +1047,6 @@ function contarPedidosYVentasFechaDetallado(fechaISO) {
             GROUP BY p.id
         `, [negocioId, fechaISO]);
         
-        // Desglose de ventas directas por producto
         const ventasPorProducto = query(`
             SELECT 
                 p.id as producto_id,
@@ -557,7 +1066,6 @@ function contarPedidosYVentasFechaDetallado(fechaISO) {
             GROUP BY p.id
         `, [negocioId, fechaISO]);
         
-        // Combinar
         const productosMap = {};
         
         pedidosPorProducto.forEach(row => {
@@ -615,42 +1123,28 @@ function contarPedidosYVentasFechaDetallado(fechaISO) {
 // 🆕 v2.2.7: CORRECCIÓN #11 REFORZADA - PRODUCTO_ID EN PRODUCCIÓN
 // ============================================================
 
-/**
- * 🆕 v2.2.7: Migración idempotente de la columna producto_id.
- * 
- * Añade la columna `producto_id INTEGER` a la tabla
- * `calendario_produccion` si no existe.
- * 
- * Incluye logs detallados para diagnóstico.
- * 
- * @param {Object} db - Instancia de SQL.js Database
- */
 async function ensureProductoIdColumn(db) {
     const LOG_PREFIX = '🔧 [ensureProductoIdColumn v2.2.7]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
         
-        // 1. Verificar que la tabla existe
         const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='calendario_produccion'`);
         if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
             console.log(`${LOG_PREFIX} ℹ️ Tabla calendario_produccion no existe, se omite.`);
             return;
         }
         
-        // 2. Verificar columnas actuales
         const columns = db.exec('PRAGMA table_info(calendario_produccion)');
         const columnNames = columns[0]?.values?.map(row => row[1]) || [];
         
         console.log(`${LOG_PREFIX} Columnas actuales (${columnNames.length}): ${columnNames.join(', ')}`);
         
-        // 3. Añadir producto_id si no existe
         if (!columnNames.includes('producto_id')) {
             try {
                 db.run('ALTER TABLE calendario_produccion ADD COLUMN producto_id INTEGER');
                 console.log(`${LOG_PREFIX} ✅ Columna producto_id AÑADIDA correctamente`);
                 
-                // Verificar que se añadió
                 const verifyColumns = db.exec('PRAGMA table_info(calendario_produccion)');
                 const verifyNames = verifyColumns[0]?.values?.map(row => row[1]) || [];
                 if (verifyNames.includes('producto_id')) {
@@ -665,7 +1159,6 @@ async function ensureProductoIdColumn(db) {
             console.log(`${LOG_PREFIX} ✓ Columna producto_id ya existe`);
         }
         
-        // 4. Crear índice para producto_id
         try {
             db.run('CREATE INDEX IF NOT EXISTS idx_calendario_produccion_producto ON calendario_produccion(producto_id)');
             console.log(`${LOG_PREFIX} ✅ Índice idx_calendario_produccion_producto OK`);
@@ -673,7 +1166,6 @@ async function ensureProductoIdColumn(db) {
             console.warn(`${LOG_PREFIX} ⚠️ Error creando índice:`, e.message);
         }
         
-        // 5. Contar cuántas producciones tienen producto_id definido
         try {
             const countResult = db.exec(`SELECT COUNT(*) as total, SUM(CASE WHEN producto_id IS NOT NULL THEN 1 ELSE 0 END) as con_producto FROM calendario_produccion WHERE deleted_at IS NULL`);
             const total = countResult[0]?.values?.[0]?.[0] || 0;
@@ -690,13 +1182,6 @@ async function ensureProductoIdColumn(db) {
     }
 }
 
-/**
- * 🆕 v2.2.7: Obtiene el objeto completo del producto asociado a una
- * producción guardada.
- * 
- * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
- * @returns {object|null} - Objeto del producto o null si no hay
- */
 function getProductoDeProduccion(fechaISO) {
     const LOG_PREFIX = '🔍 [getProductoDeProduccion]';
     
@@ -741,13 +1226,6 @@ function getProductoDeProduccion(fechaISO) {
     }
 }
 
-/**
- * 🆕 v2.2.7: Devuelve la config de producción + el objeto del producto
- * asociado (si existe).
- * 
- * @param {string} fechaISO - Fecha en formato YYYY-MM-DD
- * @returns {object|null} - Objeto con { config, producto } o null
- */
 function getProduccionConProducto(fechaISO) {
     try {
         const config = getProduccionByFecha(fechaISO);
@@ -772,12 +1250,6 @@ function getProduccionConProducto(fechaISO) {
     }
 }
 
-/**
- * 🆕 v2.2.7: Valida que un producto_id existe y devuelve su info.
- * 
- * @param {number} productoId - ID del producto
- * @returns {object} - { valido: bool, producto: object|null, razon: string }
- */
 function validarProductoId(productoId) {
     try {
         if (!productoId) {
@@ -805,14 +1277,6 @@ function validarProductoId(productoId) {
     }
 }
 
-/**
- * 🆕 v2.2.7: Cuenta cuántas producciones tienen producto_id definido
- * en un rango de fechas.
- * 
- * @param {string} desde - Fecha ISO YYYY-MM-DD
- * @param {string} hasta - Fecha ISO YYYY-MM-DD
- * @returns {object} - { total, conProducto, sinProducto, detalles }
- */
 function contarProduccionConProducto(desde, hasta) {
     try {
         const negocioId = getNegocioIdActual();
@@ -1812,6 +2276,8 @@ async function createAllTables(db) {
             dash_show_payment_methods INTEGER DEFAULT 1, dash_show_quick_actions INTEGER DEFAULT 1,
             dash_show_bank_qr INTEGER DEFAULT 0, dash_show_help_button INTEGER DEFAULT 1,
             dash_show_orders_today INTEGER DEFAULT 1, dash_chart_mode TEXT DEFAULT 'last7',
+            sound_enabled INTEGER DEFAULT 1, sound_id TEXT DEFAULT 'beep',
+            guia_rapida_activa INTEGER DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP, deleted_at DATETIME DEFAULT NULL,
             FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
 
@@ -1998,6 +2464,25 @@ async function createAllTables(db) {
             uuid TEXT,
             FOREIGN KEY (negocio_id) REFERENCES negocios(id),
             FOREIGN KEY (producto_id) REFERENCES productos(id))`);
+
+        db.run(`CREATE TABLE IF NOT EXISTS bank_default_user (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL UNIQUE,
+            bank_account_id INTEGER NOT NULL,
+            negocio_id INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id))`);
+
+        db.run(`CREATE TABLE IF NOT EXISTS config_bancaria_negocio (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            negocio_id INTEGER NOT NULL UNIQUE,
+            permitir_ver_qr_otros INTEGER DEFAULT 0,
+            permitir_cambiar_default INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
 
         console.log('✅ Todas las tablas creadas/verificadas');
     } catch (error) {
@@ -2255,7 +2740,7 @@ function getProduccionByFecha(fecha) {
 }
 
 function saveProduccion(data) {
-    const LOG_PREFIX = '💾 [saveProduccion v2.3.0]';
+    const LOG_PREFIX = '💾 [saveProduccion v2.3.4]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -2453,7 +2938,7 @@ function getProduccionRango(desde, hasta) {
 }
 
 function saveProduccionRango(data) {
-    const LOG_PREFIX = '💾💾 [saveProduccionRango v2.3.0]';
+    const LOG_PREFIX = '💾💾 [saveProduccionRango v2.3.4]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -2672,7 +3157,7 @@ function writeBackupMeta(db, backupType) {
         db.run(`INSERT INTO ${BACKUP_META_TABLE} 
             (backup_type, backup_date, backup_version, backup_negocio_id, backup_negocio_nombre, backup_user, backup_user_role)
             VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-            backupType, new Date().toISOString(), '2.3.0', negocioId,
+            backupType, new Date().toISOString(), '2.3.4', negocioId,
             negocio?.nombre || 'Desconocido', user?.username || 'Desconocido',
             user?.is_admin === 1 ? 'admin' : 'user'
         ]);
@@ -2702,38 +3187,116 @@ function readBackupMeta(backupDb) {
 }
 
 // ============================================================
-// BANK ACCOUNTS
+// 🆕 CORRECCIÓN #16: BANK ACCOUNTS CON PERMISOS
 // ============================================================
 
+function getBankAccountsParaUsuario() {
+    const LOG_PREFIX = '🏦 [getBankAccountsParaUsuario]';
+    
+    try {
+        const user = window.AuthModule?.getCurrentUser();
+        if (!user) {
+            console.warn(`${LOG_PREFIX} ⚠️ No hay usuario autenticado`);
+            return [];
+        }
+        
+        const negocioId = getNegocioIdActual();
+        const esAdmin = user.is_admin === 1;
+        const config = getConfigBancaria();
+        
+        console.log(`${LOG_PREFIX} user=#${user.id}, isAdmin=${esAdmin}, permitirVerOtros=${config.permitir_ver_qr_otros}`);
+        
+        if (esAdmin) {
+            const todas = query(`
+                SELECT * FROM bank_accounts 
+                WHERE negocio_id = ? AND deleted_at IS NULL 
+                ORDER BY is_default DESC, created_at DESC
+            `, [negocioId]);
+            console.log(`${LOG_PREFIX} ✅ Admin ve ${todas.length} cuentas`);
+            return todas;
+        }
+        
+        if (config.permitir_ver_qr_otros) {
+            const todas = query(`
+                SELECT * FROM bank_accounts 
+                WHERE negocio_id = ? AND deleted_at IS NULL 
+                ORDER BY is_default DESC, created_at DESC
+            `, [negocioId]);
+            console.log(`${LOG_PREFIX} ✅ No-admin ve ${todas.length} cuentas (permitido ver otros)`);
+            return todas;
+        } else {
+            const propias = query(`
+                SELECT * FROM bank_accounts 
+                WHERE negocio_id = ? AND user_id = ? AND deleted_at IS NULL 
+                ORDER BY is_default DESC, created_at DESC
+            `, [negocioId, user.id]);
+            console.log(`${LOG_PREFIX} ✅ No-admin ve ${propias.length} cuentas propias`);
+            return propias;
+        }
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return [];
+    }
+}
+
 function getBankAccounts() {
-    const negocioId = getNegocioIdActual();
-    return query('SELECT * FROM bank_accounts WHERE negocio_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, created_at DESC', [negocioId]);
+    return getBankAccountsParaUsuario();
 }
 
 function getBankAccount(id) {
-    const negocioId = getNegocioIdActual();
-    const results = query('SELECT * FROM bank_accounts WHERE id = ? AND negocio_id = ? AND deleted_at IS NULL', [id, negocioId]);
-    return results.length > 0 ? results[0] : null;
+    const LOG_PREFIX = '🏦 [getBankAccount]';
+    
+    try {
+        const negocioId = getNegocioIdActual();
+        const results = query(
+            'SELECT * FROM bank_accounts WHERE id = ? AND negocio_id = ? AND deleted_at IS NULL',
+            [id, negocioId]
+        );
+        
+        if (results.length === 0) return null;
+        
+        const account = results[0];
+        
+        if (!puedeUsuarioVerCuenta(account)) {
+            console.warn(`${LOG_PREFIX} ⚠️ Usuario sin permiso para ver cuenta #${id}`);
+            return null;
+        }
+        
+        return account;
+    } catch (e) {
+        return null;
+    }
 }
 
 function getDefaultBankAccount() {
-    const negocioId = getNegocioIdActual();
-    const results = query(`SELECT * FROM bank_accounts WHERE negocio_id = ? AND deleted_at IS NULL 
-         ORDER BY is_default DESC, created_at DESC LIMIT 1`, [negocioId]);
-    return results.length > 0 ? results[0] : null;
+    return getCuentaDefaultUsuario(getCurrentUserId());
 }
 
 function saveBankAccount(accountData) {
+    const LOG_PREFIX = '🏦 [saveBankAccount]';
+    
     const user = window.AuthModule?.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
+    
     const negocioId = getNegocioIdActual();
     const currentUserId = getCurrentUserId();
+    const esAdmin = user.is_admin === 1;
 
     try {
-        const existing = getBankAccounts();
-        const isFirst = existing.length === 0;
-        
         if (accountData.id) {
+            const existing = query(
+                'SELECT * FROM bank_accounts WHERE id = ? AND negocio_id = ? AND deleted_at IS NULL',
+                [accountData.id, negocioId]
+            );
+            
+            if (existing.length === 0) {
+                return { success: false, error: 'Cuenta no encontrada' };
+            }
+            
+            if (!puedeUsuarioEditarCuenta(existing[0])) {
+                return { success: false, error: 'No tienes permiso para editar esta cuenta' };
+            }
+            
             execute(`UPDATE bank_accounts SET bank = ?, owner_name = ?, account_number = ?, phone = ?, 
                     qr_code = ?, is_default = ?, modified_by = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ? AND negocio_id = ?`, [
@@ -2744,34 +3307,90 @@ function saveBankAccount(accountData) {
             if (accountData.is_default) {
                 execute('UPDATE bank_accounts SET is_default = 0 WHERE id != ? AND negocio_id = ?', [accountData.id, negocioId]);
             }
+            
+            console.log(`${LOG_PREFIX} ✅ Cuenta #${accountData.id} actualizada`);
             return { success: true, id: accountData.id };
         } else {
+            const targetUserId = esAdmin && accountData.user_id 
+                ? accountData.user_id 
+                : user.id;
+            
+            if (!esAdmin && accountData.user_id && accountData.user_id !== user.id) {
+                return { success: false, error: 'No puedes crear cuentas para otros usuarios' };
+            }
+            
+            const existing = getBankAccountsParaUsuario();
+            const isFirst = existing.length === 0;
+            
             const result = execute(`INSERT INTO bank_accounts 
                 (user_id, negocio_id, bank, owner_name, account_number, phone, qr_code, is_default, created_by, modified_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-                user.id, negocioId, accountData.bank, accountData.owner_name || null,
+                targetUserId, negocioId, accountData.bank, accountData.owner_name || null,
                 accountData.account_number, accountData.phone || null, accountData.qr_code || null,
                 isFirst ? 1 : 0, currentUserId, currentUserId]);
+            
+            console.log(`${LOG_PREFIX} ✅ Cuenta creada para user #${targetUserId}, id=${result.lastId}`);
             return { success: true, id: result.lastId };
         }
-    } catch (e) { return { success: false, error: e.message }; }
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return { success: false, error: e.message };
+    }
 }
 
 function deleteBankAccount(id) {
-    const negocioId = getNegocioIdActual();
+    const LOG_PREFIX = '🏦 [deleteBankAccount]';
+    
     try {
+        const negocioId = getNegocioIdActual();
+        
+        const existing = query(
+            'SELECT * FROM bank_accounts WHERE id = ? AND negocio_id = ? AND deleted_at IS NULL',
+            [id, negocioId]
+        );
+        
+        if (existing.length === 0) {
+            return { success: false, error: 'Cuenta no encontrada' };
+        }
+        
+        if (!puedeUsuarioEditarCuenta(existing[0])) {
+            return { success: false, error: 'No tienes permiso para eliminar esta cuenta' };
+        }
+        
         execute('UPDATE bank_accounts SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND negocio_id = ?', [id, negocioId]);
+        
+        try {
+            execute('DELETE FROM bank_default_user WHERE bank_account_id = ?', [id]);
+        } catch (e) {}
+        
+        console.log(`${LOG_PREFIX} ✅ Cuenta #${id} eliminada`);
         return { success: true };
-    } catch (e) { return { success: false, error: e.message }; }
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return { success: false, error: e.message };
+    }
 }
 
 function setDefaultBankAccount(id) {
-    const negocioId = getNegocioIdActual();
+    const LOG_PREFIX = '🏦 [setDefaultBankAccount]';
+    
     try {
+        const negocioId = getNegocioIdActual();
+        
+        if (!esUsuarioActualAdmin()) {
+            console.warn(`${LOG_PREFIX} ⚠️ No-admin intentó cambiar default global`);
+            return setCuentaDefaultUsuario(getCurrentUserId(), id);
+        }
+        
         execute('UPDATE bank_accounts SET is_default = 0 WHERE negocio_id = ?', [negocioId]);
         execute('UPDATE bank_accounts SET is_default = 1 WHERE id = ? AND negocio_id = ?', [id, negocioId]);
+        
+        console.log(`${LOG_PREFIX} ✅ Cuenta #${id} establecida como default global por admin`);
         return { success: true };
-    } catch (e) { return { success: false, error: e.message }; }
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return { success: false, error: e.message };
+    }
 }
 
 // ============================================================
@@ -2794,7 +3413,7 @@ function exportRecetasProductosSalva() {
 
         const salva = {
             _meta: {
-                app: 'Panario', version: '2.3.0', type: 'salva_recetas_productos',
+                app: 'Panario', version: '2.3.4', type: 'salva_recetas_productos',
                 exportDate: new Date().toISOString(), negocio_id: negocioId,
                 negocio_nombre: getNombreNegocioDB(),
                 counts: {
@@ -4190,7 +4809,22 @@ window.DBModule = {
     getWaitingList, getWaitingListCount, getNextWaitingPosition,
     addToWaitingList, removeFromWaitingList, reindexWaitingList,
     attendFromWaitingList, getWaitingListWithDetails, atenderParcialmenteDeLista,
+    // 🆕 CORRECCIÓN #16: Bank accounts con permisos
     getBankAccounts, getBankAccount, getDefaultBankAccount, saveBankAccount, deleteBankAccount, setDefaultBankAccount,
+    getBankAccountsParaUsuario,
+    getConfigBancaria, saveConfigBancaria,
+    getCuentaDefaultUsuario, setCuentaDefaultUsuario,
+    puedeUsuarioVerCuenta, puedeUsuarioEditarCuenta,
+    ensureBankDefaultUserTable, ensureConfigBancariaTable,
+    esUsuarioActualAdmin,
+    // 🆕 CORRECCIÓN #17: Preferencias individuales
+    ensureUserPreferencesColumns,
+    migratePreferencesFromLocalStorage,
+    getUserSoundConfig,
+    updateUserSoundConfig,
+    getUserGuiaRapidaActiva,
+    updateUserGuiaRapida,
+    // Fin correcciones
     getDailySummary,
     getPremiosConfig, savePremiosConfig,
     calcularMejorClienteDelMes, calcularMejorClienteDelAño,
@@ -4211,10 +4845,12 @@ window.DBModule = {
     BACKUP_TYPE_COMPLETE, BACKUP_TYPE_DATA_ONLY
 };
 
-console.log('📦 DB Module cargado correctamente v2.3.0 (CORRECCIÓN #1 250926: conteo de UNIDADES)');
-console.log('   🆕 Novedades v2.3.0:');
-console.log('      • contarPedidosYVentasFecha() ahora suma UNIDADES (order_items.quantity)');
-console.log('      • Solo cuenta productos con CMPBC definido (> 0)');
-console.log('      • Las ventas directas también suman UNIDADES (sales.quantity)');
-console.log('      • NUEVA: contarPedidosYVentasFechaDetallado() con desglose por producto');
-console.log('      • Mantiene retrocompatibilidad total');
+console.log('📦 DB Module cargado correctamente v2.3.4');
+console.log('   🎯 Correcciones aplicadas:');
+console.log('      ✅ #16 (240926): Permisos bancarios');
+console.log('      ✅ #17 (240926): Configuraciones individuales');
+console.log('      ✅ #1 (250926): Conteo de UNIDADES');
+console.log('   🆕 Novedades v2.3.4:');
+console.log('      • 3 nuevas columnas en users: sound_enabled, sound_id, guia_rapida_activa');
+console.log('      • 4 nuevas funciones: getUserSoundConfig, updateUserSoundConfig, getUserGuiaRapidaActiva, updateUserGuiaRapida');
+console.log('      • Migración automática desde localStorage → BD');

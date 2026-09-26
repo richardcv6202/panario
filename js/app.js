@@ -1,77 +1,29 @@
 // ============================================================
 // 📦 APP CONTROLLER - Panario
-// CORREGIDO: Botón ❓ del Dashboard eliminado
-// ACTUALIZADO: Gráfico con encabezado único (sin duplicación)
-// AÑADIDO: Detección de ?refresh=timestamp tras importación
-// AÑADIDO: FASE 12 - Tarjeta de premios en Dashboard + notificación
-// CORREGIDO FASE 1 (160926):
-//   - Detección de ?refresh= ahora FUERZA recarga real de BD
-//   - Listener para evento 'db-saved' que refresca la vista actual
-//   - refreshCurrentView() para re-renderizar tras importaciones
-// CORREGIDO FASE 4A (170926):
-//   - Fecha con día de la semana en "Corriente hoy"
-//   - Helper cerrarTodosLosModalesRespaldo()
-// CORREGIDO (170926 v2):
-//   - Fix "Primer día de venta" con conversión de fecha UTC → local
-// CORREGIDO (170926 v3): 
-//   - formatDate() reescrito para NO convertir strings YYYY-MM-DD a UTC
-// AÑADIDO FASE C (180926 v3):
-//   - Variable global _chartMode con 3 modos
-//   - Selector desplegable en el header del gráfico
-//   - changeChartMode(mode), changeWeek(delta) respetan el modo
-//   - updateChartModeUI() sincroniza el selector y el label
-// AÑADIDO (180926 v4):
-//   - Nombre del negocio en header, título, dashboard, reportes
-// CORREGIDO FASE 1.4 (190926 v5): 🚀 FIX DEBOUNCE DEL DASHBOARD
-//   - setupDbSavedListener() ahora usa debounce de 500ms
-//   - Esto evita que el dashboard se re-renderice 4-5 veces por acción
-//   - Nueva función debouncedRefreshCurrentView() con cancelación
-//   - Log para diagnosticar cuántos eventos db-saved llegan
-// 🆕 FASE 3.2 (200926 v6):
-//   - NUEVA tarjeta: 🚀 Ventas liberadas (cantidad + importe)
-//   - NUEVA tarjeta: 🥇 Mejor día (fecha + importe)
-//   - NUEVA tarjeta: 📉 Peor día (fecha + importe)
-//   - NUEVA tarjeta: 👥 Ventas por empleado (top 3)
-//   - NUEVA función: formatearFechaInteligente() para "Corriente hoy"
-//   - Homogeneizado alturas de tarjetas (min-height: 90px)
-//   - Integración con toggles nuevos del perfil
-// 🆕 FASE 4.2 (#14) (200926 v7): PERSISTENCIA DEL MODO DEL GRÁFICO
-//   - renderDashboardView() lee chart_mode desde dashConfig (BD)
-//   - changeChartMode() guarda el modo en la BD del usuario
-//   - El selector se hidrata con el modo persistido
-// 🆕 FASE 5 (#2) (200926 v8): ENLACE "AYUDA DETALLADA"
-//   - Nueva función openDetailedHelp() → abre ayuda-panario.html
-// 🆕 FASE 4 (Entrega 4 - 210926 v9): ALTURAS HOMOGÉNEAS DE TARJETAS
-//   - Todas las tarjetas de estadísticas avanzadas tienen min-height: 90px
-// 🆕 ENTREGA 5 (230926 v10): PEDIDOS MAÑANA EN DASHBOARD
-//   - ✅ renderTarjetaPedidosHoy() muestra 3 columnas:
-//     * 📋 Pedidos hoy
-//     * 📅 Pedidos mañana (NUEVO)
-//     * ⏰ En lista de espera
-//   - ✅ Grid responsivo: 3 columnas en desktop, 1 columna en móvil
-//   - ✅ Alturas homogéneas en las 3 columnas
-//   - ✅ Fallback: si ordersTomorrowCount no existe, muestra "—"
-//   - ✅ Colores diferenciados: azul (hoy), púrpura (mañana), naranja (espera)
-//   - ✅ Click en cada columna navega a Pedidos con filtro apropiado
-//   - ✅ Iconos grandes y legibles
-//   - ✅ Compatibilidad total con el resto del Dashboard
-// 🆕 v2.2.2 (230926 v11): FALLBACK DE VERSIÓN ACTUALIZADO + LIMPIEZA DE ESTILOS
-//   - ✅ getAppVersion() fallback cambiado de '2.1.11' a '2.2.2'
-//   - ✅ navigate() ahora llama a limpiarEstilosResiduales() al cambiar de módulo
-//   - ✅ Se añade listener de 'visibilitychange' que llama a limpiarEstilosResiduales()
-//   - ✅ Se llama a limpiarEstilosResiduales() al inicio de showApp()
-//   - ✅ Se llama a limpiarEstilosResiduales() después de renderizar el dashboard
-//   - ✅ Sin cambios funcionales adicionales
-// 🆕 v2.2.3 (240926 v12): CORRECCIÓN #4 + CORRECCIÓN #19
-//   - ✅ CORRECCIÓN #4: Alturas homogéneas de tarjetas en móvil
-//     * CARD_STYLE_BASE ahora incluye height: 100% + box-sizing: border-box
-//     * min-height de tarjetas subió a 100px
-//     * Grids usan align-items: stretch
-//     * Se creó GRID_STYLE como constante reutilizable
-//   - ✅ CORRECCIÓN #19: Filtros al hacer clic en tarjetas del Dashboard
-//     * NUEVA función navigateWithFilters(section, filters)
-//     * renderTarjetaPedidosHoy() usa navigateWithFilters con filtros
-//     * mananaYYYYMMDD() exportada globalmente
+// v3.0.1 (260926): 🎯 FIX CRÍTICO - MutationObserver eliminado
+//   - ✅ BUG RESUELTO: El MutationObserver sobre el header causaba
+//     un BUCLE INFINITO de mutaciones cuando se abría la ayuda
+//     detallada. Cada mutación del header disparaba
+//     forzarStickyHeader() que a su vez mutaba el header, y eso
+//     volvía a disparar el observer... ad infinitum.
+//     El navegador se quedaba bloqueado y el modal de ayuda
+//     nunca aparecía.
+//   - ✅ SOLUCIÓN: Eliminado el MutationObserver por completo.
+//     Los otros 8 watchers (visibilitychange, pagehide, pageshow,
+//     blur, focus, resize, orientationchange, scroll, resume)
+//     son SUFICIENTES para detectar cuándo el header se deforma.
+//   - ✅ Mantenido forzarStickyHeader() pero solo se llama en
+//     eventos discretos (navigate, showApp, focus, etc.), NO en
+//     respuesta a mutaciones del DOM.
+//   - ✅ Mantenidas TODAS las funcionalidades de v3.0.0:
+//     * Corrección #5: Top bar reforzada (8 watchers)
+//     * Corrección #14: Integración de ?standalone=1
+//     * Debounce de db-saved (500ms)
+//     * Corrección #4: Alturas homogéneas de tarjetas
+//     * Corrección #19: Filtros al hacer clic en tarjetas
+//     * renderTarjetaPedidosHoy() con 3 columnas
+//     * Persistencia del modo del gráfico
+//     * Detección de ?refresh= tras importación
 // ============================================================
 
 let currentUser = null;
@@ -84,6 +36,21 @@ let dbReady = false;
 let _dbSavedDebounceTimer = null;
 const DB_SAVED_DEBOUNCE_MS = 500;
 let _dbSavedEventCount = 0;
+
+// ============================================================
+// 🆕 v3.0.0: CONTROL DE DEBOUNCE PARA FORZAR STICKY HEADER
+// ============================================================
+
+let _stickyHeaderDebounceTimer = null;
+const STICKY_HEADER_DEBOUNCE_MS = 100;
+
+// ============================================================
+// 🆕 v3.0.0: ESTADO DE LOS WATCHERS DEL HEADER
+// ============================================================
+// NOTA v3.0.1: Eliminado _headerMutationObserver. Ya no se usa.
+// ============================================================
+
+let _headerCleanupWatchersStarted = false;
 
 /**
  * Refresca la vista actual con debounce.
@@ -104,6 +71,195 @@ function debouncedRefreshCurrentView() {
         console.log(`🔄 [debounce] Refrescando vista (después de ${eventCount} evento${eventCount > 1 ? 's' : ''})`);
         refreshCurrentView();
     }, DB_SAVED_DEBOUNCE_MS);
+}
+
+// ============================================================
+// 🆕 v3.0.0: FORZAR STICKY HEADER (CORRECCIÓN #5)
+// ============================================================
+// 
+// Esta función se llama en múltiples momentos para asegurar que
+// el header SIEMPRE tenga position: sticky aplicado inline, incluso
+// si algún navegador móvil aplicó transform residual al body o
+// #appScreen al cambiar de app.
+// 
+// Es una medida defensiva adicional a las reglas CSS `!important`
+// ya existentes en style.css.
+// 
+// IMPORTANTE v3.0.1: Esta función NO debe llamarse en respuesta a
+// mutaciones del DOM (MutationObserver eliminado). Solo se llama
+// en eventos discretos como navigate(), showApp(), focus, etc.
+// ============================================================
+
+function forzarStickyHeader() {
+    try {
+        const header = document.querySelector('#appScreen > header');
+        if (!header) return;
+        
+        // Aplicar position: sticky inline con !important
+        header.style.setProperty('position', 'sticky', 'important');
+        header.style.setProperty('top', '0', 'important');
+        header.style.setProperty('z-index', '200', 'important');
+        header.style.setProperty('transform', 'none', 'important');
+        header.style.setProperty('will-change', 'auto', 'important');
+        
+        // Resetear cualquier transform residual en html, body, #appScreen y main
+        const targets = [
+            document.documentElement,
+            document.body,
+            document.getElementById('appScreen'),
+            document.getElementById('mainContent')
+        ].filter(el => el);
+        
+        const propsAResetear = [
+            'transform',
+            'will-change',
+            'isolation',
+            'filter',
+            'perspective',
+            'backface-visibility'
+        ];
+        
+        targets.forEach(el => {
+            propsAResetear.forEach(prop => {
+                if (el.style.getPropertyValue(prop)) {
+                    el.style.removeProperty(prop);
+                }
+            });
+        });
+        
+        // Loguear solo si hubo cambios visibles (evitar spam)
+        if (!header._stickyForced) {
+            console.log('🔧 [v3.0.1] forzarStickyHeader() aplicado al header');
+            header._stickyForced = true;
+        }
+    } catch (e) {
+        console.warn('⚠️ [v3.0.1] Error en forzarStickyHeader:', e);
+    }
+}
+
+/**
+ * 🆕 v3.0.0: Versión con debounce de forzarStickyHeader().
+ */
+function _debouncedForzarSticky() {
+    if (_stickyHeaderDebounceTimer) {
+        clearTimeout(_stickyHeaderDebounceTimer);
+    }
+    _stickyHeaderDebounceTimer = setTimeout(() => {
+        _stickyHeaderDebounceTimer = null;
+        forzarStickyHeader();
+        if (typeof window.limpiarEstilosResiduales === 'function') {
+            window.limpiarEstilosResiduales();
+        }
+    }, STICKY_HEADER_DEBOUNCE_MS);
+}
+
+// ============================================================
+// 🆕 v3.0.1: WATCHERS AMPLIADOS PARA EL HEADER (CORRECCIÓN #5)
+// ============================================================
+// 
+// Estos watchers se registran UNA SOLA VEZ. Detectan TODOS los
+// momentos en que el header podría deformarse y ejecutan
+// forzarStickyHeader() + limpiarEstilosResiduales().
+// 
+// v3.0.1: ELIMINADO el MutationObserver porque causaba un bucle
+// infinito. Los 8 watchers restantes son suficientes.
+// ============================================================
+
+function startHeaderCleanupWatchers() {
+    if (_headerCleanupWatchersStarted) {
+        console.log('🔄 [v3.0.1] Watchers de header ya estaban activos');
+        return;
+    }
+    
+    try {
+        // 1) visibilitychange: cuando la app vuelve a primer plano
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                console.log('👁️ [v3.0.1] visibilitychange → app vuelve a primer plano');
+                _debouncedForzarSticky();
+            }
+        });
+        
+        // 2) pagehide / pageshow: cuando la página se oculta/muestra (bfcache)
+        window.addEventListener('pagehide', () => {
+            console.log('📄 [v3.0.1] pagehide → página oculta');
+        });
+        
+        window.addEventListener('pageshow', (e) => {
+            if (e.persisted) {
+                console.log('📄 [v3.0.1] pageshow (bfcache) → forzando sticky');
+            } else {
+                console.log('📄 [v3.0.1] pageshow → forzando sticky');
+            }
+            _debouncedForzarSticky();
+        });
+        
+        // 3) blur / focus: cuando la ventana pierde/recupera foco
+        // (cambio de app en móvil)
+        window.addEventListener('blur', () => {
+            console.log('🔴 [v3.0.1] blur → ventana pierde foco');
+        });
+        
+        window.addEventListener('focus', () => {
+            console.log('🟢 [v3.0.1] focus → ventana recupera foco');
+            _debouncedForzarSticky();
+        });
+        
+        // 4) resize: cuando cambia el tamaño de la ventana
+        window.addEventListener('resize', () => {
+            _debouncedForzarSticky();
+        });
+        
+        // 5) orientationchange: cuando cambia la orientación
+        window.addEventListener('orientationchange', () => {
+            console.log('📱 [v3.0.1] orientationchange');
+            setTimeout(_debouncedForzarSticky, 100);
+        });
+        
+        // 6) scroll: cuando se hace scroll
+        document.addEventListener('scroll', () => {
+            _debouncedForzarSticky();
+        }, { capture: true, passive: true });
+        
+        // 7) resume: evento de Cordova/PhoneGap (algunos móviles)
+        document.addEventListener('resume', () => {
+            console.log('▶️ [v3.0.1] resume (Cordova)');
+            _debouncedForzarSticky();
+        }, false);
+        
+        // 8) innerHeight: detectar cambios en la barra de direcciones del móvil
+        let _lastInnerHeight = window.innerHeight;
+        window.addEventListener('resize', () => {
+            const newInnerHeight = window.innerHeight;
+            if (Math.abs(newInnerHeight - _lastInnerHeight) > 20) {
+                _lastInnerHeight = newInnerHeight;
+            }
+        });
+        
+        // ❌ v3.0.1: ELIMINADO el MutationObserver.
+        // Causaba un bucle infinito de mutaciones cuando se abría
+        // el modal de ayuda detallada. Cada mutación del header
+        // disparaba forzarStickyHeader() que a su vez mutaba el
+        // header, y eso volvía a disparar el observer... ad infinitum.
+        
+        _headerCleanupWatchersStarted = true;
+        console.log('🔄 [v3.0.1] Watchers de header activados:');
+        console.log('   • visibilitychange');
+        console.log('   • pagehide / pageshow');
+        console.log('   • blur / focus');
+        console.log('   • resize / orientationchange');
+        console.log('   • scroll (con debounce)');
+        console.log('   • resume (Cordova)');
+        console.log('   ℹ️ MutationObserver: ELIMINADO (causaba bucle infinito)');
+        
+    } catch (e) {
+        console.warn('⚠️ [v3.0.1] Error activando watchers de header:', e);
+    }
+}
+
+function stopHeaderCleanupWatchers() {
+    _headerCleanupWatchersStarted = false;
+    console.log('🛑 [v3.0.1] Watchers de header detenidos');
 }
 
 // ============================================================
@@ -160,7 +316,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.2.3';
+    return '2.3.1';
 }
 
 window.getAppVersion = getAppVersion;
@@ -387,16 +543,24 @@ function cerrarTodosLosModalesRespaldo() {
 }
 
 // ============================================================
-// FASE 5 (#2): ABRIR AYUDA DETALLADA
+// 🆕 v3.0.0: ABRIR AYUDA DETALLADA (actualizado)
+// ============================================================
+// 
+// CAMBIO: Ahora usa HelpModule.abrirAyudaDetallada() en lugar de
+// abrir ayuda-panario.html en pestaña nueva.
+// 
+// Se mantiene como wrapper para compatibilidad hacia atrás.
 // ============================================================
 
 function openDetailedHelp() {
     try {
-        const url = './ayuda-panario.html';
-        console.log('📖 Abriendo ayuda detallada:', url);
-        window.open(url, '_blank', 'noopener,noreferrer');
-        if (window.showToast) {
-            window.showToast('📖 Abriendo ayuda detallada en nueva pestaña...', 'info', 2500);
+        console.log('📖 openDetailedHelp() → delegando en HelpModule');
+        
+        if (window.HelpModule && typeof window.HelpModule.abrirAyudaDetallada === 'function') {
+            window.HelpModule.abrirAyudaDetallada();
+        } else {
+            console.warn('⚠️ HelpModule no disponible, abriendo en pestaña nueva');
+            window.open('./index.html?standalone=1', '_blank', 'noopener,noreferrer');
         }
     } catch (e) {
         console.warn('⚠️ Error abriendo ayuda detallada:', e);
@@ -432,7 +596,7 @@ function navigateWithFilters(section, filters) {
 window.navigateWithFilters = navigateWithFilters;
 
 // ============================================================
-// INICIALIZACIÓN
+// 🆕 v3.0.0: INICIALIZACIÓN CON DETECCIÓN DE ?standalone=1
 // ============================================================
 
 async function initApp() {
@@ -444,7 +608,47 @@ async function initApp() {
             window.limpiarEstilosResiduales();
         }
         
+        // ============================================================
+        // 🆕 v3.0.0: DETECCIÓN DE ?standalone=1 (CORRECCIÓN #14)
+        // ============================================================
+        // Si el usuario abrió la app con ?standalone=1, se renderiza
+        // SOLO la ayuda a pantalla completa (sin header, sin nav, sin app).
+        // Esto es lo que usa el botón "🔗 ↗" de la ayuda.
+        // ============================================================
+        
         const urlParams = new URLSearchParams(window.location.search);
+        const standaloneParam = urlParams.get('standalone');
+        
+        if (standaloneParam === '1') {
+            console.log('📖 [v3.0.0] Modo standalone detectado → renderizando SOLO la ayuda');
+            
+            // Esperar a que HelpModule y HelpDetailedModule estén cargados
+            setTimeout(() => {
+                if (window.HelpModule && typeof window.HelpModule.renderAyudaStandalone === 'function') {
+                    window.HelpModule.renderAyudaStandalone();
+                    console.log('✅ [v3.0.0] Ayuda standalone renderizada');
+                } else {
+                    console.error('❌ [v3.0.0] HelpModule.renderAyudaStandalone no disponible');
+                    document.body.innerHTML = `
+                        <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; text-align: center; font-family: system-ui, sans-serif;">
+                            <div>
+                                <div style="font-size: 64px; margin-bottom: 16px;">❌</div>
+                                <h1 style="margin: 0 0 8px 0;">Error</h1>
+                                <p style="color: #666;">No se pudo cargar el módulo de ayuda.</p>
+                                <a href="./index.html" style="display: inline-block; margin-top: 16px; padding: 10px 20px; background: #f5a623; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600;">← Volver a Panario</a>
+                            </div>
+                        </div>
+                    `;
+                }
+            }, 300);
+            
+            return; // ← Salida temprana: NO se inicializa el resto de la app
+        }
+        
+        // ============================================================
+        // FLUJO NORMAL DE LA APP
+        // ============================================================
+        
         const refreshParam = urlParams.get('refresh');
         
         if (refreshParam) {
@@ -537,18 +741,16 @@ async function initApp() {
         createScrollButtons();
         setupDbSavedListener();
         
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                console.log('👁️ [app] App vuelve a primer plano → limpiando estilos');
-                if (typeof window.limpiarEstilosResiduales === 'function') {
-                    window.limpiarEstilosResiduales();
-                }
-            }
-        });
+        // 🆕 v3.0.0: Activar watchers reforzados del header
+        startHeaderCleanupWatchers();
+        forzarStickyHeader();
         
         setTimeout(adjustForSafeArea, 500);
 
         console.log(`✅ App inicializada correctamente (v${version})`);
+        console.log(`   🔧 [v3.0.1] Corrección #5 aplicada: 8 watchers de header activados`);
+        console.log(`   📖 [v3.0.0] Corrección #14 aplicada: ?standalone=1 soportado`);
+        console.log(`   🐛 [v3.0.1] Fix: MutationObserver eliminado (bucle infinito resuelto)`);
 
     } catch (error) {
         console.error('❌ Error inicializando app:', error);
@@ -1035,6 +1237,9 @@ function showApp(user) {
     updateDocumentTitle();
     updateAppHeader();
     
+    // 🆕 v3.0.0: Forzar sticky header al mostrar la app
+    setTimeout(forzarStickyHeader, 100);
+    
     document.dispatchEvent(new CustomEvent('panario:logged-in'));
     
     navigate('dashboard');
@@ -1043,6 +1248,7 @@ function showApp(user) {
         if (typeof window.limpiarEstilosResiduales === 'function') {
             window.limpiarEstilosResiduales();
         }
+        forzarStickyHeader();
     }, 200);
 }
 
@@ -1097,6 +1303,9 @@ function navigate(section) {
     if (typeof window.limpiarEstilosResiduales === 'function') {
         window.limpiarEstilosResiduales();
     }
+    
+    // 🆕 v3.0.0: Forzar sticky header al navegar
+    forzarStickyHeader();
     
     if (window.HelpModule && window.HelpModule.cerrarPopoverAyuda) {
         try { window.HelpModule.cerrarPopoverAyuda(); } catch (e) {}
@@ -1221,6 +1430,7 @@ function navigate(section) {
         if (typeof window.limpiarEstilosResiduales === 'function') {
             window.limpiarEstilosResiduales();
         }
+        forzarStickyHeader();
     }, 400);
 }
 
@@ -1792,6 +2002,7 @@ function renderDashboardView() {
         if (typeof window.limpiarEstilosResiduales === 'function') {
             window.limpiarEstilosResiduales();
         }
+        forzarStickyHeader();
     }, 400);
 }
 
@@ -3269,7 +3480,12 @@ window.renderSalesByEmployee = renderSalesByEmployee;
 window.openDetailedHelp = openDetailedHelp;
 window.getAppVersion = getAppVersion;
 
-console.log('📦 App Controller v' + getAppVersion() + ' (v2.2.3: Corrección #4 alturas homogéneas + Corrección #19 filtros en tarjetas)');
+// 🆕 v3.0.1: Exportar funciones nuevas
+window.forzarStickyHeader = forzarStickyHeader;
+window.startHeaderCleanupWatchers = startHeaderCleanupWatchers;
+window.stopHeaderCleanupWatchers = stopHeaderCleanupWatchers;
+
+console.log('📦 App Controller v' + getAppVersion() + ' (v3.0.1: Fix bucle infinito MutationObserver)');
 
 // ============================================================
 // INICIALIZACIÓN AUTOMÁTICA

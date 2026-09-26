@@ -34,6 +34,16 @@
 //   - ✅ Compatibilidad con iOS Safari (usa webkitAudioContext)
 //   - ✅ El sonido funciona INCLUSO si el usuario no ha hecho login
 //     todavía (por ejemplo, en la pantalla de login)
+// 🆕 v2.3.4 (260926): 🎯 CORRECCIÓN #17 (240926) - CONFIGURACIONES INDIVIDUALES
+//   - ✅ getSoundConfig() ahora lee de la BD (por user_id) en lugar
+//     de localStorage.
+//   - ✅ setSoundConfig() ahora guarda en la BD (por user_id) en
+//     lugar de localStorage.
+//   - ✅ Fallback a localStorage si no hay usuario actual (ej: en la
+//     pantalla de login).
+//   - ✅ Mantiene compatibilidad total: si el usuario no está
+//     logueado, se usa localStorage; si está logueado, se usa la BD.
+//   - ✅ Cada usuario tiene su propia configuración de sonido.
 // ============================================================
 
 window.NotificationsModule = {};
@@ -81,17 +91,6 @@ let _testAllSoundsOverlay = null;
 // ============================================================
 // 🆕 FASE 1.5: AUDIO CONTEXT SINGLETON (FIX DEFINITIVO)
 // ============================================================
-// 
-// Un solo AudioContext reutilizado para toda la app.
-// Se desbloquea con el PRIMER gesto del usuario (en cualquier
-// parte de la app, incluso en el login).
-// 
-// Estrategia:
-//   1. Registrar listeners de gesto INMEDIATAMENTE al cargar el módulo
-//   2. Al primer gesto, intentar crear + resume() del AudioContext
-//   3. Si falla, reintentar en el siguiente gesto
-//   4. Si supera MAX_UNLOCK_ATTEMPTS, dejar de intentar (evitar spam)
-// ============================================================
 
 let _audioContext = null;
 let _audioUnlocked = false;
@@ -99,10 +98,6 @@ let _audioUnlockAttempts = 0;
 let _audioUnlockPending = false;
 const MAX_UNLOCK_ATTEMPTS = 10;
 
-/**
- * Obtiene (o crea) el AudioContext singleton.
- * NO llama a resume() automáticamente.
- */
 function getAudioContext() {
     if (_audioContext) return _audioContext;
     
@@ -123,24 +118,15 @@ function getAudioContext() {
     }
 }
 
-/**
- * 🆕 FASE 1.5: Intenta desbloquear el AudioContext.
- * 
- * @param {string} source - Origen del intento (para logs)
- * @returns {Promise<boolean>} true si quedó desbloqueado
- */
 async function unlockAudio(source = 'unknown') {
-    // Ya desbloqueado → OK
     if (_audioUnlocked && _audioContext && _audioContext.state === 'running') {
         return true;
     }
     
-    // Demasiados intentos → detener para no spamear
     if (_audioUnlockAttempts >= MAX_UNLOCK_ATTEMPTS) {
         return false;
     }
     
-    // Evitar intentos simultáneos
     if (_audioUnlockPending) {
         return false;
     }
@@ -155,12 +141,10 @@ async function unlockAudio(source = 'unknown') {
             return false;
         }
         
-        // Si está suspendido, intentar resume
         if (ctx.state === 'suspended') {
             try {
                 await ctx.resume();
             } catch (e) {
-                // Silencioso: el navegador bloquea sin gesto
                 _audioUnlockPending = false;
                 return false;
             }
@@ -170,20 +154,17 @@ async function unlockAudio(source = 'unknown') {
             _audioUnlocked = true;
             console.log(`🔊 AudioContext desbloqueado correctamente (intento #${_audioUnlockAttempts}, origen: ${source})`);
             
-            // Reproducir un sonido muy corto para confirmar
             try {
                 const oscillator = ctx.createOscillator();
                 const gainNode = ctx.createGain();
                 oscillator.connect(gainNode);
                 gainNode.connect(ctx.destination);
-                oscillator.frequency.value = 1; // Prácticamente inaudible
+                oscillator.frequency.value = 1;
                 gainNode.gain.setValueAtTime(0.0001, ctx.currentTime);
                 gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.01);
                 oscillator.start(ctx.currentTime);
                 oscillator.stop(ctx.currentTime + 0.01);
-            } catch (e) {
-                // Silencioso
-            }
+            } catch (e) {}
             
             _audioUnlockPending = false;
             return true;
@@ -198,20 +179,15 @@ async function unlockAudio(source = 'unknown') {
     }
 }
 
-/**
- * 🆕 FASE 1.5: Configura los listeners de unlock.
- * Se llama INMEDIATAMENTE al cargar el módulo (al final del archivo).
- */
 function setupAudioUnlockListeners() {
     const events = ['click', 'touchstart', 'touchend', 'keydown', 'pointerdown', 'mousedown'];
     
     let attemptsCount = 0;
-    const maxEventAttempts = 30; // Después de 30 gestos, quitar listeners
+    const maxEventAttempts = 30;
     
     const unlockHandler = async (e) => {
         attemptsCount++;
         
-        // Después de muchos intentos, quitar listeners
         if (attemptsCount > maxEventAttempts) {
             events.forEach(evt => {
                 document.removeEventListener(evt, unlockHandler, true);
@@ -223,7 +199,6 @@ function setupAudioUnlockListeners() {
         const unlocked = await unlockAudio(`gesto (${e.type})`);
         
         if (unlocked) {
-            // Una vez desbloqueado, quitar los listeners
             events.forEach(evt => {
                 document.removeEventListener(evt, unlockHandler, true);
             });
@@ -238,7 +213,6 @@ function setupAudioUnlockListeners() {
     console.log('🔊 Listeners de desbloqueo de audio registrados (FASE 1.5)');
     console.log(`   📋 Eventos: ${events.join(', ')}`);
     
-    // 🆕 FASE 1.5: Intentar unlock inmediato (algunos navegadores lo permiten)
     setTimeout(() => {
         unlockAudio('intento inicial').then(unlocked => {
             if (unlocked) {
@@ -247,7 +221,6 @@ function setupAudioUnlockListeners() {
         });
     }, 500);
     
-    // 🆕 FASE 1.5: Intentar unlock cuando el DOM esté listo
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => unlockAudio('DOMContentLoaded'), 300);
@@ -256,16 +229,6 @@ function setupAudioUnlockListeners() {
         setTimeout(() => unlockAudio('readyState-complete'), 300);
     }
 }
-
-// ============================================================
-// REGISTRAR LISTENERS AL CARGAR EL MÓDULO (CRÍTICO)
-// ============================================================
-// 
-// ⚠️ IMPORTANTE: Esta llamada es la CLAVE del fix.
-// Se ejecuta INMEDIATAMENTE al cargar el archivo, no cuando el
-// usuario hace login. Así el primer gesto del usuario (aunque
-// sea en el login) desbloquea el audio.
-// ============================================================
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', setupAudioUnlockListeners);
@@ -333,11 +296,35 @@ function initNotificationSystem() {
 }
 
 // ============================================================
-// CONFIGURACIÓN DE SONIDO
+// 🆕 CORRECCIÓN #17: CONFIGURACIÓN DE SONIDO (INDIVIDUAL)
+// ============================================================
+// 
+// ANTES: Se guardaba en localStorage (GLOBAL, compartido).
+// AHORA: Se guarda en la BD con user_id (INDIVIDUAL por usuario).
+//
+// FALLBACK: Si no hay usuario logueado (ej: pantalla de login),
+// se sigue usando localStorage para no romper nada.
 // ============================================================
 
+/**
+ * 🆕 CORRECCIÓN #17: Obtiene la configuración de sonido del usuario actual.
+ * 
+ * Prioridad:
+ *   1. Si hay usuario logueado → leer de la BD.
+ *   2. Si no hay usuario → leer de localStorage (fallback).
+ */
 function getSoundConfig() {
     try {
+        // 🆕 CORRECCIÓN #17: Intentar leer de la BD primero
+        const user = window.AuthModule?.getCurrentUser();
+        if (user && user.id && window.DBModule && typeof window.DBModule.getUserSoundConfig === 'function') {
+            const dbConfig = window.DBModule.getUserSoundConfig(user.id);
+            if (dbConfig && typeof dbConfig.enabled === 'boolean' && dbConfig.soundId) {
+                return dbConfig;
+            }
+        }
+        
+        // Fallback: localStorage (para pantalla de login)
         const saved = localStorage.getItem(SOUND_CONFIG_KEY);
         if (saved) {
             return { ...DEFAULT_SOUND_CONFIG, ...JSON.parse(saved) };
@@ -348,11 +335,34 @@ function getSoundConfig() {
     return { ...DEFAULT_SOUND_CONFIG };
 }
 
+/**
+ * 🆕 CORRECCIÓN #17: Guarda la configuración de sonido del usuario actual.
+ * 
+ * Prioridad:
+ *   1. Si hay usuario logueado → guardar en la BD.
+ *   2. Si no hay usuario → guardar en localStorage (fallback).
+ * 
+ * IMPORTANTE: Siempre guarda también en localStorage como caché,
+ * para que el próximo login lea rápido sin consultar la BD.
+ */
 function setSoundConfig(config) {
     try {
         const merged = { ...DEFAULT_SOUND_CONFIG, ...config };
+        
+        // 🆕 CORRECCIÓN #17: Guardar en la BD si hay usuario logueado
+        const user = window.AuthModule?.getCurrentUser();
+        if (user && user.id && window.DBModule && typeof window.DBModule.updateUserSoundConfig === 'function') {
+            const result = window.DBModule.updateUserSoundConfig(user.id, merged);
+            if (result.success) {
+                console.log('🔊 Config de sonido guardada en BD para user #' + user.id + ':', merged);
+            } else {
+                console.warn('⚠️ Error guardando config de sonido en BD:', result.error);
+            }
+        }
+        
+        // Guardar SIEMPRE en localStorage como caché/fallback
         localStorage.setItem(SOUND_CONFIG_KEY, JSON.stringify(merged));
-        console.log('🔊 Config de sonido guardada:', merged);
+        
         return { success: true, config: merged };
     } catch (e) {
         console.error('Error guardando config de sonido:', e);
@@ -372,12 +382,6 @@ function getAvailableSounds() {
 // 🆕 FASE 1.5: REPRODUCIR SONIDO (CON REINTENTOS)
 // ============================================================
 
-/**
- * Reproduce un sonido por ID usando el AudioContext singleton.
- * 
- * @param {string} soundId - ID del sonido ('beep', 'chime', etc.)
- * @returns {Promise<boolean>} true si se reprodujo
- */
 async function playSoundById(soundId) {
     const config = getSoundConfig();
     
@@ -391,31 +395,24 @@ async function playSoundById(soundId) {
     }
     
     try {
-        // Obtener el AudioContext singleton
         const ctx = getAudioContext();
         if (!ctx) return false;
         
-        // Si está suspendido, intentar resume
         if (ctx.state === 'suspended') {
             try {
                 await ctx.resume();
             } catch (e) {
-                // El navegador bloqueó el resume (sin gesto del usuario)
-                // Intentar unlock en segundo plano (sin bloquear)
                 unlockAudio('playSoundById-fallback');
                 return false;
             }
         }
         
-        // Si aún está suspendido después de resume, no podemos reproducir
         if (ctx.state !== 'running') {
             return false;
         }
         
-        // Marcar como desbloqueado si llegamos aquí
         _audioUnlocked = true;
         
-        // Crear oscilador y gain node (se destruyen al terminar)
         const oscillator = ctx.createOscillator();
         const gainNode = ctx.createGain();
         
@@ -425,7 +422,6 @@ async function playSoundById(soundId) {
         oscillator.frequency.value = sound.freq;
         oscillator.type = 'sine';
         
-        // Fade in/out para evitar clicks
         const now = ctx.currentTime;
         gainNode.gain.setValueAtTime(0, now);
         gainNode.gain.linearRampToValueAtTime(0.15, now + 0.01);
@@ -434,7 +430,6 @@ async function playSoundById(soundId) {
         oscillator.start(now);
         oscillator.stop(now + sound.duration + 0.01);
         
-        // Limpiar después de terminar
         oscillator.onended = () => {
             try {
                 oscillator.disconnect();
@@ -445,19 +440,14 @@ async function playSoundById(soundId) {
         return true;
         
     } catch (e) {
-        // Silencioso: el navegador bloquea sin gesto
         return false;
     }
 }
 
-/**
- * Reproduce el sonido configurado según el tipo de notificación.
- */
 async function playNotificationSound(type) {
     const config = getSoundConfig();
     if (!config.enabled) return;
     
-    // Mapear tipo → sonido
     const soundMap = {
         [NOTIFICATION_TYPES.SUCCESS]: 'success',
         [NOTIFICATION_TYPES.ERROR]: 'alert',
@@ -559,11 +549,7 @@ function _removeTestAllSoundsOverlay() {
     _testAllSoundsOverlay = null;
 }
 
-/**
- * Prueba todos los sonidos con animación y delay.
- */
 async function testAllSounds() {
-    // Si ya hay una prueba en curso, abortarla y empezar de nuevo
     if (!_testAllSoundsAbort && _testAllSoundsOverlay) {
         abortTestAllSounds();
         await new Promise(r => setTimeout(r, 300));
@@ -574,17 +560,13 @@ async function testAllSounds() {
     const soundIds = Object.keys(SOUNDS).filter(id => id !== 'silent');
     const total = soundIds.length;
     
-    // Guardar el sonido configurado por el usuario para restaurarlo al final
     const configOriginal = getSoundConfig();
     const soundIdOriginal = configOriginal.soundId || 'beep';
     
-    // Desbloquear el audio primero
     await unlockAudio('testAllSounds');
     
-    // Crear overlay
     _createTestAllSoundsOverlay();
     
-    // Registrar handler de Escape
     const escHandler = function(e) {
         if (e.key === 'Escape') {
             abortTestAllSounds();
@@ -599,31 +581,24 @@ async function testAllSounds() {
             
             const soundId = soundIds[i];
             
-            // Actualizar overlay
             _updateTestAllSoundsOverlay(i + 1, total, soundId);
             
-            // Reproducir el sonido
             await playSoundById(soundId);
             
-            // Esperar 1.5s entre sonidos (último solo espera 1s)
             const waitTime = (i === total - 1) ? 1000 : 1500;
             
-            // Espera cancelable
             for (let elapsed = 0; elapsed < waitTime; elapsed += 100) {
                 if (_testAllSoundsAbort) break;
                 await new Promise(r => setTimeout(r, 100));
             }
         }
         
-        // Si no se abortó, restaurar el sonido configurado
         if (!_testAllSoundsAbort) {
             _updateTestAllSoundsOverlay(total, total, soundIdOriginal);
             
-            // Pequeña pausa y reproducir el sonido configurado
             await new Promise(r => setTimeout(r, 300));
             await playSoundById(soundIdOriginal);
             
-            // Toast de finalización
             await new Promise(r => setTimeout(r, 800));
             _removeTestAllSoundsOverlay();
             
@@ -633,7 +608,6 @@ async function testAllSounds() {
                 3000
             );
         } else {
-            // Se abortó: solo quitar overlay
             _removeTestAllSoundsOverlay();
         }
         
@@ -754,7 +728,6 @@ function showToast(message, type = 'info', duration = 8000) {
         [NOTIFICATION_TYPES.STOCK]: '🛒'
     };
     
-    // Verificar si ya existe una notificación similar (agrupación)
     const existingNotifications = container.querySelectorAll('.notification-item');
     let isDuplicate = false;
     existingNotifications.forEach(el => {
@@ -795,7 +768,6 @@ function showToast(message, type = 'info', duration = 8000) {
         position: relative;
     `;
     
-    // Reproducir sonido configurado (async, no bloquea)
     playNotificationSound(type).catch(() => {});
     
     notification.innerHTML = `
@@ -835,7 +807,6 @@ function addNotification(message, type = 'info', duration = 8000) {
         
         showToast(message, type, duration);
         
-        // Verificar si ya existe una notificación idéntica
         const existingIndex = notificationList.findIndex(n => 
             n.message === message && !n.resolved && !n.read
         );
@@ -858,7 +829,6 @@ function addNotification(message, type = 'info', duration = 8000) {
             resolved_at: null
         };
         
-        // Enviar push si es importante (sin emoji duplicado)
         if (type === NOTIFICATION_TYPES.ERROR || type === NOTIFICATION_TYPES.WARNING) {
             let pushTitle = message.split(' - ')[0] || 'Alerta';
             if (!/^[\u{1F300}-\u{1F9FF}]/u.test(pushTitle)) {
@@ -906,10 +876,7 @@ function showNotificationsModal() {
     modal.id = 'notifications-modal';
     modal.style.cssText = `
         position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
+        top: 0; left: 0; right: 0; bottom: 0;
         background: rgba(0,0,0,0.6);
         backdrop-filter: blur(6px);
         -webkit-backdrop-filter: blur(6px);
@@ -1340,6 +1307,9 @@ window.showToast = function(message, type = 'info', duration = 8000) {
 window.testAllSounds = testAllSounds;
 window.abortTestAllSounds = abortTestAllSounds;
 
-console.log('📦 Notifications Module v2.1.10 (FASE 1.5: fix definitivo - sonido desde el primer clic)');
+console.log('📦 Notifications Module v2.3.4 (CORRECCIÓN #17: sonido individual por usuario)');
 console.log('   🔊 AudioContext singleton listo');
 console.log('   🎯 Listeners de unlock registrados al cargar el módulo');
+console.log('   🆕 getSoundConfig() ahora lee de la BD (user_id)');
+console.log('   🆕 setSoundConfig() ahora guarda en la BD (user_id)');
+console.log('   🔄 Fallback a localStorage si no hay usuario logueado');

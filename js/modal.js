@@ -26,6 +26,27 @@
 //   - ✅ La limpieza se ejecuta también cada vez que se abre un modal
 //   - ✅ Se marca el body con clase 'modal-open' mientras hay un modal
 //     abierto, para que las reglas CSS defensivas sepan cuándo resetear
+// 🆕 v2.0.12 (250926 v6): 🎯 CORRECCIÓN #8 (240926) - RACE CONDITION FIX
+//   - ✅ BUG RESUELTO: El modal de progreso se cerraba ANTES de mostrar
+//     el estado final (✅ success / ❌ error), causando que el usuario
+//     viera el modal desaparecer abruptamente sin ver el resultado.
+//   - ✅ NUEVO: Sistema de "generación" del modal de progreso. Cada
+//     showProgressModal() incrementa un contador _progressGeneration,
+//     y cada timeout verifica que sigue siendo la misma generación.
+//   - ✅ NUEVO: _clearAllProgressTimeouts() cancela TODOS los timeouts
+//     pendientes (cierre, fallbacks, safety) de una sola vez.
+//   - ✅ CAMBIO: showProgressSuccess() y showProgressError() ahora
+//     cancelan TODOS los timeouts previos antes de programar su
+//     propio cierre único a 2500/3000ms.
+//   - ✅ CAMBIO: closeProgressModal() acepta un parámetro {force} para
+//     forzar el cierre inmediato (ignorando el estado final visible).
+//   - ✅ CAMBIO: Los fallbacks de 250/1000/2000ms se reemplazan por
+//     UN SOLO fallback de seguridad a 1500ms (más simple, más limpio).
+//   - ✅ NUEVO: Flag _progressHasFinalState que indica si el modal
+//     está mostrando un success/error. Si es true y NO es forzado,
+//     closeProgressModal() respeta el delay de cierre.
+//   - ✅ NUEVO: Logs de diagnóstico con número de generación para
+//     facilitar el diagnóstico de futuros bugs.
 // ============================================================
 
 window.ModalModule = {};
@@ -37,6 +58,10 @@ window.ModalModule = {};
 const MODAL_Z_INDEX = 9999999999;
 const PROGRESS_Z_INDEX = 9999999999;
 const PROGRESS_SAFETY_TIMEOUT_MS = 30000;
+const PROGRESS_SUCCESS_CLOSE_DELAY_MS = 2500;
+const PROGRESS_ERROR_CLOSE_DELAY_MS = 3000;
+const PROGRESS_FADE_OUT_MS = 250;
+const PROGRESS_FALLBACK_MS = 1500;
 
 // ============================================================
 // 🆕 v2.0.9: STACK DE OVERFLOW DEL BODY (LIFO)
@@ -60,6 +85,30 @@ let _currentModalTimeoutId = null;
 
 let _styleCleanupWatchersStarted = false;
 let _styleCleanupDebounceTimer = null;
+
+// ============================================================
+// 🆕 v2.0.12: ESTADO DEL MODAL DE PROGRESO
+// ============================================================
+// 
+// _progressGeneration: contador que se incrementa cada vez que se
+//   abre un nuevo modal de progreso. Permite que los timeouts
+//   verifiquen que siguen siendo válidos (misma generación).
+// 
+// _progressCloseTimeoutId: timeout del cierre programado tras
+//   mostrar success/error.
+// 
+// _progressFallbackTimeouts: array de timeouts de fallback (solo
+//   debería haber uno a la vez).
+// 
+// _progressHasFinalState: true si el modal está mostrando el
+//   estado final (✅ o ❌). Sirve para que closeProgressModal()
+//   no cierre el modal si aún no se ha mostrado el resultado.
+// ============================================================
+
+let _progressGeneration = 0;
+let _progressCloseTimeoutId = null;
+let _progressFallbackTimeouts = [];
+let _progressHasFinalState = false;
 
 // ============================================================
 // 🆕 v2.0.9: FUNCIONES DE BLOQUEO/DESBLOQUEO DEL SCROLL
@@ -90,7 +139,6 @@ function unlockBodyScroll() {
     try {
         const prev = _bodyOverflowStack.pop();
         if (prev === undefined) {
-            // No hay nada en el stack: por seguridad, restaurar a ''
             document.body.style.overflow = '';
             console.log('🔓 Body scroll liberado (stack estaba vacío)');
         } else {
@@ -98,7 +146,6 @@ function unlockBodyScroll() {
             console.log(`🔓 Body scroll liberado (stack size: ${_bodyOverflowStack.length})`);
         }
         
-        // Si no hay más modales apilados, quitar la clase
         if (_bodyOverflowStack.length === 0) {
             document.body.classList.remove('modal-open');
         }
@@ -111,24 +158,6 @@ function unlockBodyScroll() {
  * 🆕 v2.0.10: Limpia TODOS los estilos residuales que puedan haber
  * quedado en el body, html, #appScreen, main o cualquier ancestro
  * del header, y que rompan `position: sticky`.
- * 
- * Esto es crítico en móvil: si un modal añade `transform` o
- * `will-change` a un ancestro del header, el `position: sticky`
- * del header deja de funcionar y se deforma la barra superior.
- * 
- * Propiedades que se resetean:
- *   - transform
- *   - will-change
- *   - isolation
- *   - filter
- *   - perspective
- *   - backface-visibility
- *   - contain (solo si es 'paint' o 'layout paint')
- *   - content-visibility
- *   - translate / rotate / scale (propiedades individuales)
- *   - offset-path / offset-distance
- * 
- * @returns {number} Número de propiedades limpiadas
  */
 function limpiarEstilosResiduales() {
     try {
@@ -140,7 +169,6 @@ function limpiarEstilosResiduales() {
             document.getElementById('authScreen')
         ].filter(el => el);
         
-        // 🆕 v2.0.10: Lista ampliada de propiedades que rompen sticky
         const propsAResetear = [
             'transform',
             'will-change',
@@ -176,8 +204,6 @@ function limpiarEstilosResiduales() {
                 }
             });
             
-            // 🆕 v2.0.10: contain solo se resetea si es 'paint' o 'layout paint',
-            // porque contain: layout puede ser legítimo en algunos elementos.
             try {
                 const containVal = el.style.getPropertyValue('contain');
                 if (containVal && (containVal.includes('paint') || containVal === 'strict' || containVal === 'content')) {
@@ -187,7 +213,6 @@ function limpiarEstilosResiduales() {
             } catch (e) {}
         });
         
-        // También limpiar el body overflow si quedó huérfano
         if (document.body && document.body.style.overflow === 'hidden' && _bodyOverflowStack.length === 0) {
             document.body.style.overflow = '';
             document.body.classList.remove('modal-open');
@@ -195,7 +220,6 @@ function limpiarEstilosResiduales() {
             limpiados++;
         }
         
-        // 🆕 v2.0.10: Si no hay modales abiertos, asegurar que la clase modal-open no esté
         if (document.body && _bodyOverflowStack.length === 0) {
             if (document.body.classList.contains('modal-open')) {
                 document.body.classList.remove('modal-open');
@@ -217,7 +241,6 @@ function limpiarEstilosResiduales() {
 
 /**
  * Limpia modales huérfanos del DOM y llama a limpiarEstilosResiduales().
- * Se llama al arrancar el módulo y al abrir cualquier modal.
  */
 function limpiarModalesHuerfanos() {
     try {
@@ -263,7 +286,6 @@ function limpiarModalesHuerfanos() {
         window._modalResolved = false;
         _currentModal = null;
         
-        // 🆕 v2.0.9: Limpiar estilos residuales
         limpiarEstilosResiduales();
         
         return customModals.length + limpiados;
@@ -283,14 +305,6 @@ if (document.readyState === 'loading') {
 // ============================================================
 // 🆕 v2.0.10: WATCHERS GLOBALES PARA LIMPIEZA AUTOMÁTICA
 // ============================================================
-// 
-// Estos listeners detectan situaciones donde el header podría
-// deformarse (cambio de visibilidad, resize, orientación, scroll,
-// focus) y ejecutan limpiarEstilosResiduales() para asegurar que
-// el `position: sticky` del header siga funcionando.
-// 
-// Se registran UNA SOLA VEZ cuando se llama a startStyleCleanupWatchers().
-// ============================================================
 
 function _debouncedLimpiarEstilos(delay = 150) {
     if (_styleCleanupDebounceTimer) {
@@ -309,7 +323,6 @@ function startStyleCleanupWatchers() {
     }
     
     try {
-        // 1) Cuando la app vuelve a primer plano (móvil)
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 console.log('👁️ [Modal] App vuelve a primer plano → limpiando estilos');
@@ -317,7 +330,6 @@ function startStyleCleanupWatchers() {
             }
         });
         
-        // 2) Cuando la página se restaura desde bfcache (back-forward cache)
         window.addEventListener('pageshow', (e) => {
             if (e.persisted) {
                 console.log('📄 [Modal] Página restaurada desde bfcache → limpiando estilos');
@@ -325,24 +337,19 @@ function startStyleCleanupWatchers() {
             }
         });
         
-        // 3) Cuando la ventana cambia de tamaño
         window.addEventListener('resize', () => {
             _debouncedLimpiarEstilos(200);
         });
         
-        // 4) Cuando cambia la orientación (portrait/landscape)
         window.addEventListener('orientationchange', () => {
             console.log('📱 [Modal] Cambio de orientación → limpiando estilos');
             _debouncedLimpiarEstilos(300);
         });
         
-        // 5) Cuando la ventana recibe el foco
         window.addEventListener('focus', () => {
             _debouncedLimpiarEstilos(150);
         });
         
-        // 6) Cuando el documento hace scroll (con debounce agresivo)
-        //    Nota: usamos capture porque el scroll puede ocurrir en main
         document.addEventListener('scroll', () => {
             _debouncedLimpiarEstilos(250);
         }, { capture: true, passive: true });
@@ -356,12 +363,9 @@ function startStyleCleanupWatchers() {
 }
 
 function stopStyleCleanupWatchers() {
-    // Los listeners anónimos no se pueden remover fácilmente.
-    // En la práctica, no es necesario detenerlos.
     _styleCleanupWatchersStarted = false;
 }
 
-// Activar watchers al cargar el módulo
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         setTimeout(startStyleCleanupWatchers, 200);
@@ -378,7 +382,6 @@ function showConfirm(options) {
     return new Promise((resolve) => {
         console.log('📦 Modal: showConfirm llamado', options);
         
-        // 🆕 v2.0.10: Limpiar estilos residuales antes de abrir un nuevo modal
         limpiarEstilosResiduales();
         
         if (_currentModal) {
@@ -416,14 +419,12 @@ function showConfirm(options) {
         document.body.appendChild(modal);
         _currentModal = modal;
         
-        // 🆕 v2.0.9: bloquear scroll
         lockBodyScroll();
     });
 }
 
 function showAlert(options) {
     return new Promise((resolve) => {
-        // 🆕 v2.0.10: Limpiar estilos residuales antes de abrir un nuevo modal
         limpiarEstilosResiduales();
         
         if (_currentModal) {
@@ -469,7 +470,6 @@ function showAlert(options) {
 
 function showPrompt(options) {
     return new Promise((resolve) => {
-        // 🆕 v2.0.10: Limpiar estilos residuales antes de abrir un nuevo modal
         limpiarEstilosResiduales();
         
         if (_currentModal) {
@@ -536,23 +536,42 @@ function showPrompt(options) {
 }
 
 // ============================================================
-// MODAL DE PROGRESO
+// MODAL DE PROGRESO — v2.0.12 (CORRECCIÓN #8: RACE CONDITION FIX)
+// ============================================================
+// 
+// 🎯 BUG RESUELTO:
+//   Antes, el modal de progreso se cerraba ANTES de mostrar el
+//   estado final (✅ success / ❌ error). El usuario veía el modal
+//   desaparecer abruptamente en lugar de ver el resultado.
+// 
+// 🛠️ SOLUCIÓN:
+//   1. Sistema de "generación" — cada showProgressModal() incrementa
+//      _progressGeneration. Los timeouts verifican que la generación
+//      no ha cambiado antes de ejecutarse.
+//   2. _clearAllProgressTimeouts() — cancela TODOS los timeouts
+//      pendientes (cierre, fallbacks, safety) de una sola vez.
+//   3. showProgressSuccess/Error() cancelan TODOS los timeouts
+//      previos y programan su propio cierre único.
+//   4. closeProgressModal() respeta el delay si hay un estado final
+//      visible, a menos que se llame con {force: true}.
+//   5. Un solo fallback de seguridad (1500ms) en lugar de tres.
 // ============================================================
 
-// ============================================================
-// MODAL DE PROGRESO — v2.0.11 (CORRECCIÓN #8: REFORZADO)
-// ============================================================
-// Cambios en esta versión:
-//   - z-index verificado al máximo (2147483647) para garantizar
-//     que aparezca por encima de CUALQUIER otro modal.
-//   - Timeout de seguridad de 30s mantenido.
-//   - Cierre GARANTIZADO con triple fallback (250ms, 1000ms, 2000ms).
-//   - Logs de diagnóstico detallados con prefijo [ProgressModal].
-//   - Verificación de que las funciones estén exportadas a window.
-//   - El modal se añade al body con appendChild tras eliminar
-//     cualquier instancia previa.
-//   - Se fuerza isolation: isolate para evitar conflictos de stacking.
-// ============================================================
+/**
+ * 🆕 v2.0.12: Cancela TODOS los timeouts pendientes del modal de progreso.
+ */
+function _clearAllProgressTimeouts() {
+    if (_progressCloseTimeoutId) {
+        clearTimeout(_progressCloseTimeoutId);
+        _progressCloseTimeoutId = null;
+    }
+    _progressFallbackTimeouts.forEach(id => clearTimeout(id));
+    _progressFallbackTimeouts = [];
+    if (window._progressSafetyTimeout) {
+        clearTimeout(window._progressSafetyTimeout);
+        window._progressSafetyTimeout = null;
+    }
+}
 
 function showProgressModal(options = {}) {
     const LOG_PREFIX = '⏳ [ProgressModal]';
@@ -564,17 +583,20 @@ function showProgressModal(options = {}) {
         icon = '⏳'
     } = options;
 
+    // 🆕 v2.0.12: Nueva generación + resetear estado
+    _progressGeneration++;
+    _progressHasFinalState = false;
+    const currentGeneration = _progressGeneration;
+    console.log(`${LOG_PREFIX} Nueva generación: ${currentGeneration}`);
+
+    // 🆕 v2.0.12: Cancelar TODOS los timeouts previos
+    _clearAllProgressTimeouts();
+
     // Eliminar cualquier instancia previa
     const existing = document.getElementById('progress-modal');
     if (existing) {
         console.log(`${LOG_PREFIX} Eliminando modal de progreso previo`);
         try { existing.remove(); } catch (e) {}
-    }
-
-    // Limpiar timeout previo
-    if (window._progressSafetyTimeout) {
-        clearTimeout(window._progressSafetyTimeout);
-        window._progressSafetyTimeout = null;
     }
 
     // Eliminar cualquier modal de confirmación pendiente para evitar conflictos de z-index
@@ -639,7 +661,7 @@ function showProgressModal(options = {}) {
                 <div id="progress-error-message" style="font-size: 14px; color: #ef4444; font-weight: 600;"></div>
             </div>
             
-            <button onclick="window.ModalModule.closeProgressModal()" 
+            <button onclick="window.ModalModule.closeProgressModal({force: true})" 
                     style="margin-top: 16px; padding: 6px 16px; font-size: 12px; background: transparent; color: var(--text-light); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer;">
                 ✕ Cerrar
             </button>
@@ -655,14 +677,18 @@ function showProgressModal(options = {}) {
         console.warn(`${LOG_PREFIX} Error en lockBodyScroll:`, e);
     }
 
-    console.log(`${LOG_PREFIX} Modal creado y añadido al DOM`);
+    console.log(`${LOG_PREFIX} Modal creado y añadido al DOM (gen ${currentGeneration})`);
 
-    // Timeout de seguridad
+    // 🆕 v2.0.12: Timeout de seguridad con verificación de generación
     window._progressSafetyTimeout = setTimeout(() => {
+        if (currentGeneration !== _progressGeneration) {
+            console.log(`${LOG_PREFIX} Safety timeout ignorado (gen cambió: ${currentGeneration} → ${_progressGeneration})`);
+            return;
+        }
         console.warn(`${LOG_PREFIX} Timeout de seguridad alcanzado (30s). Cerrando automáticamente.`);
         const stillThere = document.getElementById('progress-modal');
         if (stillThere) {
-            closeProgressModal();
+            closeProgressModal({ force: true });
             if (window.showToast) {
                 window.showToast('⚠️ La operación tardó demasiado. Modal cerrado por seguridad.', 'warning', 5000);
             }
@@ -674,7 +700,7 @@ function showProgressModal(options = {}) {
         update: (newMessage, newPercent) => updateProgressModal(newMessage, newPercent),
         success: (successMessage) => showProgressSuccess(successMessage),
         error: (errorMessage) => showProgressError(errorMessage),
-        close: () => closeProgressModal()
+        close: () => closeProgressModal({ force: true })
     };
 }
 
@@ -699,17 +725,19 @@ function updateProgressModal(message, percent = null) {
         }
     }
     
-    console.log(`${LOG_PREFIX} update: ${message || '(sin cambio)'} ${percent !== null ? percent + '%' : ''}`);
+    console.log(`${LOG_PREFIX} update: ${message || '(sin cambio)'} ${percent !== null ? percent + '%' : ''} (gen ${_progressGeneration})`);
 }
 
 function showProgressSuccess(message = 'Operación completada') {
     const LOG_PREFIX = '⏳ [ProgressModal]';
-    console.log(`${LOG_PREFIX} showProgressSuccess(): ${message}`);
+    console.log(`${LOG_PREFIX} showProgressSuccess(): ${message} (gen ${_progressGeneration})`);
     
-    if (window._progressSafetyTimeout) {
-        clearTimeout(window._progressSafetyTimeout);
-        window._progressSafetyTimeout = null;
-    }
+    // 🆕 v2.0.12: Cancelar TODOS los timeouts previos (incluidos fallbacks)
+    _clearAllProgressTimeouts();
+    
+    // 🆕 v2.0.12: Marcar que hay un estado final visible
+    _progressHasFinalState = true;
+    const currentGeneration = _progressGeneration;
     
     const iconEl = document.getElementById('progress-icon');
     const titleEl = document.getElementById('progress-title');
@@ -727,19 +755,29 @@ function showProgressSuccess(message = 'Operación completada') {
     if (successEl) successEl.style.display = 'block';
     if (successMsgEl) successMsgEl.textContent = message;
     
-    setTimeout(() => {
-        closeProgressModal();
-    }, 2500);
+    console.log(`${LOG_PREFIX} Estado ✅ visible. Cerrando en ${PROGRESS_SUCCESS_CLOSE_DELAY_MS}ms`);
+    
+    // 🆕 v2.0.12: Programar cierre ÚNICO con verificación de generación
+    _progressCloseTimeoutId = setTimeout(() => {
+        if (currentGeneration !== _progressGeneration) {
+            console.log(`${LOG_PREFIX} Cierre de success ignorado (gen cambió: ${currentGeneration} → ${_progressGeneration})`);
+            return;
+        }
+        console.log(`${LOG_PREFIX} Cerrando modal tras success (gen ${currentGeneration})`);
+        closeProgressModal({ force: true });
+    }, PROGRESS_SUCCESS_CLOSE_DELAY_MS);
 }
 
 function showProgressError(message = 'Ocurrió un error') {
     const LOG_PREFIX = '⏳ [ProgressModal]';
-    console.log(`${LOG_PREFIX} showProgressError(): ${message}`);
+    console.log(`${LOG_PREFIX} showProgressError(): ${message} (gen ${_progressGeneration})`);
     
-    if (window._progressSafetyTimeout) {
-        clearTimeout(window._progressSafetyTimeout);
-        window._progressSafetyTimeout = null;
-    }
+    // 🆕 v2.0.12: Cancelar TODOS los timeouts previos (incluidos fallbacks)
+    _clearAllProgressTimeouts();
+    
+    // 🆕 v2.0.12: Marcar que hay un estado final visible
+    _progressHasFinalState = true;
+    const currentGeneration = _progressGeneration;
     
     const iconEl = document.getElementById('progress-icon');
     const titleEl = document.getElementById('progress-title');
@@ -757,56 +795,72 @@ function showProgressError(message = 'Ocurrió un error') {
     if (errorEl) errorEl.style.display = 'block';
     if (errorMsgEl) errorMsgEl.textContent = message;
     
-    setTimeout(() => {
-        closeProgressModal();
-    }, 3000);
+    console.log(`${LOG_PREFIX} Estado ❌ visible. Cerrando en ${PROGRESS_ERROR_CLOSE_DELAY_MS}ms`);
+    
+    // 🆕 v2.0.12: Programar cierre ÚNICO con verificación de generación
+    _progressCloseTimeoutId = setTimeout(() => {
+        if (currentGeneration !== _progressGeneration) {
+            console.log(`${LOG_PREFIX} Cierre de error ignorado (gen cambió: ${currentGeneration} → ${_progressGeneration})`);
+            return;
+        }
+        console.log(`${LOG_PREFIX} Cerrando modal tras error (gen ${currentGeneration})`);
+        closeProgressModal({ force: true });
+    }, PROGRESS_ERROR_CLOSE_DELAY_MS);
 }
 
-function closeProgressModal() {
+function closeProgressModal(options = {}) {
     const LOG_PREFIX = '⏳ [ProgressModal]';
-    console.log(`${LOG_PREFIX} closeProgressModal() llamado`);
+    const { force = false } = options;
     
-    if (window._progressSafetyTimeout) {
-        clearTimeout(window._progressSafetyTimeout);
-        window._progressSafetyTimeout = null;
+    console.log(`${LOG_PREFIX} closeProgressModal() llamado (force: ${force}, hasFinalState: ${_progressHasFinalState}, gen ${_progressGeneration})`);
+    
+    // 🆕 v2.0.12: Si hay un estado final visible y NO es forzado, respetar el delay
+    if (_progressHasFinalState && !force) {
+        console.log(`${LOG_PREFIX} Estado final visible, respetando delay. No se cierra ahora.`);
+        return;
     }
+    
+    // 🆕 v2.0.12: Cancelar todos los timeouts pendientes
+    _clearAllProgressTimeouts();
     
     const modal = document.getElementById('progress-modal');
-    if (modal) {
-        modal.style.animation = 'modalFadeOut 0.25s ease forwards';
-        
-        // Fallback 1: 250ms
-        setTimeout(() => {
-            const stillThere = document.getElementById('progress-modal');
-            if (stillThere && stillThere.parentNode) {
-                stillThere.remove();
-                window._progressModal = null;
-                console.log(`${LOG_PREFIX} Modal eliminado en fallback 1 (250ms)`);
-            }
-        }, 250);
-        
-        // Fallback 2: 1000ms
-        setTimeout(() => {
-            const stillThere = document.getElementById('progress-modal');
-            if (stillThere && stillThere.parentNode) {
-                stillThere.remove();
-                window._progressModal = null;
-                console.warn(`${LOG_PREFIX} Modal forzado a cerrar en fallback 2 (1000ms)`);
-            }
-        }, 1000);
-        
-        // Fallback 3: 2000ms
-        setTimeout(() => {
-            const stillThere = document.getElementById('progress-modal');
-            if (stillThere && stillThere.parentNode) {
-                stillThere.remove();
-                window._progressModal = null;
-                console.warn(`${LOG_PREFIX} Modal forzado a cerrar en fallback 3 (2000ms)`);
-            }
-        }, 2000);
-    } else {
+    if (!modal) {
         console.log(`${LOG_PREFIX} No hay modal de progreso abierto`);
+        try { unlockBodyScroll(); } catch (e) {}
+        return;
     }
+    
+    const currentGeneration = _progressGeneration;
+    
+    modal.style.animation = 'modalFadeOut 0.25s ease forwards';
+    
+    // 🆕 v2.0.12: Cierre principal tras fade-out
+    _progressCloseTimeoutId = setTimeout(() => {
+        if (currentGeneration !== _progressGeneration) {
+            console.log(`${LOG_PREFIX} Cierre ignorado (gen cambió)`);
+            return;
+        }
+        const stillThere = document.getElementById('progress-modal');
+        if (stillThere && stillThere.parentNode) {
+            stillThere.remove();
+            window._progressModal = null;
+            console.log(`${LOG_PREFIX} Modal eliminado del DOM (gen ${currentGeneration})`);
+        }
+    }, PROGRESS_FADE_OUT_MS);
+    
+    // 🆕 v2.0.12: UN SOLO fallback de seguridad (1500ms)
+    _progressFallbackTimeouts.push(setTimeout(() => {
+        if (currentGeneration !== _progressGeneration) {
+            console.log(`${LOG_PREFIX} Fallback ignorado (gen cambió)`);
+            return;
+        }
+        const stillThere = document.getElementById('progress-modal');
+        if (stillThere && stillThere.parentNode) {
+            stillThere.remove();
+            window._progressModal = null;
+            console.warn(`${LOG_PREFIX} Modal forzado a cerrar en fallback (gen ${currentGeneration})`);
+        }
+    }, PROGRESS_FALLBACK_MS));
     
     try {
         unlockBodyScroll();
@@ -881,7 +935,6 @@ function closeModalAndResolve(value) {
         window._modalResolve = null;
     }
     
-    // 🆕 v2.0.9: Restaurar scroll y limpiar estilos residuales
     unlockBodyScroll();
     limpiarEstilosResiduales();
 }
@@ -904,7 +957,6 @@ function closeModalByReference(modal) {
             if (modalRef && modalRef.parentNode) {
                 modalRef.remove();
             }
-            // 🆕 v2.0.9: limpieza final
             limpiarEstilosResiduales();
         }, 500);
         
@@ -1082,7 +1134,10 @@ function cerrarTodosLosModales() {
         window._currentModalTimeoutId = null;
     }
     
-    // 🆕 v2.0.9: Vaciar el stack y limpiar estilos
+    // 🆕 v2.0.12: Limpiar timeouts del modal de progreso
+    _clearAllProgressTimeouts();
+    _progressHasFinalState = false;
+    
     _bodyOverflowStack.length = 0;
     if (document.body) {
         document.body.style.overflow = '';
@@ -1095,10 +1150,6 @@ function cerrarTodosLosModales() {
     return cerrados;
 }
 
-/**
- * 🆕 v2.0.9: Cerrar todos los modales Y limpiar estilos residuales.
- * Alias de cerrarTodosLosModales() con nombre más descriptivo.
- */
 function cerrarTodosYLimpiar() {
     return cerrarTodosLosModales();
 }
@@ -1123,11 +1174,9 @@ window.ModalModule = {
     cerrarTodosYLimpiar,
     limpiarModalesHuerfanos,
     closeCurrentModalImmediate,
-    // 🆕 v2.0.9: Nuevas funciones
     lockBodyScroll,
     unlockBodyScroll,
     limpiarEstilosResiduales,
-    // 🆕 v2.0.10: Watchers globales
     startStyleCleanupWatchers,
     stopStyleCleanupWatchers
 };
@@ -1143,24 +1192,21 @@ window.cerrarTodosLosModales = cerrarTodosLosModales;
 window.cerrarTodosYLimpiar = cerrarTodosYLimpiar;
 window.limpiarModalesHuerfanos = limpiarModalesHuerfanos;
 
-// 🆕 v2.0.9: Exponer funciones de scroll globalmente
 window.lockBodyScroll = lockBodyScroll;
 window.unlockBodyScroll = unlockBodyScroll;
 window.limpiarEstilosResiduales = limpiarEstilosResiduales;
 
-// 🆕 v2.0.10: Exponer watchers
 window.startStyleCleanupWatchers = startStyleCleanupWatchers;
 window.stopStyleCleanupWatchers = stopStyleCleanupWatchers;
 
-console.log('📦 Modal Module v2.0.10 (FIX BUG #1: limpieza reforzada + watchers globales)');
-console.log('   🆕 Nuevas funciones:');
-console.log('      • limpiarEstilosResiduales() → elimina 18+ propiedades residuales');
-console.log('      • startStyleCleanupWatchers() → activa watchers globales');
-console.log('      • stopStyleCleanupWatchers() → detiene watchers globales');
-console.log('   ✅ Watchers activos:');
-console.log('      • visibilitychange (app vuelve a primer plano)');
-console.log('      • pageshow (restauración desde bfcache)');
-console.log('      • resize (cambio de tamaño)');
-console.log('      • orientationchange (cambio de orientación)');
-console.log('      • focus (ventana recupera foco)');
-console.log('      • scroll (con debounce agresivo)');
+console.log('📦 Modal Module v2.0.12 (CORRECCIÓN #8: race condition del modal de progreso RESUELTA)');
+console.log('   🆕 Novedades v2.0.12:');
+console.log('      • Sistema de "generación" del modal de progreso');
+console.log('      • _clearAllProgressTimeouts() cancela TODOS los timeouts pendientes');
+console.log('      • showProgressSuccess/Error() cancelan timeouts previos');
+console.log('      • closeProgressModal({force: true}) para cierre forzado');
+console.log('      • _progressHasFinalState evita cierre prematuro');
+console.log('      • Un solo fallback de seguridad (1500ms)');
+console.log('      • Logs de diagnóstico con número de generación');
+console.log('   ✅ Watchers de limpieza activos:');
+console.log('      • visibilitychange, pageshow, resize, orientationchange, focus, scroll');

@@ -1,17 +1,24 @@
 // ============================================================
 // 📦 UI SETTINGS - Panario (Configuración y Herramientas)
-// v2.3.0 (250926): CORRECCIONES FINALES
-//   - ✅ CORRECCIÓN #8 (2/2): Modal de progreso en export/import
-//     * REESCRITA COMPLETA la sección de backups
-//     * Eliminado el reemplazo temporal de ModalModule.showConfirm
-//     * Flujo lineal con await correcto
-//     * Timeout para eliminación del input file (evita cancelar diálogo)
-//     * Manejo de errores robusto en cada paso
-//     * Los modales se apilan correctamente (confirmación → progreso)
-//   - ✅ CORRECCIÓN #10: Algoritmo inteligente de bloques (regla amanecer)
-//   - ✅ CORRECCIÓN #11: Guardar y cargar producto_id en producción
-//   - ✅ CORRECCIÓN #14: Modal de eliminación por error mejorado
-//   - ✅ CORRECCIÓN #6: Botón para restaurar estilos residuales
+// v2.3.3 (260926): 🎯 CORRECCIÓN #16 (240926) - PERMISOS BANCARIOS
+//   - ✅ NUEVA SECCIÓN "Configuración Bancaria" (solo admin) en
+//     renderSettingsView().
+//   - ✅ NUEVAS FUNCIONES:
+//     * showConfigBancariaModal() - abre el modal de configuración
+//     * renderConfigBancariaContent() - renderiza los toggles
+//     * toggleConfigBancaria() - guarda los cambios
+//   - ✅ Dos interruptores:
+//     * permitir_ver_qr_otros: no-admin puede ver QRs de otros
+//     * permitir_cambiar_default: no-admin puede cambiar su default
+//   - ✅ Mantiene TODAS las correcciones anteriores:
+//     * CORRECCIÓN #2, #3, #4 (250926)
+//     * CORRECCIÓN #8, #10, #11, #12, #14, #18 (240926)
+// v2.3.2 (250926): 🎯 CORRECCIONES #2, #3, #4 (250926)
+//   - ✅ CORRECCIÓN #2 (250926): Link a créditos en Información
+//   - ✅ CORRECCIÓN #3 (250926): Modal de progreso + contraseña en
+//     "Limpiar datos eliminados"
+//   - ✅ CORRECCIÓN #4 (250926): Modal de progreso en export/import
+//     de recetas y productos (salva diferencial)
 // ============================================================
 
 // ============================================================
@@ -27,7 +34,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.3.0';
+    return '2.3.3';
 }
 
 window.getAppVersion = getAppVersion;
@@ -337,7 +344,7 @@ window._formatearMensajeBloque = _formatearMensajeBloque;
 // ============================================================
 
 function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
-    const LOG_PREFIX = '🧠 [calcularBloquesIdeales v2.3.0]';
+    const LOG_PREFIX = '🧠 [calcularBloquesIdeales v2.3.3]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -583,6 +590,23 @@ async function runProductionDiagnostics() {
         results.push({ name: '9. Algoritmo bloques', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
     }
     
+    // 🆕 CORRECCIÓN #16: Test de tablas bancarias
+    try {
+        const db = window.DBModule.getDB();
+        const tablasRequeridas = ['bank_default_user', 'config_bancaria_negocio'];
+        const tablasExistentes = db.exec("SELECT name FROM sqlite_master WHERE type='table'");
+        const nombres = tablasExistentes[0]?.values?.map(r => r[0]) || [];
+        const faltantes = tablasRequeridas.filter(t => !nombres.includes(t));
+        
+        if (faltantes.length === 0) {
+            results.push({ name: '10. Tablas bancarias (C#16)', status: 'ok', message: 'OK', detail: '' });
+        } else {
+            results.push({ name: '10. Tablas bancarias (C#16)', status: 'error', message: `Faltan: ${faltantes.join(', ')}`, detail: '' });
+        }
+    } catch (e) {
+        results.push({ name: '10. Tablas bancarias (C#16)', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
+    }
+    
     const okCount = results.filter(r => r.status === 'ok').length;
     const warnCount = results.filter(r => r.status === 'warning').length;
     const errorCount = results.filter(r => r.status === 'error').length;
@@ -703,6 +727,251 @@ window.showProductionDiagnosticModal = showProductionDiagnosticModal;
 window.closeProductionDiagnosticModal = closeProductionDiagnosticModal;
 window.renderDiagnosticResults = renderDiagnosticResults;
 window.rerunDiagnostics = rerunDiagnostics;
+
+// ============================================================
+// 🆕 CORRECCIÓN #16: CONFIGURACIÓN BANCARIA (SOLO ADMIN)
+// ============================================================
+// 
+// Esta sección permite al admin controlar:
+//   1. permitir_ver_qr_otros: si los no-admin pueden ver QRs de otros.
+//   2. permitir_cambiar_default: si los no-admin pueden cambiar su
+//      cuenta por defecto individual.
+// ============================================================
+
+/**
+ * 🆕 CORRECCIÓN #16: Abre el modal de configuración bancaria.
+ * Solo accesible para admins.
+ */
+async function showConfigBancariaModal() {
+    const user = window.AuthModule.getCurrentUser();
+    if (!user || user.is_admin !== 1) {
+        window.showToast('🔒 Solo el administrador puede configurar esto', 'warning', 4000);
+        return;
+    }
+    
+    const existingModal = document.getElementById('config-bancaria-modal');
+    if (existingModal) existingModal.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'config-bancaria-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 999999999; padding: 15px;
+    `;
+    
+    document.body.appendChild(modal);
+    window._configBancariaModal = modal;
+    
+    await renderConfigBancariaContent();
+    
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeConfigBancariaModal(); });
+}
+
+/**
+ * 🆕 CORRECCIÓN #16: Renderiza el contenido del modal de config bancaria.
+ */
+async function renderConfigBancariaContent() {
+    const modal = document.getElementById('config-bancaria-modal');
+    if (!modal) return;
+    
+    try {
+        const config = window.DBModule.getConfigBancaria();
+        const negocioId = window.DBModule.getNegocioIdActual();
+        const negocio = window.DBModule.getNegocio(negocioId);
+        
+        // Contar cuántos usuarios hay y cuántas cuentas bancarias
+        const usuarios = window.AuthModule.getUsuariosDelNegocio();
+        const cuentasBancarias = window.DBModule.query(
+            'SELECT COUNT(*) as n FROM bank_accounts WHERE negocio_id = ? AND deleted_at IS NULL',
+            [negocioId]
+        );
+        const totalCuentas = cuentasBancarias[0]?.n || 0;
+        
+        modal.innerHTML = `
+            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 560px; width: 100%; max-height: 92vh; overflow-y: auto; border: 2px solid #3b82f6;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #3b82f6;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 28px;">🔐</span>
+                        <div>
+                            <h2 style="margin: 0; font-size: 18px; color: #3b82f6;">Configuración Bancaria</h2>
+                            <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">
+                                ${negocio?.nombre || 'Negocio'} · ${usuarios.length} usuario(s) · ${totalCuentas} cuenta(s)
+                            </p>
+                        </div>
+                    </div>
+                    <button onclick="closeConfigBancariaModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light);">✕</button>
+                </div>
+                
+                <div style="background: #eff6ff; border: 1px solid #3b82f6; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 12px; color: #1e40af;">
+                    💡 <strong>Controla los permisos</strong> de los usuarios no-admin sobre las cuentas bancarias del negocio.
+                    <br>Solo tú (administrador) puedes cambiar esta configuración.
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+                    
+                    <!-- Toggle 1: permitir_ver_qr_otros -->
+                    <div style="background: var(--bg); padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border-color);">
+                        <div style="display: flex; align-items: flex-start; gap: 12px;">
+                            <span style="font-size: 24px; flex-shrink: 0;">👁️</span>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 14px; font-weight: 600;">Permitir a usuarios ver QRs de otros</div>
+                                <div style="font-size: 11px; color: var(--text-light); margin-top: 4px; line-height: 1.4;">
+                                    Si está <strong>activado</strong>, los usuarios no-admin pueden <strong>ver</strong> (solo lectura) las cuentas bancarias de otros usuarios del negocio.
+                                    <br>Si está <strong>desactivado</strong>, cada usuario solo ve sus propias cuentas.
+                                </div>
+                            </div>
+                            <label style="position: relative; display: inline-block; width: 50px; height: 26px; cursor: pointer; flex-shrink: 0; margin-top: 2px;">
+                                <input type="checkbox" 
+                                       ${config.permitir_ver_qr_otros ? 'checked' : ''}
+                                       onchange="toggleConfigBancaria('permitir_ver_qr_otros', this.checked)"
+                                       style="opacity: 0; width: 0; height: 0;">
+                                <span class="config-bancaria-slider" 
+                                      style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+                                             background-color: ${config.permitir_ver_qr_otros ? '#10b981' : '#94a3b8'}; 
+                                             border-radius: 26px; transition: 0.3s;">
+                                    <span style="position: absolute; height: 18px; width: 18px; 
+                                                 left: ${config.permitir_ver_qr_otros ? '28px' : '4px'}; bottom: 4px; 
+                                                 background-color: white; border-radius: 50%; transition: 0.3s; 
+                                                 box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Toggle 2: permitir_cambiar_default -->
+                    <div style="background: var(--bg); padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border-color);">
+                        <div style="display: flex; align-items: flex-start; gap: 12px;">
+                            <span style="font-size: 24px; flex-shrink: 0;">⭐</span>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 14px; font-weight: 600;">Permitir a usuarios cambiar su cuenta por defecto</div>
+                                <div style="font-size: 11px; color: var(--text-light); margin-top: 4px; line-height: 1.4;">
+                                    Si está <strong>activado</strong>, cada usuario puede elegir cuál de sus cuentas usar por defecto (individual).
+                                    <br>Si está <strong>desactivado</strong>, todos usan la cuenta que TÚ designes como predeterminada global.
+                                </div>
+                            </div>
+                            <label style="position: relative; display: inline-block; width: 50px; height: 26px; cursor: pointer; flex-shrink: 0; margin-top: 2px;">
+                                <input type="checkbox" 
+                                       ${config.permitir_cambiar_default ? 'checked' : ''}
+                                       onchange="toggleConfigBancaria('permitir_cambiar_default', this.checked)"
+                                       style="opacity: 0; width: 0; height: 0;">
+                                <span class="config-bancaria-slider" 
+                                      style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+                                             background-color: ${config.permitir_cambiar_default ? '#10b981' : '#94a3b8'}; 
+                                             border-radius: 26px; transition: 0.3s;">
+                                    <span style="position: absolute; height: 18px; width: 18px; 
+                                                 left: ${config.permitir_cambiar_default ? '28px' : '4px'}; bottom: 4px; 
+                                                 background-color: white; border-radius: 50%; transition: 0.3s; 
+                                                 box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                </div>
+                
+                <div style="background: #fef9e7; border-left: 3px solid #f59e0b; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 12px; color: #92400e;">
+                    💡 <strong>Combinaciones:</strong>
+                    <br>• Ambas ON: usuarios ven todas y eligen su default
+                    <br>• Solo ver ON: usuarios ven todas pero no cambian default
+                    <br>• Solo default ON: usuarios ven solo las suyas pero eligen default
+                    <br>• Ambas OFF: usuarios ven solo las suyas y el admin designa default global
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                    <button onclick="closeConfigBancariaModal()" class="btn secondary" style="padding: 10px 20px; font-size: 14px; width: auto;">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('Error renderizando config bancaria:', error);
+        modal.innerHTML = `
+            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; text-align: center;">
+                <span style="font-size: 48px;">❌</span>
+                <h2 style="margin: 12px 0 8px;">Error</h2>
+                <p style="color: var(--text-light); font-size: 13px;">${error.message}</p>
+                <button onclick="closeConfigBancariaModal()" class="btn secondary" style="margin-top: 12px; padding: 8px 20px; width: auto;">Cerrar</button>
+            </div>
+        `;
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #16: Guarda un cambio en la configuración bancaria.
+ * 
+ * @param {string} key - 'permitir_ver_qr_otros' | 'permitir_cambiar_default'
+ * @param {boolean} value - Nuevo valor
+ */
+async function toggleConfigBancaria(key, value) {
+    try {
+        const user = window.AuthModule.getCurrentUser();
+        if (!user || user.is_admin !== 1) {
+            window.showToast('🔒 Solo el administrador', 'warning', 4000);
+            return;
+        }
+        
+        // Obtener config actual
+        const currentConfig = window.DBModule.getConfigBancaria();
+        currentConfig[key] = value;
+        
+        // Guardar
+        const result = window.DBModule.saveConfigBancaria(currentConfig);
+        
+        if (result.success) {
+            // Actualizar UI del slider
+            const event = window.event;
+            if (event && event.target) {
+                const slider = event.target.nextElementSibling;
+                const innerCircle = slider?.querySelector('span');
+                if (slider && innerCircle) {
+                    slider.style.backgroundColor = value ? '#10b981' : '#94a3b8';
+                    innerCircle.style.left = value ? '28px' : '4px';
+                }
+            }
+            
+            const label = value ? '✅ Activado' : '🚫 Desactivado';
+            const nombre = key === 'permitir_ver_qr_otros' 
+                ? 'Ver QRs de otros' 
+                : 'Cambiar cuenta por defecto';
+            
+            window.showToast(`${label}: ${nombre}`, 'success', 2500);
+            
+            console.log(`🔐 [toggleConfigBancaria] ${key}=${value} guardado correctamente`);
+        } else {
+            window.showToast('❌ Error al guardar: ' + result.error, 'error', 4000);
+            
+            // Revertir visualmente
+            const event = window.event;
+            if (event && event.target) {
+                event.target.checked = !value;
+            }
+        }
+    } catch (e) {
+        console.error('Error en toggleConfigBancaria:', e);
+        window.showToast('❌ Error: ' + e.message, 'error', 4000);
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #16: Cierra el modal de config bancaria.
+ */
+function closeConfigBancariaModal() {
+    const modal = document.getElementById('config-bancaria-modal');
+    if (modal) {
+        modal.style.animation = 'modalFadeOut 0.2s ease forwards';
+        setTimeout(() => { if (modal.parentNode) modal.remove(); }, 200);
+    }
+    window._configBancariaModal = null;
+}
+
+window.showConfigBancariaModal = showConfigBancariaModal;
+window.renderConfigBancariaContent = renderConfigBancariaContent;
+window.toggleConfigBancaria = toggleConfigBancaria;
+window.closeConfigBancariaModal = closeConfigBancariaModal;
 
 // ============================================================
 // CONFIGURACIÓN DE CORRIENTE
@@ -3182,28 +3451,7 @@ window.executeReprogramarPedidos = executeReprogramarPedidos;
 // ============================================================
 // 🆕 CORRECCIÓN #8 (240926): BACKUPS - REESCRITURA COMPLETA
 // ============================================================
-// 
-// PROBLEMA ANTERIOR:
-//   Las funciones de exportar/importar reemplazaban temporalmente
-//   ModalModule.showConfirm, lo cual era frágil. Además, el input
-//   file se eliminaba demasiado pronto en móviles, cancelando el
-//   diálogo de selección de archivo.
-//
-// SOLUCIÓN:
-//   1. Eliminado el reemplazo temporal de showConfirm.
-//   2. Flujo lineal con await: confirmar → mostrar progreso → ejecutar.
-//   3. Input file con timeout de 5 minutos para no cancelar el diálogo.
-//   4. Manejo de errores robusto en cada paso.
-//   5. Modal de progreso se cierra garantizadamente con triple fallback.
-// ============================================================
 
-/**
- * 🆕 CORRECCIÓN #8: Abre un diálogo de selección de archivo de forma
- * robusta, esperando hasta 5 minutos antes de eliminar el input.
- * 
- * @param {string} accept - Tipos MIME aceptados (ej: ".db,.sqlite")
- * @returns {Promise<File|null>} - El archivo seleccionado o null
- */
 function abrirSelectorArchivo(accept = '.db,.sqlite,.sqlite3') {
     const LOG_PREFIX = '📁 [abrirSelectorArchivo]';
     console.log(`${LOG_PREFIX} Abriendo selector de archivo...`);
@@ -3238,8 +3486,6 @@ function abrirSelectorArchivo(accept = '.db,.sqlite,.sqlite3') {
             resolve(file || null);
         };
         
-        // Fallback: si el usuario cancela, el navegador no dispara onchange
-        // en algunos casos, así que usamos focus como heurística
         window.addEventListener('focus', function onFocus() {
             window.removeEventListener('focus', onFocus);
             setTimeout(() => {
@@ -3259,7 +3505,6 @@ function abrirSelectorArchivo(accept = '.db,.sqlite,.sqlite3') {
             }, 500);
         }, { once: true });
         
-        // Timeout de seguridad: 5 minutos
         timeoutId = setTimeout(() => {
             if (resolved) return;
             resolved = true;
@@ -3273,10 +3518,6 @@ function abrirSelectorArchivo(accept = '.db,.sqlite,.sqlite3') {
     });
 }
 
-/**
- * 🆕 CORRECCIÓN #8: Exportar copia COMPLETA (admin)
- * Flujo: confirmar → progreso → ejecutar → cerrar progreso.
- */
 async function exportDatabaseCompleteAction() {
     const LOG_PREFIX = '📦 [exportDatabaseComplete]';
     console.log(`${LOG_PREFIX} Iniciando...`);
@@ -3287,7 +3528,6 @@ async function exportDatabaseCompleteAction() {
         return;
     }
     
-    // 1) Confirmar primero
     const confirm = await window.ModalModule.showConfirm({
         title: '📦 Exportar copia completa',
         message: 'Se exportará TODA la base de datos, incluyendo usuarios y negocios.\n\n' +
@@ -3304,7 +3544,6 @@ async function exportDatabaseCompleteAction() {
         return;
     }
     
-    // 2) Mostrar progreso
     let progress = null;
     try {
         progress = window.ModalModule.showProgressModal({
@@ -3316,7 +3555,6 @@ async function exportDatabaseCompleteAction() {
         console.warn(`${LOG_PREFIX} No se pudo mostrar modal:`, e);
     }
     
-    // 3) Ejecutar exportación en el siguiente tick
     setTimeout(() => {
         try {
             if (progress) progress.update('Serializando base de datos...', 30);
@@ -3351,14 +3589,10 @@ async function exportDatabaseCompleteAction() {
     }, 150);
 }
 
-/**
- * 🆕 CORRECCIÓN #8: Exportar copia SOLO DATOS (todos los usuarios)
- */
 async function exportDatabaseDataOnlyAction() {
     const LOG_PREFIX = '📊 [exportDatabaseDataOnly]';
     console.log(`${LOG_PREFIX} Iniciando...`);
     
-    // 1) Confirmar primero
     const confirm = await window.ModalModule.showConfirm({
         title: '📊 Exportar copia de datos',
         message: 'Se exportarán los datos operativos (ventas, pedidos, insumos, etc.)\n\n' +
@@ -3375,7 +3609,6 @@ async function exportDatabaseDataOnlyAction() {
         return;
     }
     
-    // 2) Mostrar progreso
     let progress = null;
     try {
         progress = window.ModalModule.showProgressModal({
@@ -3387,7 +3620,6 @@ async function exportDatabaseDataOnlyAction() {
         console.warn(`${LOG_PREFIX} No se pudo mostrar modal:`, e);
     }
     
-    // 3) Ejecutar
     setTimeout(() => {
         try {
             if (progress) progress.update('Serializando...', 30);
@@ -3422,15 +3654,10 @@ async function exportDatabaseDataOnlyAction() {
     }, 150);
 }
 
-/**
- * 🆕 CORRECCIÓN #8: Importar copia (detección automática)
- * Flujo: seleccionar archivo → confirmar → progreso → ejecutar.
- */
 async function importDatabaseSmartAction() {
     const LOG_PREFIX = '📥 [importDatabaseSmart]';
     console.log(`${LOG_PREFIX} Iniciando...`);
     
-    // 1) Seleccionar archivo (con timeout para no cancelar el diálogo)
     const file = await abrirSelectorArchivo('.db,.sqlite,.sqlite3');
     
     if (!file) {
@@ -3441,7 +3668,6 @@ async function importDatabaseSmartAction() {
     const user = window.AuthModule.getCurrentUser();
     const isAdmin = user && user.is_admin === 1;
     
-    // 2) Confirmar
     const confirm = await window.ModalModule.showConfirm({
         title: '📥 Importar copia',
         message: `¿Importar "${file.name}"?\n\n` +
@@ -3459,7 +3685,6 @@ async function importDatabaseSmartAction() {
         return;
     }
     
-    // 3) Mostrar progreso
     let progress = null;
     try {
         progress = window.ModalModule.showProgressModal({
@@ -3471,7 +3696,6 @@ async function importDatabaseSmartAction() {
         console.warn(`${LOG_PREFIX} No se pudo mostrar modal:`, e);
     }
     
-    // 4) Ejecutar importación
     try {
         if (progress) progress.update('Validando archivo...', 20);
         
@@ -3487,7 +3711,6 @@ async function importDatabaseSmartAction() {
                 }
             }, 300);
             
-            // Recargar tras breve pausa
             setTimeout(() => {
                 const url = new URL(window.location.href);
                 url.searchParams.set('refresh', Date.now());
@@ -3512,9 +3735,6 @@ async function importDatabaseSmartAction() {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #8: Importar solo datos (reemplaza operativos)
- */
 async function importDatabaseDataOnlyFromFileAction() {
     const LOG_PREFIX = '📊 [importDatabaseDataOnly]';
     console.log(`${LOG_PREFIX} Iniciando...`);
@@ -3572,9 +3792,6 @@ async function importDatabaseDataOnlyFromFileAction() {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #8: Fusionar bases de datos
- */
 async function importDatabaseFusionAction() {
     const LOG_PREFIX = '🔀 [importDatabaseFusion]';
     console.log(`${LOG_PREFIX} Iniciando...`);
@@ -3644,7 +3861,6 @@ async function importDatabaseFusionAction() {
     }
 }
 
-// Exponer las funciones globalmente
 window.exportDatabaseCompleteAction = exportDatabaseCompleteAction;
 window.exportDatabaseDataOnlyAction = exportDatabaseDataOnlyAction;
 window.importDatabaseSmartAction = importDatabaseSmartAction;
@@ -4137,61 +4353,153 @@ window.handleToggleAdmin = handleToggleAdmin;
 window.handleDeleteUser = handleDeleteUser;
 
 // ============================================================
-// SALVA DIFERENCIAL
+// 🆕 CORRECCIÓN #4 (250926): SALVA DIFERENCIAL CON MODAL DE PROGRESO
 // ============================================================
 
-function exportSalvaRecetasProductos() {
+async function exportSalvaRecetasProductos() {
+    const LOG_PREFIX = '🧩 [exportSalvaRecetasProductos]';
+    console.log(`${LOG_PREFIX} Iniciando...`);
+    
+    let progress = null;
     try {
-        const result = window.DBModule.exportRecetasProductosSalva();
-        
-        if (result.success) {
-            window.showToast(`✅ Salva exportada: ${result.filename} (${result.sizeKB} KB)`, 'success', 5000);
-        } else {
-            window.showToast('❌ Error: ' + result.error, 'error', 5000);
-        }
+        progress = window.ModalModule.showProgressModal({
+            title: 'Exportando salva diferencial',
+            message: 'Preparando recetas y productos...',
+            icon: '🧩'
+        });
     } catch (e) {
-        window.showToast('❌ Error: ' + e.message, 'error', 5000);
+        console.warn(`${LOG_PREFIX} No se pudo mostrar modal:`, e);
     }
+    
+    setTimeout(() => {
+        try {
+            if (progress) progress.update('Consultando base de datos...', 30);
+            
+            const result = window.DBModule.exportRecetasProductosSalva();
+            
+            if (result.success) {
+                console.log(`${LOG_PREFIX} ✅ Completado:`, result.filename);
+                if (progress) progress.update('Generando archivo JSON...', 80);
+                
+                setTimeout(() => {
+                    if (progress) {
+                        const counts = result.counts || {};
+                        progress.success(
+                            `✅ Salva exportada: ${result.filename} (${result.sizeKB} KB)\n` +
+                            `📖 ${counts.recipes || 0} recetas · 🏷️ ${counts.productos || 0} productos`
+                        );
+                    } else {
+                        window.showToast(`✅ Salva exportada: ${result.filename} (${result.sizeKB} KB)`, 'success', 5000);
+                    }
+                }, 300);
+            } else {
+                console.error(`${LOG_PREFIX} ❌ Error:`, result.error);
+                if (progress) {
+                    progress.error(result.error || 'Error al exportar');
+                } else {
+                    window.showToast('❌ Error: ' + result.error, 'error', 5000);
+                }
+            }
+        } catch (e) {
+            console.error(`${LOG_PREFIX} ❌ Excepción:`, e);
+            if (progress) {
+                progress.error(e.message);
+            } else {
+                window.showToast('❌ Error: ' + e.message, 'error', 5000);
+            }
+        }
+    }, 150);
 }
 
 async function importSalvaRecetasProductos() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.style.display = 'none';
+    const LOG_PREFIX = '🧩 [importSalvaRecetasProductos]';
+    console.log(`${LOG_PREFIX} Iniciando...`);
     
-    input.onchange = async function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        const confirm = await window.ModalModule.showConfirm({
-            title: '📥 Importar salva',
-            message: `¿Importar "${file.name}"?\n\nSe importarán recetas y productos.`,
-            confirmText: '📥 Importar', cancelText: 'Cancelar',
-            icon: '🧩', confirmColor: '#8b5cf6'
+    const file = await abrirSelectorArchivo('.json');
+    
+    if (!file) {
+        console.log(`${LOG_PREFIX} Sin archivo seleccionado`);
+        return;
+    }
+    
+    const confirm = await window.ModalModule.showConfirm({
+        title: '📥 Importar salva',
+        message: `¿Importar "${file.name}"?\n\n` +
+                 `Se importarán recetas y productos.\n` +
+                 `⚠️ Los existentes (mismo nombre) se actualizarán.\n\n` +
+                 `¿Continuar?`,
+        confirmText: '📥 Importar',
+        cancelText: '❌ Cancelar',
+        icon: '🧩',
+        confirmColor: '#8b5cf6'
+    });
+    
+    if (!confirm) {
+        console.log(`${LOG_PREFIX} Cancelado por el usuario`);
+        return;
+    }
+    
+    let progress = null;
+    try {
+        progress = window.ModalModule.showProgressModal({
+            title: 'Importando salva',
+            message: 'Leyendo archivo JSON...',
+            icon: '🧩'
         });
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} No se pudo mostrar modal:`, e);
+    }
+    
+    try {
+        if (progress) progress.update('Validando archivo...', 20);
         
-        if (!confirm) return;
+        const salvaData = await window.DBModule.readSalvaFile(file);
         
-        try {
-            const salvaData = await window.DBModule.readSalvaFile(file);
-            const result = window.DBModule.importRecetasProductosSalva(salvaData, 'merge');
+        if (progress) progress.update('Importando recetas y productos...', 60);
+        
+        const result = window.DBModule.importRecetasProductosSalva(salvaData, 'merge');
+        
+        if (result.success) {
+            const imported = result.imported || {};
+            const skipped = result.skipped || {};
             
-            if (result.success) {
-                const imported = result.imported;
-                window.showToast(`✅ Salva importada: ${imported.recipes} recetas, ${imported.productos} productos`, 'success', 5000);
-                setTimeout(() => window.location.reload(), 1500);
+            console.log(`${LOG_PREFIX} ✅ Importación exitosa`);
+            
+            if (progress) progress.update('Aplicando cambios...', 90);
+            
+            setTimeout(() => {
+                if (progress) {
+                    progress.success(
+                        `✅ Salva importada\n` +
+                        `📖 +${imported.recipes || 0} recetas, ~${skipped.recipes || 0} actualizadas\n` +
+                        `🏷️ +${imported.productos || 0} productos, ~${skipped.productos || 0} actualizados`
+                    );
+                } else {
+                    window.showToast(`✅ Salva importada: ${imported.recipes} recetas, ${imported.productos} productos`, 'success', 5000);
+                }
+            }, 300);
+            
+            setTimeout(() => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('refresh', Date.now());
+                window.location.href = url.toString();
+            }, 2500);
+        } else {
+            console.error(`${LOG_PREFIX} ❌ Error:`, result.error);
+            if (progress) {
+                progress.error(result.error || 'Error al importar');
             } else {
                 window.showToast('❌ Error: ' + result.error, 'error', 5000);
             }
-        } catch (err) {
+        }
+    } catch (err) {
+        console.error(`${LOG_PREFIX} ❌ Excepción:`, err);
+        if (progress) {
+            progress.error(err.message);
+        } else {
             window.showToast('❌ Error: ' + err.message, 'error', 5000);
         }
-    };
-    
-    document.body.appendChild(input);
-    input.click();
-    document.body.removeChild(input);
+    }
 }
 
 window.exportSalvaRecetasProductos = exportSalvaRecetasProductos;
@@ -4220,43 +4528,192 @@ function clearLastUserAction() {
 window.clearLastUserAction = clearLastUserAction;
 
 // ============================================================
-// LIMPIAR DATOS ELIMINADOS
+// 🆕 CORRECCIÓN #3 (250926): LIMPIAR DATOS ELIMINADOS
 // ============================================================
 
 async function cleanDeletedData() {
+    const LOG_PREFIX = '🧹 [cleanDeletedData]';
+    console.log(`${LOG_PREFIX} Iniciando...`);
+    
     const confirm = await window.ModalModule.showConfirm({
         title: '🧹 Limpiar datos eliminados',
-        message: '¿Eliminar PERMANENTEMENTE todos los registros con soft-delete?\n\n⚠️ Esta acción no se puede deshacer.',
-        confirmText: '🧹 Sí, limpiar',
-        cancelText: 'Cancelar',
+        message: '¿Eliminar PERMANENTEMENTE todos los registros con soft-delete?\n\n' +
+                 '⚠️ Esta acción no se puede deshacer.\n' +
+                 '💡 Asegúrate de haber hecho una copia de seguridad antes.',
+        confirmText: '🧹 Sí, continuar',
+        cancelText: '❌ Cancelar',
         icon: '🧹',
         confirmColor: '#ef4444'
     });
     
-    if (!confirm) return;
+    if (!confirm) {
+        console.log(`${LOG_PREFIX} Cancelado por el usuario (paso 1)`);
+        return;
+    }
     
+    const password = await window.ModalModule.showPrompt({
+        title: '🔒 Confirmación de seguridad',
+        message: 'Escribe "panario" para confirmar la operación.\n\n' +
+                 '⚠️ Esta es una operación destructiva que atenta contra la auditoría.',
+        placeholder: 'Contraseña',
+        icon: '🔒',
+        inputType: 'password'
+    });
+    
+    if (password === null || password === undefined) {
+        console.log(`${LOG_PREFIX} Cancelado por el usuario (paso 2 - sin contraseña)`);
+        return;
+    }
+    
+    if (password !== 'panario') {
+        console.log(`${LOG_PREFIX} Contraseña incorrecta`);
+        window.showToast('❌ Contraseña incorrecta', 'error', 4000);
+        return;
+    }
+    
+    const confirmFinal = await window.ModalModule.showConfirm({
+        title: '⚠️ CONFIRMACIÓN FINAL',
+        message: 'Esta es la ÚLTIMA advertencia.\n\n' +
+                 'Se eliminarán permanentemente todos los registros con soft-delete.\n\n' +
+                 '¿Confirmas?',
+        confirmText: '🚨 SÍ, LIMPIAR TODO',
+        cancelText: '❌ NO, cancelar',
+        icon: '🚨',
+        confirmColor: '#dc2626'
+    });
+    
+    if (!confirmFinal) {
+        console.log(`${LOG_PREFIX} Cancelado por el usuario (paso 3)`);
+        window.showToast('❌ Operación cancelada', 'info', 2000);
+        return;
+    }
+    
+    let progress = null;
     try {
-        const negocioId = window.DBModule.getNegocioIdActual();
-        const tablas = [
-            'insumos', 'recipes', 'productos', 'orders', 'sales', 'transactions',
-            'clients', 'waiting_list', 'bank_accounts', 'corriente_config',
-            'premios_config', 'dias_sin_ventas', 'calendario_produccion'
-        ];
-        
-        let totalLimpiados = 0;
-        for (const tabla of tablas) {
-            try {
-                const result = window.DBModule.execute(`DELETE FROM ${tabla} WHERE negocio_id = ? AND deleted_at IS NOT NULL`, [negocioId]);
-                totalLimpiados++;
-            } catch (e) {
-                console.warn(`⚠️ Error limpiando ${tabla}:`, e.message);
+        progress = window.ModalModule.showProgressModal({
+            title: 'Limpiando datos eliminados',
+            message: 'Iniciando limpieza...',
+            icon: '🧹'
+        });
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} No se pudo mostrar modal:`, e);
+    }
+    
+    setTimeout(() => {
+        try {
+            const negocioId = window.DBModule.getNegocioIdActual();
+            
+            const tablas = [
+                'insumos',
+                'recipes',
+                'recipe_ingredients',
+                'receta_insumos',
+                'productos',
+                'orders',
+                'order_items',
+                'payments',
+                'waiting_list',
+                'sales',
+                'transactions',
+                'clients',
+                'bank_accounts',
+                'corriente_config',
+                'premios_config',
+                'dias_sin_ventas',
+                'calendario_produccion',
+                'notifications'
+            ];
+            
+            const resultados = {};
+            let totalRegistros = 0;
+            let tablasLimpiadas = 0;
+            
+            for (let i = 0; i < tablas.length; i++) {
+                const tabla = tablas[i];
+                const porcentaje = Math.round(((i + 1) / tablas.length) * 100);
+                
+                if (progress) {
+                    progress.update(`Limpiando ${tabla}... (${i + 1}/${tablas.length})`, porcentaje);
+                }
+                
+                try {
+                    let countSql = `SELECT COUNT(*) as n FROM ${tabla} WHERE deleted_at IS NOT NULL`;
+                    let countParams = [];
+                    
+                    try {
+                        const countResult = window.DBModule.query(countSql, countParams);
+                        const count = countResult[0]?.n || 0;
+                        
+                        if (count > 0) {
+                            window.DBModule.execute(`DELETE FROM ${tabla} WHERE deleted_at IS NOT NULL`, []);
+                            resultados[tabla] = count;
+                            totalRegistros += count;
+                            tablasLimpiadas++;
+                        } else {
+                            resultados[tabla] = 0;
+                        }
+                    } catch (e) {
+                        console.warn(`${LOG_PREFIX} ⚠️ Error contando/borrando en ${tabla}:`, e.message);
+                        resultados[tabla] = 0;
+                    }
+                } catch (e) {
+                    console.warn(`${LOG_PREFIX} ⚠️ Error en ${tabla}:`, e.message);
+                    resultados[tabla] = 0;
+                }
+            }
+            
+            console.log(`${LOG_PREFIX} ✅ Limpieza completada: ${totalRegistros} registros en ${tablasLimpiadas} tablas`);
+            
+            if (progress) {
+                if (totalRegistros > 0) {
+                    let detalle = '';
+                    const tablasConRegistros = Object.entries(resultados)
+                        .filter(([_, count]) => count > 0)
+                        .sort((a, b) => b[1] - a[1]);
+                    
+                    if (tablasConRegistros.length > 0) {
+                        detalle = '\n' + tablasConRegistros
+                            .slice(0, 8)
+                            .map(([tabla, count]) => `   • ${tabla}: ${count}`)
+                            .join('\n');
+                        
+                        if (tablasConRegistros.length > 8) {
+                            detalle += `\n   ... y ${tablasConRegistros.length - 8} tabla(s) más`;
+                        }
+                    }
+                    
+                    progress.success(
+                        `✅ ${totalRegistros} registro(s) eliminado(s) permanentemente${detalle}`
+                    );
+                } else {
+                    progress.success('✅ No había registros eliminados para limpiar');
+                }
+            } else {
+                window.showToast(
+                    totalRegistros > 0 
+                        ? `✅ ${totalRegistros} registro(s) eliminado(s)` 
+                        : '✅ No había registros para limpiar',
+                    'success',
+                    5000
+                );
+            }
+            
+            if (typeof window.refreshCurrentView === 'function') {
+                setTimeout(window.refreshCurrentView, 500);
+            }
+            if (typeof window.loadDashboardData === 'function') {
+                setTimeout(window.loadDashboardData, 800);
+            }
+            
+        } catch (e) {
+            console.error(`${LOG_PREFIX} ❌ Excepción:`, e);
+            if (progress) {
+                progress.error('Error: ' + e.message);
+            } else {
+                window.showToast('❌ Error: ' + e.message, 'error', 6000);
             }
         }
-        
-        window.showToast(`✅ ${totalLimpiados} tablas limpiadas`, 'success', 5000);
-    } catch (e) {
-        window.showToast('❌ Error: ' + e.message, 'error', 5000);
-    }
+    }, 150);
 }
 
 window.cleanDeletedData = cleanDeletedData;
@@ -4270,7 +4727,8 @@ async function resetDatabaseWithPassword() {
         title: '🚨 Reiniciar Base de Datos',
         message: 'Escribe "panario" para confirmar:',
         placeholder: 'Contraseña',
-        icon: '🚨'
+        icon: '🚨',
+        inputType: 'password'
     });
     
     if (password !== 'panario') {
@@ -4604,6 +5062,19 @@ async function executeDeleteSelected() {
     
     if (!confirm1) return;
     
+    const password = await window.ModalModule.showPrompt({
+        title: '🔒 Contraseña de seguridad',
+        message: 'Escribe "panario" para confirmar:',
+        placeholder: 'Contraseña',
+        icon: '🔒',
+        inputType: 'password'
+    });
+    
+    if (password !== 'panario') {
+        window.showToast('❌ Contraseña incorrecta', 'error');
+        return;
+    }
+    
     const confirm2 = await window.ModalModule.showConfirm({
         title: '🚨 ÚLTIMA ADVERTENCIA',
         message: `Se eliminarán ${selected.length} ${tipo} de la base de datos.\n\nNo hay vuelta atrás.\n\n¿Confirmas?`,
@@ -4677,6 +5148,7 @@ window.executeDeleteSelected = executeDeleteSelected;
 
 // ============================================================
 // RENDER SETTINGS VIEW - COMPLETA
+// 🆕 CORRECCIÓN #16: Nueva sección "Configuración Bancaria"
 // ============================================================
 
 function renderSettingsView() {
@@ -4730,6 +5202,19 @@ function renderSettingsView() {
             </p>
             <button onclick="showUsersModal()" class="btn primary" style="padding: 10px 16px; font-size: 14px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                 👥 Gestionar Usuarios
+            </button>
+        </div>
+        
+        <!-- 🆕 CORRECCIÓN #16: NUEVA SECCIÓN CONFIGURACIÓN BANCARIA -->
+        <div class="card" style="border-left: 4px solid #3b82f6; border: 2px solid #3b82f6;">
+            <h3 style="margin: 0 0 8px 0; color: #3b82f6;">🔐 Configuración Bancaria</h3>
+            <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
+                Controla los permisos de los usuarios no-admin sobre las cuentas bancarias del negocio:
+                <br>• <strong>Ver QRs de otros:</strong> si los usuarios pueden ver las cuentas ajenas (solo lectura).
+                <br>• <strong>Cambiar cuenta por defecto:</strong> si los usuarios pueden elegir su cuenta por defecto individual.
+            </p>
+            <button onclick="showConfigBancariaModal()" class="btn primary" style="padding: 10px 16px; font-size: 14px; width: auto; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                🔐 Configurar permisos bancarios
             </button>
         </div>
         ` : ''}
@@ -4890,6 +5375,7 @@ function renderSettingsView() {
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
                 Elimina permanentemente todos los registros con soft-delete.
                 <br><strong style="color: #ef4444;">⚠️ Esta acción no se puede deshacer.</strong>
+                <br>🔒 Se pedirá la contraseña "panario" para confirmar.
             </p>
             <button onclick="cleanDeletedData()" class="btn danger" style="padding: 8px 16px; font-size: 14px; width: auto;">
                 🗑️ Limpiar datos eliminados
@@ -4929,7 +5415,7 @@ function renderSettingsView() {
                 Versión: <span id="app-version-display">${appVersion}</span>
             </p>
             <p style="font-size: 12px; color: var(--text-light); margin-top: 8px;">
-                🍞 Desarrollado por Ricardo Castillo Valdés
+                🍞 <a href="#" onclick="event.preventDefault(); if(window.HelpModule && window.HelpModule.showCreditsModal) { window.HelpModule.showCreditsModal(); } else if (window.showCreditsModal) { window.showCreditsModal(); } else { window.showToast('⚠️ Modal de créditos no disponible', 'warning', 3000); }" style="color: var(--primary); text-decoration: underline; cursor: pointer; font-weight: 600;">Desarrollado por Ricardo Castillo Valdés</a>
             </p>
         </div>
     `;
@@ -5008,10 +5494,16 @@ window.showChangePasswordModal = showChangePasswordModal;
 window.closeChangePasswordModal = closeChangePasswordModal;
 window.handleToggleAdmin = handleToggleAdmin;
 window.handleDeleteUser = handleDeleteUser;
+
+// 🆕 CORRECCIÓN #4 (250926): Salva diferencial con progreso
 window.exportSalvaRecetasProductos = exportSalvaRecetasProductos;
 window.importSalvaRecetasProductos = importSalvaRecetasProductos;
+
 window.clearLastUserAction = clearLastUserAction;
+
+// 🆕 CORRECCIÓN #3 (250926): Limpiar datos con contraseña + progreso
 window.cleanDeletedData = cleanDeletedData;
+
 window.resetDatabaseWithPassword = resetDatabaseWithPassword;
 window.showDeleteSelectorModal = showDeleteSelectorModal;
 window.closeDeleteSelectorModal = closeDeleteSelectorModal;
@@ -5041,13 +5533,18 @@ window._formatearMensajeBloque = _formatearMensajeBloque;
 window.getProductoDeProduccionUI = getProductoDeProduccionUI;
 window.getProduccionConProductoUI = getProduccionConProductoUI;
 
-console.log('📦 UI Settings Module cargado correctamente v2.3.0');
-console.log('   🆕 CORRECCIÓN #8 (240926) aplicada:');
-console.log('      • exportDatabaseCompleteAction() → flujo lineal confirmar→progreso→ejecutar');
-console.log('      • exportDatabaseDataOnlyAction() → flujo lineal');
-console.log('      • importDatabaseSmartAction() → selección robusta de archivo');
-console.log('      • importDatabaseDataOnlyFromFileAction() → flujo robusto');
-console.log('      • importDatabaseFusionAction() → fusión sin reemplazo de showConfirm');
-console.log('      • abrirSelectorArchivo() → input con timeout de 5 min');
-console.log('      • Eliminado el reemplazo temporal de ModalModule.showConfirm');
-console.log('      • Manejo de errores robusto en cada paso');
+// 🆕 CORRECCIÓN #16: Configuración bancaria
+window.showConfigBancariaModal = showConfigBancariaModal;
+window.renderConfigBancariaContent = renderConfigBancariaContent;
+window.toggleConfigBancaria = toggleConfigBancaria;
+window.closeConfigBancariaModal = closeConfigBancariaModal;
+
+console.log('📦 UI Settings Module cargado correctamente v2.3.3');
+console.log('   🆕 CORRECCIÓN #16 (240926) aplicada:');
+console.log('      ✅ Nueva sección "🔐 Configuración Bancaria" en Herramientas (solo admin)');
+console.log('      ✅ Modal showConfigBancariaModal() con 2 interruptores');
+console.log('      ✅ toggleConfigBancaria() para guardar cambios');
+console.log('      ✅ Test #10 en diagnóstico: verifica tablas bancarias');
+console.log('   🔄 Correcciones anteriores mantenidas:');
+console.log('      • #2, #3, #4 (250926): Link créditos, modal progreso, salva con progreso');
+console.log('      • #8, #10, #11, #12, #14, #18 (240926)');

@@ -22,18 +22,33 @@
 //     * 🏆 show_rewards (Premios) — #25
 //   - Orden reorganizado para agrupar toggles relacionados
 //   - Descripciones más claras y concisas
+// 🆕 v2.3.3 (260926): 🎯 CORRECCIÓN #16 (240926) - PERMISOS BANCARIOS
+//   - ✅ showBankAccountsModal() ahora usa getBankAccountsParaUsuario()
+//     para filtrar cuentas según permisos del usuario.
+//   - ✅ Los botones "Editar" y "Eliminar" solo se muestran si el
+//     usuario tiene permiso (admin o dueño de la cuenta).
+//   - ✅ Nuevo botón "⭐ Mi Default" para que cada usuario pueda elegir
+//     su cuenta por defecto individual (si el admin lo permite).
+//   - ✅ Indicador visual de "Mi cuenta por defecto" (badge verde).
+//   - ✅ Indicador visual de "Cuenta de [nombre]" para cuentas ajenas.
+//   - ✅ Banner informativo cuando el usuario puede ver cuentas ajenas
+//     pero no editarlas (modo solo lectura).
+//   - ✅ setDefaultBankAccount() ahora distingue entre:
+//     * Admin: establece la cuenta por defecto GLOBAL (is_default=1)
+//     * No-admin: establece su cuenta por defecto INDIVIDUAL
+//   - ✅ deleteBankAccount() verifica permisos antes de eliminar.
+// 🆕 v2.3.4 (260926): 🎯 CORRECCIÓN #17 (240926) - CONFIGURACIONES INDIVIDUALES
+//   - ✅ toggleGuiaRapida() ahora guarda en la BD con user_id
+//     en lugar de localStorage.
+//   - ✅ loadProfile() ahora lee la config de guía rápida y sonido
+//     desde la BD con user_id en lugar de localStorage.
+//   - ✅ Fallback a localStorage si la BD falla (retrocompatibilidad).
+//   - ✅ Cada usuario tiene sus propias preferencias de guía rápida
+//     y sonido.
 // ============================================================
 
 // ============================================================
 // 🆕 FIX 1.3.4: DEFINICIÓN GLOBAL TEMPRANA
-// ============================================================
-// Esta función estaba declarada dentro de editBankAccount() (scope local).
-// Eso causaba "Uncaught ReferenceError: closeEditBankAccountModal is not defined"
-// si se invocaba desde el HTML del modal antes de que editBankAccount() se
-// hubiera ejecutado al menos una vez.
-// 
-// SOLUCIÓN: definirla globalmente al principio del archivo, para que exista
-// siempre. La versión duplicada al final de editBankAccount() se ha eliminado.
 // ============================================================
 
 window.closeEditBankAccountModal = function() {
@@ -82,10 +97,37 @@ function loadProfile(user) {
     const themeIcon = user.theme === 'dark' ? '☀️' : '🌙';
     const themeAction = user.theme === 'dark' ? 'Cambiar a claro' : 'Cambiar a oscuro';
     
-    const guiaDeshabilitada = localStorage.getItem('panario_guia_deshabilitada') === 'true';
+    // 🆕 CORRECCIÓN #17: Leer la guía rápida desde la BD (con fallback a localStorage)
+    let guiaActiva;
+    try {
+        if (window.DBModule && typeof window.DBModule.getUserGuiaRapidaActiva === 'function') {
+            guiaActiva = window.DBModule.getUserGuiaRapidaActiva(user.id);
+        } else {
+            // Fallback: localStorage (compatibilidad)
+            guiaActiva = localStorage.getItem('panario_guia_deshabilitada') !== 'true';
+        }
+    } catch (e) {
+        console.warn('⚠️ Error leyendo guía rápida:', e);
+        guiaActiva = localStorage.getItem('panario_guia_deshabilitada') !== 'true';
+    }
+    
     const dashConfig = user.dashboard_config || window.DBModule.getUserDashboardConfig(user.id);
     
-    const soundConfig = window.NotificationsModule?.getSoundConfig() || { enabled: true, soundId: 'beep' };
+    // 🆕 CORRECCIÓN #17: Leer el sonido desde la BD (con fallback a localStorage)
+    let soundConfig;
+    try {
+        if (window.NotificationsModule && typeof window.NotificationsModule.getSoundConfig === 'function') {
+            soundConfig = window.NotificationsModule.getSoundConfig();
+        } else if (window.DBModule && typeof window.DBModule.getUserSoundConfig === 'function') {
+            soundConfig = window.DBModule.getUserSoundConfig(user.id);
+        } else {
+            soundConfig = { enabled: true, soundId: 'beep' };
+        }
+    } catch (e) {
+        console.warn('⚠️ Error leyendo config de sonido:', e);
+        soundConfig = { enabled: true, soundId: 'beep' };
+    }
+    
     const availableSounds = window.NotificationsModule?.getAvailableSounds() || [];
     
     main.innerHTML = `
@@ -181,14 +223,14 @@ function loadProfile(user) {
                 </div>
                 <label style="position: relative; display: inline-block; width: 50px; height: 26px; cursor: pointer; flex-shrink: 0;">
                     <input type="checkbox" id="toggle-guia-rapida" 
-                           ${!guiaDeshabilitada ? 'checked' : ''}
+                           ${guiaActiva ? 'checked' : ''}
                            onchange="toggleGuiaRapida(this.checked)"
                            style="opacity: 0; width: 0; height: 0;">
                     <span id="toggle-guia-slider" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
-                          background-color: ${!guiaDeshabilitada ? '#10b981' : '#94a3b8'}; 
+                          background-color: ${guiaActiva ? '#10b981' : '#94a3b8'}; 
                           border-radius: 26px; transition: 0.3s;">
                         <span style="position: absolute; height: 18px; width: 18px; 
-                              left: ${!guiaDeshabilitada ? '28px' : '4px'}; bottom: 4px; 
+                              left: ${guiaActiva ? '28px' : '4px'}; bottom: 4px; 
                               background-color: white; border-radius: 50%; transition: 0.3s; 
                               box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
                     </span>
@@ -490,29 +532,61 @@ function testAllNotificationSounds() {
 }
 
 // ============================================================
-// TOGGLE DE GUÍA RÁPIDA
+// 🆕 CORRECCIÓN #17: TOGGLE DE GUÍA RÁPIDA (INDIVIDUAL)
+// ============================================================
+// 
+// ANTES: Se guardaba en localStorage (GLOBAL).
+// AHORA: Se guarda en la BD con user_id (INDIVIDUAL).
+//
+// FALLBACK: Si la BD falla, se usa localStorage para no romper nada.
 // ============================================================
 
 function toggleGuiaRapida(activada) {
-    if (activada) {
-        localStorage.removeItem('panario_guia_deshabilitada');
-        localStorage.removeItem('panario_tour_completed');
-        window.showToast('✅ Guía rápida activada. Se mostrará al próximo inicio.', 'success', 3000);
-    } else {
-        localStorage.setItem('panario_guia_deshabilitada', 'true');
-        window.showToast('✅ Guía rápida desactivada.', 'info', 3000);
-    }
-    
-    const slider = document.getElementById('toggle-guia-slider');
-    const innerCircle = slider?.querySelector('span');
-    if (slider && innerCircle) {
-        if (activada) {
-            slider.style.backgroundColor = '#10b981';
-            innerCircle.style.left = '28px';
+    try {
+        const user = window.AuthModule?.getCurrentUser();
+        
+        if (user && user.id && window.DBModule && typeof window.DBModule.updateUserGuiaRapida === 'function') {
+            // 🆕 CORRECCIÓN #17: Guardar en la BD con user_id
+            const result = window.DBModule.updateUserGuiaRapida(user.id, activada);
+            
+            if (result.success) {
+                console.log(`🚀 Guía rápida ${activada ? 'activada' : 'desactivada'} para user #${user.id}`);
+            } else {
+                console.warn('⚠️ Error guardando guía rápida en BD:', result.error);
+            }
         } else {
-            slider.style.backgroundColor = '#94a3b8';
-            innerCircle.style.left = '4px';
+            // Fallback: localStorage (retrocompatibilidad)
+            if (activada) {
+                localStorage.removeItem('panario_guia_deshabilitada');
+                localStorage.removeItem('panario_tour_completed');
+            } else {
+                localStorage.setItem('panario_guia_deshabilitada', 'true');
+            }
         }
+        
+        // Actualizar UI del slider
+        const slider = document.getElementById('toggle-guia-slider');
+        const innerCircle = slider?.querySelector('span');
+        if (slider && innerCircle) {
+            if (activada) {
+                slider.style.backgroundColor = '#10b981';
+                innerCircle.style.left = '28px';
+            } else {
+                slider.style.backgroundColor = '#94a3b8';
+                innerCircle.style.left = '4px';
+            }
+        }
+        
+        // Mostrar toast
+        if (activada) {
+            window.showToast('✅ Guía rápida activada. Se mostrará al próximo inicio.', 'success', 3000);
+        } else {
+            window.showToast('✅ Guía rápida desactivada.', 'info', 3000);
+        }
+        
+    } catch (e) {
+        console.error('Error toggling guía rápida:', e);
+        window.showToast('❌ Error al guardar la preferencia', 'error');
     }
 }
 
@@ -880,7 +954,7 @@ function generarEditQRPreview() {
 }
 
 // ============================================================
-// MODAL DE DATOS BANCARIOS
+// 🆕 CORRECCIÓN #16: MODAL DE DATOS BANCARIOS CON PERMISOS
 // ============================================================
 
 async function showBankAccountsModal() {
@@ -889,8 +963,15 @@ async function showBankAccountsModal() {
     
     window._qrDataTemp = null;
     
-    const accounts = await window.DBModule.getBankAccounts();
+    const accounts = await window.DBModule.getBankAccountsParaUsuario();
     const user = window.AuthModule.getCurrentUser();
+    const esAdmin = user && user.is_admin === 1;
+    const config = window.DBModule.getConfigBancaria();
+    
+    const cuentaDefaultUsuario = window.DBModule.getCuentaDefaultUsuario(user.id);
+    const cuentaDefaultUsuarioId = cuentaDefaultUsuario ? cuentaDefaultUsuario.id : null;
+    
+    const enModoSoloLectura = !esAdmin && config.permitir_ver_qr_otros && !config.permitir_cambiar_default;
     
     const modal = document.createElement('div');
     modal.id = 'bank-accounts-modal';
@@ -912,13 +993,41 @@ async function showBankAccountsModal() {
     } else {
         accountsHtml = accounts.map(acc => {
             const ownerName = acc.owner_name || '';
+            
+            const puedoEditar = window.DBModule.puedeUsuarioEditarCuenta(acc);
+            const esMiCuenta = acc.user_id === user.id;
+            const esMiDefaultIndividual = acc.id === cuentaDefaultUsuarioId;
+            const esDefaultGlobal = acc.is_default === 1;
+            
+            let badgeDefault = '';
+            if (esMiDefaultIndividual) {
+                badgeDefault = '<span style="font-size: 11px; background: #10b98120; color: #10b981; padding: 1px 8px; border-radius: 10px; font-weight: 600;">⭐ Mi default</span>';
+            } else if (esAdmin && esDefaultGlobal) {
+                badgeDefault = '<span style="font-size: 11px; background: #f59e0b20; color: #f59e0b; padding: 1px 8px; border-radius: 10px; font-weight: 600;">👑 Default global</span>';
+            }
+            
+            const badgeAjena = (!esMiCuenta && esAdmin) 
+                ? `<span style="font-size: 10px; background: #94a3b820; color: var(--text-light); padding: 1px 6px; border-radius: 8px; margin-left: 4px;">👤 ${acc.user_id}</span>`
+                : '';
+            
+            const borderColor = esMiDefaultIndividual 
+                ? '#10b981' 
+                : (esDefaultGlobal ? '#f59e0b' : '#94a3b8');
+            
+            const puedeCambiarDefault = esAdmin || config.permitir_cambiar_default;
+            const mostrarBotonDefault = puedeCambiarDefault 
+                && puedoEditar 
+                && !esMiDefaultIndividual
+                && !enModoSoloLectura;
+            
             return `
-            <div style="background: var(--bg); border-radius: 8px; padding: 12px; margin-bottom: 8px; border-left: 4px solid ${acc.is_default ? '#10b981' : '#94a3b8'};">
+            <div style="background: var(--bg); border-radius: 8px; padding: 12px; margin-bottom: 8px; border-left: 4px solid ${borderColor};">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
                     <div style="flex: 1; min-width: 0;">
                         <div style="font-weight: 600; font-size: 14px;">
                             🏦 ${acc.bank}
-                            ${acc.is_default ? '<span style="font-size: 11px; background: #10b98120; color: #10b981; padding: 1px 8px; border-radius: 10px;">✅ Predeterminada</span>' : ''}
+                            ${badgeDefault}
+                            ${badgeAjena}
                         </div>
                         ${ownerName ? `<div style="font-size: 13px; color: var(--text-light);">👤 Titular: <strong>${ownerName}</strong></div>` : ''}
                         <div style="font-size: 13px; color: var(--text-light);">
@@ -927,25 +1036,60 @@ async function showBankAccountsModal() {
                         ${acc.phone ? `<div style="font-size: 13px; color: var(--text-light);">📞 ${acc.phone}</div>` : ''}
                     </div>
                     <div style="display: flex; gap: 4px; flex-wrap: wrap;">
-                        ${!acc.is_default ? `
-                            <button onclick="setDefaultBankAccount(${acc.id})" class="btn secondary" style="padding: 2px 10px; font-size: 11px; width: auto; background: #10b981; color: #fff; border: none; border-radius: 4px; cursor: pointer;">
-                                ⭐ Default
+                        ${mostrarBotonDefault ? `
+                            <button onclick="setDefaultBankAccount(${acc.id})" class="btn secondary" style="padding: 2px 10px; font-size: 11px; width: auto; background: #10b981; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                                ⭐ Mi Default
                             </button>
                         ` : ''}
                         <button onclick="viewBankAccountQR(${acc.id})" class="btn secondary" style="padding: 2px 10px; font-size: 11px; width: auto;">
                             📷 QR
                         </button>
-                        <button onclick="editBankAccount(${acc.id})" class="btn secondary" style="padding: 2px 10px; font-size: 11px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 4px; cursor: pointer;">
-                            ✏️ Editar
-                        </button>
-                        <button onclick="deleteBankAccount(${acc.id})" class="btn secondary" style="padding: 2px 10px; font-size: 11px; width: auto; color: #ef4444; border-color: #ef4444;">
-                            🗑️
-                        </button>
+                        ${puedoEditar ? `
+                            <button onclick="editBankAccount(${acc.id})" class="btn secondary" style="padding: 2px 10px; font-size: 11px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 4px; cursor: pointer;">
+                                ✏️ Editar
+                            </button>
+                            <button onclick="deleteBankAccount(${acc.id})" class="btn secondary" style="padding: 2px 10px; font-size: 11px; width: auto; color: #ef4444; border-color: #ef4444;">
+                                🗑️
+                            </button>
+                        ` : `
+                            <span style="font-size: 10px; color: var(--text-light); padding: 4px 8px; background: var(--bg-card); border-radius: 6px;" title="No tienes permiso para editar esta cuenta">
+                                🔒 Solo lectura
+                            </span>
+                        `}
                     </div>
                 </div>
             </div>
             `;
         }).join('');
+    }
+    
+    let bannerInfo = '';
+    if (!esAdmin) {
+        if (config.permitir_ver_qr_otros && config.permitir_cambiar_default) {
+            bannerInfo = `
+                <div style="background: #3b82f615; border-left: 3px solid #3b82f6; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; font-size: 12px; color: #1e40af;">
+                    💡 <strong>Puedes ver todas las cuentas</strong> (solo lectura para las ajenas) y <strong>elegir tu cuenta por defecto</strong>.
+                </div>
+            `;
+        } else if (config.permitir_ver_qr_otros && !config.permitir_cambiar_default) {
+            bannerInfo = `
+                <div style="background: #f59e0b15; border-left: 3px solid #f59e0b; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; font-size: 12px; color: #92400e;">
+                    👁️ <strong>Solo lectura:</strong> Puedes ver todas las cuentas, pero no cambiar tu cuenta por defecto (la designa el administrador).
+                </div>
+            `;
+        } else if (!config.permitir_ver_qr_otros && config.permitir_cambiar_default) {
+            bannerInfo = `
+                <div style="background: #10b98115; border-left: 3px solid #10b981; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; font-size: 12px; color: #065f46;">
+                    🔒 <strong>Solo ves tus cuentas.</strong> Puedes elegir cuál usar por defecto.
+                </div>
+            `;
+        } else {
+            bannerInfo = `
+                <div style="background: #ef444415; border-left: 3px solid #ef4444; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; font-size: 12px; color: #991b1b;">
+                    🔒 <strong>Solo ves tus cuentas</strong> y la cuenta por defecto la designa el administrador.
+                </div>
+            `;
+        }
     }
     
     modal.innerHTML = `
@@ -954,6 +1098,8 @@ async function showBankAccountsModal() {
                 <h2 style="margin: 0;">🏦 Datos Bancarios</h2>
                 <button onclick="closeBankAccountsModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
             </div>
+            
+            ${bannerInfo}
             
             <div style="margin-bottom: 16px;">
                 <h3 style="margin: 0 0 8px 0; font-size: 14px;">📋 Cuentas registradas</h3>
@@ -1147,6 +1293,11 @@ async function editBankAccount(accountId) {
         return;
     }
     
+    if (!window.DBModule.puedeUsuarioEditarCuenta(account)) {
+        window.showToast('🔒 No tienes permiso para editar esta cuenta', 'warning', 4000);
+        return;
+    }
+    
     window._editQrDataTemp = null;
     
     const modal = document.createElement('div');
@@ -1238,10 +1389,13 @@ async function editBankAccount(accountId) {
                 </div>
                 
                 <div style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--bg); border-radius: 6px; border: 1px solid var(--border-color);">
-                    <span style="font-size: 16px;">⭐</span>
-                    <span style="flex: 1; font-size: 13px;">Establecer como predeterminada</span>
+                    <span style="font-size: 16px;">👑</span>
+                    <span style="flex: 1; font-size: 13px;">Establecer como predeterminada global (admin)</span>
                     <input type="checkbox" id="edit-bank-account-default" ${account.is_default ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary);">
                 </div>
+                <small style="font-size: 11px; color: var(--text-light); display: block; margin-top: -6px;">
+                    💡 Esta opción solo tiene efecto si eres administrador. Cada usuario puede tener su propia cuenta por defecto.
+                </small>
                 
                 <div style="display: flex; gap: 8px; margin-top: 8px;">
                     <button type="submit" class="btn primary" style="flex: 1; background: #f59e0b; color: #fff; border: none; border-radius: 8px; padding: 10px; cursor: pointer; font-weight: 600;">
@@ -1459,9 +1613,20 @@ async function viewBankAccountQR(accountId) {
 // ============================================================
 
 async function deleteBankAccount(accountId) {
+    const account = await window.DBModule.getBankAccount(accountId);
+    if (!account) {
+        window.showToast('❌ Cuenta no encontrada', 'error');
+        return;
+    }
+    
+    if (!window.DBModule.puedeUsuarioEditarCuenta(account)) {
+        window.showToast('🔒 No tienes permiso para eliminar esta cuenta', 'warning', 4000);
+        return;
+    }
+    
     const confirm = await window.ModalModule.showConfirm({
         title: '🗑️ Eliminar cuenta bancaria',
-        message: '¿Seguro que quieres eliminar esta cuenta bancaria?',
+        message: `¿Seguro que quieres eliminar la cuenta "${account.bank}"?\n\nEsta acción se puede deshacer desde "Limpiar datos eliminados" (no aplica).`,
         confirmText: 'Sí, eliminar',
         cancelText: 'Cancelar',
         icon: '🗑️',
@@ -1481,13 +1646,37 @@ async function deleteBankAccount(accountId) {
 }
 
 // ============================================================
-// ESTABLECER CUENTA DEFAULT
+// 🆕 CORRECCIÓN #16: ESTABLECER CUENTA DEFAULT
 // ============================================================
 
 async function setDefaultBankAccount(accountId) {
-    const result = await window.DBModule.setDefaultBankAccount(accountId);
+    const user = window.AuthModule.getCurrentUser();
+    if (!user) {
+        window.showToast('❌ No hay usuario autenticado', 'error');
+        return;
+    }
+    
+    const esAdmin = user.is_admin === 1;
+    const config = window.DBModule.getConfigBancaria();
+    
+    if (!esAdmin && !config.permitir_cambiar_default) {
+        window.showToast('🔒 El administrador no permite cambiar la cuenta por defecto', 'warning', 4000);
+        return;
+    }
+    
+    let result;
+    let mensaje;
+    
+    if (esAdmin) {
+        result = window.DBModule.setDefaultBankAccount(accountId);
+        mensaje = '✅ Cuenta predeterminada global establecida';
+    } else {
+        result = window.DBModule.setCuentaDefaultUsuario(user.id, accountId);
+        mensaje = '✅ Tu cuenta predeterminada ha sido actualizada';
+    }
+    
     if (result.success) {
-        window.showToast('✅ Cuenta predeterminada establecida', 'success');
+        window.showToast(mensaje, 'success');
         closeBankAccountsModal();
         setTimeout(() => showBankAccountsModal(), 300);
     } else {
@@ -1539,4 +1728,12 @@ window.generarQRPreview = generarQRPreview;
 window.generarEditQRPreview = generarEditQRPreview;
 window.construirTextoQR = construirTextoQR;
 
-console.log('📦 Profile Module cargado correctamente v2.1.0 (FASE 3.3: toggles ampliados)');
+console.log('📦 Profile Module cargado correctamente v2.3.4');
+console.log('   🆕 CORRECCIÓN #17 (240926) aplicada:');
+console.log('      ✅ toggleGuiaRapida() guarda en BD con user_id');
+console.log('      ✅ loadProfile() lee guía rápida desde BD con user_id');
+console.log('      ✅ loadProfile() lee sonido desde BD con user_id');
+console.log('      ✅ Fallback a localStorage si BD falla');
+console.log('   🔄 Correcciones anteriores mantenidas:');
+console.log('      • #16 (240926): Permisos bancarios');
+console.log('      • #2, #3, #4 (250926)');

@@ -38,17 +38,17 @@
 // 🆕 v2.2.6 (240926 v16): CORRECCIÓN #17 - BOTÓN "ENTREGAR (SIN DEUDA)"
 // 🆕 v2.2.7 (240926 v17): CORRECCIÓN #19 - FILTROS AL HACER CLIC EN TARJETAS
 // 🆕 v2.3.0 (250926 v18): 🎯 CORRECCIÓN #1 (250926) - CONTEO DE UNIDADES
-//   - ✅ renderProduccionInfoHTML() ahora muestra UNIDADES (con decimales)
-//     * Formato: "📋 Pedidos: 3.5/6.5" en lugar de "3/6"
-//     * Se usa formatearCantidadProduccion() para evitar ceros innecesarios
-//   - ✅ submitOrderForm() propaga `validarCupo: true` a saveOrder()
-//     * Si hubo ajustes, muestra modal de alerta al usuario
-//     * Si NO hubo ajustes, guarda normalmente
-//   - ✅ submitMultiOrderForm() maneja `ajustados` en el resumen final
-//   - ✅ onOrderDateChange() previsualiza cupo en UNIDADES
-//   - ✅ getProduccionInfo() delega en DBModule (ya devuelve unidades)
-//   - ✅ Mensajes con lenguaje claro: "unidad(es)" en lugar de "pedido(s)"
-//   - ✅ Mantiene total compatibilidad con versiones anteriores
+// 🆕 v2.3.1 (250926 v19): 🎯 CORRECCIÓN #6 (240926) - FORMATO DE MENSAJES
+// 🆕 v2.4.0 (260926 v20): 🎯 CORRECCIÓN #9 (240926) - IMPRIMIR HORARIO
+//   - ✅ NUEVO: Botón "🖨️ Imprimir horario" en el header de Pedidos
+//   - ✅ NUEVO: showProductionScheduleReportModal()
+//     * Modal con rango de fechas + atajos (7d, 14d, 30d, mes)
+//     * Botón "📄 Generar reporte" llama a ReportsModule
+//   - ✅ NUEVO: generarReporteHorarioProduccion()
+//     * Llama a ReportsModule.generateProductionScheduleReport()
+//     * Pasa el HTML a ReportsModule.printReport()
+//   - ✅ NUEVO: closeProductionScheduleReportModal()
+//   - ✅ Mantiene TODAS las funcionalidades anteriores
 // ============================================================
 
 // ============================================================
@@ -135,8 +135,8 @@ window.updateOrderTotal = function() {
 };
 
 // ============================================================
-// 🆕 v2.2.1: HELPER PARA OBTENER INFO DE PRODUCCIÓN
-// (con soporte para bloque del día anterior Y formato de fecha consistente)
+// 🆕 v2.2.1 + CORRECCIÓN #6 (240926): HELPER PARA OBTENER INFO
+// DE PRODUCCIÓN con formato condicional de fecha
 // 🆕 CORRECCIÓN #1 (250926): Delegación total en DBModule
 // ============================================================
 
@@ -154,7 +154,7 @@ function getProduccionInfo(fechaISO) {
                     tieneProduccion: false, 
                     esBloqueDiaAnterior: false,
                     fechaBloqueReal: null,
-                    bloqueTextoAyer: null,
+                    bloqueTexto: null,
                     ...conteo 
                 };
             }
@@ -168,28 +168,24 @@ function getProduccionInfo(fechaISO) {
                 : [];
             
             let bloqueTexto = '';
-            let bloqueTextoAyer = null;
             
             if (bloques && bloques.length >= config.bloque_index) {
                 const bloque = bloques[config.bloque_index - 1];
-                const fechaParaTexto = esBloqueDiaAnterior ? fechaBloqueReal : fechaISO;
                 
                 try {
-                    const fechaObj = new Date(fechaParaTexto + 'T00:00:00');
-                    const dia = String(fechaObj.getDate()).padStart(2, '0');
-                    const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
-                    
-                    bloqueTexto = `${dia}/${mes} de ${bloque.inicioStr} a ${bloque.finStr}`;
-                    
                     if (esBloqueDiaAnterior) {
-                        bloqueTextoAyer = bloqueTexto;
+                        // 🆕 CORRECCIÓN #6: Día anterior → CON fecha
+                        const fechaObj = new Date(fechaBloqueReal + 'T00:00:00');
+                        const dia = String(fechaObj.getDate()).padStart(2, '0');
+                        const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
+                        bloqueTexto = `${dia}/${mes} de ${bloque.inicioStr} a ${bloque.finStr}`;
+                    } else {
+                        // 🆕 CORRECCIÓN #6: Mismo día → SIN fecha
+                        bloqueTexto = `de ${bloque.inicioStr} a ${bloque.finStr}`;
                     }
                 } catch (e) {
                     console.warn('⚠️ Error formateando texto de producción:', e);
                     bloqueTexto = `${bloque.inicioStr} - ${bloque.finStr}`;
-                    if (esBloqueDiaAnterior) {
-                        bloqueTextoAyer = bloqueTexto;
-                    }
                 }
             }
             
@@ -200,7 +196,6 @@ function getProduccionInfo(fechaISO) {
                 notas: config.notas,
                 esBloqueDiaAnterior,
                 fechaBloqueReal,
-                bloqueTextoAyer,
                 ...conteo
             };
         }
@@ -222,7 +217,7 @@ function getProduccionInfo(fechaISO) {
                 cantidadProduccion: 0,
                 esBloqueDiaAnterior: false,
                 fechaBloqueReal: null,
-                bloqueTextoAyer: null
+                bloqueTexto: null
             };
         }
         
@@ -234,7 +229,7 @@ function getProduccionInfo(fechaISO) {
                 tieneProduccion: false, 
                 esBloqueDiaAnterior: false,
                 fechaBloqueReal: null,
-                bloqueTextoAyer: null,
+                bloqueTexto: null,
                 ...conteo 
             };
         }
@@ -248,27 +243,23 @@ function getProduccionInfo(fechaISO) {
             : [];
         
         let bloqueTexto = '';
-        let bloqueTextoAyer = null;
         
         if (bloques && bloques.length >= config.bloque_index) {
             const bloque = bloques[config.bloque_index - 1];
-            const fechaParaTexto = esBloqueDiaAnterior ? fechaBloqueReal : fechaISO;
             
             try {
-                const fechaObj = new Date(fechaParaTexto + 'T00:00:00');
-                const dia = String(fechaObj.getDate()).padStart(2, '0');
-                const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
-                
-                bloqueTexto = `${dia}/${mes} de ${bloque.inicioStr} a ${bloque.finStr}`;
-                
                 if (esBloqueDiaAnterior) {
-                    bloqueTextoAyer = bloqueTexto;
+                    // 🆕 CORRECCIÓN #6: Día anterior → CON fecha
+                    const fechaObj = new Date(fechaBloqueReal + 'T00:00:00');
+                    const dia = String(fechaObj.getDate()).padStart(2, '0');
+                    const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
+                    bloqueTexto = `${dia}/${mes} de ${bloque.inicioStr} a ${bloque.finStr}`;
+                } else {
+                    // 🆕 CORRECCIÓN #6: Mismo día → SIN fecha
+                    bloqueTexto = `de ${bloque.inicioStr} a ${bloque.finStr}`;
                 }
             } catch (e) {
                 bloqueTexto = `${bloque.inicioStr} - ${bloque.finStr}`;
-                if (esBloqueDiaAnterior) {
-                    bloqueTextoAyer = bloqueTexto;
-                }
             }
         }
         
@@ -279,7 +270,6 @@ function getProduccionInfo(fechaISO) {
             notas: config.notas,
             esBloqueDiaAnterior,
             fechaBloqueReal,
-            bloqueTextoAyer,
             ...conteo
         };
     } catch (e) {
@@ -292,7 +282,7 @@ function getProduccionInfo(fechaISO) {
             cantidadProduccion: 0,
             esBloqueDiaAnterior: false,
             fechaBloqueReal: null,
-            bloqueTextoAyer: null
+            bloqueTexto: null
         };
     }
 }
@@ -435,9 +425,6 @@ async function mostrarAlertaStockWarning(orderId, stockWarning) {
 // ============================================================
 // 🆕 CORRECCIÓN #1: MODAL DE AJUSTES DE CUPO
 // ============================================================
-// Se muestra cuando el usuario intenta guardar un pedido cuya
-// cantidad excede el cupo disponible. Informa qué se ajustó.
-// ============================================================
 
 async function mostrarAlertaAjusteCupo(detalles, mensaje) {
     try {
@@ -464,6 +451,225 @@ async function mostrarAlertaAjusteCupo(detalles, mensaje) {
 }
 
 window.mostrarAlertaAjusteCupo = mostrarAlertaAjusteCupo;
+
+// ============================================================
+// 🆕 CORRECCIÓN #9 (240926): MODAL DE REPORTE DE HORARIO
+// ============================================================
+// 
+// Permite seleccionar un rango de fechas y generar el reporte
+// de horario de producción (que vive en reports.js).
+// ============================================================
+
+function showProductionScheduleReportModal() {
+    const LOG_PREFIX = '🖨️ [showProductionScheduleReportModal]';
+    console.log(`${LOG_PREFIX} Abriendo modal...`);
+    
+    // Verificar que ReportsModule esté disponible
+    if (!window.ReportsModule || typeof window.ReportsModule.generateProductionScheduleReport !== 'function') {
+        console.error(`${LOG_PREFIX} ❌ ReportsModule.generateProductionScheduleReport no disponible`);
+        window.showToast('⚠️ Módulo de reportes no disponible. Recarga la página.', 'warning', 5000);
+        return;
+    }
+    
+    const existingModal = document.getElementById('production-schedule-report-modal');
+    if (existingModal) existingModal.remove();
+    
+    // Fechas por defecto: hoy → hoy + 7 días
+    const hoy = new Date();
+    const hoyStr = window.fechaLocalYYYYMMDD 
+        ? window.fechaLocalYYYYMMDD(hoy) 
+        : hoy.toISOString().split('T')[0];
+    const en7dias = new Date(hoy);
+    en7dias.setDate(en7dias.getDate() + 7);
+    const en7diasStr = window.fechaLocalYYYYMMDD 
+        ? window.fechaLocalYYYYMMDD(en7dias) 
+        : en7dias.toISOString().split('T')[0];
+    
+    const modal = document.createElement('div');
+    modal.id = 'production-schedule-report-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: ${ORDERS_MODAL_Z_INDEX}; padding: 20px;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #8b5cf6;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 28px;">🖨️</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 18px; color: #8b5cf6;">Imprimir horario de producción</h2>
+                        <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">Reporte para el panadero</p>
+                    </div>
+                </div>
+                <button onclick="closeProductionScheduleReportModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+            </div>
+            
+            <div style="background: #f0f9ff; border: 1px solid #3b82f6; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: #1e40af; line-height: 1.5;">
+                💡 <strong>¿Qué incluye este reporte?</strong>
+                <ul style="margin: 6px 0 0 18px; padding: 0;">
+                    <li>📅 Fecha de venta</li>
+                    <li>🏷️ Producto</li>
+                    <li>🔨 Bloque de producción</li>
+                    <li>📦 Cantidad a producir</li>
+                    <li>⏰ <strong>Horario de porciones y bolear</strong> (4h antes del bloque)</li>
+                </ul>
+            </div>
+            
+            <form id="production-schedule-report-form" style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 12px; font-weight: 600; color: var(--text-label); margin-bottom: 8px;">📅 Rango de fechas</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <div class="form-group">
+                            <label style="font-size: 12px;">Desde</label>
+                            <input type="date" id="report-schedule-from" value="${hoyStr}" class="input-field" required>
+                        </div>
+                        <div class="form-group">
+                            <label style="font-size: 12px;">Hasta</label>
+                            <input type="date" id="report-schedule-to" value="${en7diasStr}" class="input-field" required>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap;">
+                        <button type="button" onclick="setProductionReportRango(7)" class="btn secondary" style="padding: 4px 10px; font-size: 11px; width: auto;">7 días</button>
+                        <button type="button" onclick="setProductionReportRango(14)" class="btn secondary" style="padding: 4px 10px; font-size: 11px; width: auto;">14 días</button>
+                        <button type="button" onclick="setProductionReportRango(30)" class="btn secondary" style="padding: 4px 10px; font-size: 11px; width: auto;">30 días</button>
+                        <button type="button" onclick="setProductionReportMesActual()" class="btn secondary" style="padding: 4px 10px; font-size: 11px; width: auto;">Mes completo</button>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button type="submit" class="btn primary" style="flex: 2; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; padding: 12px; cursor: pointer; font-weight: 700;">
+                        🖨️ Generar reporte
+                    </button>
+                    <button type="button" onclick="closeProductionScheduleReportModal()" class="btn secondary" style="flex: 1;">
+                        ❌ Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const form = document.getElementById('production-schedule-report-form');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await generarReporteHorarioProduccion();
+    });
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeProductionScheduleReportModal();
+    });
+}
+
+/**
+ * 🆕 CORRECCIÓN #9: Atajos rápidos para el rango del reporte.
+ */
+function setProductionReportRango(dias) {
+    const inicio = document.getElementById('report-schedule-from');
+    const fin = document.getElementById('report-schedule-to');
+    if (!inicio || !fin) return;
+    
+    const hoy = new Date();
+    const finObj = new Date(hoy);
+    finObj.setDate(finObj.getDate() + (dias - 1));
+    
+    inicio.value = window.fechaLocalYYYYMMDD 
+        ? window.fechaLocalYYYYMMDD(hoy) 
+        : hoy.toISOString().split('T')[0];
+    fin.value = window.fechaLocalYYYYMMDD 
+        ? window.fechaLocalYYYYMMDD(finObj) 
+        : finObj.toISOString().split('T')[0];
+}
+
+/**
+ * 🆕 CORRECCIÓN #9: Atajo para el mes actual.
+ */
+function setProductionReportMesActual() {
+    const inicio = document.getElementById('report-schedule-from');
+    const fin = document.getElementById('report-schedule-to');
+    if (!inicio || !fin) return;
+    
+    const hoy = new Date();
+    const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+    
+    inicio.value = window.fechaLocalYYYYMMDD 
+        ? window.fechaLocalYYYYMMDD(primerDia) 
+        : primerDia.toISOString().split('T')[0];
+    fin.value = window.fechaLocalYYYYMMDD 
+        ? window.fechaLocalYYYYMMDD(ultimoDia) 
+        : ultimoDia.toISOString().split('T')[0];
+}
+
+/**
+ * 🆕 CORRECCIÓN #9: Genera el reporte de horario de producción.
+ */
+async function generarReporteHorarioProduccion() {
+    const LOG_PREFIX = '🖨️ [generarReporteHorarioProduccion]';
+    
+    const fromDate = document.getElementById('report-schedule-from')?.value || '';
+    const toDate = document.getElementById('report-schedule-to')?.value || '';
+    
+    if (!fromDate || !toDate) {
+        window.showToast('⚠️ Selecciona un rango de fechas', 'warning');
+        return;
+    }
+    
+    if (fromDate > toDate) {
+        window.showToast('⚠️ La fecha "desde" debe ser anterior a "hasta"', 'error');
+        return;
+    }
+    
+    console.log(`${LOG_PREFIX} Generando reporte para ${fromDate} → ${toDate}`);
+    
+    try {
+        window.showToast('⏳ Generando reporte...', 'info', 2000);
+        
+        const html = window.ReportsModule.generateProductionScheduleReport({
+            from_date: fromDate,
+            to_date: toDate
+        });
+        
+        if (!html) {
+            window.showToast('⚠️ No hay producciones programadas en ese rango', 'warning', 5000);
+            return;
+        }
+        
+        window.ReportsModule.printReport(html);
+        window.showToast('✅ Reporte generado', 'success', 3000);
+        
+        closeProductionScheduleReportModal();
+        
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+        window.showToast('❌ Error al generar reporte: ' + error.message, 'error', 5000);
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #9: Cierra el modal de reporte de horario.
+ */
+function closeProductionScheduleReportModal() {
+    const modal = document.getElementById('production-schedule-report-modal');
+    if (modal) {
+        modal.style.animation = 'modalFadeOut 0.2s ease forwards';
+        setTimeout(() => { if (modal.parentNode) modal.remove(); }, 200);
+        setTimeout(() => {
+            const still = document.getElementById('production-schedule-report-modal');
+            if (still && still.parentNode) still.remove();
+        }, 500);
+    }
+}
+
+window.showProductionScheduleReportModal = showProductionScheduleReportModal;
+window.closeProductionScheduleReportModal = closeProductionScheduleReportModal;
+window.generarReporteHorarioProduccion = generarReporteHorarioProduccion;
+window.setProductionReportRango = setProductionReportRango;
+window.setProductionReportMesActual = setProductionReportMesActual;
 
 // ============================================================
 // MODAL DE GESTIÓN DE LISTA DE ESPERA
@@ -962,12 +1168,8 @@ async function reporteListaEspera() {
 }
 
 // ============================================================
-// 🆕 v2.2.4 + CORRECCIÓN #1: RENDER INFO DE PRODUCCIÓN
-// ============================================================
-// CAMBIO v2.3.0:
-//   - El mensaje "📋 Pedidos: m/n" ahora muestra UNIDADES.
-//   - Se usa formatearCantidadProduccion() para evitar ceros innecesarios.
-//   - Ejemplo: "📋 Pedidos: 3.5/6.5" en lugar de "3/6"
+// 🆕 v2.2.4 + CORRECCIÓN #1 + CORRECCIÓN #6 (240926)
+// RENDER INFO DE PRODUCCIÓN con formato unificado
 // ============================================================
 
 function renderProduccionInfoHTML(fechaISO) {
@@ -994,14 +1196,14 @@ function renderProduccionInfoHTML(fechaISO) {
             bgDisponible = '#f59e0b15';
         }
         
-        // 🆕 v2.2.4: Badge CLICKEABLE
-        const badgeBloqueHoy = esAyer
+        // 🆕 CORRECCIÓN #6: Badge unificado con 🔨 y borde dashed solo si es día anterior
+        const badgeBloque = esAyer
             ? `<span onclick="event.stopPropagation(); if(window.showHorarioDetalle) window.showHorarioDetalle('${fechaISO}');" 
                      style="background: #8b5cf615; color: #8b5cf6; padding: 3px 10px; border-radius: 6px; font-weight: 600; border: 1px dashed #8b5cf6; cursor: pointer; transition: all 0.2s;" 
                      onmouseover="this.style.background='#8b5cf630'; this.style.transform='scale(1.02)';" 
                      onmouseout="this.style.background='#8b5cf615'; this.style.transform='scale(1)';"
                      title="Clic para configurar la producción del día">
-                  🌙 Prod. ayer: ${info.bloqueTexto}
+                  🔨 Producción: ${info.bloqueTexto}
                </span>`
             : `<span onclick="event.stopPropagation(); if(window.showHorarioDetalle) window.showHorarioDetalle('${fechaISO}');" 
                      style="background: #8b5cf615; color: #8b5cf6; padding: 3px 10px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.2s;" 
@@ -1013,7 +1215,7 @@ function renderProduccionInfoHTML(fechaISO) {
         
         return `
             <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-color); font-size: 11px;">
-                ${badgeBloqueHoy}
+                ${badgeBloque}
                 <span style="background: ${bgDisponible}; color: ${colorDisponible}; padding: 3px 10px; border-radius: 6px; font-weight: 600;">
                     📋 Pedidos: ${fmt(pedidos)}/${fmt(cantidadProd)}
                 </span>
@@ -1043,6 +1245,7 @@ window.renderProduccionInfoHTML = renderProduccionInfoHTML;
 
 // ============================================================
 // RENDER ORDERS VIEW
+// 🆕 CORRECCIÓN #9: Añadido botón "🖨️ Imprimir horario"
 // ============================================================
 
 function renderOrdersView() {
@@ -1086,6 +1289,9 @@ function renderOrdersView() {
                 </button>
                 <button onclick="showWaitingListManagerModal()" class="btn primary" style="padding: 8px 16px; font-size: 14px; width: auto; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                     ⏰ Lista de espera
+                </button>
+                <button onclick="showProductionScheduleReportModal()" class="btn primary" style="padding: 8px 16px; font-size: 14px; width: auto; background: #8b5cf6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;" title="Imprimir horario de producción (4h antes del bloque)">
+                    🖨️ Imprimir horario
                 </button>
                 <button onclick="showOrdersReportModal()" class="btn secondary" style="padding: 8px 16px; font-size: 14px; width: auto;">
                     📊 Reporte
@@ -2660,9 +2866,7 @@ async function actualizarVistaPrevia() {
             }
             
             if (prodInfo.tieneProduccion) {
-                const prodBadge = prodInfo.esBloqueDiaAnterior 
-                    ? `🌙 ${fmt(prodInfo.pedidos)}/${fmt(prodInfo.cantidadProduccion)}` 
-                    : `🔨 ${fmt(prodInfo.pedidos)}/${fmt(prodInfo.cantidadProduccion)}`;
+                const prodBadge = `🔨 ${fmt(prodInfo.pedidos)}/${fmt(prodInfo.cantidadProduccion)}`;
                 textoExtra += ` <span style="color: #8b5cf6;">${prodBadge}</span>`;
             }
         }
@@ -2853,7 +3057,6 @@ function removeMultiItem(index) {
 
 // ============================================================
 // 🆕 CORRECCIÓN #1: ENVIAR RESERVA POR PERÍODO
-// Maneja `ajustados` en el resumen final.
 // ============================================================
 
 async function submitMultiOrderForm() {
@@ -3055,7 +3258,7 @@ function highlightSesionSelection(sesion) {
 }
 
 // ============================================================
-// 🆕 CORRECCIÓN #1: onOrderDateChange con conteo en UNIDADES
+// 🆕 CORRECCIÓN #1 + #6: onOrderDateChange con formato unificado
 // ============================================================
 
 function onOrderDateChange() {
@@ -3102,16 +3305,13 @@ function onOrderDateChange() {
                 borderColor = '#f59e0b';
             }
             
-            const tituloProduccion = esAyer
-                ? `<span style="font-weight: 700; color: #8b5cf6; font-size: 13px;">🌙 Prod. ayer: ${info.bloqueTexto}</span>`
-                : `<span style="font-weight: 700; color: #8b5cf6; font-size: 13px;">🔨 Horario de producción: ${info.bloqueTexto}</span>`;
-            
-            const iconoProduccion = esAyer ? '🌙' : '🔨';
+            // 🆕 CORRECCIÓN #6: Título unificado con 🔨
+            const tituloProduccion = `<span style="font-weight: 700; color: #8b5cf6; font-size: 13px;">🔨 Producción: ${info.bloqueTexto}</span>`;
             
             prodInfoContainer.innerHTML = `
                 <div style="background: ${bgDisponible}; border: 2px solid ${esAyer ? '#8b5cf6' : borderColor}; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px;">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                        <span style="font-size: 20px;">${iconoProduccion}</span>
+                        <span style="font-size: 20px;">🔨</span>
                         ${tituloProduccion}
                     </div>
                     ${esAyer ? `
@@ -3409,7 +3609,6 @@ async function submitOrderForm(isEdit) {
             
             // 🆕 CORRECCIÓN #1: Manejar ajustes de cupo
             if (result.huboAjustes) {
-                // Mostrar alerta informativa sobre los ajustes
                 await mostrarAlertaAjusteCupo(
                     null,
                     result.mensajeAjustes || 'Se ajustaron algunas cantidades por falta de cupo.'
@@ -3422,7 +3621,6 @@ async function submitOrderForm(isEdit) {
             await loadOrders();
             if (typeof window.loadDashboardData === 'function') setTimeout(window.loadDashboardData, 500);
         } else {
-            // Si hubo ajustes pero TODOS los items quedaron en 0, mostrar mensaje
             if (result.huboAjustes && result.mensajeAjustes) {
                 await window.ModalModule.showAlert({
                     title: '⛔ Sin cupo disponible',
@@ -3442,7 +3640,7 @@ async function submitOrderForm(isEdit) {
 
 // ============================================================
 // VER PEDIDO EN DETALLE
-// 🆕 CORRECCIÓN #1: Producción y conteo en UNIDADES
+// 🆕 CORRECCIÓN #1 + #6: Producción en UNIDADES y formato unificado
 // ============================================================
 
 async function viewOrder(id) {
@@ -3497,13 +3695,11 @@ async function viewOrder(id) {
         if (prodInfo.tieneProduccion) {
             const esAyer = prodInfo.esBloqueDiaAnterior === true;
             
+            // 🆕 CORRECCIÓN #6: Título unificado con 🔨
             produccionSection = `
                 <div style="background: linear-gradient(135deg, #8b5cf615 0%, #8b5cf608 100%); border: ${esAyer ? '2px dashed' : '1px solid'} #8b5cf6; border-radius: 8px; padding: 10px 12px; margin: 10px 0;">
                     <div style="font-size: 13px; font-weight: 600; color: #8b5cf6; margin-bottom: 4px;">
-                        ${esAyer 
-                            ? `🌙 Prod. ayer: ${prodInfo.bloqueTexto}` 
-                            : `🔨 Horario de producción: ${prodInfo.bloqueTexto}`
-                        }
+                        🔨 Producción: ${prodInfo.bloqueTexto}
                     </div>
                     ${esAyer ? `
                         <div style="font-size: 11px; color: #8b5cf6; background: #8b5cf615; padding: 3px 8px; border-radius: 6px; margin-bottom: 4px; border-left: 2px solid #8b5cf6; font-style: italic;">
@@ -4220,12 +4416,21 @@ window.selectDiasExcluidos = selectDiasExcluidos;
 window.limpiarDiasExcluidos = limpiarDiasExcluidos;
 window.updateExclusionSummary = updateExclusionSummary;
 
-console.log('📦 UI Orders Module v2.3.0 (CORRECCIÓN #1 250926: conteo de UNIDADES)');
-console.log('   🆕 Novedades v2.3.0:');
-console.log('      • renderProduccionInfoHTML() muestra UNIDADES (ej: "Pedidos: 3.5/6.5")');
-console.log('      • submitOrderForm() propaga validarCupo=true y maneja ajustes');
-console.log('      • submitMultiOrderForm() maneja ajustes en el resumen final');
-console.log('      • onOrderDateChange() previsualiza cupo en UNIDADES');
-console.log('      • NUEVA: mostrarAlertaAjusteCupo() para informar ajustes');
-console.log('      • Mensajes claros: "unidad(es)" en lugar de "pedido(s)"');
-console.log('   ✅ Compatibilidad total con versiones anteriores');
+// 🆕 CORRECCIÓN #9 (240926): Exportar funciones del reporte de horario
+window.showProductionScheduleReportModal = showProductionScheduleReportModal;
+window.closeProductionScheduleReportModal = closeProductionScheduleReportModal;
+window.generarReporteHorarioProduccion = generarReporteHorarioProduccion;
+window.setProductionReportRango = setProductionReportRango;
+window.setProductionReportMesActual = setProductionReportMesActual;
+
+console.log('📦 UI Orders Module v2.4.0 (CORRECCIÓN #9 240926: Botón Imprimir horario)');
+console.log('   🆕 Novedades v2.4.0:');
+console.log('      • NUEVO: Botón "🖨️ Imprimir horario" en el header de Pedidos');
+console.log('      • NUEVO: showProductionScheduleReportModal()');
+console.log('         - Modal con rango de fechas + atajos (7d, 14d, 30d, mes)');
+console.log('         - Llama a ReportsModule.generateProductionScheduleReport()');
+console.log('      • NUEVO: generarReporteHorarioProduccion()');
+console.log('      • NUEVO: setProductionReportRango() y setProductionReportMesActual()');
+console.log('   ✅ Correcciones anteriores mantenidas:');
+console.log('      • #1 (250926): Conteo de UNIDADES');
+console.log('      • #6 (240926): Formato unificado de mensajes de producción');
