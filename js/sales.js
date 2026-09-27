@@ -29,6 +29,15 @@
 //     compartida (para no bloquear la operación de venta en mostrador).
 //     Solo se bloquea la EDICIÓN/ANULACIÓN/RESTAURACIÓN/ELIMINACIÓN
 //     de ventas existentes que el usuario no puede procesar.
+// 🆕 v2.1.13 (260926 v4): 🎯 NUEVA FUNCIONALIDAD #1 (260926) - NOTA A LA VENTA
+//   - ✅ saveSale() ahora acepta y guarda saleData.notes en INSERT y UPDATE
+//   - ✅ NUEVA función updateSaleNote(saleId, note):
+//     * Permite actualizar solo la nota de una venta existente.
+//     * Solo el creador de la venta puede modificar la nota.
+//     * Verifica que la venta no esté anulada ni eliminada.
+//     * Actualiza notes y updated_at.
+//   - ✅ La nota es opcional (puede quedar vacía o null).
+//   - ✅ La nota NO se incluye en el reporte PDF (por decisión de diseño).
 // ============================================================
 
 window.SalesModule = {};
@@ -36,9 +45,6 @@ window.SalesModule = {};
 // ============================================================
 // 🆕 v2.1.12: WRAPPER LOCAL PARA VERIFICAR PERMISOS DE VENTA
 // ============================================================
-// Delega a orders.js si está disponible para tener una única
-// fuente de verdad. Si no está disponible, hace la verificación
-// directamente en sales.js.
 
 function _puedeUsuarioActualProcesarVenta(saleOrId) {
     // 1) Intentar delegar a orders.js
@@ -57,7 +63,6 @@ function _puedeUsuarioActualProcesarVenta(saleOrId) {
             return { puede: false, razon: 'No hay usuario autenticado', recetaBloqueada: null };
         }
         
-        // Admin siempre puede
         if (user.is_admin === 1) {
             return { puede: true, razon: '', recetaBloqueada: null };
         }
@@ -76,7 +81,6 @@ function _puedeUsuarioActualProcesarVenta(saleOrId) {
             return { puede: true, razon: '', recetaBloqueada: null };
         }
         
-        // Cargar la venta si no la tenemos
         if (!sale) {
             try {
                 const sales = window.DBModule.query(
@@ -97,12 +101,10 @@ function _puedeUsuarioActualProcesarVenta(saleOrId) {
             }
         }
         
-        // Sin receta → no hay bloqueo
         if (!sale.receta_id) {
             return { puede: true, razon: '', recetaBloqueada: null };
         }
         
-        // Verificar la receta
         try {
             const recetas = window.DBModule.query(
                 `SELECT id, user_id, shared, name 
@@ -142,14 +144,9 @@ function _puedeUsuarioActualProcesarVenta(saleOrId) {
     }
 }
 
-/**
- * Limpia la caché de permisos de ventas.
- * Llamar cuando se edita una venta para invalidar la caché.
- */
 function _limpiarCachePermisosVenta(saleId) {
     try {
         if (saleId && typeof window.OrdersModule?.limpiarCachePermisos === 'function') {
-            // Limpiar también la caché de orders (compartida)
             window.OrdersModule.limpiarCachePermisos();
         }
     } catch (e) {
@@ -162,49 +159,29 @@ window._puedeUsuarioActualProcesarVenta = _puedeUsuarioActualProcesarVenta;
 // ============================================================
 // FIX 2: NORMALIZACIÓN DE FECHAS
 // ============================================================
-// 
-// PROBLEMA:
-//   new Date("2026-09-17") → 17 sept 00:00 UTC → 16 sept 20:00 local (UTC-4) ❌
-//   new Date("2026-09-17T00:00:00") → 17 sept 00:00 LOCAL ✅
-//   Pero si SQLite lo interpreta como UTC → 16 sept 20:00 local ❌
-//
-// SOLUCIÓN:
-//   - Si la fecha es HOY → usar hora actual (new Date().toISOString())
-//   - Si la fecha es otra → usar mediodía UTC (T12:00:00.000Z)
-//   
-//   Mediodía UTC siempre cae en el mismo día local en cualquier zona
-//   horaria razonable (UTC-12 a UTC+12).
-// ============================================================
 
 function normalizarFechaVenta(fechaInput) {
-    // Si no hay fecha, usar hora actual
     if (!fechaInput) {
         return new Date().toISOString();
     }
     
-    // Si ya viene con hora (ISO completo), respetarla
     if (typeof fechaInput === 'string' && fechaInput.includes('T')) {
         return fechaInput;
     }
     
-    // Si viene como YYYY-MM-DD (de <input type="date">)
     const fechaStr = String(fechaInput).trim();
     
-    // Validar formato YYYY-MM-DD
     const match = fechaStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!match) {
         console.warn('⚠️ [normalizarFechaVenta] Formato no reconocido:', fechaInput);
         return new Date().toISOString();
     }
     
-    // ¿Es hoy?
     const hoyStr = new Date().toISOString().split('T')[0];
     if (fechaStr === hoyStr) {
-        // Hoy → hora actual real (preserva la hora exacta de la venta)
         return new Date().toISOString();
     }
     
-    // Otra fecha → mediodía UTC (garantiza el mismo día local)
     return `${fechaStr}T12:00:00.000Z`;
 }
 
@@ -286,6 +263,7 @@ async function getSale(id) {
 // ============================================================
 // GUARDAR VENTA - CON FIX DE DUPLICADOS EN TRANSACCIONES
 // 🆕 v2.1.12: Verifica permisos antes de EDITAR (no al crear)
+// 🆕 v2.1.13: Acepta y guarda notes (INSERT y UPDATE)
 // ============================================================
 
 async function saveSale(saleData) {
@@ -314,14 +292,17 @@ async function saveSale(saleData) {
         const saleDateNormalizada = normalizarFechaVenta(saleData.sale_date);
         console.log('📅 [saveSale] Fecha normalizada:', saleData.sale_date, '→', saleDateNormalizada);
 
+        // 🆕 v2.1.13: Normalizar notes
+        const notesFinal = (saleData.notes !== undefined && saleData.notes !== null)
+            ? String(saleData.notes).trim() || null
+            : null;
+
         let result;
         let isUpdate = false;
         let oldSale = null;
 
-        // Determinar is_liberated
         const isLiberated = saleData.is_liberated ? 1 : 0;
         
-        // Si es venta liberada, forzar buyer y no permitir deuda
         let buyer = saleData.buyer;
         let isDebt = saleData.is_debt ? 1 : 0;
         let paid = saleData.paid !== undefined ? (saleData.paid ? 1 : 0) : 1;
@@ -346,12 +327,14 @@ async function saveSale(saleData) {
                 await reponerStockVenta(oldSale);
             }
 
+            // 🆕 v2.1.13: Incluir notes en el UPDATE
             result = window.DBModule.execute(`
                 UPDATE sales 
                 SET product_name = ?, producto_id = ?, receta_id = ?,
                     quantity = ?, unit_price = ?, total = ?, 
                     payment_method = ?, buyer = ?, is_debt = ?, paid = ?,
-                    sale_date = ?, session = ?, is_liberated = ?
+                    sale_date = ?, session = ?, is_liberated = ?,
+                    notes = ?
                 WHERE id = ? AND user_id = ?
             `, [
                 saleData.product_name || null,
@@ -367,11 +350,11 @@ async function saveSale(saleData) {
                 saleDateNormalizada,
                 saleData.session || null,
                 isLiberated,
+                notesFinal,
                 saleData.id,
                 user.id
             ]);
             
-            // 🔧 FIX CRÍTICO: Eliminar transacciones ANTERIORES por sale_id
             const txResult = window.DBModule.execute(
                 'UPDATE transactions SET deleted_at = CURRENT_TIMESTAMP WHERE sale_id = ? AND user_id = ?',
                 [saleData.id, user.id]
@@ -379,13 +362,13 @@ async function saveSale(saleData) {
             console.log('🗑️ Transacciones anteriores eliminadas por sale_id:', saleData.id);
             
         } else {
-            // 🆕 FASE 1.3.2: Generar uuid para la venta
             const saleUuid = window.DBModule.generateUuidForTable('sales');
             
+            // 🆕 v2.1.13: Incluir notes en el INSERT
             result = window.DBModule.execute(`
                 INSERT INTO sales (user_id, product_name, producto_id, receta_id, quantity, unit_price, 
-                    total, payment_method, buyer, is_debt, paid, sale_date, session, is_liberated, voided, uuid)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                    total, payment_method, buyer, is_debt, paid, sale_date, session, is_liberated, voided, notes, uuid)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
             `, [
                 user.id,
                 saleData.product_name || null,
@@ -401,18 +384,20 @@ async function saveSale(saleData) {
                 saleDateNormalizada,
                 saleData.session || null,
                 isLiberated,
+                notesFinal,
                 saleUuid
             ]);
             
             console.log(`✅ [saveSale] Venta #${result.lastId} creada con uuid ${saleUuid}`);
+            if (notesFinal) {
+                console.log(`   📝 Con nota: "${notesFinal}"`);
+            }
         }
 
         const saleId = isUpdate ? saleData.id : result.lastId;
         
-        // 🆕 v2.1.12: Limpiar caché de permisos porque la venta cambió
         _limpiarCachePermisosVenta(saleId);
         
-        // Descontar stock si tiene receta
         if (saleData.receta_id) {
             const stockResult = await window.RecipesModule.descontarStockReceta(
                 saleData.receta_id, 
@@ -428,7 +413,6 @@ async function saveSale(saleData) {
             }
         }
 
-        // Verificar que NO exista ya una transacción para esta venta
         const txExistente = window.DBModule.query(`
             SELECT id FROM transactions 
             WHERE sale_id = ? AND user_id = ? 
@@ -436,7 +420,6 @@ async function saveSale(saleData) {
         `, [saleId, user.id]);
 
         if (txExistente.length === 0) {
-            // Registrar transacción (solo si no existe)
             await registerTransaction({
                 type: 'income',
                 category: isLiberated ? 'venta_liberada' : 'venta',
@@ -455,7 +438,6 @@ async function saveSale(saleData) {
 
         window.DBModule.saveAndNotify();
 
-        // Buscar pedido asociado (solo si NO es liberada y hay buyer)
         if (buyer && !isUpdate && !isLiberated) {
             const today = new Date();
             const todayStr = today.toISOString().split('T')[0];
@@ -495,6 +477,92 @@ async function saveSale(saleData) {
 }
 
 // ============================================================
+// 🆕 v2.1.13: ACTUALIZAR SOLO LA NOTA DE UNA VENTA
+// ============================================================
+// 
+// Permite al creador de la venta actualizar únicamente la nota,
+// sin tocar el resto de los campos.
+// 
+// Validaciones:
+//   - Solo el creador (user_id === currentUser.id) puede modificar.
+//   - La venta debe existir y no estar eliminada.
+//   - La venta NO puede estar anulada (voided = 1).
+//   - La nota puede ser vacía/null (se guardará como NULL).
+// 
+// Retorno:
+//   { success: true } o { success: false, error: '...' }
+// ============================================================
+
+async function updateSaleNote(saleId, note) {
+    const LOG_PREFIX = '📝 [updateSaleNote]';
+    
+    const user = window.AuthModule.getCurrentUser();
+    if (!user) {
+        return { success: false, error: 'No hay usuario autenticado' };
+    }
+    
+    if (!saleId) {
+        return { success: false, error: 'ID de venta requerido' };
+    }
+    
+    try {
+        // Cargar la venta
+        const sale = await getSale(saleId);
+        
+        if (!sale) {
+            console.warn(`${LOG_PREFIX} ⚠️ Venta #${saleId} no encontrada`);
+            return { success: false, error: 'Venta no encontrada' };
+        }
+        
+        // Verificar que el usuario actual sea el creador
+        if (Number(sale.user_id) !== Number(user.id)) {
+            console.warn(`${LOG_PREFIX} 🔒 Usuario #${user.id} intentó editar venta #${saleId} (creada por #${sale.user_id})`);
+            return { 
+                success: false, 
+                error: 'Solo el creador de la venta puede modificar la nota' 
+            };
+        }
+        
+        // Verificar que la venta no esté anulada
+        if (sale.voided === 1) {
+            console.warn(`${LOG_PREFIX} ⚠️ Venta #${saleId} está anulada`);
+            return { 
+                success: false, 
+                error: 'No se puede modificar la nota de una venta anulada' 
+            };
+        }
+        
+        // Normalizar la nota
+        const notesFinal = (note !== undefined && note !== null)
+            ? String(note).trim() || null
+            : null;
+        
+        // Actualizar solo la nota
+        window.DBModule.execute(`
+            UPDATE sales 
+            SET notes = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        `, [notesFinal, saleId]);
+        
+        window.DBModule.saveAndNotify();
+        
+        console.log(`${LOG_PREFIX} ✅ Nota de venta #${saleId} actualizada:`, notesFinal ? `"${notesFinal}"` : '(vacía)');
+        
+        return { 
+            success: true, 
+            saleId: saleId,
+            notes: notesFinal
+        };
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return { success: false, error: e.message };
+    }
+}
+
+window.updateSaleNote = updateSaleNote;
+
+// ============================================================
 // GUARDAR VENTA LIBERADA
 // ============================================================
 
@@ -512,7 +580,8 @@ async function saveLiberatedSale(data) {
         paid: true,
         is_liberated: true,
         sale_date: data.sale_date || new Date().toISOString(),
-        session: data.session || null
+        session: data.session || null,
+        notes: data.notes || null   // 🆕 v2.1.13
     });
 }
 
@@ -537,14 +606,12 @@ async function reponerStockVenta(sale) {
 
 // ============================================================
 // ANULAR VENTA
-// 🆕 v2.1.12: Verifica permisos antes de anular
 // ============================================================
 
 async function voidSale(id, reason) {
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
 
-    // 🆕 v2.1.12: Verificar permisos
     const permisos = _puedeUsuarioActualProcesarVenta(id);
     if (!permisos.puede) {
         console.warn('🔒 [voidSale] Bloqueado:', permisos.razon);
@@ -569,13 +636,11 @@ async function voidSale(id, reason) {
             WHERE id = ? AND user_id = ?
         `, [reason, id, user.id]);
 
-        // Anular TODAS las transacciones asociadas (por sale_id)
         window.DBModule.execute(`
             UPDATE transactions SET voided = 1, void_reason = ?, voided_at = CURRENT_TIMESTAMP
             WHERE sale_id = ? AND user_id = ?
         `, [reason, id, user.id]);
 
-        // 🆕 v2.1.12: Limpiar caché
         _limpiarCachePermisosVenta(id);
 
         window.DBModule.saveAndNotify();
@@ -587,14 +652,12 @@ async function voidSale(id, reason) {
 
 // ============================================================
 // RESTAURAR VENTA
-// 🆕 v2.1.12: Verifica permisos antes de restaurar
 // ============================================================
 
 async function unvoidSale(id) {
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
 
-    // 🆕 v2.1.12: Verificar permisos
     const permisos = _puedeUsuarioActualProcesarVenta(id);
     if (!permisos.puede) {
         console.warn('🔒 [unvoidSale] Bloqueado:', permisos.razon);
@@ -624,7 +687,6 @@ async function unvoidSale(id) {
             WHERE sale_id = ? AND user_id = ?
         `, [id, user.id]);
 
-        // 🆕 v2.1.12: Limpiar caché
         _limpiarCachePermisosVenta(id);
 
         window.DBModule.saveAndNotify();
@@ -636,14 +698,12 @@ async function unvoidSale(id) {
 
 // ============================================================
 // ELIMINAR VENTA (soft-delete)
-// 🆕 v2.1.12: Verifica permisos antes de eliminar
 // ============================================================
 
 async function deleteSale(id) {
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
 
-    // 🆕 v2.1.12: Verificar permisos
     const permisos = _puedeUsuarioActualProcesarVenta(id);
     if (!permisos.puede) {
         console.warn('🔒 [deleteSale] Bloqueado:', permisos.razon);
@@ -664,7 +724,6 @@ async function deleteSale(id) {
         window.DBModule.execute('UPDATE sales SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?', [id, user.id]);
         window.DBModule.execute('UPDATE transactions SET deleted_at = CURRENT_TIMESTAMP WHERE sale_id = ? AND user_id = ?', [id, user.id]);
         
-        // 🆕 v2.1.12: Limpiar caché
         _limpiarCachePermisosVenta(id);
         
         window.DBModule.saveAndNotify();
@@ -677,9 +736,6 @@ async function deleteSale(id) {
 // ============================================================
 // GASTOS (POR NEGOCIO)
 // ============================================================
-// Nota: Los gastos NO tienen receta asociada, por lo que NO se
-// ven afectados por la corrección #2 (bloqueo por recetas no
-// compartidas). Se mantienen sin verificación de permisos.
 
 async function getExpenses(filters = {}) {
     const negocioId = window.DBModule.getNegocioIdActual();
@@ -938,6 +994,7 @@ async function getBalance() {
 window.SalesModule = {
     getSales, getSale, saveSale, saveLiberatedSale,
     deleteSale, voidSale, unvoidSale,
+    updateSaleNote,   // 🆕 v2.1.13
     getExpenses, getExpense, updateExpense, deleteExpense,
     registerExpense, voidExpense, unvoidExpense,
     getTransactions, registerTransaction, getBalance,
@@ -947,10 +1004,12 @@ window.SalesModule = {
     _puedeUsuarioActualProcesarVenta
 };
 
-console.log('📦 Sales Module v2.1.12 (ENTREGA B: corrección #2 - bloqueo por recetas no compartidas)');
-console.log('   ✅ saveSale(): verifica permisos al EDITAR (no al crear)');
-console.log('   ✅ voidSale(): verifica permisos antes de anular');
-console.log('   ✅ unvoidSale(): verifica permisos antes de restaurar');
-console.log('   ✅ deleteSale(): verifica permisos antes de eliminar');
-console.log('   ✅ _puedeUsuarioActualProcesarVenta(): delega a orders.js o fallback local');
-console.log('   ✅ Gastos NO se bloquean (no tienen receta)');
+console.log('📦 Sales Module v2.1.13 (NUEVA FUNCIONALIDAD #1: nota a la venta)');
+console.log('   🆕 Novedades v2.1.13:');
+console.log('      • ✅ saveSale() acepta y guarda saleData.notes');
+console.log('      • ✅ NUEVA: updateSaleNote(saleId, note)');
+console.log('      • ✅ Solo el creador puede modificar la nota');
+console.log('      • ✅ Nota opcional (puede quedar vacía)');
+console.log('   🔄 Correcciones anteriores mantenidas:');
+console.log('      • v2.1.12: Bloqueo por recetas no compartidas');
+console.log('      • FIX 2: Normalización de fechas');
