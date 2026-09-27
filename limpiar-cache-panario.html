@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧹 Limpiar Caché de Panario</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #fdf6e3 0%, #f5e6c8 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #2d2d2d;
+        }
+
+        .container {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 32px 28px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+            border: 1px solid #e0d5c0;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #f5a623;
+        }
+
+        .logo {
+            font-size: 64px;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+
+        h1 {
+            font-size: 24px;
+            color: #f5a623;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .info-box {
+            background: #fef3d6;
+            border-left: 4px solid #f5a623;
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #7a5a1a;
+        }
+
+        .info-box strong {
+            color: #d4891b;
+        }
+
+        .warning-box {
+            background: #fef2f2;
+            border-left: 4px solid #ef4444;
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #991b1b;
+        }
+
+        .warning-box strong {
+            color: #dc2626;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #f5a623 0%, #d4891b 100%);
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(245, 166, 35, 0.35);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 18px rgba(245, 166, 35, 0.5);
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: #666;
+            border: 2px solid #e0d5c0;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            border-color: #f5a623;
+            color: #f5a623;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: #ffffff;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #dc2626;
+            transform: translateY(-2px);
+        }
+
+        .status-box {
+            display: none;
+            padding: 14px 16px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            line-height: 1.6;
+            border: 2px solid;
+        }
+
+        .status-box.visible {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .status-box.info {
+            background: #dbeafe;
+            border-color: #3b82f6;
+            color: #1e40af;
+        }
+
+        .status-box.success {
+            background: #d1fae5;
+            border-color: #10b981;
+            color: #065f46;
+        }
+
+        .status-box.warning {
+            background: #fef3c7;
+            border-color: #f59e0b;
+            color: #92400e;
+        }
+
+        .status-box.error {
+            background: #fee2e2;
+            border-color: #ef4444;
+            color: #991b1b;
+        }
+
+        .status-title {
+            font-weight: 700;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-detail {
+            font-size: 12px;
+            opacity: 0.85;
+            white-space: pre-line;
+        }
+
+        .log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: 10px;
+            padding: 14px 16px;
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 16px;
+            display: none;
+        }
+
+        .log.visible {
+            display: block;
+        }
+
+        .log-line {
+            margin-bottom: 2px;
+            word-break: break-word;
+        }
+
+        .log-line.success { color: #4ade80; }
+        .log-line.error { color: #f87171; }
+        .log-line.warn { color: #fbbf24; }
+        .log-line.info { color: #60a5fa; }
+        .log-line.dim { color: #808080; }
+
+        .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .stat-card {
+            background: #f8f5ed;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #e0d5c0;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: 700;
+            color: #f5a623;
+            line-height: 1.2;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid #e0d5c0;
+            font-size: 11px;
+            color: #94a3b8;
+        }
+
+        @media (max-width: 480px) {
+            .container { padding: 24px 20px; }
+            .logo { font-size: 48px; }
+            h1 { font-size: 20px; }
+            .btn { font-size: 14px; padding: 12px 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <div class="logo">🍞</div>
+        <h1>🧹 Limpiar Caché de Panario</h1>
+        <p class="subtitle">Script de mantenimiento — v1.0.0</p>
+    </div>
+
+    <div class="info-box">
+        <strong>ℹ️ ¿Qué hace este script?</strong><br>
+        Elimina <strong>únicamente</strong> los cachés y Service Workers de Panario, sin afectar a otras apps o sitios web.<br><br>
+        ✅ <strong>NO borra tus datos</strong> (SQLite / localStorage de la app se conservan).<br>
+        ✅ <strong>NO afecta</strong> a otros sitios del navegador.<br>
+        ✅ Solo limpia los recursos cacheados de Panario (HTML, CSS, JS, imágenes).
+    </div>
+
+    <div class="warning-box">
+        <strong>⚠️ Importante:</strong><br>
+        Este script solo funcionará si lo ejecutas desde el <strong>mismo origen (dominio)</strong> donde está hospedado Panario. Es decir, debes subir este archivo HTML al mismo servidor/carpeta donde está Panario, o acceder a él desde el mismo dominio.
+        <br><br>
+        Si lo ejecutas desde otro dominio, el navegador <strong>bloqueará por seguridad</strong> el acceso a los cachés de Panario (política de same-origin).
+    </div>
+
+    <div id="status-box" class="status-box"></div>
+
+    <button id="btn-clean" class="btn btn-primary" onclick="limpiarCachePanario()">
+        🧹 Limpiar Caché de Panario
+    </button>
+
+    <button id="btn-check" class="btn btn-secondary" onclick="verificarCachePanario()">
+        🔍 Verificar Caché Actual
+    </button>
+
+    <div id="stats-container" class="stats" style="display: none;">
+        <div class="stat-card">
+            <div class="stat-number" id="stat-caches">0</div>
+            <div class="stat-label">📦 Cachés encontradas</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="stat-entries">0</div>
+            <div class="stat-label">📄 Archivos cacheados</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="stat-sw">0</div>
+            <div class="stat-label">⚙️ Service Workers</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="stat-deleted">0</div>
+            <div class="stat-label">🗑️ Eliminados</div>
+        </div>
+    </div>
+
+    <div id="log" class="log"></div>
+
+    <div class="footer">
+        Panario 🍞 — Script de limpieza de caché<br>
+        Desarrollado por Ricardo Castillo Valdés
+    </div>
+</div>
+
+<script>
+// ============================================================
+// 🧹 LIMPIAR CACHÉ DE PANARIO
+// ============================================================
+// 
+// Este script elimina ÚNICAMENTE los cachés y Service Workers
+// asociados a Panario, sin afectar a otros sitios web.
+// 
+// Identifica los cachés de Panario por su nombre (prefijo "panario").
+// 
+// IMPORTANTE: Debe ejecutarse desde el mismo origen (dominio)
+// donde está hospedado Panario, de lo contrario el navegador
+// bloqueará el acceso a los cachés por same-origin policy.
+// ============================================================
+
+// Prefijos conocidos de cachés de Panario
+const PANARIO_CACHE_PREFIXES = [
+    'panario',
+    'panario-static',
+    'panario-dynamic',
+    'panario-v'
+];
+
+// Prefijos de Service Workers de Panario
+const PANARIO_SW_PATHS = [
+    '/sw.js',
+    'sw.js',
+    '/panario/sw.js'
+];
+
+let logs = [];
+
+// ============================================================
+// UTILIDADES DE LOG
+// ============================================================
+
+function log(message, type = 'info') {
+    const timestamp = new Date().toLocaleTimeString('es-ES');
+    const prefix = {
+        'success': '✅',
+        'error': '❌',
+        'warn': '⚠️',
+        'info': 'ℹ️',
+        'dim': '·'
+    }[type] || 'ℹ️';
+    
+    const logEntry = `[${timestamp}] ${prefix} ${message}`;
+    logs.push({ message: logEntry, type });
+    
+    // Actualizar el DOM
+    const logEl = document.getElementById('log');
+    if (logEl) {
+        logEl.classList.add('visible');
+        const line = document.createElement('div');
+        line.className = `log-line ${type}`;
+        line.textContent = logEntry;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+    
+    // También log en consola
+    console.log(logEntry);
+}
+
+function clearLog() {
+    logs = [];
+    const logEl = document.getElementById('log');
+    if (logEl) {
+        logEl.innerHTML = '';
+        logEl.classList.remove('visible');
+    }
+}
+
+// ============================================================
+// UTILIDADES DE UI
+// ============================================================
+
+function showStatus(type, title, detail = '') {
+    const box = document.getElementById('status-box');
+    if (!box) return;
+    
+    const icons = {
+        'info': 'ℹ️',
+        'success': '✅',
+        'warning': '⚠️',
+        'error': '❌'
+    };
+    
+    box.className = `status-box visible ${type}`;
+    box.innerHTML = `
+        <div class="status-title">
+            <span>${icons[type] || 'ℹ️'}</span>
+            <span>${title}</span>
+        </div>
+        ${detail ? `<div class="status-detail">${detail}</div>` : ''}
+    `;
+}
+
+function hideStatus() {
+    const box = document.getElementById('status-box');
+    if (box) box.className = 'status-box';
+}
+
+function updateStats(caches, entries, sw, deleted) {
+    const container = document.getElementById('stats-container');
+    if (!container) return;
+    container.style.display = 'grid';
+    
+    document.getElementById('stat-caches').textContent = caches;
+    document.getElementById('stat-entries').textContent = entries;
+    document.getElementById('stat-sw').textContent = sw;
+    document.getElementById('stat-deleted').textContent = deleted;
+}
+
+function setButtonsDisabled(disabled) {
+    const btnClean = document.getElementById('btn-clean');
+    const btnCheck = document.getElementById('btn-check');
+    if (btnClean) btnClean.disabled = disabled;
+    if (btnCheck) btnCheck.disabled = disabled;
+}
+
+// ============================================================
+// DETECTAR CACHÉS DE PANARIO
+// ============================================================
+
+async function detectarCachesPanario() {
+    if (!('caches' in window)) {
+        return { caches: [], total: 0, error: 'Cache API no soportada' };
+    }
+    
+    try {
+        const allCacheNames = await caches.keys();
+        const panarioCaches = allCacheNames.filter(name => {
+            const lowerName = name.toLowerCase();
+            return PANARIO_CACHE_PREFIXES.some(prefix => lowerName.includes(prefix));
+        });
+        
+        log(`📋 Cachés totales del navegador: ${allCacheNames.length}`, 'dim');
+        log(`🍞 Cachés de Panario detectadas: ${panarioCaches.length}`, 'info');
+        
+        if (panarioCaches.length > 0) {
+            panarioCaches.forEach(name => log(`   · ${name}`, 'dim'));
+        }
+        
+        return { caches: panarioCaches, total: allCacheNames.length };
+    } catch (e) {
+        log(`Error detectando cachés: ${e.message}`, 'error');
+        return { caches: [], total: 0, error: e.message };
+    }
+}
+
+// ============================================================
+// CONTAR ARCHIVOS EN CACHÉS
+// ============================================================
+
+async function contarArchivosEnCaches(cacheNames) {
+    let totalEntries = 0;
+    const detalles = [];
+    
+    for (const name of cacheNames) {
+        try {
+            const cache = await caches.open(name);
+            const keys = await cache.keys();
+            totalEntries += keys.length;
+            detalles.push({ name, count: keys.length });
+            log(`   · ${name}: ${keys.length} archivos`, 'dim');
+        } catch (e) {
+            log(`Error leyendo caché "${name}": ${e.message}`, 'warn');
+        }
+    }
+    
+    return { totalEntries, detalles };
+}
+
+// ============================================================
+// DETECTAR SERVICE WORKERS DE PANARIO
+// ============================================================
+
+async function detectarServiceWorkersPanario() {
+    if (!('serviceWorker' in navigator)) {
+        return [];
+    }
+    
+    try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        const panarioSWs = registrations.filter(reg => {
+            const scope = reg.scope || '';
+            const activeURL = reg.active?.scriptURL || '';
+            const installingURL = reg.installing?.scriptURL || '';
+            const waitingURL = reg.waiting?.scriptURL || '';
+            
+            // Detectar si es de Panario por la URL del script o el scope
+            return PANARIO_SW_PATHS.some(path => 
+                activeURL.includes(path) ||
+                installingURL.includes(path) ||
+                waitingURL.includes(path) ||
+                scope.includes('panario')
+            );
+        });
+        
+        log(`⚙️ Service Workers totales: ${registrations.length}`, 'dim');
+        log(`🍞 Service Workers de Panario: ${panarioSWs.length}`, 'info');
+        
+        panarioSWs.forEach(reg => {
+            log(`   · Scope: ${reg.scope}`, 'dim');
+            if (reg.active) log(`     Active: ${reg.active.scriptURL}`, 'dim');
+        });
+        
+        return panarioSWs;
+    } catch (e) {
+        log(`Error detectando Service Workers: ${e.message}`, 'error');
+        return [];
+    }
+}
+
+// ============================================================
+// VERIFICAR CACHÉ ACTUAL (sin borrar)
+// ============================================================
+
+async function verificarCachePanario() {
+    clearLog();
+    hideStatus();
+    setButtonsDisabled(true);
+    
+    log('🔍 Iniciando verificación del caché de Panario...', 'info');
+    
+    try {
+        // 1. Detectar cachés
+        const { caches: panarioCaches, total: totalCaches, error } = await detectarCachesPanario();
+        
+        if (error) {
+            showStatus('error', 'Error al detectar cachés', error);
+            setButtonsDisabled(false);
+            return;
+        }
+        
+        // 2. Contar archivos
+        const { totalEntries } = await contarArchivosEnCaches(panarioCaches);
+        
+        // 3. Detectar Service Workers
+        const panarioSWs = await detectarServiceWorkersPanario();
+        
+        // 4. Actualizar stats
+        updateStats(panarioCaches.length, totalEntries, panarioSWs.length, 0);
+        
+        // 5. Mostrar resultado
+        if (panarioCaches.length === 0 && panarioSWs.length === 0) {
+            showStatus('info', 'No se encontró caché de Panario', 
+                'No hay cachés ni Service Workers de Panario registrados en este navegador.\n\n' +
+                'Si esperabas encontrar cachés, verifica que:\n' +
+                '• Estés ejecutando este script desde el mismo dominio de Panario.\n' +
+                '• Hayas abierto Panario al menos una vez en este navegador.'
+            );
+        } else {
+            showStatus('success', 'Caché de Panario detectado', 
+                `📦 Cachés de Panario: ${panarioCaches.length}\n` +
+                `📄 Archivos cacheados: ${totalEntries}\n` +
+                `⚙️ Service Workers: ${panarioSWs.length}\n\n` +
+                `Pulsa "🧹 Limpiar Caché de Panario" para eliminarlos.`
+            );
+        }
+        
+    } catch (e) {
+        log(`Error en verificación: ${e.message}`, 'error');
+        showStatus('error', 'Error en la verificación', e.message);
+    } finally {
+        setButtonsDisabled(false);
+    }
+}
+
+// ============================================================
+// LIMPIAR CACHÉ DE PANARIO
+// ============================================================
+
+async function limpiarCachePanario() {
+    clearLog();
+    hideStatus();
+    setButtonsDisabled(true);
+    
+    log('🧹 Iniciando limpieza del caché de Panario...', 'info');
+    
+    // Confirmación
+    const confirmado = await mostrarConfirmacion();
+    if (!confirmado) {
+        log('❌ Operación cancelada por el usuario', 'warn');
+        showStatus('warning', 'Operación cancelada', 'No se eliminó ningún caché.');
+        setButtonsDisabled(false);
+        return;
+    }
+    
+    let deletedCaches = 0;
+    let deletedSWs = 0;
+    let totalEntriesBefore = 0;
+    
+    try {
+        // ============================================================
+        // PASO 1: DETECTAR CACHÉS Y CONTAR ARCHIVOS
+        // ============================================================
+        log('📋 PASO 1: Detectando cachés de Panario...', 'info');
+        
+        const { caches: panarioCaches } = await detectarCachesPanario();
+        
+        if (panarioCaches.length === 0) {
+            log('ℹ️ No se encontraron cachés de Panario', 'warn');
+        } else {
+            const { totalEntries } = await contarArchivosEnCaches(panarioCaches);
+            totalEntriesBefore = totalEntries;
+            log(`📄 Total de archivos cacheados: ${totalEntries}`, 'dim');
+        }
+        
+        // ============================================================
+        // PASO 2: ELIMINAR CACHÉS DE PANARIO
+        // ============================================================
+        log('', 'dim');
+        log('🗑️ PASO 2: Eliminando cachés de Panario...', 'info');
+        
+        for (const cacheName of panarioCaches) {
+            try {
+                const eliminado = await caches.delete(cacheName);
+                if (eliminado) {
+                    deletedCaches++;
+                    log(`✅ Caché eliminado: ${cacheName}`, 'success');
+                } else {
+                    log(`⚠️ No se pudo eliminar: ${cacheName}`, 'warn');
+                }
+            } catch (e) {
+                log(`❌ Error eliminando "${cacheName}": ${e.message}`, 'error');
+            }
+        }
+        
+        // ============================================================
+        // PASO 3: DESREGISTRAR SERVICE WORKERS DE PANARIO
+        // ============================================================
+        log('', 'dim');
+        log('⚙️ PASO 3: Desregistrando Service Workers de Panario...', 'info');
+        
+        const panarioSWs = await detectarServiceWorkersPanario();
+        
+        for (const reg of panarioSWs) {
+            try {
+                const exitoso = await reg.unregister();
+                if (exitoso) {
+                    deletedSWs++;
+                    log(`✅ Service Worker desregistrado: ${reg.scope}`, 'success');
+                } else {
+                    log(`⚠️ No se pudo desregistrar: ${reg.scope}`, 'warn');
+                }
+            } catch (e) {
+                log(`❌ Error desregistrando SW "${reg.scope}": ${e.message}`, 'error');
+            }
+        }
+        
+        // ============================================================
+        // PASO 4: VERIFICACIÓN FINAL
+        // ============================================================
+        log('', 'dim');
+        log('🔍 PASO 4: Verificación final...', 'info');
+        
+        const { caches: cachesRestantes } = await detectarCachesPanario();
+        const swRestantes = await detectarServiceWorkersPanario();
+        
+        // ============================================================
+        // PASO 5: ACTUALIZAR STATS Y MOSTRAR RESULTADO
+        // ============================================================
+        updateStats(
+            panarioCaches.length,
+            totalEntriesBefore,
+            panarioSWs.length,
+            deletedCaches + deletedSWs
+        );
+        
+        log('', 'dim');
+        
+        if (cachesRestantes.length === 0 && swRestantes.length === 0) {
+            log('✅ Limpieza completada con éxito', 'success');
+            showStatus('success', '¡Caché de Panario eliminado!', 
+                `✅ Cachés eliminadas: ${deletedCaches}\n` +
+                `✅ Service Workers desregistrados: ${deletedSWs}\n` +
+                `📄 Archivos eliminados: ${totalEntriesBefore}\n\n` +
+                `🔄 Ahora puedes abrir Panario con conexión a internet para que se vuelva a cachear automáticamente.\n\n` +
+                `💡 Tus datos (SQLite/localStorage) NO fueron afectados.`
+            );
+        } else {
+            log(`⚠️ Quedan ${cachesRestantes.length} cachés y ${swRestantes.length} SWs de Panario`, 'warn');
+            showStatus('warning', 'Limpieza parcial', 
+                `✅ Eliminados: ${deletedCaches} cachés, ${deletedSWs} SWs\n` +
+                `⚠️ Pendientes: ${cachesRestantes.length} cachés, ${swRestantes.length} SWs\n\n` +
+                `Algunos recursos no se pudieron eliminar. Esto puede ocurrir si están en uso por otra pestaña de Panario.`
+            );
+        }
+        
+    } catch (e) {
+        log(`❌ Error crítico: ${e.message}`, 'error');
+        showStatus('error', 'Error durante la limpieza', e.message);
+    } finally {
+        setButtonsDisabled(false);
+    }
+}
+
+// ============================================================
+// MODAL DE CONFIRMACIÓN
+// ============================================================
+
+function mostrarConfirmacion() {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.id = 'confirm-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(6px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999999;
+            padding: 20px;
+            animation: fadeIn 0.2s ease;
+        `;
+        
+        modal.innerHTML = `
+            <div style="
+                background: #ffffff;
+                border-radius: 16px;
+                padding: 24px 28px;
+                max-width: 420px;
+                width: 100%;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                border: 2px solid #f5a623;
+            ">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <span style="font-size: 32px;">🧹</span>
+                    <h2 style="margin: 0; font-size: 18px; color: #f5a623;">Confirmar limpieza</h2>
+                </div>
+                
+                <p style="font-size: 14px; line-height: 1.6; color: #2d2d2d; margin-bottom: 8px;">
+                    ¿Seguro que quieres limpiar el caché de <strong>Panario</strong>?
+                </p>
+                
+                <div style="background: #fef3d6; border-radius: 8px; padding: 10px 14px; margin-bottom: 20px; font-size: 12px; color: #7a5a1a; line-height: 1.6;">
+                    ✅ Se eliminarán <strong>solo</strong> los cachés y Service Workers de Panario.<br>
+                    ✅ Tus <strong>datos</strong> (SQLite/localStorage) se conservan.<br>
+                    ✅ Otros sitios web <strong>no se ven afectados</strong>.
+                </div>
+                
+                <div style="display: flex; gap: 10px;">
+                    <button id="confirm-yes" style="
+                        flex: 1;
+                        padding: 12px 16px;
+                        background: linear-gradient(135deg, #f5a623 0%, #d4891b 100%);
+                        color: #ffffff;
+                        border: none;
+                        border-radius: 8px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        font-family: inherit;
+                    ">
+                        ✅ Sí, limpiar
+                    </button>
+                    <button id="confirm-no" style="
+                        flex: 1;
+                        padding: 12px 16px;
+                        background: transparent;
+                        color: #666;
+                        border: 2px solid #e0d5c0;
+                        border-radius: 8px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        font-family: inherit;
+                    ">
+                        ❌ Cancelar
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        document.getElementById('confirm-yes').onclick = () => {
+            modal.remove();
+            resolve(true);
+        };
+        
+        document.getElementById('confirm-no').onclick = () => {
+            modal.remove();
+            resolve(false);
+        };
+        
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.remove();
+                resolve(false);
+            }
+        };
+        
+        // Escape para cancelar
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                modal.remove();
+                document.removeEventListener('keydown', escHandler);
+                resolve(false);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+    });
+}
+
+// ============================================================
+// INICIALIZACIÓN
+// ============================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    log('🍞 Script de limpieza de caché de Panario cargado', 'info');
+    log(`🌐 Origen actual: ${window.location.origin}`, 'dim');
+    log(`📁 Ruta actual: ${window.location.pathname}`, 'dim');
+    log('', 'dim');
+    log('Pulsa "🔍 Verificar Caché Actual" para inspeccionar.', 'info');
+    log('Pulsa "🧹 Limpiar Caché de Panario" para eliminar.', 'info');
+    
+    // Verificar soporte de Cache API
+    if (!('caches' in window)) {
+        log('⚠️ Cache API no soportada en este navegador', 'error');
+        showStatus('error', 'Navegador no compatible', 
+            'Este navegador no soporta la Cache API necesaria para gestionar los cachés de Panario.'
+        );
+        setButtonsDisabled(true);
+        return;
+    }
+    
+    // Verificar contexto seguro
+    const isSecure = window.location.protocol === 'https:' ||
+                     window.location.hostname === 'localhost' ||
+                     window.location.hostname === '127.0.0.1';
+    
+    if (!isSecure) {
+        log('⚠️ Contexto no seguro (HTTPS requerido)', 'warn');
+        showStatus('warning', 'Contexto no seguro',
+            'Para que el Service Worker y los cachés funcionen, debes acceder desde HTTPS o localhost.\n\n' +
+            'Actualmente estás en: ' + window.location.protocol
+        );
+    }
+    
+    // Verificar Service Worker
+    if (!('serviceWorker' in navigator)) {
+        log('⚠️ Service Worker no soportado', 'warn');
+    }
+});
+</script>
+
+</body>
+</html>

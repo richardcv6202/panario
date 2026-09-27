@@ -1,40 +1,23 @@
 // ============================================================
 // 📦 DASHBOARD MODULE - Panario (Panel de Control)
-// CORREGIDO: Todas las consultas usan negocio_id en lugar de user_id
-// CORREGIDO FASE 2 (160926): Primer día de venta usa 'localtime'
-// CORREGIDO (160926 v2): Reemplazado 'localtime' de SQLite por
-//   conversión en JavaScript, porque sql.js en WASM NO respeta
-//   la zona horaria del navegador.
-// CORREGIDO FASE 4B (170926): 
-//   - dailySales ahora INCLUYE las ventas liberadas en el total
-// AÑADIDO FASE C (180926 v2):
-//   - 3 modos de visualización del gráfico: 'last7' | 'dom-sab' | 'lun-dom'
-// 🆕 FASE 3.1 (200926 v3):
-//   - NUEVO: releasedSales → { count, total }
-//   - NUEVO: bestWorstDay → { best, worst }
-//   - NUEVO: salesByEmployee → [{ user_id, name, count, total }]
-// 🆕 ENTREGA 5 (230926 v4): PEDIDOS MAÑANA EN DASHBOARD
-//   - ✅ NUEVO: ordersTomorrowCount → total de pedidos con
-//     fecha de entrega = MAÑANA (calculado en JS con fecha local)
-//   - ✅ Se calcula usando fechaLocalYYYYMMDD() para evitar
-//     desfase UTC en zonas horarias negativas (Cuba UTC-4/5)
-//   - ✅ Se devuelve en el objeto de stats junto a
-//     ordersTodayCount y waitingListCount
-//   - ✅ Los pedidos cancelados, entregados y compró-por-lista
-//     NO se cuentan (solo pending, confirmed, production, ready, waiting)
-//   - ✅ Optimización: una sola query trae TODOS los pedidos con
-//     fecha de entrega, y se agrupan por día en JS
-//   - ✅ Compatibilidad: si la tabla orders no existe o falla,
-//     devuelve 0 sin romper el dashboard
-// 🆕 v2.2.2 (230926 v5): CORRECCIÓN #2 - CONTEO UNIFICADO EN DASHBOARD
-//   - ✅ ordersTodayCount y ordersTomorrowCount ahora usan la
-//     función unificada window.DBModule.contarPedidosYVentasFecha()
-//   - ✅ Esto garantiza que el Dashboard muestre exactamente el
-//     mismo número que la tarjeta de fecha en el módulo de Pedidos.
-//   - ✅ Se eliminó la lógica de conteo duplicada que causaba la
-//     discrepancia (el bug original).
-//   - ✅ Se mantiene la optimización de traer todos los pedidos
-//     en una sola query y agruparlos en JS.
+// v2.2.3 (260926): 🎯 CORRECCIONES #2 y #3 (240926)
+//   - ✅ NUEVO: diasSinVentas → total de días registrados sin ventas.
+//   - ✅ NUEVO: diasSinVentasDetalle → mapa { fecha: { motivo, nota } }
+//   - ✅ Se consulta la tabla dias_sin_ventas.
+// v2.2.4 (260926): 🎯 REGRESIÓN #5 (260926) - VENTAS POR EMPLEADO
+//   - ✅ FIX CRÍTICO en la query de salesByEmployee:
+//     * Antes filtraba por s.created_by IS NOT NULL, lo que excluía
+//       TODAS las ventas antiguas (created_by es columna nueva).
+//     * Ahora usa COALESCE(s.created_by, s.user_id) para que siempre
+//       haya un vendedor asignado (fallback al user_id original).
+//     * LEFT JOIN a users para no perder ventas si el usuario fue
+//       eliminado (muestra "Usuario desconocido" en ese caso).
+//     * GROUP BY con COALESCE para agrupar correctamente.
+//   - ✅ Añadido logging detallado del resultado de la query.
+//   - ✅ Se mantienen TODAS las funcionalidades anteriores:
+//     * Conteo unificado de pedidos (CORRECCIÓN #2 230926)
+//     * Ventas liberadas, mejor/peor día, ventas por empleado
+//     * 3 modos de gráfico: 'last7' | 'dom-sab' | 'lun-dom'
 // ============================================================
 
 window.DashboardModule = {};
@@ -43,16 +26,6 @@ window.DashboardModule = {};
 // 🔧 HELPER: Conversión de fecha UTC a fecha local YYYY-MM-DD
 // ============================================================
 
-/**
- * Convierte una fecha UTC (string o Date) a fecha local del navegador
- * en formato YYYY-MM-DD.
- * 
- * Usar esta función en lugar de `DATE(fecha, 'localtime')` de SQLite,
- * porque sql.js en WASM no respeta la zona horaria del navegador.
- * 
- * @param {string|Date} fechaUTC - Fecha en UTC
- * @returns {string|null} Fecha en formato YYYY-MM-DD en zona horaria local
- */
 function fechaLocalYYYYMMDD(fechaUTC) {
     if (!fechaUTC) return null;
     try {
@@ -67,16 +40,10 @@ function fechaLocalYYYYMMDD(fechaUTC) {
     }
 }
 
-/**
- * Devuelve la fecha de hoy en formato YYYY-MM-DD (zona horaria local).
- */
 function hoyYYYYMMDD() {
     return fechaLocalYYYYMMDD(new Date());
 }
 
-/**
- * 🆕 ENTREGA 5: Devuelve la fecha de MAÑANA en formato YYYY-MM-DD (local).
- */
 function mananaYYYYMMDD() {
     const manana = new Date();
     manana.setDate(manana.getDate() + 1);
@@ -87,19 +54,6 @@ function mananaYYYYMMDD() {
 // 🆕 FASE C: HELPER PARA CALCULAR RANGO DEL GRÁFICO
 // ============================================================
 
-/**
- * Calcula el rango de días a mostrar en el gráfico, respetando
- * el modo seleccionado por el usuario.
- * 
- * Modos disponibles:
- *   - 'last7'   → Últimos 7 días (retrocede 6 días desde hoy)
- *   - 'dom-sab' → Semana completa de Domingo a Sábado
- *   - 'lun-dom' → Semana completa de Lunes a Domingo
- * 
- * @param {number} weekOffset - 0 = ventana actual, -1 = anterior, etc.
- * @param {string} chartMode - 'last7' | 'dom-sab' | 'lun-dom'
- * @returns {object} { startDate, endDate, weekLabel, isCurrentRange }
- */
 function calcularRangoGrafico(weekOffset, chartMode) {
     const validModes = ['last7', 'dom-sab', 'lun-dom'];
     if (!validModes.includes(chartMode)) {
@@ -111,75 +65,43 @@ function calcularRangoGrafico(weekOffset, chartMode) {
     
     let startDate, endDate, weekLabel, isCurrentRange;
     
-    // ============================================================
-    // MODO 1: ÚLTIMOS 7 DÍAS
-    // ============================================================
     if (chartMode === 'last7') {
         const endBase = new Date(hoy);
         endBase.setDate(endBase.getDate() + (weekOffset * 7));
-        
         endDate = new Date(endBase);
         startDate = new Date(endBase);
         startDate.setDate(startDate.getDate() - 6);
-        
         isCurrentRange = (weekOffset === 0);
-        
-        if (weekOffset === 0) {
-            weekLabel = 'Últimos 7 días';
-        } else {
-            weekLabel = `Hace ${Math.abs(weekOffset)} sem.`;
-        }
-    }
-    // ============================================================
-    // MODO 2: SEMANA DOM-SÁB
-    // ============================================================
-    else if (chartMode === 'dom-sab') {
+        weekLabel = (weekOffset === 0) ? 'Últimos 7 días' : `Hace ${Math.abs(weekOffset)} sem.`;
+    } else if (chartMode === 'dom-sab') {
         const dayOfWeek = hoy.getDay();
-        
         const inicioSemanaActual = new Date(hoy);
         inicioSemanaActual.setDate(inicioSemanaActual.getDate() - dayOfWeek);
-        
         startDate = new Date(inicioSemanaActual);
         startDate.setDate(startDate.getDate() + (weekOffset * 7));
-        
         endDate = new Date(startDate);
         endDate.setDate(endDate.getDate() + 6);
-        
         isCurrentRange = (weekOffset === 0);
         weekLabel = (weekOffset === 0) ? 'Dom-Sáb (Actual)' : 'Dom-Sáb (Anterior)';
-    }
-    // ============================================================
-    // MODO 3: SEMANA LUN-DOM
-    // ============================================================
-    else if (chartMode === 'lun-dom') {
+    } else if (chartMode === 'lun-dom') {
         const dayOfWeek = hoy.getDay();
         const offsetDesdeLunes = (dayOfWeek + 6) % 7;
-        
         const inicioSemanaActual = new Date(hoy);
         inicioSemanaActual.setDate(inicioSemanaActual.getDate() - offsetDesdeLunes);
-        
         startDate = new Date(inicioSemanaActual);
         startDate.setDate(startDate.getDate() + (weekOffset * 7));
-        
         endDate = new Date(startDate);
         endDate.setDate(endDate.getDate() + 6);
-        
         isCurrentRange = (weekOffset === 0);
         weekLabel = (weekOffset === 0) ? 'Lun-Dom (Actual)' : 'Lun-Dom (Anterior)';
     }
     
-    return {
-        startDate: startDate,
-        endDate: endDate,
-        weekLabel: weekLabel,
-        isCurrentRange: isCurrentRange
-    };
+    return { startDate, endDate, weekLabel, isCurrentRange };
 }
 
 // ============================================================
 // 📊 ESTADÍSTICAS DEL DASHBOARD
-// 🆕 ENTREGA 5: Añadido ordersTomorrowCount
-// 🆕 v2.2.2: Conteo unificado para ordersTodayCount y ordersTomorrowCount
+// 🆕 CORRECCIONES #2 y #3 + REGRESIÓN #5
 // ============================================================
 
 async function getDashboardStats(options = {}) {
@@ -225,22 +147,16 @@ async function getDashboardStats(options = {}) {
         }
 
         // ============================================================
-        // VENTAS DE HOY (corregido con JS, no SQLite localtime)
+        // VENTAS DE HOY
         // ============================================================
         let todaySalesCount = 0;
         let todayRevenue = 0;
         try {
             const hoyStr = hoyYYYYMMDD();
-            
             const todasLasVentas = window.DBModule.query(
-                `SELECT sale_date, total 
-                 FROM sales 
-                 WHERE negocio_id = ? 
-                 AND deleted_at IS NULL 
-                 AND voided = 0`,
+                `SELECT sale_date, total FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0`,
                 [negocioId]
             );
-            
             for (const venta of todasLasVentas) {
                 const fechaLocal = fechaLocalYYYYMMDD(venta.sale_date);
                 if (fechaLocal === hoyStr) {
@@ -253,7 +169,7 @@ async function getDashboardStats(options = {}) {
         }
 
         // ============================================================
-        // VENTAS POR DÍA - SEGÚN MODO DEL GRÁFICO (FASE C)
+        // VENTAS POR DÍA - SEGÚN MODO DEL GRÁFICO
         // ============================================================
         let dailySales = [];
         let isCurrentRange = true;
@@ -262,14 +178,6 @@ async function getDashboardStats(options = {}) {
             const startDate = rango.startDate;
             const endDate = rango.endDate;
             isCurrentRange = rango.isCurrentRange;
-            
-            console.log('📅 Rango del gráfico calculado:', 
-                startDate.toISOString().split('T')[0], 
-                '→', 
-                endDate.toISOString().split('T')[0],
-                `(${rango.weekLabel})`,
-                `[Modo: ${chartMode}]`
-            );
             
             const rangoMin = new Date(startDate);
             rangoMin.setHours(0, 0, 0, 0);
@@ -289,10 +197,6 @@ async function getDashboardStats(options = {}) {
                  AND voided = 0`,
                 [negocioId, rangoMin.toISOString(), rangoMax.toISOString()]
             );
-            
-            console.log(`💰 [FASE C] Ventas en período: ${ventasPeriodo.length}`);
-            const totalLiberadas = ventasPeriodo.filter(v => v.is_liberated === 1).length;
-            console.log(`   🚀 De las cuales liberadas: ${totalLiberadas}`);
             
             const totalesPorFecha = {};
             for (const venta of ventasPeriodo) {
@@ -315,12 +219,36 @@ async function getDashboardStats(options = {}) {
                     total: totalesPorFecha[dateStr] || 0
                 });
             }
-            
-            const totalSemanaCalc = dailySales.reduce((sum, d) => sum + d.total, 0);
-            console.log(`   📊 Total período (con liberadas): $${totalSemanaCalc.toFixed(2)}`);
-            
         } catch (e) {
             console.warn('⚠️ Error obteniendo ventas diarias:', e);
+        }
+
+        // ============================================================
+        // 🆕 CORRECCIONES #2 y #3: DÍAS SIN VENTAS
+        // ============================================================
+        let diasSinVentas = 0;
+        let diasSinVentasDetalle = {};
+        try {
+            const diasSinVentasData = window.DBModule.query(
+                `SELECT fecha, motivo, nota 
+                 FROM dias_sin_ventas 
+                 WHERE negocio_id = ? AND deleted_at IS NULL
+                 ORDER BY fecha DESC`,
+                [negocioId]
+            );
+            
+            diasSinVentas = diasSinVentasData.length;
+            
+            for (const d of diasSinVentasData) {
+                diasSinVentasDetalle[d.fecha] = {
+                    motivo: d.motivo,
+                    nota: d.nota || ''
+                };
+            }
+            
+            console.log(`📅 [Correcciones #2 y #3] Días sin ventas: ${diasSinVentas}`);
+        } catch (e) {
+            console.warn('⚠️ Error obteniendo días sin ventas:', e);
         }
 
         // ============================================================
@@ -332,12 +260,7 @@ async function getDashboardStats(options = {}) {
         
         try {
             const todasLasFechas = window.DBModule.query(
-                `SELECT sale_date 
-                 FROM sales 
-                 WHERE negocio_id = ? 
-                 AND deleted_at IS NULL 
-                 AND voided = 0
-                 ORDER BY sale_date ASC`,
+                `SELECT sale_date FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0 ORDER BY sale_date ASC`,
                 [negocioId]
             );
             
@@ -403,14 +326,9 @@ async function getDashboardStats(options = {}) {
         let debtDetails = [];
         try {
             const debtSales = window.DBModule.query(`
-                SELECT id, product_name, total, buyer, sale_date, 
-                       payment_method, quantity, is_debt, paid
+                SELECT id, product_name, total, buyer, sale_date, payment_method, quantity, is_debt, paid
                 FROM sales 
-                WHERE negocio_id = ? 
-                AND is_debt = 1 
-                AND paid = 0 
-                AND deleted_at IS NULL 
-                AND voided = 0
+                WHERE negocio_id = ? AND is_debt = 1 AND paid = 0 AND deleted_at IS NULL AND voided = 0
                 ORDER BY sale_date ASC, id ASC
             `, [negocioId]);
             
@@ -611,7 +529,6 @@ async function getDashboardStats(options = {}) {
 
         // ============================================================
         // PEDIDOS HOY, MAÑANA Y LISTA DE ESPERA
-        // 🆕 v2.2.2: Conteo unificado con DBModule.contarPedidosYVentasFecha()
         // ============================================================
         let ordersTodayCount = 0;
         let ordersTomorrowCount = 0;
@@ -620,26 +537,17 @@ async function getDashboardStats(options = {}) {
             const hoyStr = hoyYYYYMMDD();
             const mananaStr = mananaYYYYMMDD();
             
-            console.log(`📅 [v2.2.2] Contando pedidos para HOY (${hoyStr}) y MAÑANA (${mananaStr})...`);
-            
-            // 🆕 v2.2.2: Usar la función unificada para el conteo
             const conteoHoy = window.DBModule.contarPedidosYVentasFecha(hoyStr);
             ordersTodayCount = conteoHoy.pedidos;
             
             const conteoManana = window.DBModule.contarPedidosYVentasFecha(mananaStr);
             ordersTomorrowCount = conteoManana.pedidos;
             
-            console.log(`   📅 Pedidos HOY (unificado): ${ordersTodayCount}`);
-            console.log(`   📅 Pedidos MAÑANA (unificado): ${ordersTomorrowCount}`);
-            
             const waitingCount = window.DBModule.query(
-                `SELECT COUNT(*) as count FROM waiting_list 
-                 WHERE negocio_id = ? AND deleted_at IS NULL AND status = 'waiting'`,
+                `SELECT COUNT(*) as count FROM waiting_list WHERE negocio_id = ? AND deleted_at IS NULL AND status = 'waiting'`,
                 [negocioId]
             );
             waitingListCount = waitingCount[0]?.count || 0;
-            
-            console.log(`   ⏰ Lista de espera: ${waitingListCount}`);
         } catch (e) {
             console.warn('⚠️ Error obteniendo pedidos hoy/mañana:', e);
         }
@@ -658,24 +566,20 @@ async function getDashboardStats(options = {}) {
         }
 
         // ============================================================
-        // VENTAS LIBERADAS (cantidad + importe)
+        // VENTAS LIBERADAS
         // ============================================================
         let releasedSales = { count: 0, total: 0 };
         try {
             const releasedResult = window.DBModule.query(`
                 SELECT COUNT(*) as count, SUM(total) as total
                 FROM sales
-                WHERE negocio_id = ? 
-                  AND is_liberated = 1
-                  AND deleted_at IS NULL 
-                  AND voided = 0
+                WHERE negocio_id = ? AND is_liberated = 1 AND deleted_at IS NULL AND voided = 0
             `, [negocioId]);
             
             releasedSales = {
                 count: releasedResult[0]?.count || 0,
                 total: releasedResult[0]?.total || 0
             };
-            console.log(`🚀 [FASE 3.1] Ventas liberadas: ${releasedSales.count} ($${releasedSales.total.toFixed(2)})`);
         } catch (e) {
             console.warn('⚠️ Error obteniendo ventas liberadas:', e);
         }
@@ -686,11 +590,7 @@ async function getDashboardStats(options = {}) {
         let bestWorstDay = { best: null, worst: null };
         try {
             const todasLasVentas = window.DBModule.query(`
-                SELECT sale_date, total
-                FROM sales
-                WHERE negocio_id = ? 
-                  AND deleted_at IS NULL 
-                  AND voided = 0
+                SELECT sale_date, total FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
             `, [negocioId]);
             
             const totalesPorFecha = {};
@@ -707,57 +607,131 @@ async function getDashboardStats(options = {}) {
             
             if (fechasArray.length > 0) {
                 fechasArray.sort((a, b) => a.total - b.total);
-                
                 bestWorstDay.worst = fechasArray[0];
                 bestWorstDay.best = fechasArray[fechasArray.length - 1];
-                
-                console.log(`📅 [FASE 3.1] Mejor día: ${bestWorstDay.best.date} ($${bestWorstDay.best.total.toFixed(2)})`);
-                console.log(`📅 [FASE 3.1] Peor día: ${bestWorstDay.worst.date} ($${bestWorstDay.worst.total.toFixed(2)})`);
             }
         } catch (e) {
             console.warn('⚠️ Error obteniendo mejor/peor día:', e);
         }
 
         // ============================================================
-        // VENTAS POR EMPLEADO
+        // 🆕 v2.2.4: VENTAS POR EMPLEADO (REGRESIÓN #5 CORREGIDA)
+        // ============================================================
+        // 
+        // ANTES: Filtraba por s.created_by IS NOT NULL, lo que excluía
+        //        TODAS las ventas antiguas (created_by es columna nueva).
+        // 
+        // AHORA: 
+        //   - COALESCE(s.created_by, s.user_id) → siempre hay un vendedor.
+        //   - LEFT JOIN a users → no perder ventas si el usuario fue eliminado.
+        //   - GROUP BY con el COALESCE.
         // ============================================================
         let salesByEmployee = [];
         try {
+            console.log('🔍 [REGRESIÓN #5] Consultando ventas por empleado...');
+            
+            // Query principal con COALESCE y LEFT JOIN
             const ventasPorUsuario = window.DBModule.query(`
                 SELECT 
-                    s.created_by,
-                    COUNT(*) as count,
+                    COALESCE(s.created_by, s.user_id) as vendedor_id,
+                    COUNT(*) as count, 
                     SUM(s.total) as total,
-                    u.name as user_name,
+                    u.name as user_name, 
                     u.username as user_username
                 FROM sales s
-                LEFT JOIN users u ON s.created_by = u.id
+                LEFT JOIN users u ON u.id = COALESCE(s.created_by, s.user_id)
                 WHERE s.negocio_id = ? 
                   AND s.deleted_at IS NULL 
                   AND s.voided = 0
-                  AND s.created_by IS NOT NULL
-                GROUP BY s.created_by
+                GROUP BY COALESCE(s.created_by, s.user_id)
                 ORDER BY total DESC
             `, [negocioId]);
             
-            salesByEmployee = ventasPorUsuario.map(row => ({
-                user_id: row.created_by,
-                name: row.user_name || row.user_username || 'Usuario desconocido',
-                username: row.user_username || '',
-                count: row.count || 0,
-                total: row.total || 0
-            }));
+            console.log('🔍 [REGRESIÓN #5] Resultado de query:', ventasPorUsuario);
             
+            salesByEmployee = ventasPorUsuario.map(row => {
+                const vendedorId = row.vendedor_id;
+                const nombreFinal = row.user_name || row.user_username || `Usuario #${vendedorId}`;
+                
+                return {
+                    user_id: vendedorId,
+                    name: nombreFinal,
+                    username: row.user_username || '',
+                    count: row.count || 0,
+                    total: row.total || 0
+                };
+            });
+            
+            console.log(`✅ [REGRESIÓN #5] ${salesByEmployee.length} empleado(s) con ventas:`, 
+                salesByEmployee.map(e => `${e.name}: ${e.count} ventas ($${e.total.toFixed(2)})`));
+            
+            // Si no hay empleados con ventas, intentar una query de diagnóstico
             if (salesByEmployee.length === 0) {
-                const ventasPorUser = window.DBModule.query(`
+                console.warn('⚠️ [REGRESIÓN #5] No se encontraron ventas por empleado. Ejecutando diagnóstico...');
+                
+                const diagnostico = window.DBModule.query(`
                     SELECT 
-                        s.user_id,
-                        COUNT(*) as count,
+                        COUNT(*) as total_ventas,
+                        COUNT(created_by) as con_created_by,
+                        COUNT(user_id) as con_user_id,
+                        COUNT(DISTINCT created_by) as vendedores_unicos_cb,
+                        COUNT(DISTINCT user_id) as vendedores_unicos_uid
+                    FROM sales 
+                    WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
+                `, [negocioId]);
+                
+                console.log('🔍 [REGRESIÓN #5] Diagnóstico:', diagnostico[0]);
+                
+                // Fallback: si hay ventas pero ninguna tiene vendedor reconocible
+                if (diagnostico[0]?.total_ventas > 0) {
+                    console.warn('⚠️ [REGRESIÓN #5] Hay ventas pero no se pudo asociar un vendedor');
+                    console.warn('   → Puede que created_by y user_id sean ambos NULL (datos antiguos)');
+                    
+                    // Intentar agrupar solo por created_by sin COALESCE
+                    const fallback = window.DBModule.query(`
+                        SELECT 
+                            s.user_id as vendedor_id,
+                            COUNT(*) as count, 
+                            SUM(s.total) as total,
+                            u.name as user_name, 
+                            u.username as user_username
+                        FROM sales s
+                        LEFT JOIN users u ON u.id = s.user_id
+                        WHERE s.negocio_id = ? 
+                          AND s.deleted_at IS NULL 
+                          AND s.voided = 0
+                          AND s.user_id IS NOT NULL
+                        GROUP BY s.user_id
+                        ORDER BY total DESC
+                    `, [negocioId]);
+                    
+                    if (fallback.length > 0) {
+                        console.log('✅ [REGRESIÓN #5] Fallback exitoso:', fallback);
+                        salesByEmployee = fallback.map(row => ({
+                            user_id: row.vendedor_id,
+                            name: row.user_name || row.user_username || `Usuario #${row.vendedor_id}`,
+                            username: row.user_username || '',
+                            count: row.count || 0,
+                            total: row.total || 0
+                        }));
+                    }
+                }
+            }
+            
+        } catch (e) {
+            console.error('❌ [REGRESIÓN #5] Error obteniendo ventas por empleado:', e);
+            
+            // Fallback de emergencia
+            try {
+                const fallback = window.DBModule.query(`
+                    SELECT 
+                        s.user_id as vendedor_id,
+                        COUNT(*) as count, 
                         SUM(s.total) as total,
-                        u.name as user_name,
+                        u.name as user_name, 
                         u.username as user_username
                     FROM sales s
-                    LEFT JOIN users u ON s.user_id = u.id
+                    LEFT JOIN users u ON u.id = s.user_id
                     WHERE s.negocio_id = ? 
                       AND s.deleted_at IS NULL 
                       AND s.voided = 0
@@ -765,24 +739,22 @@ async function getDashboardStats(options = {}) {
                     ORDER BY total DESC
                 `, [negocioId]);
                 
-                salesByEmployee = ventasPorUser.map(row => ({
-                    user_id: row.user_id,
-                    name: row.user_name || row.user_username || 'Usuario desconocido',
+                salesByEmployee = fallback.map(row => ({
+                    user_id: row.vendedor_id,
+                    name: row.user_name || row.user_username || `Usuario #${row.vendedor_id}`,
                     username: row.user_username || '',
                     count: row.count || 0,
                     total: row.total || 0
                 }));
+                
+                console.log('✅ [REGRESIÓN #5] Fallback de emergencia aplicado:', salesByEmployee);
+            } catch (e2) {
+                console.error('❌ [REGRESIÓN #5] Fallback también falló:', e2);
             }
-            
-            console.log(`👥 [FASE 3.1] Empleados con ventas: ${salesByEmployee.length}`);
-        } catch (e) {
-            console.warn('⚠️ Error obteniendo ventas por empleado:', e);
         }
 
         // ============================================================
         // RETORNAR OBJETO COMPLETO
-        // 🆕 ENTREGA 5: Incluye ordersTomorrowCount
-        // 🆕 v2.2.2: ordersTodayCount y ordersTomorrowCount usan conteo unificado
         // ============================================================
         return {
             totalSales, totalRevenue, todaySalesCount, todayRevenue,
@@ -793,6 +765,10 @@ async function getDashboardStats(options = {}) {
             totalDebts, debtCount, debtDetails,
             topProducts, topClients, clientesDiferentes,
             diasConVentas, promedioVentasDiarias, primerDiaVenta,
+            // 🆕 CORRECCIONES #2 y #3
+            diasSinVentas,
+            diasSinVentasDetalle,
+            // Fin correcciones
             dailySales, paymentMethods,
             totalExpenses, initialInvestment, totalRecipes,
             netProfit: totalRevenue - totalExpenses,
@@ -833,4 +809,12 @@ window.DashboardModule = {
     calcularRangoGrafico
 };
 
-console.log('📦 Dashboard Module cargado correctamente v2.2.2 (CORRECCIÓN #2: conteo unificado en Dashboard)');
+console.log('📦 Dashboard Module cargado correctamente v2.2.4');
+console.log('   🎯 CORRECCIONES #2 y #3 (240926) aplicadas:');
+console.log('      ✅ diasSinVentas → total de días sin ventas');
+console.log('      ✅ diasSinVentasDetalle → mapa { fecha: { motivo, nota } }');
+console.log('   🎯 REGRESIÓN #5 (260926) CORREGIDA:');
+console.log('      ✅ Query de salesByEmployee con COALESCE(created_by, user_id)');
+console.log('      ✅ LEFT JOIN a users para no perder ventas huérfanas');
+console.log('      ✅ Fallback de emergencia si la query principal falla');
+console.log('      ✅ Logs detallados para diagnóstico');

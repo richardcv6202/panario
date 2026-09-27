@@ -7,6 +7,16 @@
 //   - toggleUserAdmin(): promover/quitar admin a un usuario
 //   - deleteUserByAdmin(): eliminar usuario del negocio
 //   - changeOwnPassword(): usuario cambia su propia contraseña
+// 🆕 v2.3.4 (260926): 🎯 CORRECCIÓN #17 (240926) - CONFIGURACIONES INDIVIDUALES
+//   - ✅ loginUser() ahora carga la configuración de sonido y guía
+//     rápida del usuario desde la BD (por user_id).
+//   - ✅ Las nuevas columnas sound_enabled, sound_id y
+//     guia_rapida_activa se cargan al hacer login y se incluyen
+//     en el objeto user.
+//   - ✅ getUserSoundConfig() y getUserGuiaRapidaActiva() pueden
+//     consultarse después del login.
+//   - ✅ Retrocompatible: si las columnas no existen, se usan
+//     valores por defecto.
 // ============================================================
 
 window.AuthModule = {};
@@ -17,15 +27,6 @@ const LAST_USER_KEY = 'panario_last_user';
 // REGISTRO
 // ============================================================
 
-/**
- * Registra un nuevo usuario.
- * @param {string} username - Nombre de usuario
- * @param {string} password - Contraseña
- * @param {string} name - Nombre completo
- * @param {string} business - Nombre del negocio (si crea uno nuevo)
- * @param {string} negocioMode - 'crear' | 'unirse' (por defecto 'crear')
- * @param {string} codigoInvitacion - Código de invitación (solo si negocioMode='unirse')
- */
 async function registerUser(username, password, name, business, negocioMode = 'crear', codigoInvitacion = '') {
     const db = window.DBModule.getDB();
     try {
@@ -136,6 +137,10 @@ async function loginUser(username, password) {
         await window.DBModule.ensureDashboardColumns(db);
         await window.DBModule.ensureNegocioIdColumn(db);
         await window.DBModule.ensureIsAdminColumn(db);
+        // 🆕 CORRECCIÓN #17: Asegurar que las columnas de preferencias existen
+        if (typeof window.DBModule.ensureUserPreferencesColumns === 'function') {
+            await window.DBModule.ensureUserPreferencesColumns(db);
+        }
         
         const stmt = db.prepare('SELECT * FROM users WHERE LOWER(username) = ?');
         stmt.bind([normalizedUsername]);
@@ -159,6 +164,31 @@ async function loginUser(username, password) {
                 // Cargar configuración del dashboard
                 const dashConfig = window.DBModule.getUserDashboardConfig(result.id);
                 result.dashboard_config = dashConfig;
+                
+                // 🆕 CORRECCIÓN #17: Cargar configuración de sonido y guía rápida
+                try {
+                    if (typeof window.DBModule.getUserSoundConfig === 'function') {
+                        const soundConfig = window.DBModule.getUserSoundConfig(result.id);
+                        result.sound_enabled = soundConfig.enabled ? 1 : 0;
+                        result.sound_id = soundConfig.soundId;
+                        console.log(`🔊 Usuario ${result.username}: sonido=${soundConfig.soundId}, enabled=${soundConfig.enabled}`);
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Error cargando config de sonido:', e);
+                    result.sound_enabled = 1;
+                    result.sound_id = 'beep';
+                }
+                
+                try {
+                    if (typeof window.DBModule.getUserGuiaRapidaActiva === 'function') {
+                        const guiaActiva = window.DBModule.getUserGuiaRapidaActiva(result.id);
+                        result.guia_rapida_activa = guiaActiva ? 1 : 0;
+                        console.log(`🚀 Usuario ${result.username}: guía rápida=${guiaActiva}`);
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Error cargando guía rápida:', e);
+                    result.guia_rapida_activa = 1;
+                }
                 
                 // Cargar negocio del usuario
                 if (result.negocio_id) {
@@ -378,6 +408,85 @@ function getUserDashboardConfig(userId) {
 }
 
 // ============================================================
+// 🆕 CORRECCIÓN #17: SONIDO Y GUÍA RÁPIDA
+// ============================================================
+
+/**
+ * 🆕 CORRECCIÓN #17: Obtiene la configuración de sonido del usuario actual.
+ * Delegado a DBModule.
+ */
+function getUserSoundConfig(userId) {
+    const uid = userId || (getCurrentUser()?.id);
+    if (!uid) return { enabled: true, soundId: 'beep' };
+    
+    if (window.DBModule && typeof window.DBModule.getUserSoundConfig === 'function') {
+        return window.DBModule.getUserSoundConfig(uid);
+    }
+    return { enabled: true, soundId: 'beep' };
+}
+
+/**
+ * 🆕 CORRECCIÓN #17: Actualiza la configuración de sonido del usuario.
+ * Delegado a DBModule.
+ */
+async function updateUserSoundConfig(userId, config) {
+    if (!userId) return { success: false, error: 'No hay usuario' };
+    
+    if (window.DBModule && typeof window.DBModule.updateUserSoundConfig === 'function') {
+        const result = window.DBModule.updateUserSoundConfig(userId, config);
+        
+        if (result.success) {
+            const current = getCurrentUser();
+            if (current && current.id === userId) {
+                current.sound_enabled = config.enabled ? 1 : 0;
+                current.sound_id = config.soundId;
+                setCurrentUser(current);
+            }
+        }
+        
+        return result;
+    }
+    return { success: false, error: 'Función no disponible' };
+}
+
+/**
+ * 🆕 CORRECCIÓN #17: Obtiene si la guía rápida está activa.
+ * Delegado a DBModule.
+ */
+function getUserGuiaRapidaActiva(userId) {
+    const uid = userId || (getCurrentUser()?.id);
+    if (!uid) return true;
+    
+    if (window.DBModule && typeof window.DBModule.getUserGuiaRapidaActiva === 'function') {
+        return window.DBModule.getUserGuiaRapidaActiva(uid);
+    }
+    return true;
+}
+
+/**
+ * 🆕 CORRECCIÓN #17: Actualiza la preferencia de guía rápida.
+ * Delegado a DBModule.
+ */
+async function updateUserGuiaRapida(userId, activa) {
+    if (!userId) return { success: false, error: 'No hay usuario' };
+    
+    if (window.DBModule && typeof window.DBModule.updateUserGuiaRapida === 'function') {
+        const result = window.DBModule.updateUserGuiaRapida(userId, activa);
+        
+        if (result.success) {
+            const current = getCurrentUser();
+            if (current && current.id === userId) {
+                current.guia_rapida_activa = activa ? 1 : 0;
+                setCurrentUser(current);
+            }
+        }
+        
+        return result;
+    }
+    return { success: false, error: 'Función no disponible' };
+}
+
+// ============================================================
 // NEGOCIO DEL USUARIO
 // ============================================================
 
@@ -471,13 +580,6 @@ function contarUsuariosDelNegocio() {
 // 🆕 FASE B: GESTIÓN DE USUARIOS POR ADMIN
 // ============================================================
 
-/**
- * 🆕 FASE B: El admin crea un usuario directamente en su negocio.
- * No requiere código de invitación.
- * 
- * @param {object} data - { username, password, name, email, phone, isAdmin }
- * @returns {object} { success, userId, error }
- */
 async function createUserAsAdmin(data) {
     const admin = getCurrentUser();
     if (!admin) return { success: false, error: 'No hay usuario autenticado' };
@@ -498,7 +600,6 @@ async function createUserAsAdmin(data) {
     const db = window.DBModule.getDB();
     
     try {
-        // Verificar que el username no exista
         const existing = window.DBModule.query(
             'SELECT id FROM users WHERE LOWER(username) = ?',
             [username]
@@ -508,7 +609,6 @@ async function createUserAsAdmin(data) {
             return { success: false, error: '⚠️ El usuario ya existe. Elige otro nombre.' };
         }
         
-        // Insertar usuario
         const stmt = db.prepare(`
             INSERT INTO users (username, password, name, email, phone, theme, negocio_id, is_admin) 
             VALUES (?, ?, ?, ?, ?, 'light', ?, ?)
@@ -527,7 +627,6 @@ async function createUserAsAdmin(data) {
         
         window.DBModule.saveAndNotify();
         
-        // Obtener el ID del nuevo usuario
         const newUser = window.DBModule.query(
             'SELECT id FROM users WHERE LOWER(username) = ?',
             [username]
@@ -548,15 +647,6 @@ async function createUserAsAdmin(data) {
     }
 }
 
-/**
- * 🆕 FASE B: Actualiza la contraseña de un usuario.
- * El admin puede cambiar la de cualquier usuario de su negocio.
- * Un usuario normal solo puede cambiar la suya propia.
- * 
- * @param {number} userId - ID del usuario
- * @param {string} newPassword - Nueva contraseña
- * @returns {object} { success, error }
- */
 async function updateUserPassword(userId, newPassword) {
     const currentUser = getCurrentUser();
     if (!currentUser) return { success: false, error: 'No hay usuario autenticado' };
@@ -566,7 +656,6 @@ async function updateUserPassword(userId, newPassword) {
         return { success: false, error: '⚠️ La contraseña debe tener al menos 4 caracteres' };
     }
     
-    // Verificar permisos
     const isOwnUser = currentUser.id === userId;
     const isAdmin = currentUser.is_admin === 1;
     
@@ -577,7 +666,6 @@ async function updateUserPassword(userId, newPassword) {
     const db = window.DBModule.getDB();
     
     try {
-        // Si es admin pero no es su propio usuario, verificar que sea del mismo negocio
         if (!isOwnUser && isAdmin) {
             const targetUser = window.DBModule.query(
                 'SELECT negocio_id FROM users WHERE id = ? AND deleted_at IS NULL',
@@ -610,15 +698,6 @@ async function updateUserPassword(userId, newPassword) {
     }
 }
 
-/**
- * 🆕 FASE B: Cambiar el rol de admin de un usuario.
- * Solo el admin puede hacerlo.
- * No se puede quitar admin al último admin del negocio.
- * 
- * @param {number} userId - ID del usuario
- * @param {boolean} isAdmin - true para promover, false para degradar
- * @returns {object} { success, error }
- */
 async function toggleUserAdmin(userId, isAdmin) {
     const currentUser = getCurrentUser();
     if (!currentUser) return { success: false, error: 'No hay usuario autenticado' };
@@ -630,7 +709,6 @@ async function toggleUserAdmin(userId, isAdmin) {
     const db = window.DBModule.getDB();
     
     try {
-        // Verificar que el usuario sea del mismo negocio
         const targetUser = window.DBModule.query(
             'SELECT id, is_admin, negocio_id FROM users WHERE id = ? AND deleted_at IS NULL',
             [userId]
@@ -646,7 +724,6 @@ async function toggleUserAdmin(userId, isAdmin) {
         
         const newAdminValue = isAdmin ? 1 : 0;
         
-        // Si estamos degradando a un admin, verificar que no sea el último
         if (!isAdmin && targetUser[0].is_admin === 1) {
             const adminCount = window.DBModule.query(
                 'SELECT COUNT(*) as count FROM users WHERE negocio_id = ? AND is_admin = 1 AND deleted_at IS NULL',
@@ -675,14 +752,6 @@ async function toggleUserAdmin(userId, isAdmin) {
     }
 }
 
-/**
- * 🆕 FASE B: Eliminar un usuario (soft-delete).
- * Solo el admin puede hacerlo. No puede eliminarse a sí mismo.
- * No puede eliminar al último admin.
- * 
- * @param {number} userId - ID del usuario
- * @returns {object} { success, error }
- */
 async function deleteUserByAdmin(userId) {
     const currentUser = getCurrentUser();
     if (!currentUser) return { success: false, error: 'No hay usuario autenticado' };
@@ -705,7 +774,6 @@ async function deleteUserByAdmin(userId) {
             return { success: false, error: '⚠️ El usuario no pertenece a tu negocio' };
         }
         
-        // No permitir eliminar al último admin
         if (targetUser[0].is_admin === 1) {
             const adminCount = window.DBModule.query(
                 'SELECT COUNT(*) as count FROM users WHERE negocio_id = ? AND is_admin = 1 AND deleted_at IS NULL',
@@ -734,14 +802,6 @@ async function deleteUserByAdmin(userId) {
     }
 }
 
-/**
- * 🆕 FASE B: Actualiza los datos de un usuario (nombre, email, teléfono).
- * El admin puede editar cualquier usuario de su negocio.
- * 
- * @param {number} userId - ID del usuario
- * @param {object} data - { name, email, phone }
- * @returns {object} { success, error }
- */
 async function updateUserDataByAdmin(userId, data) {
     const currentUser = getCurrentUser();
     if (!currentUser) return { success: false, error: 'No hay usuario autenticado' };
@@ -824,6 +884,12 @@ window.AuthModule = {
     updateUserPhoto,
     updateUserDashboardConfig,
     getUserDashboardConfig,
+    // 🆕 CORRECCIÓN #17: Sonido y guía rápida
+    getUserSoundConfig,
+    updateUserSoundConfig,
+    getUserGuiaRapidaActiva,
+    updateUserGuiaRapida,
+    // Fin corrección #17
     getCurrentNegocio,
     updateNegocioNombre,
     validarCodigoInvitacion,
@@ -842,4 +908,10 @@ window.AuthModule = {
     updateUserDataByAdmin
 };
 
-console.log('📦 Auth Module cargado correctamente v2.0.2 (FASE 16 + FASE B: gestión completa de usuarios)');
+console.log('📦 Auth Module cargado correctamente v2.3.4 (CORRECCIÓN #17: preferencias individuales)');
+console.log('   🆕 Novedades v2.3.4:');
+console.log('      • loginUser() carga sound_enabled, sound_id, guia_rapida_activa');
+console.log('      • NUEVAS funciones delegadas: getUserSoundConfig, updateUserSoundConfig');
+console.log('      • NUEVAS funciones delegadas: getUserGuiaRapidaActiva, updateUserGuiaRapida');
+console.log('   🔄 Correcciones anteriores mantenidas:');
+console.log('      • FASE B: gestión completa de usuarios por admin');

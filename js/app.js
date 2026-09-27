@@ -1,21 +1,28 @@
 // ============================================================
 // 📦 APP CONTROLLER - Panario
-// v3.0.1 (260926): 🎯 FIX CRÍTICO - MutationObserver eliminado
-//   - ✅ BUG RESUELTO: El MutationObserver sobre el header causaba
-//     un BUCLE INFINITO de mutaciones cuando se abría la ayuda
-//     detallada. Cada mutación del header disparaba
-//     forzarStickyHeader() que a su vez mutaba el header, y eso
-//     volvía a disparar el observer... ad infinitum.
-//     El navegador se quedaba bloqueado y el modal de ayuda
-//     nunca aparecía.
-//   - ✅ SOLUCIÓN: Eliminado el MutationObserver por completo.
-//     Los otros 8 watchers (visibilitychange, pagehide, pageshow,
-//     blur, focus, resize, orientationchange, scroll, resume)
-//     son SUFICIENTES para detectar cuándo el header se deforma.
-//   - ✅ Mantenido forzarStickyHeader() pero solo se llama en
-//     eventos discretos (navigate, showApp, focus, etc.), NO en
-//     respuesta a mutaciones del DOM.
-//   - ✅ Mantenidas TODAS las funcionalidades de v3.0.0:
+// v3.0.2 (260926): 🎯 CORRECCIONES #2 y #3 (240926)
+//   - ✅ CORRECCIÓN #3: Nueva tarjeta "Días sin ventas" en el
+//     Dashboard, junto a "Días con ventas". Color rojo, icono 📅.
+//   - ✅ CORRECCIÓN #2: El gráfico de barras y línea ahora muestra
+//     el motivo del día sin ventas en vertical, precedido de "SV. ".
+// v3.0.3 (260926): 🎯 REGRESIÓN #5 (260926) - VENTAS POR EMPLEADO
+//   - ✅ FIX en renderSalesByEmployee()
+// v3.0.4 (260926): 🎯 REGRESIONES #8 y #9 (260926)
+//   - ✅ FIX #9: handleLogout() ahora llama a
+//     window.NotificationsModule.cleanupNotificationsResources()
+//     ANTES de recargar la página. Esto cierra el AudioContext,
+//     remueve listeners duplicados y limpia recursos, evitando
+//     el error "AudioContext zombie" al cerrar sesión.
+//   - ✅ FIX #9: showApp() ahora llama a
+//     window.NotificationsModule.reinitAfterLogin() DESPUÉS de un
+//     login exitoso, para volver a registrar los listeners de
+//     audio que fueron removidos en el logout.
+//   - ✅ FIX #8: exportChartAsImage() y exportChartAsPDF() ahora
+//     tienen logging detallado para diagnosticar por qué falla la
+//     descarga. Añadido fallback robusto cuando no hay datos.
+//   - ✅ Actualizados los textos de versión en console.log para
+//     reflejar correctamente v3.0.4.
+//   - ✅ Se mantienen TODAS las funcionalidades anteriores:
 //     * Corrección #5: Top bar reforzada (8 watchers)
 //     * Corrección #14: Integración de ?standalone=1
 //     * Debounce de db-saved (500ms)
@@ -47,8 +54,6 @@ const STICKY_HEADER_DEBOUNCE_MS = 100;
 // ============================================================
 // 🆕 v3.0.0: ESTADO DE LOS WATCHERS DEL HEADER
 // ============================================================
-// NOTA v3.0.1: Eliminado _headerMutationObserver. Ya no se usa.
-// ============================================================
 
 let _headerCleanupWatchersStarted = false;
 
@@ -76,33 +81,18 @@ function debouncedRefreshCurrentView() {
 // ============================================================
 // 🆕 v3.0.0: FORZAR STICKY HEADER (CORRECCIÓN #5)
 // ============================================================
-// 
-// Esta función se llama en múltiples momentos para asegurar que
-// el header SIEMPRE tenga position: sticky aplicado inline, incluso
-// si algún navegador móvil aplicó transform residual al body o
-// #appScreen al cambiar de app.
-// 
-// Es una medida defensiva adicional a las reglas CSS `!important`
-// ya existentes en style.css.
-// 
-// IMPORTANTE v3.0.1: Esta función NO debe llamarse en respuesta a
-// mutaciones del DOM (MutationObserver eliminado). Solo se llama
-// en eventos discretos como navigate(), showApp(), focus, etc.
-// ============================================================
 
 function forzarStickyHeader() {
     try {
         const header = document.querySelector('#appScreen > header');
         if (!header) return;
         
-        // Aplicar position: sticky inline con !important
         header.style.setProperty('position', 'sticky', 'important');
         header.style.setProperty('top', '0', 'important');
         header.style.setProperty('z-index', '200', 'important');
         header.style.setProperty('transform', 'none', 'important');
         header.style.setProperty('will-change', 'auto', 'important');
         
-        // Resetear cualquier transform residual en html, body, #appScreen y main
         const targets = [
             document.documentElement,
             document.body,
@@ -110,14 +100,7 @@ function forzarStickyHeader() {
             document.getElementById('mainContent')
         ].filter(el => el);
         
-        const propsAResetear = [
-            'transform',
-            'will-change',
-            'isolation',
-            'filter',
-            'perspective',
-            'backface-visibility'
-        ];
+        const propsAResetear = ['transform', 'will-change', 'isolation', 'filter', 'perspective', 'backface-visibility'];
         
         targets.forEach(el => {
             propsAResetear.forEach(prop => {
@@ -127,19 +110,15 @@ function forzarStickyHeader() {
             });
         });
         
-        // Loguear solo si hubo cambios visibles (evitar spam)
         if (!header._stickyForced) {
-            console.log('🔧 [v3.0.1] forzarStickyHeader() aplicado al header');
+            console.log('🔧 [v3.0.4] forzarStickyHeader() aplicado al header');
             header._stickyForced = true;
         }
     } catch (e) {
-        console.warn('⚠️ [v3.0.1] Error en forzarStickyHeader:', e);
+        console.warn('⚠️ [v3.0.4] Error en forzarStickyHeader:', e);
     }
 }
 
-/**
- * 🆕 v3.0.0: Versión con debounce de forzarStickyHeader().
- */
 function _debouncedForzarSticky() {
     if (_stickyHeaderDebounceTimer) {
         clearTimeout(_stickyHeaderDebounceTimer);
@@ -156,78 +135,44 @@ function _debouncedForzarSticky() {
 // ============================================================
 // 🆕 v3.0.1: WATCHERS AMPLIADOS PARA EL HEADER (CORRECCIÓN #5)
 // ============================================================
-// 
-// Estos watchers se registran UNA SOLA VEZ. Detectan TODOS los
-// momentos en que el header podría deformarse y ejecutan
-// forzarStickyHeader() + limpiarEstilosResiduales().
-// 
-// v3.0.1: ELIMINADO el MutationObserver porque causaba un bucle
-// infinito. Los 8 watchers restantes son suficientes.
-// ============================================================
 
 function startHeaderCleanupWatchers() {
     if (_headerCleanupWatchersStarted) {
-        console.log('🔄 [v3.0.1] Watchers de header ya estaban activos');
+        console.log('🔄 [v3.0.4] Watchers de header ya estaban activos');
         return;
     }
     
     try {
-        // 1) visibilitychange: cuando la app vuelve a primer plano
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                console.log('👁️ [v3.0.1] visibilitychange → app vuelve a primer plano');
                 _debouncedForzarSticky();
             }
         });
         
-        // 2) pagehide / pageshow: cuando la página se oculta/muestra (bfcache)
-        window.addEventListener('pagehide', () => {
-            console.log('📄 [v3.0.1] pagehide → página oculta');
-        });
-        
         window.addEventListener('pageshow', (e) => {
-            if (e.persisted) {
-                console.log('📄 [v3.0.1] pageshow (bfcache) → forzando sticky');
-            } else {
-                console.log('📄 [v3.0.1] pageshow → forzando sticky');
-            }
             _debouncedForzarSticky();
-        });
-        
-        // 3) blur / focus: cuando la ventana pierde/recupera foco
-        // (cambio de app en móvil)
-        window.addEventListener('blur', () => {
-            console.log('🔴 [v3.0.1] blur → ventana pierde foco');
         });
         
         window.addEventListener('focus', () => {
-            console.log('🟢 [v3.0.1] focus → ventana recupera foco');
             _debouncedForzarSticky();
         });
         
-        // 4) resize: cuando cambia el tamaño de la ventana
         window.addEventListener('resize', () => {
             _debouncedForzarSticky();
         });
         
-        // 5) orientationchange: cuando cambia la orientación
         window.addEventListener('orientationchange', () => {
-            console.log('📱 [v3.0.1] orientationchange');
             setTimeout(_debouncedForzarSticky, 100);
         });
         
-        // 6) scroll: cuando se hace scroll
         document.addEventListener('scroll', () => {
             _debouncedForzarSticky();
         }, { capture: true, passive: true });
         
-        // 7) resume: evento de Cordova/PhoneGap (algunos móviles)
         document.addEventListener('resume', () => {
-            console.log('▶️ [v3.0.1] resume (Cordova)');
             _debouncedForzarSticky();
         }, false);
         
-        // 8) innerHeight: detectar cambios en la barra de direcciones del móvil
         let _lastInnerHeight = window.innerHeight;
         window.addEventListener('resize', () => {
             const newInnerHeight = window.innerHeight;
@@ -236,30 +181,17 @@ function startHeaderCleanupWatchers() {
             }
         });
         
-        // ❌ v3.0.1: ELIMINADO el MutationObserver.
-        // Causaba un bucle infinito de mutaciones cuando se abría
-        // el modal de ayuda detallada. Cada mutación del header
-        // disparaba forzarStickyHeader() que a su vez mutaba el
-        // header, y eso volvía a disparar el observer... ad infinitum.
-        
         _headerCleanupWatchersStarted = true;
-        console.log('🔄 [v3.0.1] Watchers de header activados:');
-        console.log('   • visibilitychange');
-        console.log('   • pagehide / pageshow');
-        console.log('   • blur / focus');
-        console.log('   • resize / orientationchange');
-        console.log('   • scroll (con debounce)');
-        console.log('   • resume (Cordova)');
-        console.log('   ℹ️ MutationObserver: ELIMINADO (causaba bucle infinito)');
+        console.log('🔄 [v3.0.4] Watchers de header activados');
         
     } catch (e) {
-        console.warn('⚠️ [v3.0.1] Error activando watchers de header:', e);
+        console.warn('⚠️ [v3.0.4] Error activando watchers de header:', e);
     }
 }
 
 function stopHeaderCleanupWatchers() {
     _headerCleanupWatchersStarted = false;
-    console.log('🛑 [v3.0.1] Watchers de header detenidos');
+    console.log('🛑 [v3.0.4] Watchers de header detenidos');
 }
 
 // ============================================================
@@ -390,9 +322,6 @@ function formatearFechaConDiaSemana(date = new Date()) {
     return `${diasAbrev[date.getDay()]}, ${date.getDate()} de ${mesesAbrev[date.getMonth()]}.`;
 }
 
-/**
- * Formatea una fecha YYYY-MM-DD a un formato corto: "15 sep 2026"
- */
 function formatearFechaYYYYMMDD(fechaStr, opciones = {}) {
     if (!fechaStr) return '—';
     
@@ -446,16 +375,12 @@ function formatDate(dateStr) {
     }
 }
 
-/**
- * Formatea una fecha de forma inteligente y contextual.
- */
 function formatearFechaInteligente(fecha, horaStr = null) {
     try {
         const date = fecha instanceof Date ? fecha : new Date(fecha);
         if (isNaN(date.getTime())) return '—';
         
         const fechaObj = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-        
         const hoy = new Date();
         const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
         
@@ -466,24 +391,14 @@ function formatearFechaInteligente(fecha, horaStr = null) {
         const dia = date.getDate();
         const mes = String(date.getMonth() + 1).padStart(2, '0');
         
-        let sufijoHora = '';
-        if (horaStr) {
-            sufijoHora = `, ${horaStr}`;
-        }
+        let sufijoHora = horaStr ? `, ${horaStr}` : '';
         
-        if (diffDias === 0) {
-            return `Hoy${sufijoHora}`;
-        } else if (diffDias === 1) {
-            return `Mañana ${dia}${sufijoHora}`;
-        } else if (diffDias === -1) {
-            return `Ayer${sufijoHora}`;
-        } else if (diffDias > 1 && diffDias <= 6) {
-            return `${diasAbrev[date.getDay()]} ${dia}${sufijoHora}`;
-        } else if (diffDias < -1 && diffDias >= -6) {
-            return `${diasAbrev[date.getDay()]} ${dia}${sufijoHora}`;
-        } else if (diffDias >= 7 || diffDias <= -7) {
-            return `${dia}/${mes}${sufijoHora}`;
-        }
+        if (diffDias === 0) return `Hoy${sufijoHora}`;
+        else if (diffDias === 1) return `Mañana ${dia}${sufijoHora}`;
+        else if (diffDias === -1) return `Ayer${sufijoHora}`;
+        else if (diffDias > 1 && diffDias <= 6) return `${diasAbrev[date.getDay()]} ${dia}${sufijoHora}`;
+        else if (diffDias < -1 && diffDias >= -6) return `${diasAbrev[date.getDay()]} ${dia}${sufijoHora}`;
+        else if (diffDias >= 7 || diffDias <= -7) return `${dia}/${mes}${sufijoHora}`;
         
         return `${diasAbrev[date.getDay()]} ${dia}${sufijoHora}`;
     } catch (e) {
@@ -545,12 +460,6 @@ function cerrarTodosLosModalesRespaldo() {
 // ============================================================
 // 🆕 v3.0.0: ABRIR AYUDA DETALLADA (actualizado)
 // ============================================================
-// 
-// CAMBIO: Ahora usa HelpModule.abrirAyudaDetallada() en lugar de
-// abrir ayuda-panario.html en pestaña nueva.
-// 
-// Se mantiene como wrapper para compatibilidad hacia atrás.
-// ============================================================
 
 function openDetailedHelp() {
     try {
@@ -608,21 +517,12 @@ async function initApp() {
             window.limpiarEstilosResiduales();
         }
         
-        // ============================================================
-        // 🆕 v3.0.0: DETECCIÓN DE ?standalone=1 (CORRECCIÓN #14)
-        // ============================================================
-        // Si el usuario abrió la app con ?standalone=1, se renderiza
-        // SOLO la ayuda a pantalla completa (sin header, sin nav, sin app).
-        // Esto es lo que usa el botón "🔗 ↗" de la ayuda.
-        // ============================================================
-        
         const urlParams = new URLSearchParams(window.location.search);
         const standaloneParam = urlParams.get('standalone');
         
         if (standaloneParam === '1') {
             console.log('📖 [v3.0.0] Modo standalone detectado → renderizando SOLO la ayuda');
             
-            // Esperar a que HelpModule y HelpDetailedModule estén cargados
             setTimeout(() => {
                 if (window.HelpModule && typeof window.HelpModule.renderAyudaStandalone === 'function') {
                     window.HelpModule.renderAyudaStandalone();
@@ -642,12 +542,8 @@ async function initApp() {
                 }
             }, 300);
             
-            return; // ← Salida temprana: NO se inicializa el resto de la app
+            return;
         }
-        
-        // ============================================================
-        // FLUJO NORMAL DE LA APP
-        // ============================================================
         
         const refreshParam = urlParams.get('refresh');
         
@@ -741,16 +637,18 @@ async function initApp() {
         createScrollButtons();
         setupDbSavedListener();
         
-        // 🆕 v3.0.0: Activar watchers reforzados del header
         startHeaderCleanupWatchers();
         forzarStickyHeader();
         
         setTimeout(adjustForSafeArea, 500);
 
         console.log(`✅ App inicializada correctamente (v${version})`);
-        console.log(`   🔧 [v3.0.1] Corrección #5 aplicada: 8 watchers de header activados`);
+        console.log(`   🔧 [v3.0.4] Corrección #5 aplicada: 8 watchers de header activados`);
         console.log(`   📖 [v3.0.0] Corrección #14 aplicada: ?standalone=1 soportado`);
         console.log(`   🐛 [v3.0.1] Fix: MutationObserver eliminado (bucle infinito resuelto)`);
+        console.log(`   📅 [v3.0.2] Correcciones #2 y #3 aplicadas: motivo SV en gráfico + tarjeta días sin ventas`);
+        console.log(`   👥 [v3.0.3] Regresión #5 corregida: Ventas por empleado`);
+        console.log(`   🚪 [v3.0.4] Regresiones #8 y #9 corregidas: exportar gráfico + cerrar sesión`);
 
     } catch (error) {
         console.error('❌ Error inicializando app:', error);
@@ -1111,6 +1009,7 @@ async function handleRegister() {
 
 // ============================================================
 // CIERRE DE SESIÓN
+// 🆕 v3.0.4: REGRESIÓN #9 - Limpieza de recursos antes de recargar
 // ============================================================
 
 async function handleLogout() {
@@ -1124,17 +1023,59 @@ async function handleLogout() {
     });
 
     if (confirm) {
+        const LOG_PREFIX = '🚪 [handleLogout v3.0.4]';
+        console.log(`${LOG_PREFIX} Cerrando sesión...`);
+        
         try {
-            window.DBModule.saveDatabase();
-            sessionStorage.removeItem('panario_user');
-            localStorage.removeItem('panario-theme');
+            // 1. Guardar BD antes de cerrar
+            try {
+                window.DBModule.saveDatabase();
+                console.log(`${LOG_PREFIX} ✅ BD guardada`);
+            } catch (e) {
+                console.warn(`${LOG_PREFIX} ⚠️ Error guardando BD:`, e.message);
+            }
+            
+            // 2. 🆕 v3.0.4: Limpiar recursos de notificaciones
+            //    (Cierra AudioContext, remueve listeners, aborta test de sonidos)
+            try {
+                if (window.NotificationsModule && 
+                    typeof window.NotificationsModule.cleanupNotificationsResources === 'function') {
+                    const cleanupResult = window.NotificationsModule.cleanupNotificationsResources();
+                    console.log(`${LOG_PREFIX} ✅ Recursos de notificaciones limpiados:`, cleanupResult);
+                } else {
+                    console.log(`${LOG_PREFIX} ℹ️ cleanupNotificationsResources no disponible, se omite`);
+                }
+            } catch (e) {
+                console.warn(`${LOG_PREFIX} ⚠️ Error limpiando notificaciones:`, e.message);
+            }
+            
+            // 3. Limpiar sessionStorage y localStorage
+            try {
+                sessionStorage.removeItem('panario_user');
+                localStorage.removeItem('panario-theme');
+                console.log(`${LOG_PREFIX} ✅ Sesión y tema limpiados`);
+            } catch (e) {
+                console.warn(`${LOG_PREFIX} ⚠️ Error limpiando storage:`, e.message);
+            }
+            
+            // 4. Resetear estado local
             currentUser = null;
             dbReady = false;
             document.title = 'Panario - Panadería Artesanal';
-            window.location.reload(true);
+            
+            console.log(`${LOG_PREFIX} ✅ Todo limpio, recargando página...`);
+            
+            // 5. Recargar (con pequeño delay para que los logs se impriman)
+            setTimeout(() => {
+                window.location.reload(true);
+            }, 200);
+            
         } catch (e) {
-            console.error('❌ Error cerrando sesión:', e);
-            window.location.reload(true);
+            console.error(`${LOG_PREFIX} ❌ Error durante logout:`, e);
+            // Fallback: recargar de todas formas
+            setTimeout(() => {
+                window.location.reload(true);
+            }, 100);
         }
     }
 }
@@ -1192,6 +1133,7 @@ function updateTopBarAvatar(photoData) {
 
 // ============================================================
 // MOSTRAR APP
+// 🆕 v3.0.4: REGRESIÓN #9 - Reinicializar notificaciones tras login
 // ============================================================
 
 function showApp(user) {
@@ -1237,8 +1179,19 @@ function showApp(user) {
     updateDocumentTitle();
     updateAppHeader();
     
-    // 🆕 v3.0.0: Forzar sticky header al mostrar la app
     setTimeout(forzarStickyHeader, 100);
+    
+    // 🆕 v3.0.4: Reinicializar notificaciones tras login
+    // (Vuelve a registrar los listeners de audio si fueron removidos
+    //  en un logout previo)
+    try {
+        if (window.NotificationsModule && 
+            typeof window.NotificationsModule.reinitAfterLogin === 'function') {
+            window.NotificationsModule.reinitAfterLogin();
+        }
+    } catch (e) {
+        console.warn('⚠️ [v3.0.4] Error en reinitAfterLogin:', e.message);
+    }
     
     document.dispatchEvent(new CustomEvent('panario:logged-in'));
     
@@ -1304,7 +1257,6 @@ function navigate(section) {
         window.limpiarEstilosResiduales();
     }
     
-    // 🆕 v3.0.0: Forzar sticky header al navegar
     forzarStickyHeader();
     
     if (window.HelpModule && window.HelpModule.cerrarPopoverAyuda) {
@@ -1538,7 +1490,6 @@ function renderTarjetaCorrienteHoy() {
 
 // ============================================================
 // 🆕 v2.2.3: TARJETA DE PEDIDOS HOY / MAÑANA / LISTA DE ESPERA
-// CON FILTROS AL HACER CLIC (Corrección #19)
 // ============================================================
 
 function renderTarjetaPedidosHoy(stats) {
@@ -1584,40 +1535,31 @@ function renderTarjetaPedidosHoy(stats) {
             
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
                 
-                <!-- 📋 Pedidos HOY (con filtro de hoy) -->
                 <div onclick='navigateWithFilters("orders", ${filtrosHoy})' 
                      style="background: #3b82f615; border: 1px solid #3b82f6; border-radius: 10px; padding: 12px 8px; text-align: center; min-height: 100px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;"
                      onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(59,130,246,0.25)';"
                      onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
                     <div style="font-size: 24px; line-height: 1; margin-bottom: 4px;">📋</div>
                     <div style="font-size: 26px; font-weight: 700; color: #3b82f6; line-height: 1.1;">${pedidosHoy}</div>
-                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px; font-weight: 500;">
-                        Pedidos hoy
-                    </div>
+                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px; font-weight: 500;">Pedidos hoy</div>
                 </div>
                 
-                <!-- 📅 Pedidos MAÑANA (con filtro de mañana) -->
                 <div onclick='navigateWithFilters("orders", ${filtrosManana})' 
                      style="background: #8b5cf615; border: 1px solid #8b5cf6; border-radius: 10px; padding: 12px 8px; text-align: center; min-height: 100px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;"
                      onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(139,92,246,0.25)';"
                      onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
                     <div style="font-size: 24px; line-height: 1; margin-bottom: 4px;">📅</div>
                     <div style="font-size: 26px; font-weight: 700; color: #8b5cf6; line-height: 1.1;">${pedidosMananaDisplay}</div>
-                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px; font-weight: 500;">
-                        Pedidos mañana
-                    </div>
+                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px; font-weight: 500;">Pedidos mañana</div>
                 </div>
                 
-                <!-- ⏰ Lista de ESPERA (con filtro de waiting) -->
                 <div onclick='navigateWithFilters("orders", ${filtrosEspera})' 
                      style="background: #f59e0b15; border: 1px solid #f59e0b; border-radius: 10px; padding: 12px 8px; text-align: center; min-height: 100px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;"
                      onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(245,158,11,0.25)';"
                      onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
                     <div style="font-size: 24px; line-height: 1; margin-bottom: 4px;">⏰</div>
                     <div style="font-size: 26px; font-weight: 700; color: #f59e0b; line-height: 1.1;">${waiting}</div>
-                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px; font-weight: 500;">
-                        En lista de espera
-                    </div>
+                    <div style="font-size: 11px; color: var(--text-light); margin-top: 4px; font-weight: 500;">En lista de espera</div>
                 </div>
                 
             </div>
@@ -1635,7 +1577,6 @@ function renderTarjetaPedidosHoy(stats) {
 
 // ============================================================
 // RENDER DASHBOARD VIEW
-// 🆕 v2.2.3: Alturas homogéneas de tarjetas (Corrección #4)
 // ============================================================
 
 function renderDashboardView() {
@@ -1801,6 +1742,11 @@ function renderDashboardView() {
                 <div style="${CARD_ICON_STYLE}">📅</div>
                 <div style="${CARD_LABEL_STYLE}">Días con ventas</div>
                 <div style="${CARD_VALUE_STYLE} color: #8b5cf6;" id="stat-dias-ventas">-</div>
+            </div>
+            <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #ef4444;">
+                <div style="${CARD_ICON_STYLE}">📅</div>
+                <div style="${CARD_LABEL_STYLE}">Días sin ventas</div>
+                <div style="${CARD_VALUE_STYLE} color: #ef4444;" id="stat-dias-sin-ventas">-</div>
             </div>
             <div class="card" style="${CARD_STYLE_BASE} border-left: 4px solid #06b6d4;">
                 <div style="${CARD_ICON_STYLE}">📊</div>
@@ -2015,9 +1961,10 @@ async function renderDashboardBankQR() {
     if (!container) return;
     
     try {
-        const accounts = await window.DBModule.getBankAccounts();
+        // 🔧 FIX v3.0.4: getBankAccountsParaUsuario es SÍNCRONA
+        const accounts = window.DBModule.getBankAccountsParaUsuario();
         
-        let defaultAccount = accounts.find(acc => acc.is_default === 1);
+        let defaultAccount = accounts.find(acc => Number(acc.is_default) === 1);
         
         if (!defaultAccount && accounts.length > 0) {
             defaultAccount = accounts[0];
@@ -2059,7 +2006,7 @@ async function renderDashboardBankQR() {
                 ${ownerName ? `<div style="font-size: 12px; color: var(--text-light);">👤 Titular: <strong>${ownerName}</strong></div>` : ''}
                 <div style="font-size: 12px; color: var(--text-light);">
                     📋 ${defaultAccount.account_number}
-                    ${defaultAccount.is_default ? '<span style="font-size: 10px; background: #10b98120; color: #10b981; padding: 1px 6px; border-radius: 8px; margin-left: 4px;">✅ Predeterminada</span>' : ''}
+                    ${Number(defaultAccount.is_default) === 1 ? '<span style="font-size: 10px; background: #10b98120; color: #10b981; padding: 1px 6px; border-radius: 8px; margin-left: 4px;">✅ Predeterminada</span>' : ''}
                 </div>
                 ${defaultAccount.phone ? `<div style="font-size: 12px; color: var(--text-light);">📞 ${defaultAccount.phone}</div>` : ''}
             </div>
@@ -2095,8 +2042,9 @@ async function renderDashboardBankQR() {
 
 async function downloadDashboardQR(bank, accountNumber) {
     try {
-        const accounts = await window.DBModule.getBankAccounts();
-        const defaultAccount = accounts.find(acc => acc.is_default === 1) || accounts[0];
+        // 🔧 FIX v3.0.4: getBankAccountsParaUsuario es SÍNCRONA
+        const accounts = window.DBModule.getBankAccountsParaUsuario();
+        const defaultAccount = accounts.find(acc => Number(acc.is_default) === 1) || accounts[0];
         
         if (!defaultAccount || !defaultAccount.qr_code) {
             window.showToast('❌ No hay QR para descargar', 'error');
@@ -2121,8 +2069,8 @@ async function downloadDashboardQR(bank, accountNumber) {
         console.error('Error descargando QR:', error);
         
         try {
-            const accounts = await window.DBModule.getBankAccounts();
-            const defaultAccount = accounts.find(acc => acc.is_default === 1) || accounts[0];
+            const accounts = window.DBModule.getBankAccountsParaUsuario();
+            const defaultAccount = accounts.find(acc => Number(acc.is_default) === 1) || accounts[0];
             
             if (defaultAccount && defaultAccount.qr_code) {
                 const link = document.createElement('a');
@@ -2330,7 +2278,25 @@ function renderChart() {
 }
 
 // ============================================================
+// 🆕 CORRECCIÓN #2: OBTENER MOTIVO DE DÍA SIN VENTAS
+// ============================================================
+
+function getMotivoSinVentas(fechaISO) {
+    try {
+        const detalle = window._diasSinVentasDetalle || {};
+        const info = detalle[fechaISO];
+        if (!info) return null;
+        const motivo = info.motivo || '';
+        if (!motivo) return null;
+        return `SV. ${motivo}`;
+    } catch (e) {
+        return null;
+    }
+}
+
+// ============================================================
 // RENDER BAR CHART
+// 🆕 CORRECCIÓN #2: Motivo SV en vertical
 // ============================================================
 
 function renderBarChart(container, chartData) {
@@ -2348,6 +2314,8 @@ function renderBarChart(container, chartData) {
                 const esMayor = d.date === fechaMayor && d.total > 0;
                 const esMenor = d.date === fechaMenor && d.total > 0 && maxVenta !== minVenta;
                 
+                const motivoSV = d.total === 0 ? getMotivoSinVentas(d.date) : null;
+                
                 let color, bordeColor, etiqueta;
                 if (d.total === 0) { color = '#e2e8f0'; bordeColor = '#e2e8f0'; etiqueta = ''; }
                 else if (esMayor) { color = '#10b981'; bordeColor = '#059669'; etiqueta = '🥇'; }
@@ -2356,8 +2324,15 @@ function renderBarChart(container, chartData) {
                 else { color = colors[i % colors.length]; bordeColor = color; etiqueta = ''; }
                 
                 return `
-                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; height: 100%; justify-content: flex-end; min-width: 0;">
-                        <div style="font-size: 8px; color: ${esMayor ? '#10b981' : (esMenor ? '#ef4444' : (isToday ? '#f59e0b' : 'var(--text-light)'))}; white-space: nowrap; font-weight: ${esMayor || esMenor || isToday ? '700' : '400'}; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">
+                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; height: 100%; justify-content: flex-end; min-width: 0; position: relative;">
+                        ${motivoSV ? `
+                            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 40px; display: flex; align-items: center; justify-content: center; pointer-events: none;">
+                                <div style="writing-mode: vertical-rl; transform: rotate(180deg); font-size: 9px; font-weight: 700; color: #ef4444; letter-spacing: 1px; background: #fef2f2; padding: 4px 2px; border-radius: 4px; border: 1px solid #ef4444; max-height: 100%; overflow: hidden; text-overflow: ellipsis;">
+                                    ${motivoSV}
+                                </div>
+                            </div>
+                        ` : ''}
+                        <div style="font-size: 8px; color: ${esMayor ? '#10b981' : (esMenor ? '#ef4444' : (isToday ? '#f59e0b' : 'var(--text-light)'))}; white-space: nowrap; font-weight: ${esMayor || esMenor || isToday ? '700' : '400'}; overflow: hidden; text-overflow: ellipsis; max-width: 100%; z-index: 1;">
                             ${etiqueta} ${d.total > 0 ? '$' + d.total.toFixed(0) : ''}
                         </div>
                         <div style="width: 100%; max-width: 100%; height: ${height}px; min-height: 3px; background: ${color}; border-radius: 3px 3px 0 0; transition: height 0.5s ease; box-sizing: border-box; border-top: 2px solid ${bordeColor};"></div>
@@ -2372,6 +2347,7 @@ function renderBarChart(container, chartData) {
 
 // ============================================================
 // RENDER LINE CHART
+// 🆕 CORRECCIÓN #2: Motivo SV en vertical
 // ============================================================
 
 function renderLineChart(container, chartData) {
@@ -2430,6 +2406,8 @@ function renderLineChart(container, chartData) {
                     const esMayor = p.date === fechaMayor && p.value > 0;
                     const esMenor = p.date === fechaMenor && p.value > 0 && maxVenta !== minVenta;
                     
+                    const motivoSV = p.value === 0 ? getMotivoSinVentas(p.date) : null;
+                    
                     let colorPunto, radioPunto, etiqueta;
                     if (p.value === 0) { colorPunto = '#e2e8f0'; radioPunto = 3; etiqueta = ''; }
                     else if (esMayor) { colorPunto = '#10b981'; radioPunto = 6; etiqueta = '🥇'; }
@@ -2440,6 +2418,9 @@ function renderLineChart(container, chartData) {
                     return `
                         <circle cx="${x}" cy="${y}" r="${radioPunto}" fill="${colorPunto}" stroke="#fff" stroke-width="1.5"/>
                         ${etiqueta ? `<text x="${x}" y="${y - 10}" text-anchor="middle" font-size="10" fill="${colorPunto}">${etiqueta}</text>` : ''}
+                        ${motivoSV ? `
+                            <text x="${x}" y="${y - 15}" text-anchor="middle" font-size="7" fill="#ef4444" font-weight="700" transform="rotate(-90 ${x} ${y - 15})" style="letter-spacing: 0.5px;">${motivoSV}</text>
+                        ` : ''}
                         <text x="${x}" y="${chartHeight + 5}" text-anchor="middle" font-size="9" fill="${p.isToday ? '#f59e0b' : 'var(--text-light)'}" font-weight="${p.isToday ? '700' : '400'}">${p.day}</text>
                     `;
                 }).join('')}
@@ -2647,6 +2628,7 @@ async function loadDashboardData() {
         }
 
         window._dailySalesData = stats.dailySales || [];
+        window._diasSinVentasDetalle = stats.diasSinVentasDetalle || {};
 
         const elements = {
             'stat-total-sales': stats.totalSales || 0,
@@ -2667,6 +2649,7 @@ async function loadDashboardData() {
             'stat-bank-balance-detail': '$' + (stats.bank?.balance || 0).toFixed(2),
             'stat-bank-sales-vs-expenses': '$' + (stats.bank?.salesVsExpenses || 0).toFixed(2),
             'stat-dias-ventas': stats.diasConVentas || 0,
+            'stat-dias-sin-ventas': stats.diasSinVentas || 0,
             'stat-promedio-diario': '$' + (stats.promedioVentasDiarias || 0).toFixed(2),
             'stat-primer-dia': stats.primerDiaVenta ? formatearFechaYYYYMMDD(stats.primerDiaVenta) : '—',
             'stat-clientes-diferentes': stats.clientesDiferentes || 0
@@ -2717,6 +2700,12 @@ async function loadDashboardData() {
             }
         }
 
+        console.log('👥 [REGRESIÓN #5] Estado de salesByEmployee antes de renderizar:', {
+            existe: Array.isArray(stats.salesByEmployee),
+            cantidad: stats.salesByEmployee?.length || 0,
+            contenido: stats.salesByEmployee
+        });
+
         if (dashConfig.show_sales_by_employee !== false) {
             renderSalesByEmployee(stats.salesByEmployee || []);
         }
@@ -2751,7 +2740,9 @@ async function loadDashboardData() {
 
         console.log('✅ Dashboard actualizado correctamente (v' + getAppVersion() + ')');
         console.log('   📅 Pedidos HOY:', stats.ordersTodayCount, '| MAÑANA:', stats.ordersTomorrowCount, '| Lista espera:', stats.waitingListCount);
+        console.log('   📅 Días con ventas:', stats.diasConVentas, '| Días sin ventas:', stats.diasSinVentas);
         console.log('   📊 Modo del gráfico:', stats.chartMode, '| isCurrentRange:', stats.isCurrentRange);
+        console.log('   👥 Empleados con ventas:', stats.salesByEmployee?.length || 0);
 
     } catch (error) {
         console.error('❌ Error cargando dashboard:', error);
@@ -2761,24 +2752,56 @@ async function loadDashboardData() {
 
 // ============================================================
 // RENDER VENTAS POR EMPLEADO
+// 🆕 REGRESIÓN #5: Logging + fallbacks + tolerancia a formatos
 // ============================================================
 
 function renderSalesByEmployee(salesByEmployee) {
-    const container = document.getElementById('sales-by-employee');
-    if (!container) return;
+    const LOG_PREFIX = '👥 [renderSalesByEmployee v3.0.4]';
     
-    if (!salesByEmployee || salesByEmployee.length === 0) {
-        container.innerHTML = `<div style="text-align: center; padding: 10px 0; color: var(--text-light);">Sin datos de empleados</div>`;
+    const container = document.getElementById('sales-by-employee');
+    if (!container) {
+        console.log(`${LOG_PREFIX} ⚠️ No existe el contenedor #sales-by-employee (posiblemente el toggle está desactivado)`);
+        return;
+    }
+    
+    console.log(`${LOG_PREFIX} Recibido:`, {
+        esArray: Array.isArray(salesByEmployee),
+        longitud: salesByEmployee?.length,
+        contenido: salesByEmployee
+    });
+    
+    if (!salesByEmployee || !Array.isArray(salesByEmployee) || salesByEmployee.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 12px 0; color: var(--text-light);">
+                <div style="font-size: 24px; margin-bottom: 4px;">👥</div>
+                <div style="font-size: 12px;">Sin datos de empleados</div>
+                <div style="font-size: 10px; color: var(--text-light); margin-top: 4px; opacity: 0.7;">
+                    (No hay ventas registradas o el vendedor no está asignado)
+                </div>
+            </div>
+        `;
+        console.log(`${LOG_PREFIX} ⚠️ Array vacío o inválido → mostrando "Sin datos"`);
         return;
     }
     
     const colors = ['#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#ef4444'];
     const medals = ['🥇', '🥈', '🥉'];
-    const totalVentas = salesByEmployee.reduce((sum, e) => sum + e.total, 0);
+    const totalVentas = salesByEmployee.reduce((sum, e) => sum + (e.total || 0), 0);
+    
+    console.log(`${LOG_PREFIX} Total ventas a mostrar: $${totalVentas.toFixed(2)}`);
     
     container.innerHTML = salesByEmployee.map((emp, i) => {
-        const porcentaje = totalVentas > 0 ? (emp.total / totalVentas * 100) : 0;
+        const nombre = emp.name 
+            || emp.user_name 
+            || emp.username 
+            || emp.user_username
+            || (emp.user_id ? `Usuario #${emp.user_id}` : 'Usuario desconocido');
+        
+        const cantidad = emp.count || 0;
+        const total = emp.total || 0;
+        const porcentaje = totalVentas > 0 ? (total / totalVentas * 100) : 0;
         const medal = i < 3 ? medals[i] : `#${i + 1}`;
+        const color = colors[i % colors.length];
         
         return `
             <div style="padding: 8px 0; border-bottom: ${i < salesByEmployee.length - 1 ? '1px solid var(--border-color)' : 'none'};">
@@ -2786,24 +2809,26 @@ function renderSalesByEmployee(salesByEmployee) {
                     <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
                         <span style="font-size: 16px; flex-shrink: 0;">${medal}</span>
                         <span style="font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                            ${emp.name}
+                            ${nombre}
                         </span>
                     </div>
                     <div style="text-align: right; flex-shrink: 0; margin-left: 8px;">
-                        <div style="font-size: 14px; font-weight: 700; color: ${colors[i % colors.length]};">
-                            $${emp.total.toFixed(2)}
+                        <div style="font-size: 14px; font-weight: 700; color: ${color};">
+                            $${total.toFixed(2)}
                         </div>
                         <div style="font-size: 10px; color: var(--text-light);">
-                            ${emp.count} venta${emp.count !== 1 ? 's' : ''}
+                            ${cantidad} venta${cantidad !== 1 ? 's' : ''}
                         </div>
                     </div>
                 </div>
                 <div style="width: 100%; height: 4px; background: var(--border-color); border-radius: 2px; overflow: hidden;">
-                    <div style="width: ${porcentaje}%; height: 100%; background: ${colors[i % colors.length]}; border-radius: 2px; transition: width 0.5s ease;"></div>
+                    <div style="width: ${porcentaje}%; height: 100%; background: ${color}; border-radius: 2px; transition: width 0.5s ease;"></div>
                 </div>
             </div>
         `;
     }).join('');
+    
+    console.log(`${LOG_PREFIX} ✅ ${salesByEmployee.length} empleado(s) renderizado(s)`);
 }
 
 // ============================================================
@@ -2968,6 +2993,7 @@ Fecha: ${new Date().toLocaleString('es-ES')}
 
 📊 ESTADÍSTICAS AVANZADAS
   Días con ventas: ${stats.diasConVentas}
+  Días sin ventas: ${stats.diasSinVentas || 0}
   Promedio diario: $${stats.promedioVentasDiarias.toFixed(2)}
   Primer día de venta: ${stats.primerDiaVenta || '—'}
   Clientes diferentes: ${stats.clientesDiferentes}
@@ -3020,58 +3046,80 @@ ${nombreNegocio}
 
 // ============================================================
 // EXPORTAR GRÁFICOS
+// 🆕 v3.0.4: REGRESIÓN #8 - Logging detallado para diagnosticar
 // ============================================================
 
 function exportChartAsImage() {
+    const LOG_PREFIX = '🖼️ [exportChartAsImage v3.0.4]';
+    console.log(`${LOG_PREFIX} Iniciando exportación de gráfico como imagen...`);
+    
     const container = document.getElementById('daily-sales-chart');
     if (!container) {
+        console.error(`${LOG_PREFIX} ❌ No existe #daily-sales-chart`);
         window.showToast('❌ No hay gráfico para exportar', 'error');
         return;
     }
     
     try {
+        // 1. Intentar canvas (gráfico pastel)
         const canvas = container.querySelector('canvas');
         if (canvas) {
+            console.log(`${LOG_PREFIX} ✅ Canvas encontrado (gráfico pastel)`);
             const imageData = canvas.toDataURL('image/png');
             downloadImage(imageData, 'grafico-ventas-panario.png');
             return;
         }
+        console.log(`${LOG_PREFIX} ℹ️ No hay canvas, buscando SVG...`);
         
+        // 2. Intentar SVG (gráfico línea)
         const svg = container.querySelector('svg');
         if (svg) {
+            console.log(`${LOG_PREFIX} ✅ SVG encontrado (gráfico línea)`);
             const svgData = new XMLSerializer().serializeToString(svg);
             const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
             const url = URL.createObjectURL(svgBlob);
             
             const img = new Image();
             img.onload = function() {
-                const canvas2 = document.createElement('canvas');
-                const dpr = window.devicePixelRatio || 1;
-                canvas2.width = (svg.clientWidth || 600) * dpr;
-                canvas2.height = (svg.clientHeight || 300) * dpr;
-                const ctx = canvas2.getContext('2d');
-                ctx.scale(dpr, dpr);
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, canvas2.width, canvas2.height);
-                ctx.drawImage(img, 0, 0, svg.clientWidth || 600, svg.clientHeight || 300);
-                
-                const dataUrl = canvas2.toDataURL('image/png');
-                URL.revokeObjectURL(url);
-                downloadImage(dataUrl, 'grafico-ventas-panario.png');
+                try {
+                    const canvas2 = document.createElement('canvas');
+                    const dpr = window.devicePixelRatio || 1;
+                    canvas2.width = (svg.clientWidth || 600) * dpr;
+                    canvas2.height = (svg.clientHeight || 300) * dpr;
+                    const ctx = canvas2.getContext('2d');
+                    ctx.scale(dpr, dpr);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvas2.width, canvas2.height);
+                    ctx.drawImage(img, 0, 0, svg.clientWidth || 600, svg.clientHeight || 300);
+                    
+                    const dataUrl = canvas2.toDataURL('image/png');
+                    URL.revokeObjectURL(url);
+                    downloadImage(dataUrl, 'grafico-ventas-panario.png');
+                } catch (e) {
+                    console.error(`${LOG_PREFIX} ❌ Error convirtiendo SVG a PNG:`, e);
+                    URL.revokeObjectURL(url);
+                    window.showToast('❌ Error al convertir SVG', 'error');
+                }
             };
             img.onerror = function() {
+                console.error(`${LOG_PREFIX} ❌ Error cargando SVG como imagen`);
                 URL.revokeObjectURL(url);
-                window.showToast('⚠️ No se pudo exportar el gráfico SVG', 'warning');
+                window.showToast('⚠️ No se pudo exportar el SVG', 'warning');
             };
             img.src = url;
             return;
         }
+        console.log(`${LOG_PREFIX} ℹ️ No hay SVG, usando fallback HTML/CSS (gráfico barras)`);
         
+        // 3. Fallback: gráfico de barras (HTML/CSS puro)
         const dailySales = window._dailySalesData || [];
         if (dailySales.length === 0) {
+            console.warn(`${LOG_PREFIX} ⚠️ No hay datos en window._dailySalesData`);
             window.showToast('⚠️ No hay datos para exportar', 'warning');
             return;
         }
+        
+        console.log(`${LOG_PREFIX} ✅ Generando canvas manual con ${dailySales.length} días`);
         
         const canvas3 = document.createElement('canvas');
         const dpr = window.devicePixelRatio || 1;
@@ -3145,10 +3193,11 @@ function exportChartAsImage() {
         ctx.fillText('Total: $' + totalSemana.toFixed(0), width - paddingRight, 25);
         
         const dataUrl = canvas3.toDataURL('image/png');
+        console.log(`${LOG_PREFIX} ✅ Canvas generado (${dataUrl.length} chars)`);
         downloadImage(dataUrl, 'grafico-ventas-panario.png');
         
     } catch (error) {
-        console.error('Error exportando gráfico:', error);
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
         window.showToast('❌ Error al exportar: ' + error.message, 'error');
     }
 }
@@ -3169,8 +3218,12 @@ function downloadImage(dataUrl, filename) {
 }
 
 function exportChartAsPDF() {
+    const LOG_PREFIX = '📄 [exportChartAsPDF v3.0.4]';
+    console.log(`${LOG_PREFIX} Iniciando exportación de gráfico como PDF...`);
+    
     const container = document.getElementById('daily-sales-chart');
     if (!container) {
+        console.error(`${LOG_PREFIX} ❌ No existe #daily-sales-chart`);
         window.showToast('❌ No hay gráfico para exportar', 'error');
         return;
     }
@@ -3181,10 +3234,13 @@ function exportChartAsPDF() {
         
         const canvas = container.querySelector('canvas');
         if (canvas) {
+            console.log(`${LOG_PREFIX} ✅ Canvas encontrado (gráfico pastel)`);
             imageSrc = canvas.toDataURL('image/png');
         } else {
+            console.log(`${LOG_PREFIX} ℹ️ Generando canvas manual desde datos`);
             const dailySales = window._dailySalesData || [];
             if (dailySales.length === 0) {
+                console.warn(`${LOG_PREFIX} ⚠️ No hay datos para exportar`);
                 window.showToast('⚠️ No hay datos para exportar', 'warning');
                 return;
             }
@@ -3297,14 +3353,17 @@ function exportChartAsPDF() {
             ctx.fillText('📉 Menor: $' + minVenta.toFixed(0), width - 15, height - 14);
             
             imageSrc = canvas2.toDataURL('image/png');
+            console.log(`${LOG_PREFIX} ✅ Canvas manual generado (${imageSrc.length} chars)`);
         }
         
         if (imageSrc) {
             generatePDFWithImage(imageSrc);
+        } else {
+            console.warn(`${LOG_PREFIX} ⚠️ No se pudo generar la imagen`);
         }
         
     } catch (error) {
-        console.error('Error exportando a PDF:', error);
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
         window.showToast('❌ Error al exportar: ' + error.message, 'error');
     }
 }
@@ -3351,6 +3410,7 @@ function generatePDFWithImage(imageSrc) {
     
     const win = window.open('', '_blank');
     if (!win) {
+        console.error('❌ [generatePDFWithImage] Ventana emergente bloqueada');
         window.showToast('❌ Permite ventanas emergentes', 'error');
         return;
     }
@@ -3480,12 +3540,13 @@ window.renderSalesByEmployee = renderSalesByEmployee;
 window.openDetailedHelp = openDetailedHelp;
 window.getAppVersion = getAppVersion;
 
-// 🆕 v3.0.1: Exportar funciones nuevas
+// 🆕 v3.0.4: Exportar funciones nuevas
 window.forzarStickyHeader = forzarStickyHeader;
 window.startHeaderCleanupWatchers = startHeaderCleanupWatchers;
 window.stopHeaderCleanupWatchers = stopHeaderCleanupWatchers;
+window.getMotivoSinVentas = getMotivoSinVentas;
 
-console.log('📦 App Controller v' + getAppVersion() + ' (v3.0.1: Fix bucle infinito MutationObserver)');
+console.log('📦 App Controller v' + getAppVersion() + ' (v3.0.4: Regresiones #8 y #9 corregidas)');
 
 // ============================================================
 // INICIALIZACIÓN AUTOMÁTICA

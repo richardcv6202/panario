@@ -1,24 +1,16 @@
 // ============================================================
 // 📦 UI SETTINGS - Panario (Configuración y Herramientas)
-// v2.3.3 (260926): 🎯 CORRECCIÓN #16 (240926) - PERMISOS BANCARIOS
-//   - ✅ NUEVA SECCIÓN "Configuración Bancaria" (solo admin) en
-//     renderSettingsView().
-//   - ✅ NUEVAS FUNCIONES:
-//     * showConfigBancariaModal() - abre el modal de configuración
-//     * renderConfigBancariaContent() - renderiza los toggles
-//     * toggleConfigBancaria() - guarda los cambios
-//   - ✅ Dos interruptores:
-//     * permitir_ver_qr_otros: no-admin puede ver QRs de otros
-//     * permitir_cambiar_default: no-admin puede cambiar su default
+// v2.3.5 (260926): 🎯 REFINAMIENTO #16 - TERCER TOGGLE (forzar_qr_admin)
+//   - ✅ NUEVO TOGGLE en el modal de configuración bancaria:
+//     * 🔒 Solo usar y mostrar el QR definido por defecto por el administrador
+//   - ✅ El modal ahora tiene 3 toggles en lugar de 2.
+//   - ✅ toggleConfigBancaria() maneja los 3 toggles.
+//   - ✅ renderConfigBancariaContent() muestra los 3 toggles + combinaciones.
+//   - ✅ Añadido Test #11 en el diagnóstico: columna forzar_qr_admin.
 //   - ✅ Mantiene TODAS las correcciones anteriores:
-//     * CORRECCIÓN #2, #3, #4 (250926)
-//     * CORRECCIÓN #8, #10, #11, #12, #14, #18 (240926)
-// v2.3.2 (250926): 🎯 CORRECCIONES #2, #3, #4 (250926)
-//   - ✅ CORRECCIÓN #2 (250926): Link a créditos en Información
-//   - ✅ CORRECCIÓN #3 (250926): Modal de progreso + contraseña en
-//     "Limpiar datos eliminados"
-//   - ✅ CORRECCIÓN #4 (250926): Modal de progreso en export/import
-//     de recetas y productos (salva diferencial)
+//     * #16 (240926): Permisos bancarios (2 toggles)
+//     * #2, #3, #4 (250926): Link créditos, modal progreso, salva con progreso
+//     * #8, #10, #11, #12, #14, #18 (240926)
 // ============================================================
 
 // ============================================================
@@ -34,7 +26,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.3.3';
+    return '2.3.5';
 }
 
 window.getAppVersion = getAppVersion;
@@ -344,7 +336,7 @@ window._formatearMensajeBloque = _formatearMensajeBloque;
 // ============================================================
 
 function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
-    const LOG_PREFIX = '🧠 [calcularBloquesIdeales v2.3.3]';
+    const LOG_PREFIX = '🧠 [calcularBloquesIdeales v2.3.5]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -460,7 +452,7 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
                 horaInicioStr: candidato.horaInicioStr,
                 horaFinStr: candidato.horaFinStr,
                 horaInicioStr24: candidato.horaInicioStr24,
-                horaFinStr24: candidato.horaFinStr24,
+                horaFinStr24: candidato.finStr24,
                 duracionHoras: candidato.duracionHoras,
                 cantidad: cantidad,
                 esBloqueAyer: candidato.esBloqueAyer,
@@ -607,6 +599,20 @@ async function runProductionDiagnostics() {
         results.push({ name: '10. Tablas bancarias (C#16)', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
     }
     
+    // 🆕 REFINAMIENTO #16: Test de columna forzar_qr_admin
+    try {
+        const db = window.DBModule.getDB();
+        const pragma = db.exec('PRAGMA table_info(config_bancaria_negocio)');
+        const cols = pragma[0]?.values?.map(row => row[1]) || [];
+        if (cols.includes('forzar_qr_admin')) {
+            results.push({ name: '11. Columna forzar_qr_admin (R#16)', status: 'ok', message: 'OK', detail: '' });
+        } else {
+            results.push({ name: '11. Columna forzar_qr_admin (R#16)', status: 'error', message: 'Falta columna', detail: '' });
+        }
+    } catch (e) {
+        results.push({ name: '11. Columna forzar_qr_admin (R#16)', status: 'error', message: 'Excepción: ' + e.message, detail: '' });
+    }
+    
     const okCount = results.filter(r => r.status === 'ok').length;
     const warnCount = results.filter(r => r.status === 'warning').length;
     const errorCount = results.filter(r => r.status === 'error').length;
@@ -729,17 +735,19 @@ window.renderDiagnosticResults = renderDiagnosticResults;
 window.rerunDiagnostics = rerunDiagnostics;
 
 // ============================================================
-// 🆕 CORRECCIÓN #16: CONFIGURACIÓN BANCARIA (SOLO ADMIN)
+// 🆕 CORRECCIÓN #16 + REFINAMIENTO #16: CONFIGURACIÓN BANCARIA
 // ============================================================
 // 
 // Esta sección permite al admin controlar:
 //   1. permitir_ver_qr_otros: si los no-admin pueden ver QRs de otros.
 //   2. permitir_cambiar_default: si los no-admin pueden cambiar su
 //      cuenta por defecto individual.
+//   3. forzar_qr_admin: si el Dashboard SIEMPRE muestra la cuenta del
+//      admin (ignorando la cuenta individual del usuario).
 // ============================================================
 
 /**
- * 🆕 CORRECCIÓN #16: Abre el modal de configuración bancaria.
+ * 🆕 CORRECCIÓN #16 + REFINAMIENTO #16: Abre el modal de configuración bancaria.
  * Solo accesible para admins.
  */
 async function showConfigBancariaModal() {
@@ -770,7 +778,8 @@ async function showConfigBancariaModal() {
 }
 
 /**
- * 🆕 CORRECCIÓN #16: Renderiza el contenido del modal de config bancaria.
+ * 🆕 CORRECCIÓN #16 + REFINAMIENTO #16: Renderiza el contenido del modal.
+ * Ahora muestra 3 toggles en lugar de 2.
  */
 async function renderConfigBancariaContent() {
     const modal = document.getElementById('config-bancaria-modal');
@@ -781,7 +790,6 @@ async function renderConfigBancariaContent() {
         const negocioId = window.DBModule.getNegocioIdActual();
         const negocio = window.DBModule.getNegocio(negocioId);
         
-        // Contar cuántos usuarios hay y cuántas cuentas bancarias
         const usuarios = window.AuthModule.getUsuariosDelNegocio();
         const cuentasBancarias = window.DBModule.query(
             'SELECT COUNT(*) as n FROM bank_accounts WHERE negocio_id = ? AND deleted_at IS NULL',
@@ -790,7 +798,7 @@ async function renderConfigBancariaContent() {
         const totalCuentas = cuentasBancarias[0]?.n || 0;
         
         modal.innerHTML = `
-            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 560px; width: 100%; max-height: 92vh; overflow-y: auto; border: 2px solid #3b82f6;">
+            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 620px; width: 100%; max-height: 92vh; overflow-y: auto; border: 2px solid #3b82f6;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #3b82f6;">
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <span style="font-size: 28px;">🔐</span>
@@ -869,14 +877,49 @@ async function renderConfigBancariaContent() {
                         </div>
                     </div>
                     
+                    <!-- 🆕 REFINAMIENTO #16: Toggle 3: forzar_qr_admin -->
+                    <div style="background: ${config.forzar_qr_admin ? '#8b5cf615' : 'var(--bg)'}; padding: 14px 16px; border-radius: 10px; border: 2px solid ${config.forzar_qr_admin ? '#8b5cf6' : 'var(--border-color)'};">
+                        <div style="display: flex; align-items: flex-start; gap: 12px;">
+                            <span style="font-size: 24px; flex-shrink: 0;">🔒</span>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 14px; font-weight: 600; color: ${config.forzar_qr_admin ? '#8b5cf6' : 'var(--text)'};">Solo usar y mostrar el QR definido por el administrador</div>
+                                <div style="font-size: 11px; color: var(--text-light); margin-top: 4px; line-height: 1.4;">
+                                    Si está <strong>activado</strong>, TODOS los usuarios verán en el Dashboard <strong>únicamente el QR del administrador</strong>, ignorando su cuenta por defecto individual.
+                                    <br>Si está <strong>desactivado</strong>, cada usuario puede tener su propio QR en el Dashboard (si se le permite cambiar default).
+                                </div>
+                                ${config.forzar_qr_admin ? `
+                                    <div style="margin-top: 6px; padding: 6px 10px; background: #8b5cf620; border-left: 3px solid #8b5cf6; border-radius: 4px; font-size: 11px; color: #8b5cf6; font-weight: 600;">
+                                        ⚠️ Al activar esto, la opción "Permitir cambiar cuenta por defecto" queda sin efecto.
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <label style="position: relative; display: inline-block; width: 50px; height: 26px; cursor: pointer; flex-shrink: 0; margin-top: 2px;">
+                                <input type="checkbox" 
+                                       ${config.forzar_qr_admin ? 'checked' : ''}
+                                       onchange="toggleConfigBancaria('forzar_qr_admin', this.checked)"
+                                       style="opacity: 0; width: 0; height: 0;">
+                                <span class="config-bancaria-slider" 
+                                      style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+                                             background-color: ${config.forzar_qr_admin ? '#8b5cf6' : '#94a3b8'}; 
+                                             border-radius: 26px; transition: 0.3s;">
+                                    <span style="position: absolute; height: 18px; width: 18px; 
+                                                 left: ${config.forzar_qr_admin ? '28px' : '4px'}; bottom: 4px; 
+                                                 background-color: white; border-radius: 50%; transition: 0.3s; 
+                                                 box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                    
                 </div>
                 
                 <div style="background: #fef9e7; border-left: 3px solid #f59e0b; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 12px; color: #92400e;">
-                    💡 <strong>Combinaciones:</strong>
-                    <br>• Ambas ON: usuarios ven todas y eligen su default
-                    <br>• Solo ver ON: usuarios ven todas pero no cambian default
-                    <br>• Solo default ON: usuarios ven solo las suyas pero eligen default
-                    <br>• Ambas OFF: usuarios ven solo las suyas y el admin designa default global
+                    💡 <strong>Combinaciones y efectos:</strong>
+                    <br>• <strong>Ambas primeras ON:</strong> usuarios ven todas + eligen su default
+                    <br>• <strong>Solo ver ON:</strong> usuarios ven todas pero no cambian default
+                    <br>• <strong>Solo default ON:</strong> usuarios ven solo las suyas pero eligen default
+                    <br>• <strong>Ambas primeras OFF:</strong> usuarios ven solo las suyas y el admin designa default global
+                    <br>• <strong>🔒 Forzar QR del admin ON:</strong> <strong>TODOS</strong> ven el QR del admin en el Dashboard (anula las demás)
                 </div>
                 
                 <div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border-color);">
@@ -901,9 +944,9 @@ async function renderConfigBancariaContent() {
 }
 
 /**
- * 🆕 CORRECCIÓN #16: Guarda un cambio en la configuración bancaria.
+ * 🆕 CORRECCIÓN #16 + REFINAMIENTO #16: Guarda un cambio en la configuración bancaria.
  * 
- * @param {string} key - 'permitir_ver_qr_otros' | 'permitir_cambiar_default'
+ * @param {string} key - 'permitir_ver_qr_otros' | 'permitir_cambiar_default' | 'forzar_qr_admin'
  * @param {boolean} value - Nuevo valor
  */
 async function toggleConfigBancaria(key, value) {
@@ -928,7 +971,8 @@ async function toggleConfigBancaria(key, value) {
                 const slider = event.target.nextElementSibling;
                 const innerCircle = slider?.querySelector('span');
                 if (slider && innerCircle) {
-                    slider.style.backgroundColor = value ? '#10b981' : '#94a3b8';
+                    const isForzarQR = key === 'forzar_qr_admin';
+                    slider.style.backgroundColor = value ? (isForzarQR ? '#8b5cf6' : '#10b981') : '#94a3b8';
                     innerCircle.style.left = value ? '28px' : '4px';
                 }
             }
@@ -936,11 +980,17 @@ async function toggleConfigBancaria(key, value) {
             const label = value ? '✅ Activado' : '🚫 Desactivado';
             const nombre = key === 'permitir_ver_qr_otros' 
                 ? 'Ver QRs de otros' 
-                : 'Cambiar cuenta por defecto';
+                : (key === 'permitir_cambiar_default' ? 'Cambiar cuenta por defecto' : 'Forzar QR del admin');
             
             window.showToast(`${label}: ${nombre}`, 'success', 2500);
             
             console.log(`🔐 [toggleConfigBancaria] ${key}=${value} guardado correctamente`);
+            
+            // 🆕 REFINAMIENTO #16: Si activamos forzar_qr_admin, re-renderizar el modal
+            // para mostrar la advertencia visual
+            if (key === 'forzar_qr_admin') {
+                setTimeout(() => renderConfigBancariaContent(), 300);
+            }
         } else {
             window.showToast('❌ Error al guardar: ' + result.error, 'error', 4000);
             
@@ -5148,7 +5198,6 @@ window.executeDeleteSelected = executeDeleteSelected;
 
 // ============================================================
 // RENDER SETTINGS VIEW - COMPLETA
-// 🆕 CORRECCIÓN #16: Nueva sección "Configuración Bancaria"
 // ============================================================
 
 function renderSettingsView() {
@@ -5205,13 +5254,13 @@ function renderSettingsView() {
             </button>
         </div>
         
-        <!-- 🆕 CORRECCIÓN #16: NUEVA SECCIÓN CONFIGURACIÓN BANCARIA -->
         <div class="card" style="border-left: 4px solid #3b82f6; border: 2px solid #3b82f6;">
             <h3 style="margin: 0 0 8px 0; color: #3b82f6;">🔐 Configuración Bancaria</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
                 Controla los permisos de los usuarios no-admin sobre las cuentas bancarias del negocio:
                 <br>• <strong>Ver QRs de otros:</strong> si los usuarios pueden ver las cuentas ajenas (solo lectura).
                 <br>• <strong>Cambiar cuenta por defecto:</strong> si los usuarios pueden elegir su cuenta por defecto individual.
+                <br>• <strong>🔒 Forzar QR del admin:</strong> si TODOS deben usar únicamente el QR que tú definas.
             </p>
             <button onclick="showConfigBancariaModal()" class="btn primary" style="padding: 10px 16px; font-size: 14px; width: auto; background: #3b82f6; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                 🔐 Configurar permisos bancarios
@@ -5473,7 +5522,6 @@ window.closeReprogramarModal = closeReprogramarModal;
 window.actualizarPreviewReprogramacion = actualizarPreviewReprogramacion;
 window.executeReprogramarPedidos = executeReprogramarPedidos;
 
-// 🆕 CORRECCIÓN #8 (240926): Backups - reescritura completa
 window.exportDatabaseCompleteAction = exportDatabaseCompleteAction;
 window.exportDatabaseDataOnlyAction = exportDatabaseDataOnlyAction;
 window.importDatabaseSmartAction = importDatabaseSmartAction;
@@ -5495,13 +5543,11 @@ window.closeChangePasswordModal = closeChangePasswordModal;
 window.handleToggleAdmin = handleToggleAdmin;
 window.handleDeleteUser = handleDeleteUser;
 
-// 🆕 CORRECCIÓN #4 (250926): Salva diferencial con progreso
 window.exportSalvaRecetasProductos = exportSalvaRecetasProductos;
 window.importSalvaRecetasProductos = importSalvaRecetasProductos;
 
 window.clearLastUserAction = clearLastUserAction;
 
-// 🆕 CORRECCIÓN #3 (250926): Limpiar datos con contraseña + progreso
 window.cleanDeletedData = cleanDeletedData;
 
 window.resetDatabaseWithPassword = resetDatabaseWithPassword;
@@ -5533,18 +5579,21 @@ window._formatearMensajeBloque = _formatearMensajeBloque;
 window.getProductoDeProduccionUI = getProductoDeProduccionUI;
 window.getProduccionConProductoUI = getProduccionConProductoUI;
 
-// 🆕 CORRECCIÓN #16: Configuración bancaria
+// 🆕 CORRECCIÓN #16 + REFINAMIENTO #16: Configuración bancaria (3 toggles)
 window.showConfigBancariaModal = showConfigBancariaModal;
 window.renderConfigBancariaContent = renderConfigBancariaContent;
 window.toggleConfigBancaria = toggleConfigBancaria;
 window.closeConfigBancariaModal = closeConfigBancariaModal;
 
-console.log('📦 UI Settings Module cargado correctamente v2.3.3');
-console.log('   🆕 CORRECCIÓN #16 (240926) aplicada:');
-console.log('      ✅ Nueva sección "🔐 Configuración Bancaria" en Herramientas (solo admin)');
-console.log('      ✅ Modal showConfigBancariaModal() con 2 interruptores');
-console.log('      ✅ toggleConfigBancaria() para guardar cambios');
-console.log('      ✅ Test #10 en diagnóstico: verifica tablas bancarias');
+console.log('📦 UI Settings Module cargado correctamente v2.3.5');
+console.log('   🆕 REFINAMIENTO #16 (240926) aplicado:');
+console.log('      ✅ Modal de configuración bancaria con 3 toggles:');
+console.log('         1. 👁️ Permitir a usuarios ver QRs de otros');
+console.log('         2. ⭐ Permitir a usuarios cambiar su cuenta por defecto');
+console.log('         3. 🔒 Solo usar y mostrar el QR del administrador');
+console.log('      ✅ toggleConfigBancaria() maneja los 3 toggles');
+console.log('      ✅ Test #11 en el diagnóstico: columna forzar_qr_admin');
 console.log('   🔄 Correcciones anteriores mantenidas:');
-console.log('      • #2, #3, #4 (250926): Link créditos, modal progreso, salva con progreso');
+console.log('      • #16 (240926): Permisos bancarios');
+console.log('      • #2, #3, #4 (250926): Link créditos, modal progreso, salva');
 console.log('      • #8, #10, #11, #12, #14, #18 (240926)');

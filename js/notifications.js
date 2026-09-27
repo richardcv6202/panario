@@ -22,28 +22,26 @@
 //   - ✅ SOLUCIÓN: Los listeners se registran INMEDIATAMENTE al
 //     cargar el módulo (al final del archivo), NO cuando el usuario
 //     hace login.
-//   - ✅ Eventos ampliados: click, touchstart, touchend, keydown,
-//     pointerdown, mousedown
-//   - ✅ Reintentos automáticos: hasta MAX_UNLOCK_ATTEMPTS veces
-//   - ✅ Sistema de "pending unlock": si el unlock falla, se reintenta
-//     en el siguiente gesto sin intervención del usuario
-//   - ✅ Detección temprana: se intenta unlock tan pronto como el
-//     DOM esté listo (sin esperar gesto) — algunos navegadores lo
-//     permiten si el usuario ya interactuó con el sitio antes
-//   - ✅ Logs de diagnóstico claros en consola
-//   - ✅ Compatibilidad con iOS Safari (usa webkitAudioContext)
-//   - ✅ El sonido funciona INCLUSO si el usuario no ha hecho login
-//     todavía (por ejemplo, en la pantalla de login)
 // 🆕 v2.3.4 (260926): 🎯 CORRECCIÓN #17 (240926) - CONFIGURACIONES INDIVIDUALES
-//   - ✅ getSoundConfig() ahora lee de la BD (por user_id) en lugar
-//     de localStorage.
-//   - ✅ setSoundConfig() ahora guarda en la BD (por user_id) en
-//     lugar de localStorage.
-//   - ✅ Fallback a localStorage si no hay usuario actual (ej: en la
-//     pantalla de login).
-//   - ✅ Mantiene compatibilidad total: si el usuario no está
-//     logueado, se usa localStorage; si está logueado, se usa la BD.
-//   - ✅ Cada usuario tiene su propia configuración de sonido.
+//   - ✅ getSoundConfig() ahora lee de la BD (por user_id)
+//   - ✅ setSoundConfig() ahora guarda en la BD (por user_id)
+//   - ✅ Fallback a localStorage si no hay usuario actual
+// 🆕 v2.3.5 (260926): 🎯 REGRESIÓN #9 (260926) - LIMPIEZA AL LOGOUT
+//   - ✅ NUEVA función cleanupNotificationsResources():
+//     * Cierra el AudioContext si existe (evita contexto zombie).
+//     * Resetea el flag _audioUnlocked.
+//     * Resetea los contadores de intentos.
+//     * Remueve todos los listeners de desbloqueo de audio
+//       (evita duplicados al volver a iniciar sesión).
+//     * Limpia la lista de notificaciones en memoria (NO en localStorage,
+//       para que el próximo usuario no las vea).
+//   - ✅ NUEVO flag _audioUnlockListenersAttached para evitar
+//     registrar listeners duplicados.
+//   - ✅ NUEVA función reinitAfterLogin() que se llama tras un login
+//     exitoso para volver a registrar los listeners de audio si
+//     es necesario.
+//   - ✅ handleLogout() en app.js llama a cleanupNotificationsResources()
+//     antes de recargar la página.
 // ============================================================
 
 window.NotificationsModule = {};
@@ -97,6 +95,10 @@ let _audioUnlocked = false;
 let _audioUnlockAttempts = 0;
 let _audioUnlockPending = false;
 const MAX_UNLOCK_ATTEMPTS = 10;
+
+// 🆕 v2.3.5: Flag para evitar listeners duplicados
+let _audioUnlockListenersAttached = false;
+let _audioUnlockHandlerRef = null;
 
 function getAudioContext() {
     if (_audioContext) return _audioContext;
@@ -180,6 +182,12 @@ async function unlockAudio(source = 'unknown') {
 }
 
 function setupAudioUnlockListeners() {
+    // 🆕 v2.3.5: Evitar listeners duplicados
+    if (_audioUnlockListenersAttached && _audioUnlockHandlerRef) {
+        console.log('🔊 Listeners de unlock ya estaban registrados, se omite');
+        return;
+    }
+    
     const events = ['click', 'touchstart', 'touchend', 'keydown', 'pointerdown', 'mousedown'];
     
     let attemptsCount = 0;
@@ -192,6 +200,8 @@ function setupAudioUnlockListeners() {
             events.forEach(evt => {
                 document.removeEventListener(evt, unlockHandler, true);
             });
+            _audioUnlockListenersAttached = false;
+            _audioUnlockHandlerRef = null;
             console.log('🔊 Listeners de unlock removidos (demasiados gestos sin éxito)');
             return;
         }
@@ -202,6 +212,8 @@ function setupAudioUnlockListeners() {
             events.forEach(evt => {
                 document.removeEventListener(evt, unlockHandler, true);
             });
+            _audioUnlockListenersAttached = false;
+            _audioUnlockHandlerRef = null;
             console.log('🔊 Listeners de unlock removidos (éxito)');
         }
     };
@@ -209,6 +221,9 @@ function setupAudioUnlockListeners() {
     events.forEach(evt => {
         document.addEventListener(evt, unlockHandler, true);
     });
+    
+    _audioUnlockHandlerRef = unlockHandler;
+    _audioUnlockListenersAttached = true;
     
     console.log('🔊 Listeners de desbloqueo de audio registrados (FASE 1.5)');
     console.log(`   📋 Eventos: ${events.join(', ')}`);
@@ -235,6 +250,139 @@ if (document.readyState === 'loading') {
 } else {
     setupAudioUnlockListeners();
 }
+
+// ============================================================
+// 🆕 v2.3.5: LIMPIEZA DE RECURSOS AL LOGOUT (REGRESIÓN #9)
+// ============================================================
+// 
+// Llamada desde app.js → handleLogout() antes de recargar la página.
+// 
+// OBJETIVO:
+//   1. Cerrar el AudioContext para evitar "contextos zombie".
+//   2. Remover los listeners de desbloqueo de audio (evita duplicados
+//      al volver a iniciar sesión).
+//   3. Resetear flags de estado.
+//   4. Limpiar la lista de notificaciones en memoria (NO en localStorage,
+//      porque el próximo usuario podría querer ver el historial global
+//      o no; se puede cambiar el comportamiento si es necesario).
+// ============================================================
+
+function cleanupNotificationsResources() {
+    const LOG_PREFIX = '🧹 [cleanupNotificationsResources v2.3.5]';
+    console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+    
+    try {
+        // 1. Remover listeners de desbloqueo de audio
+        if (_audioUnlockListenersAttached && _audioUnlockHandlerRef) {
+            const events = ['click', 'touchstart', 'touchend', 'keydown', 'pointerdown', 'mousedown'];
+            events.forEach(evt => {
+                try {
+                    document.removeEventListener(evt, _audioUnlockHandlerRef, true);
+                } catch (e) {}
+            });
+            _audioUnlockListenersAttached = false;
+            _audioUnlockHandlerRef = null;
+            console.log(`${LOG_PREFIX} ✅ Listeners de audio removidos`);
+        } else {
+            console.log(`${LOG_PREFIX} ℹ️ No había listeners de audio registrados`);
+        }
+        
+        // 2. Cerrar AudioContext
+        if (_audioContext) {
+            try {
+                const state = _audioContext.state;
+                if (state !== 'closed') {
+                    _audioContext.close().then(() => {
+                        console.log(`${LOG_PREFIX} ✅ AudioContext cerrado (estado previo: ${state})`);
+                    }).catch((e) => {
+                        console.warn(`${LOG_PREFIX} ⚠️ Error cerrando AudioContext:`, e.message);
+                    });
+                } else {
+                    console.log(`${LOG_PREFIX} ℹ️ AudioContext ya estaba cerrado`);
+                }
+            } catch (e) {
+                console.warn(`${LOG_PREFIX} ⚠️ Error cerrando AudioContext:`, e.message);
+            }
+            _audioContext = null;
+        } else {
+            console.log(`${LOG_PREFIX} ℹ️ No había AudioContext activo`);
+        }
+        
+        // 3. Resetear flags
+        _audioUnlocked = false;
+        _audioUnlockAttempts = 0;
+        _audioUnlockPending = false;
+        
+        // 4. Abortar cualquier prueba de sonidos en curso
+        if (_testAllSoundsOverlay) {
+            try {
+                _testAllSoundsAbort = true;
+                _removeTestAllSoundsOverlay();
+                console.log(`${LOG_PREFIX} ✅ Prueba de sonidos abortada`);
+            } catch (e) {}
+        }
+        
+        // 5. Limpiar timers de notificaciones
+        try {
+            Object.values(notificationTimers).forEach(timerId => {
+                clearTimeout(timerId);
+            });
+            notificationTimers = {};
+            console.log(`${LOG_PREFIX} ✅ Timers de notificaciones limpiados`);
+        } catch (e) {}
+        
+        // 6. Limpiar contenedor de toasts en el DOM
+        try {
+            const container = document.getElementById('notification-container');
+            if (container) {
+                container.innerHTML = '';
+                console.log(`${LOG_PREFIX} ✅ Contenedor de toasts limpiado`);
+            }
+        } catch (e) {}
+        
+        // 7. Resetear flag de procesamiento
+        isProcessingNotification = false;
+        
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+        return true;
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return false;
+    }
+}
+
+/**
+ * 🆕 v2.3.5: Reinicializa los recursos de audio después de un login.
+ * 
+ * Llamada desde app.js → showApp() después de un login exitoso.
+ * 
+ * OBJETIVO:
+ *   Volver a registrar los listeners de desbloqueo de audio
+ *   que fueron removidos al cerrar sesión.
+ */
+function reinitAfterLogin() {
+    const LOG_PREFIX = '🔊 [reinitAfterLogin v2.3.5]';
+    console.log(`${LOG_PREFIX} Reinicializando recursos de audio tras login...`);
+    
+    try {
+        // Solo registrar si no están registrados
+        if (!_audioUnlockListenersAttached) {
+            setupAudioUnlockListeners();
+            console.log(`${LOG_PREFIX} ✅ Listeners de audio vueltos a registrar`);
+        } else {
+            console.log(`${LOG_PREFIX} ℹ️ Listeners ya estaban registrados`);
+        }
+        
+        return true;
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return false;
+    }
+}
+
+window.cleanupNotificationsResources = cleanupNotificationsResources;
+window.reinitAfterLogin = reinitAfterLogin;
 
 // ============================================================
 // INICIALIZAR SISTEMA DE NOTIFICACIONES
@@ -298,24 +446,9 @@ function initNotificationSystem() {
 // ============================================================
 // 🆕 CORRECCIÓN #17: CONFIGURACIÓN DE SONIDO (INDIVIDUAL)
 // ============================================================
-// 
-// ANTES: Se guardaba en localStorage (GLOBAL, compartido).
-// AHORA: Se guarda en la BD con user_id (INDIVIDUAL por usuario).
-//
-// FALLBACK: Si no hay usuario logueado (ej: pantalla de login),
-// se sigue usando localStorage para no romper nada.
-// ============================================================
 
-/**
- * 🆕 CORRECCIÓN #17: Obtiene la configuración de sonido del usuario actual.
- * 
- * Prioridad:
- *   1. Si hay usuario logueado → leer de la BD.
- *   2. Si no hay usuario → leer de localStorage (fallback).
- */
 function getSoundConfig() {
     try {
-        // 🆕 CORRECCIÓN #17: Intentar leer de la BD primero
         const user = window.AuthModule?.getCurrentUser();
         if (user && user.id && window.DBModule && typeof window.DBModule.getUserSoundConfig === 'function') {
             const dbConfig = window.DBModule.getUserSoundConfig(user.id);
@@ -324,7 +457,6 @@ function getSoundConfig() {
             }
         }
         
-        // Fallback: localStorage (para pantalla de login)
         const saved = localStorage.getItem(SOUND_CONFIG_KEY);
         if (saved) {
             return { ...DEFAULT_SOUND_CONFIG, ...JSON.parse(saved) };
@@ -335,21 +467,10 @@ function getSoundConfig() {
     return { ...DEFAULT_SOUND_CONFIG };
 }
 
-/**
- * 🆕 CORRECCIÓN #17: Guarda la configuración de sonido del usuario actual.
- * 
- * Prioridad:
- *   1. Si hay usuario logueado → guardar en la BD.
- *   2. Si no hay usuario → guardar en localStorage (fallback).
- * 
- * IMPORTANTE: Siempre guarda también en localStorage como caché,
- * para que el próximo login lea rápido sin consultar la BD.
- */
 function setSoundConfig(config) {
     try {
         const merged = { ...DEFAULT_SOUND_CONFIG, ...config };
         
-        // 🆕 CORRECCIÓN #17: Guardar en la BD si hay usuario logueado
         const user = window.AuthModule?.getCurrentUser();
         if (user && user.id && window.DBModule && typeof window.DBModule.updateUserSoundConfig === 'function') {
             const result = window.DBModule.updateUserSoundConfig(user.id, merged);
@@ -360,7 +481,6 @@ function setSoundConfig(config) {
             }
         }
         
-        // Guardar SIEMPRE en localStorage como caché/fallback
         localStorage.setItem(SOUND_CONFIG_KEY, JSON.stringify(merged));
         
         return { success: true, config: merged };
@@ -1297,7 +1417,10 @@ window.NotificationsModule = {
     // 🆕 FASE 1.5
     unlockAudio,
     getAudioContext,
-    setupAudioUnlockListeners
+    setupAudioUnlockListeners,
+    // 🆕 v2.3.5: Limpieza y reinicialización
+    cleanupNotificationsResources,
+    reinitAfterLogin
 };
 
 window.showToast = function(message, type = 'info', duration = 8000) {
@@ -1306,10 +1429,13 @@ window.showToast = function(message, type = 'info', duration = 8000) {
 
 window.testAllSounds = testAllSounds;
 window.abortTestAllSounds = abortTestAllSounds;
+window.cleanupNotificationsResources = cleanupNotificationsResources;
+window.reinitAfterLogin = reinitAfterLogin;
 
-console.log('📦 Notifications Module v2.3.4 (CORRECCIÓN #17: sonido individual por usuario)');
+console.log('📦 Notifications Module v2.3.5 (REGRESIÓN #9 CORREGIDA)');
 console.log('   🔊 AudioContext singleton listo');
-console.log('   🎯 Listeners de unlock registrados al cargar el módulo');
-console.log('   🆕 getSoundConfig() ahora lee de la BD (user_id)');
-console.log('   🆕 setSoundConfig() ahora guarda en la BD (user_id)');
-console.log('   🔄 Fallback a localStorage si no hay usuario logueado');
+console.log('   🎯 Listeners de unlock con flag anti-duplicados');
+console.log('   🆕 cleanupNotificationsResources() disponible');
+console.log('   🆕 reinitAfterLogin() disponible');
+console.log('   ✅ getSoundConfig() lee de la BD (user_id)');
+console.log('   ✅ setSoundConfig() guarda en la BD (user_id)');

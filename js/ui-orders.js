@@ -1,54 +1,14 @@
 // ============================================================
 // 📦 UI ORDERS - Panario (Interfaz de Pedidos completa)
-// Con: Reserva por período, lista de espera, filtros mejorados,
-// corriente, sesión y reporte parametrizable
-// CORREGIDO: Eliminado botón de Deudas (solo en Ventas)
-// CORREGIDO FASE 2 (160926): Añadido botón "No, cancelar" en el
-//   modal de procesamiento de lista de espera (Problema #12)
-// CORREGIDO (160926 v3): Edición de pedido detecta si el usuario
-//   cambió el nombre del cliente manualmente
-// CORREGIDO FASE 4A (170926): 
-//   - showOrderForm() y viewOrder() cierran TODOS los modales antes de abrirse
-//   - Botones de cerrar modales con timeout de seguridad
-//   - "Ver → Editar" cierra el modal de vista antes de abrir el de edición
-//   - updateOrderStatusAndReload() cierra todos los modales antes del confirm
-// CORREGIDO FASE A.2 (170926 v2):
-//   - Modales de ui-orders usan z-index 9999999998
-// AÑADIDO FASE A.4 (170926 v3):
-//   - viewOrder() muestra sección de Auditoría
-// AÑADIDO FASE 1.2 (190926 v3):
-//   - updateOrderStatusAndReload() REFACTORIZADA
-//   - Nueva función mostrarAlertaStockWarning()
-// CORREGIDO FASE 2.1 FIX (200926):
-//   - updateOrderTotal() DEFINIDA GLOBALMENTE al principio
-// 🆕 FIX 2 (190926 v4):
-//   - normalizarFechaVenta() helper (fallback defensivo)
-// 🆕 FASE 2.2 (200926 v5):
-//   - NUEVO: Botón "⏰ Lista de espera" en el header
-//   - NUEVA: showWaitingListManagerModal()
-// 🆕 FASE 7 (Entrega 5 - 200926 v7):
-//   - NUEVO: Validación de cantidad de producción al crear pedidos
-// 🆕 FASE 7.3 (210926 v9): MOSTRAR PRODUCCIÓN + BLOQUEO DEFINITIVO
-// 🆕 v2.1.12 (210926 v10): CORRECCIÓN #2 - BLOQUEO POR RECETAS NO COMPARTIDAS
-// 🆕 v2.1.13 (210926 v11): CORRECCIÓN #4 - EXCLUIR DÍAS DE LA SEMANA EN RANGO
-// 🆕 CORRECCIÓN #6 (211026 v12): PRODUCCIÓN DEL DÍA ANTERIOR
-// 🆕 v2.2.1 (230926 v13): FIX FECHA REAL EN BLOQUE DEL DÍA ANTERIOR
-// 🆕 v2.2.2 (230926 v14): CORRECCIÓN #9 - CONTEO PEDIDOS VS VENTAS
-// 🆕 v2.2.4 (230926 v15): CORRECCIÓN #3 - CLIC EN BADGE DE PRODUCCIÓN
-// 🆕 v2.2.6 (240926 v16): CORRECCIÓN #17 - BOTÓN "ENTREGAR (SIN DEUDA)"
-// 🆕 v2.2.7 (240926 v17): CORRECCIÓN #19 - FILTROS AL HACER CLIC EN TARJETAS
-// 🆕 v2.3.0 (250926 v18): 🎯 CORRECCIÓN #1 (250926) - CONTEO DE UNIDADES
-// 🆕 v2.3.1 (250926 v19): 🎯 CORRECCIÓN #6 (240926) - FORMATO DE MENSAJES
-// 🆕 v2.4.0 (260926 v20): 🎯 CORRECCIÓN #9 (240926) - IMPRIMIR HORARIO
-//   - ✅ NUEVO: Botón "🖨️ Imprimir horario" en el header de Pedidos
-//   - ✅ NUEVO: showProductionScheduleReportModal()
-//     * Modal con rango de fechas + atajos (7d, 14d, 30d, mes)
-//     * Botón "📄 Generar reporte" llama a ReportsModule
-//   - ✅ NUEVO: generarReporteHorarioProduccion()
-//     * Llama a ReportsModule.generateProductionScheduleReport()
-//     * Pasa el HTML a ReportsModule.printReport()
-//   - ✅ NUEVO: closeProductionScheduleReportModal()
-//   - ✅ Mantiene TODAS las funcionalidades anteriores
+// v2.4.1 (260926): 🎯 CORRECCIÓN #4 (240926)
+//   - ✅ DOCUMENTADA: Lógica del color en "Pedidos: m/n":
+//     * 🟢 Verde (#10b981) si disponibles > 3
+//     * 🟡 Amarillo (#f59e0b) si 0 < disponibles <= 3
+//     * 🔴 Rojo (#ef4444) si disponibles === 0 (COMPLETO)
+//   - ✅ Mantiene TODAS las funcionalidades de v2.4.0:
+//     * Corrección #9: Botón "🖨️ Imprimir horario"
+//     * Corrección #1: Conteo de UNIDADES
+//     * Corrección #6: Formato unificado de mensajes de producción
 // ============================================================
 
 // ============================================================
@@ -141,12 +101,10 @@ window.updateOrderTotal = function() {
 // ============================================================
 
 function getProduccionInfo(fechaISO) {
-    // 🆕 CORRECCIÓN #1 + #9: Delegar en DBModule si está disponible
     try {
         if (window.DBModule && typeof window.DBModule.contarPedidosYVentasFecha === 'function') {
             const conteo = window.DBModule.contarPedidosYVentasFecha(fechaISO);
             
-            // Obtener la config de producción para el texto del bloque
             const config = getProduccionConfig(fechaISO);
             
             if (!config) {
@@ -174,13 +132,11 @@ function getProduccionInfo(fechaISO) {
                 
                 try {
                     if (esBloqueDiaAnterior) {
-                        // 🆕 CORRECCIÓN #6: Día anterior → CON fecha
                         const fechaObj = new Date(fechaBloqueReal + 'T00:00:00');
                         const dia = String(fechaObj.getDate()).padStart(2, '0');
                         const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
                         bloqueTexto = `${dia}/${mes} de ${bloque.inicioStr} a ${bloque.finStr}`;
                     } else {
-                        // 🆕 CORRECCIÓN #6: Mismo día → SIN fecha
                         bloqueTexto = `de ${bloque.inicioStr} a ${bloque.finStr}`;
                     }
                 } catch (e) {
@@ -249,13 +205,11 @@ function getProduccionInfo(fechaISO) {
             
             try {
                 if (esBloqueDiaAnterior) {
-                    // 🆕 CORRECCIÓN #6: Día anterior → CON fecha
                     const fechaObj = new Date(fechaBloqueReal + 'T00:00:00');
                     const dia = String(fechaObj.getDate()).padStart(2, '0');
                     const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
                     bloqueTexto = `${dia}/${mes} de ${bloque.inicioStr} a ${bloque.finStr}`;
                 } else {
-                    // 🆕 CORRECCIÓN #6: Mismo día → SIN fecha
                     bloqueTexto = `de ${bloque.inicioStr} a ${bloque.finStr}`;
                 }
             } catch (e) {
@@ -455,16 +409,11 @@ window.mostrarAlertaAjusteCupo = mostrarAlertaAjusteCupo;
 // ============================================================
 // 🆕 CORRECCIÓN #9 (240926): MODAL DE REPORTE DE HORARIO
 // ============================================================
-// 
-// Permite seleccionar un rango de fechas y generar el reporte
-// de horario de producción (que vive en reports.js).
-// ============================================================
 
 function showProductionScheduleReportModal() {
     const LOG_PREFIX = '🖨️ [showProductionScheduleReportModal]';
     console.log(`${LOG_PREFIX} Abriendo modal...`);
     
-    // Verificar que ReportsModule esté disponible
     if (!window.ReportsModule || typeof window.ReportsModule.generateProductionScheduleReport !== 'function') {
         console.error(`${LOG_PREFIX} ❌ ReportsModule.generateProductionScheduleReport no disponible`);
         window.showToast('⚠️ Módulo de reportes no disponible. Recarga la página.', 'warning', 5000);
@@ -474,7 +423,6 @@ function showProductionScheduleReportModal() {
     const existingModal = document.getElementById('production-schedule-report-modal');
     if (existingModal) existingModal.remove();
     
-    // Fechas por defecto: hoy → hoy + 7 días
     const hoy = new Date();
     const hoyStr = window.fechaLocalYYYYMMDD 
         ? window.fechaLocalYYYYMMDD(hoy) 
@@ -565,9 +513,6 @@ function showProductionScheduleReportModal() {
     });
 }
 
-/**
- * 🆕 CORRECCIÓN #9: Atajos rápidos para el rango del reporte.
- */
 function setProductionReportRango(dias) {
     const inicio = document.getElementById('report-schedule-from');
     const fin = document.getElementById('report-schedule-to');
@@ -585,9 +530,6 @@ function setProductionReportRango(dias) {
         : finObj.toISOString().split('T')[0];
 }
 
-/**
- * 🆕 CORRECCIÓN #9: Atajo para el mes actual.
- */
 function setProductionReportMesActual() {
     const inicio = document.getElementById('report-schedule-from');
     const fin = document.getElementById('report-schedule-to');
@@ -605,9 +547,6 @@ function setProductionReportMesActual() {
         : ultimoDia.toISOString().split('T')[0];
 }
 
-/**
- * 🆕 CORRECCIÓN #9: Genera el reporte de horario de producción.
- */
 async function generarReporteHorarioProduccion() {
     const LOG_PREFIX = '🖨️ [generarReporteHorarioProduccion]';
     
@@ -650,9 +589,6 @@ async function generarReporteHorarioProduccion() {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #9: Cierra el modal de reporte de horario.
- */
 function closeProductionScheduleReportModal() {
     const modal = document.getElementById('production-schedule-report-modal');
     if (modal) {
@@ -1168,8 +1104,21 @@ async function reporteListaEspera() {
 }
 
 // ============================================================
-// 🆕 v2.2.4 + CORRECCIÓN #1 + CORRECCIÓN #6 (240926)
+// 🆕 v2.2.4 + CORRECCIÓN #1 + CORRECCIÓN #4 (240926)
 // RENDER INFO DE PRODUCCIÓN con formato unificado
+// ============================================================
+// 
+// 🎯 CORRECCIÓN #4 (240926): Lógica del color en "Pedidos: m/n"
+// 
+// El color del badge "📋 Pedidos: m/n" se determina según los
+// cupos disponibles:
+//   - 🟢 Verde (#10b981):  disponibles > 3
+//   - 🟡 Amarillo (#f59e0b): 0 < disponibles <= 3
+//   - 🔴 Rojo (#ef4444):   disponibles === 0 (COMPLETO)
+// 
+// Esta lógica es intencional: los cupos bajos se muestran en
+// amarillo para alertar al vendedor sin bloquear la venta.
+// Solo cuando el cupo llega a 0 se muestra en rojo como COMPLETO.
 // ============================================================
 
 function renderProduccionInfoHTML(fechaISO) {
@@ -1186,17 +1135,28 @@ function renderProduccionInfoHTML(fechaISO) {
         
         const fmt = window.formatearCantidadProduccion || (v => String(v));
         
-        let colorDisponible = '#10b981';
+        // 🎯 CORRECCIÓN #4 (240926): Lógica del color en "Pedidos: m/n"
+        // 
+        // Determinar el color de fondo y texto según los cupos disponibles.
+        // 
+        // - Verde (#10b981):  Hay más de 3 cupos disponibles. Todo en orden.
+        // - Amarillo (#f59e0b): Quedan 3 o menos cupos. Alerta preventiva.
+        // - Rojo (#ef4444):   No hay cupos. COMPLETO.
+        let colorDisponible = '#10b981';  // Verde por defecto
         let bgDisponible = '#10b98115';
+        
         if (disponibles === 0) {
+            // 🔴 Rojo: Sin cupos disponibles (COMPLETO)
             colorDisponible = '#ef4444';
             bgDisponible = '#ef444415';
         } else if (disponibles <= 3) {
+            // 🟡 Amarillo: Pocos cupos (3 o menos)
             colorDisponible = '#f59e0b';
             bgDisponible = '#f59e0b15';
         }
+        // 🟢 Verde: Más de 3 cupos disponibles (valor por defecto)
         
-        // 🆕 CORRECCIÓN #6: Badge unificado con 🔨 y borde dashed solo si es día anterior
+        // Badge unificado con 🔨 y borde dashed solo si es día anterior
         const badgeBloque = esAyer
             ? `<span onclick="event.stopPropagation(); if(window.showHorarioDetalle) window.showHorarioDetalle('${fechaISO}');" 
                      style="background: #8b5cf615; color: #8b5cf6; padding: 3px 10px; border-radius: 6px; font-weight: 600; border: 1px dashed #8b5cf6; cursor: pointer; transition: all 0.2s;" 
@@ -3144,7 +3104,6 @@ async function submitMultiOrderForm() {
             
             window.showToast(msg, 'success', 5000);
             
-            // Si hubo ajustes, mostrar modal informativo
             if (result.totalAjustados > 0) {
                 const detalles = [];
                 (result.ajustados || []).forEach(aj => {
@@ -3305,7 +3264,6 @@ function onOrderDateChange() {
                 borderColor = '#f59e0b';
             }
             
-            // 🆕 CORRECCIÓN #6: Título unificado con 🔨
             const tituloProduccion = `<span style="font-weight: 700; color: #8b5cf6; font-size: 13px;">🔨 Producción: ${info.bloqueTexto}</span>`;
             
             prodInfoContainer.innerHTML = `
@@ -3520,7 +3478,6 @@ async function submitOrderForm(isEdit) {
     if (!deliveryDateRaw) { window.showToast('⚠️ La fecha de entrega es obligatoria', 'error'); return; }
     if (hasAdvancePayment && advanceAmount <= 0) { window.showToast('⚠️ Monto adelanto > 0', 'error'); return; }
     
-    // Pre-chequeo visual (no bloquea el guardado, solo informa)
     if (!isEdit) {
         const prodInfo = getProduccionInfo(deliveryDateRaw);
         const fmt = window.formatearCantidadProduccion || (v => String(v));
@@ -3595,7 +3552,6 @@ async function submitOrderForm(isEdit) {
         has_advance_payment: hasAdvancePayment,
         advance_amount: hasAdvancePayment ? advanceAmount : 0,
         advance_payment_method: hasAdvancePayment ? advancePaymentMethod : null,
-        // 🆕 CORRECCIÓN #1: activar validación de cupo
         validarCupo: true
     };
     
@@ -3607,7 +3563,6 @@ async function submitOrderForm(isEdit) {
         if (result.success) {
             window.closeOrderModal();
             
-            // 🆕 CORRECCIÓN #1: Manejar ajustes de cupo
             if (result.huboAjustes) {
                 await mostrarAlertaAjusteCupo(
                     null,
@@ -3640,7 +3595,6 @@ async function submitOrderForm(isEdit) {
 
 // ============================================================
 // VER PEDIDO EN DETALLE
-// 🆕 CORRECCIÓN #1 + #6: Producción en UNIDADES y formato unificado
 // ============================================================
 
 async function viewOrder(id) {
@@ -3695,7 +3649,6 @@ async function viewOrder(id) {
         if (prodInfo.tieneProduccion) {
             const esAyer = prodInfo.esBloqueDiaAnterior === true;
             
-            // 🆕 CORRECCIÓN #6: Título unificado con 🔨
             produccionSection = `
                 <div style="background: linear-gradient(135deg, #8b5cf615 0%, #8b5cf608 100%); border: ${esAyer ? '2px dashed' : '1px solid'} #8b5cf6; border-radius: 8px; padding: 10px 12px; margin: 10px 0;">
                     <div style="font-size: 13px; font-weight: 600; color: #8b5cf6; margin-bottom: 4px;">
@@ -4416,21 +4369,19 @@ window.selectDiasExcluidos = selectDiasExcluidos;
 window.limpiarDiasExcluidos = limpiarDiasExcluidos;
 window.updateExclusionSummary = updateExclusionSummary;
 
-// 🆕 CORRECCIÓN #9 (240926): Exportar funciones del reporte de horario
 window.showProductionScheduleReportModal = showProductionScheduleReportModal;
 window.closeProductionScheduleReportModal = closeProductionScheduleReportModal;
 window.generarReporteHorarioProduccion = generarReporteHorarioProduccion;
 window.setProductionReportRango = setProductionReportRango;
 window.setProductionReportMesActual = setProductionReportMesActual;
 
-console.log('📦 UI Orders Module v2.4.0 (CORRECCIÓN #9 240926: Botón Imprimir horario)');
-console.log('   🆕 Novedades v2.4.0:');
-console.log('      • NUEVO: Botón "🖨️ Imprimir horario" en el header de Pedidos');
-console.log('      • NUEVO: showProductionScheduleReportModal()');
-console.log('         - Modal con rango de fechas + atajos (7d, 14d, 30d, mes)');
-console.log('         - Llama a ReportsModule.generateProductionScheduleReport()');
-console.log('      • NUEVO: generarReporteHorarioProduccion()');
-console.log('      • NUEVO: setProductionReportRango() y setProductionReportMesActual()');
-console.log('   ✅ Correcciones anteriores mantenidas:');
+console.log('📦 UI Orders Module v2.4.1');
+console.log('   🎯 CORRECCIÓN #4 (240926) aplicada:');
+console.log('      ✅ Documentada lógica de color en "Pedidos: m/n":');
+console.log('         • 🟢 Verde si disponibles > 3');
+console.log('         • 🟡 Amarillo si 0 < disponibles <= 3');
+console.log('         • 🔴 Rojo si disponibles === 0 (COMPLETO)');
+console.log('   🔄 Correcciones anteriores mantenidas:');
+console.log('      • #9 (240926): Botón "🖨️ Imprimir horario"');
 console.log('      • #1 (250926): Conteo de UNIDADES');
 console.log('      • #6 (240926): Formato unificado de mensajes de producción');

@@ -38,17 +38,17 @@
 // 🆕 v2.3.0 (250926 v17): 🎯 CORRECCIÓN #1 (250926) - CONTEO DE UNIDADES
 // 🆕 v2.3.3 (260926 v18): 🎯 CORRECCIÓN #16 (240926) - PERMISOS BANCARIOS
 // 🆕 v2.3.4 (260926 v19): 🎯 CORRECCIÓN #17 (240926) - CONFIGURACIONES INDIVIDUALES
-//   - ✅ NUEVAS COLUMNAS en users:
-//     * sound_enabled INTEGER DEFAULT 1
-//     * sound_id TEXT DEFAULT 'beep'
-//     * guia_rapida_activa INTEGER DEFAULT 1
-//   - ✅ NUEVAS FUNCIONES:
-//     * getUserSoundConfig(userId) → { enabled, soundId }
-//     * updateUserSoundConfig(userId, config)
-//     * getUserGuiaRapidaActiva(userId) → boolean
-//     * updateUserGuiaRapida(userId, activa)
-//   - ✅ Migración automática: copia los valores de localStorage
-//     a la BD del usuario actual (solo la primera vez).
+// 🆕 v2.3.5 (260926 v20): 🎯 REFINAMIENTO #16 - TERCER TOGGLE (forzar_qr_admin)
+// 🆕 v2.3.6 (260926 v21): 🎯 REGRESIONES #4 y #7 (260926) - DATOS BANCARIOS
+// 🆕 v2.3.7 (260926 v22): 🎯 NUEVA FUNCIONALIDAD #1 (260926) - NOTA A LA VENTA
+//   - ✅ NUEVA COLUMNA: sales.notes (TEXT DEFAULT NULL)
+//     * Opcional (puede quedar NULL)
+//     * Editable por el creador de la venta
+//     * En cualquier momento: al crear, al editar o post-venta
+//   - ✅ NUEVA FUNCIÓN: ensureSalesNotesColumn(db)
+//     * Migración idempotente que añade la columna si no existe.
+//     * Se ejecuta en initDB() antes de las semillas.
+//   - ✅ Se mantiene TODO lo anterior sin cambios.
 // ============================================================
 
 let db = null;
@@ -248,9 +248,6 @@ function getUsuarioNombre(userId) {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #16: Devuelve true si el usuario actual es admin.
- */
 function esUsuarioActualAdmin() {
     try {
         const user = window.AuthModule?.getCurrentUser();
@@ -319,6 +316,8 @@ async function initDB() {
         await ensureCapacidadMaxBloqueColumn(db);
         await ensureBloquesDistribucionColumns(db);
         await ensureProductoIdColumn(db);
+        // 🆕 v2.3.7: Asegurar columna notes en sales
+        await ensureSalesNotesColumn(db);
         await ensureNegociosTable(db);
         await ensureNegocioIdColumn(db);
         await migrateToMultiUser(db);
@@ -333,9 +332,13 @@ async function initDB() {
         // 🆕 CORRECCIÓN #16: Nuevas tablas de permisos bancarios
         await ensureBankDefaultUserTable(db);
         await ensureConfigBancariaTable(db);
+        // 🆕 REFINAMIENTO #16: Tercer toggle forzar_qr_admin
+        await ensureForzarQRAdminColumn(db);
         // 🆕 CORRECCIÓN #17: Nuevas columnas de preferencias individuales
         await ensureUserPreferencesColumns(db);
         await migratePreferencesFromLocalStorage(db);
+        // 🆕 v2.3.6: Reparar negocio_id nulos en bank_accounts
+        await repararNegocioIdEnBankAccounts(db);
         await seedDefaultUnits(db);
         await seedDefaultProducts(db);
         await seedDefaultInsumos(db);
@@ -353,37 +356,154 @@ async function initDB() {
 }
 
 // ============================================================
-// 🆕 CORRECCIÓN #17 (240926): PREFERENCIAS INDIVIDUALES
+// 🆕 v2.3.7: COLUMNA notes EN LA TABLA sales
 // ============================================================
 // 
-// CONTEXTO:
-//   Antes de esta corrección, las preferencias de SONIDO de
-//   notificaciones y GUÍA RÁPIDA se guardaban en localStorage,
-//   lo cual las hacía GLOBALES (compartidas entre usuarios).
-//
-// CAMBIOS:
-//   1. NUEVAS COLUMNAS en users:
-//      - sound_enabled (INTEGER, default 1)
-//      - sound_id (TEXT, default 'beep')
-//      - guia_rapida_activa (INTEGER, default 1)
-//
-//   2. NUEVAS FUNCIONES:
-//      - getUserSoundConfig(userId)
-//      - updateUserSoundConfig(userId, config)
-//      - getUserGuiaRapidaActiva(userId)
-//      - updateUserGuiaRapida(userId, activa)
-//
-//   3. MIGRACIÓN AUTOMÁTICA:
-//      Al inicializar, si existen valores en localStorage
-//      (sonido + guía), se copian a la BD del usuario actual
-//      (solo la primera vez). Después se eliminan del localStorage
-//      para no confundir.
+// Añade la columna `notes` a la tabla `sales` para permitir
+// que el creador de la venta le añada una nota opcional.
+// 
+// Características:
+//   - Opcional (puede quedar NULL)
+//   - Editable en cualquier momento (crear, editar, post-venta)
+//   - Solo el creador de la venta puede modificarla
+//   - No aparece en el reporte PDF (por decisión de diseño)
 // ============================================================
 
-/**
- * 🆕 CORRECCIÓN #17: Añade las columnas de preferencias individuales
- * a la tabla users.
- */
+async function ensureSalesNotesColumn(db) {
+    const LOG_PREFIX = '🔧 [ensureSalesNotesColumn v2.3.7]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='sales'`);
+        if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ Tabla sales no existe todavía, se omite.`);
+            return;
+        }
+        
+        const columns = db.exec('PRAGMA table_info(sales)');
+        const columnNames = columns[0]?.values?.map(row => row[1]) || [];
+        
+        if (!columnNames.includes('notes')) {
+            try {
+                db.run('ALTER TABLE sales ADD COLUMN notes TEXT DEFAULT NULL');
+                console.log(`${LOG_PREFIX} ✅ Columna notes añadida a la tabla sales`);
+            } catch (e) {
+                console.warn(`${LOG_PREFIX} ⚠️ Error añadiendo columna:`, e.message);
+            }
+        } else {
+            console.log(`${LOG_PREFIX} ✓ Columna notes ya existe en la tabla sales`);
+        }
+        
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+        
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+// ============================================================
+// 🆕 v2.3.6: REPARAR NEGOCIO_ID EN BANK_ACCOUNTS
+// ============================================================
+
+async function repararNegocioIdEnBankAccounts(db) {
+    const LOG_PREFIX = '🔧 [repararNegocioIdEnBankAccounts v2.3.6]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='bank_accounts'`);
+        if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ Tabla bank_accounts no existe, se omite.`);
+            return;
+        }
+        
+        const countResult = db.exec(`SELECT COUNT(*) FROM bank_accounts WHERE negocio_id IS NULL AND deleted_at IS NULL`);
+        const totalHuerfanas = countResult[0]?.values?.[0]?.[0] || 0;
+        
+        if (totalHuerfanas === 0) {
+            console.log(`${LOG_PREFIX} ✓ No hay cuentas bancarias con negocio_id NULL`);
+            console.log(`${LOG_PREFIX} ========== FIN ==========`);
+            return;
+        }
+        
+        console.log(`${LOG_PREFIX} ⚠️ Encontradas ${totalHuerfanas} cuentas con negocio_id NULL. Reparando...`);
+        
+        const negocioDefaultResult = db.exec(`SELECT id FROM negocios WHERE deleted_at IS NULL ORDER BY id ASC LIMIT 1`);
+        const negocioDefaultId = negocioDefaultResult[0]?.values?.[0]?.[0] || 1;
+        
+        const cuentasHuerfanas = db.exec(`
+            SELECT ba.id, ba.user_id, u.negocio_id as negocio_user
+            FROM bank_accounts ba
+            LEFT JOIN users u ON u.id = ba.user_id
+            WHERE ba.negocio_id IS NULL AND ba.deleted_at IS NULL
+        `);
+        
+        const filas = cuentasHuerfanas[0]?.values || [];
+        let reparadas = 0;
+        
+        for (const fila of filas) {
+            const cuentaId = fila[0];
+            const negocioUserId = fila[2];
+            const negocioFinal = negocioUserId || negocioDefaultId;
+            
+            try {
+                db.run(`UPDATE bank_accounts SET negocio_id = ? WHERE id = ?`, [negocioFinal, cuentaId]);
+                reparadas++;
+            } catch (e) {
+                console.warn(`${LOG_PREFIX} ⚠️ Error reparando cuenta #${cuentaId}:`, e.message);
+            }
+        }
+        
+        console.log(`${LOG_PREFIX} ✅ ${reparadas} cuentas reparadas`);
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+        
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+// ============================================================
+// 🆕 REFINAMIENTO #16: COLUMNA forzar_qr_admin
+// ============================================================
+
+async function ensureForzarQRAdminColumn(db) {
+    const LOG_PREFIX = '🔧 [ensureForzarQRAdminColumn]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='config_bancaria_negocio'`);
+        if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ Tabla config_bancaria_negocio no existe todavía.`);
+            return;
+        }
+        
+        const columns = db.exec('PRAGMA table_info(config_bancaria_negocio)');
+        const columnNames = columns[0]?.values?.map(row => row[1]) || [];
+        
+        if (!columnNames.includes('forzar_qr_admin')) {
+            try {
+                db.run('ALTER TABLE config_bancaria_negocio ADD COLUMN forzar_qr_admin INTEGER DEFAULT 0');
+                console.log(`${LOG_PREFIX} ✅ Columna forzar_qr_admin añadida`);
+            } catch (e) {
+                console.warn(`${LOG_PREFIX} ⚠️ Error añadiendo columna:`, e.message);
+            }
+        } else {
+            console.log(`${LOG_PREFIX} ✓ Columna forzar_qr_admin ya existe`);
+        }
+        
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+        
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+// ============================================================
+// 🆕 CORRECCIÓN #17: PREFERENCIAS INDIVIDUALES
+// ============================================================
+
 async function ensureUserPreferencesColumns(db) {
     const LOG_PREFIX = '🔧 [ensureUserPreferencesColumns]';
     
@@ -428,37 +548,24 @@ async function ensureUserPreferencesColumns(db) {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #17: Migración automática desde localStorage.
- * 
- * Si existen valores de sonido o guía rápida en localStorage,
- * se copian a la BD del usuario actual (solo la primera vez).
- * Después se eliminan del localStorage.
- * 
- * Esto preserva la configuración del usuario que ya tenía la app
- * abierta antes de la corrección.
- */
 async function migratePreferencesFromLocalStorage(db) {
     const LOG_PREFIX = '🔄 [migratePreferencesFromLocalStorage]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
         
-        // Verificar si hay usuario actual
         const userId = getCurrentUserId();
         if (!userId) {
             console.log(`${LOG_PREFIX} ℹ️ No hay usuario actual, se omite migración.`);
             return;
         }
         
-        // Verificar si ya se migró (usando una flag en localStorage)
         const migrado = localStorage.getItem('panario_preferences_migrated_v17');
         if (migrado === 'true') {
             console.log(`${LOG_PREFIX} ℹ️ Ya se migró anteriormente. Se omite.`);
             return;
         }
         
-        // Leer valores antiguos de localStorage
         let soundConfig = null;
         let guiaDeshabilitada = false;
         
@@ -475,7 +582,6 @@ async function migratePreferencesFromLocalStorage(db) {
             console.log(`${LOG_PREFIX} 📖 Guía rápida deshabilitada en localStorage: ${guiaDeshabilitada}`);
         } catch (e) {}
         
-        // Migrar sonido si existe
         if (soundConfig) {
             const enabled = soundConfig.enabled ? 1 : 0;
             const soundId = soundConfig.soundId || 'beep';
@@ -487,7 +593,6 @@ async function migratePreferencesFromLocalStorage(db) {
             }
         }
         
-        // Migrar guía rápida
         const guiaActiva = guiaDeshabilitada ? 0 : 1;
         try {
             db.run(`UPDATE users SET guia_rapida_activa = ? WHERE id = ?`, [guiaActiva, userId]);
@@ -496,13 +601,9 @@ async function migratePreferencesFromLocalStorage(db) {
             console.warn(`${LOG_PREFIX} ⚠️ Error migrando guía:`, e.message);
         }
         
-        // Marcar como migrado
         try {
             localStorage.setItem('panario_preferences_migrated_v17', 'true');
         } catch (e) {}
-        
-        // NOTA: NO eliminamos los valores de localStorage por si acaso.
-        // Los dejamos como respaldo. La nueva lógica usa la BD.
         
         console.log(`${LOG_PREFIX} ========== FIN ==========`);
         
@@ -511,12 +612,6 @@ async function migratePreferencesFromLocalStorage(db) {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #17: Obtiene la configuración de sonido del usuario.
- * 
- * @param {number} userId - ID del usuario (default: usuario actual)
- * @returns {object} - { enabled: boolean, soundId: string }
- */
 function getUserSoundConfig(userId) {
     try {
         const uid = userId || getCurrentUserId();
@@ -543,13 +638,6 @@ function getUserSoundConfig(userId) {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #17: Guarda la configuración de sonido del usuario.
- * 
- * @param {number} userId - ID del usuario
- * @param {object} config - { enabled, soundId }
- * @returns {object} - { success, error? }
- */
 function updateUserSoundConfig(userId, config) {
     const LOG_PREFIX = '🔊 [updateUserSoundConfig]';
     
@@ -573,12 +661,6 @@ function updateUserSoundConfig(userId, config) {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #17: Obtiene si la guía rápida está activa para el usuario.
- * 
- * @param {number} userId - ID del usuario (default: usuario actual)
- * @returns {boolean} - true si está activa
- */
 function getUserGuiaRapidaActiva(userId) {
     try {
         const uid = userId || getCurrentUserId();
@@ -597,13 +679,6 @@ function getUserGuiaRapidaActiva(userId) {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #17: Guarda si la guía rápida está activa para el usuario.
- * 
- * @param {number} userId - ID del usuario
- * @param {boolean} activa - Nuevo valor
- * @returns {object} - { success, error? }
- */
 function updateUserGuiaRapida(userId, activa) {
     const LOG_PREFIX = '🚀 [updateUserGuiaRapida]';
     
@@ -673,6 +748,7 @@ async function ensureConfigBancariaTable(db) {
                 negocio_id INTEGER NOT NULL UNIQUE,
                 permitir_ver_qr_otros INTEGER DEFAULT 0,
                 permitir_cambiar_default INTEGER DEFAULT 1,
+                forzar_qr_admin INTEGER DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (negocio_id) REFERENCES negocios(id)
@@ -694,7 +770,8 @@ function getConfigBancaria() {
     const LOG_PREFIX = '🏦 [getConfigBancaria]';
     const defaults = {
         permitir_ver_qr_otros: false,
-        permitir_cambiar_default: true
+        permitir_cambiar_default: true,
+        forzar_qr_admin: false
     };
     
     try {
@@ -714,7 +791,8 @@ function getConfigBancaria() {
         const row = result[0];
         return {
             permitir_ver_qr_otros: row.permitir_ver_qr_otros === 1,
-            permitir_cambiar_default: row.permitir_cambiar_default === 1
+            permitir_cambiar_default: row.permitir_cambiar_default === 1,
+            forzar_qr_admin: row.forzar_qr_admin === 1
         };
     } catch (e) {
         console.warn(`${LOG_PREFIX} ⚠️ Error:`, e);
@@ -735,6 +813,7 @@ function saveConfigBancaria(config) {
         
         const verQR = config.permitir_ver_qr_otros ? 1 : 0;
         const cambiarDefault = config.permitir_cambiar_default ? 1 : 0;
+        const forzarQR = config.forzar_qr_admin ? 1 : 0;
         
         const existing = query(
             'SELECT id FROM config_bancaria_negocio WHERE negocio_id = ? LIMIT 1',
@@ -744,17 +823,19 @@ function saveConfigBancaria(config) {
         if (existing.length > 0) {
             execute(`
                 UPDATE config_bancaria_negocio 
-                SET permitir_ver_qr_otros = ?, permitir_cambiar_default = ?, 
+                SET permitir_ver_qr_otros = ?, 
+                    permitir_cambiar_default = ?, 
+                    forzar_qr_admin = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE negocio_id = ?
-            `, [verQR, cambiarDefault, negocioId]);
+            `, [verQR, cambiarDefault, forzarQR, negocioId]);
             console.log(`${LOG_PREFIX} ✅ Config actualizada`);
         } else {
             execute(`
                 INSERT INTO config_bancaria_negocio 
-                (negocio_id, permitir_ver_qr_otros, permitir_cambiar_default)
-                VALUES (?, ?, ?)
-            `, [negocioId, verQR, cambiarDefault]);
+                (negocio_id, permitir_ver_qr_otros, permitir_cambiar_default, forzar_qr_admin)
+                VALUES (?, ?, ?, ?)
+            `, [negocioId, verQR, cambiarDefault, forzarQR]);
             console.log(`${LOG_PREFIX} ✅ Config creada`);
         }
         
@@ -766,22 +847,53 @@ function saveConfigBancaria(config) {
 }
 
 function getCuentaDefaultUsuario(userId) {
-    const LOG_PREFIX = '🏦 [getCuentaDefaultUsuario]';
+    const LOG_PREFIX = '🏦 [getCuentaDefaultUsuario v2.3.6]';
     
     try {
-        const uid = userId || getCurrentUserId();
-        if (!uid) return null;
+        const uid = Number(userId) || Number(getCurrentUserId());
+        if (!uid || isNaN(uid)) {
+            console.log(`${LOG_PREFIX} ℹ️ No hay usuario válido`);
+            return null;
+        }
         
         const negocioId = getNegocioIdActual();
+        const config = getConfigBancaria();
+        
+        if (config.forzar_qr_admin) {
+            console.log(`${LOG_PREFIX} 🔒 forzar_qr_admin=1 → usando cuenta del admin`);
+            const adminDefault = query(`
+                SELECT * FROM bank_accounts 
+                WHERE negocio_id = ? AND is_default = 1 AND deleted_at IS NULL
+                ORDER BY created_at DESC LIMIT 1
+            `, [negocioId]);
+            
+            if (adminDefault.length > 0) {
+                console.log(`${LOG_PREFIX} ✅ Cuenta del admin: ${adminDefault[0].bank}`);
+                return adminDefault[0];
+            }
+            
+            const primera = query(`
+                SELECT * FROM bank_accounts 
+                WHERE negocio_id = ? AND deleted_at IS NULL
+                ORDER BY created_at ASC LIMIT 1
+            `, [negocioId]);
+            
+            if (primera.length > 0) {
+                console.log(`${LOG_PREFIX} ✅ Primera cuenta (fallback): ${primera[0].bank}`);
+                return primera[0];
+            }
+            
+            console.log(`${LOG_PREFIX} ℹ️ No hay cuentas disponibles`);
+            return null;
+        }
         
         const userDefault = query(`
             SELECT ba.* FROM bank_default_user bdu
             INNER JOIN bank_accounts ba ON ba.id = bdu.bank_account_id
             WHERE bdu.user_id = ? 
               AND ba.deleted_at IS NULL
-              AND ba.negocio_id = ?
             LIMIT 1
-        `, [uid, negocioId]);
+        `, [uid]);
         
         if (userDefault.length > 0) {
             console.log(`${LOG_PREFIX} ✅ Cuenta individual del usuario #${uid}: ${userDefault[0].bank}`);
@@ -819,15 +931,24 @@ function getCuentaDefaultUsuario(userId) {
 }
 
 function setCuentaDefaultUsuario(userId, accountId) {
-    const LOG_PREFIX = '🏦 [setCuentaDefaultUsuario]';
+    const LOG_PREFIX = '🏦 [setCuentaDefaultUsuario v2.3.6]';
     
     try {
-        const uid = userId || getCurrentUserId();
-        if (!uid) return { success: false, error: 'No hay usuario activo' };
+        const uid = Number(userId) || Number(getCurrentUserId());
+        const aid = Number(accountId);
+        
+        if (!uid || isNaN(uid)) return { success: false, error: 'No hay usuario activo' };
+        if (!aid || isNaN(aid)) return { success: false, error: 'ID de cuenta inválido' };
         
         const negocioId = getNegocioIdActual();
         const esAdmin = esUsuarioActualAdmin();
         const config = getConfigBancaria();
+        
+        console.log(`${LOG_PREFIX} uid=${uid}, aid=${aid}, negocioId=${negocioId}, esAdmin=${esAdmin}`);
+        
+        if (!esAdmin && config.forzar_qr_admin) {
+            return { success: false, error: 'El administrador ha forzado su cuenta. No puedes cambiar la tuya.' };
+        }
         
         if (!esAdmin && !config.permitir_cambiar_default) {
             return { success: false, error: 'El administrador no permite cambiar la cuenta por defecto' };
@@ -835,15 +956,16 @@ function setCuentaDefaultUsuario(userId, accountId) {
         
         const cuenta = query(`
             SELECT * FROM bank_accounts 
-            WHERE id = ? AND negocio_id = ? AND deleted_at IS NULL
-        `, [accountId, negocioId]);
+            WHERE id = ? AND deleted_at IS NULL
+        `, [aid]);
         
         if (cuenta.length === 0) {
+            console.log(`${LOG_PREFIX} ⚠️ Cuenta #${aid} no encontrada`);
             return { success: false, error: 'Cuenta bancaria no encontrada' };
         }
         
         if (!esAdmin && !config.permitir_ver_qr_otros) {
-            if (cuenta[0].user_id !== uid) {
+            if (Number(cuenta[0].user_id) !== uid) {
                 return { success: false, error: 'No tienes acceso a esta cuenta' };
             }
         }
@@ -856,17 +978,17 @@ function setCuentaDefaultUsuario(userId, accountId) {
         if (existing.length > 0) {
             execute(`
                 UPDATE bank_default_user 
-                SET bank_account_id = ?, updated_at = CURRENT_TIMESTAMP 
+                SET bank_account_id = ?, negocio_id = ?, updated_at = CURRENT_TIMESTAMP 
                 WHERE user_id = ?
-            `, [accountId, uid]);
+            `, [aid, negocioId, uid]);
         } else {
             execute(`
                 INSERT INTO bank_default_user (user_id, bank_account_id, negocio_id)
                 VALUES (?, ?, ?)
-            `, [uid, accountId, negocioId]);
+            `, [uid, aid, negocioId]);
         }
         
-        console.log(`${LOG_PREFIX} ✅ Cuenta #${accountId} establecida como default para usuario #${uid}`);
+        console.log(`${LOG_PREFIX} ✅ Cuenta #${aid} establecida como default para usuario #${uid}`);
         return { success: true };
     } catch (e) {
         console.error(`${LOG_PREFIX} ❌ Error:`, e);
@@ -881,8 +1003,8 @@ function puedeUsuarioVerCuenta(account) {
         const user = window.AuthModule?.getCurrentUser();
         if (!user) return false;
         
-        if (user.is_admin === 1) return true;
-        if (account.user_id === user.id) return true;
+        if (Number(user.is_admin) === 1) return true;
+        if (Number(account.user_id) === Number(user.id)) return true;
         
         const config = getConfigBancaria();
         return config.permitir_ver_qr_otros === true;
@@ -898,9 +1020,9 @@ function puedeUsuarioEditarCuenta(account) {
         const user = window.AuthModule?.getCurrentUser();
         if (!user) return false;
         
-        if (user.is_admin === 1) return true;
+        if (Number(user.is_admin) === 1) return true;
         
-        return account.user_id === user.id;
+        return Number(account.user_id) === Number(user.id);
     } catch (e) {
         return false;
     }
@@ -968,7 +1090,7 @@ function _contarUnidadesVentasDirectas(negocioId, fechaISO) {
 }
 
 function contarPedidosYVentasFecha(fechaISO) {
-    const LOG_PREFIX = '📊 [contarPedidosYVentasFecha v2.3.4]';
+    const LOG_PREFIX = '📊 [contarPedidosYVentasFecha v2.3.6]';
     
     try {
         const negocioId = getNegocioIdActual();
@@ -2379,6 +2501,7 @@ async function createAllTables(db) {
             is_liberated INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             deleted_at DATETIME DEFAULT NULL, voided INTEGER DEFAULT 0, void_reason TEXT,
             voided_at DATETIME, from_waiting_list INTEGER DEFAULT 0,
+            notes TEXT DEFAULT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id),
             FOREIGN KEY (producto_id) REFERENCES productos(id),
             FOREIGN KEY (receta_id) REFERENCES recipes(id),
@@ -2480,6 +2603,7 @@ async function createAllTables(db) {
             negocio_id INTEGER NOT NULL UNIQUE,
             permitir_ver_qr_otros INTEGER DEFAULT 0,
             permitir_cambiar_default INTEGER DEFAULT 1,
+            forzar_qr_admin INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
@@ -2740,7 +2864,7 @@ function getProduccionByFecha(fecha) {
 }
 
 function saveProduccion(data) {
-    const LOG_PREFIX = '💾 [saveProduccion v2.3.4]';
+    const LOG_PREFIX = '💾 [saveProduccion v2.3.7]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -2938,7 +3062,7 @@ function getProduccionRango(desde, hasta) {
 }
 
 function saveProduccionRango(data) {
-    const LOG_PREFIX = '💾💾 [saveProduccionRango v2.3.4]';
+    const LOG_PREFIX = '💾💾 [saveProduccionRango v2.3.7]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -3157,7 +3281,7 @@ function writeBackupMeta(db, backupType) {
         db.run(`INSERT INTO ${BACKUP_META_TABLE} 
             (backup_type, backup_date, backup_version, backup_negocio_id, backup_negocio_nombre, backup_user, backup_user_role)
             VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-            backupType, new Date().toISOString(), '2.3.4', negocioId,
+            backupType, new Date().toISOString(), '2.3.7', negocioId,
             negocio?.nombre || 'Desconocido', user?.username || 'Desconocido',
             user?.is_admin === 1 ? 'admin' : 'user'
         ]);
@@ -3187,11 +3311,11 @@ function readBackupMeta(backupDb) {
 }
 
 // ============================================================
-// 🆕 CORRECCIÓN #16: BANK ACCOUNTS CON PERMISOS
+// 🆕 CORRECCIÓN #16 + v2.3.6: BANK ACCOUNTS CON PERMISOS
 // ============================================================
 
 function getBankAccountsParaUsuario() {
-    const LOG_PREFIX = '🏦 [getBankAccountsParaUsuario]';
+    const LOG_PREFIX = '🏦 [getBankAccountsParaUsuario v2.3.6]';
     
     try {
         const user = window.AuthModule?.getCurrentUser();
@@ -3201,37 +3325,56 @@ function getBankAccountsParaUsuario() {
         }
         
         const negocioId = getNegocioIdActual();
-        const esAdmin = user.is_admin === 1;
+        const esAdmin = Number(user.is_admin) === 1;
         const config = getConfigBancaria();
+        const uid = Number(user.id);
         
-        console.log(`${LOG_PREFIX} user=#${user.id}, isAdmin=${esAdmin}, permitirVerOtros=${config.permitir_ver_qr_otros}`);
+        console.log(`${LOG_PREFIX} user=#${uid}, isAdmin=${esAdmin}, permitirVerOtros=${config.permitir_ver_qr_otros}, negocioId=${negocioId}`);
         
         if (esAdmin) {
             const todas = query(`
                 SELECT * FROM bank_accounts 
-                WHERE negocio_id = ? AND deleted_at IS NULL 
+                WHERE deleted_at IS NULL 
+                  AND (negocio_id = ? OR negocio_id IS NULL)
                 ORDER BY is_default DESC, created_at DESC
             `, [negocioId]);
             console.log(`${LOG_PREFIX} ✅ Admin ve ${todas.length} cuentas`);
-            return todas;
+            return todas.map(cuenta => ({
+                ...cuenta,
+                user_id: Number(cuenta.user_id),
+                negocio_id: Number(cuenta.negocio_id) || null,
+                is_default: Number(cuenta.is_default) || 0
+            }));
         }
         
         if (config.permitir_ver_qr_otros) {
             const todas = query(`
                 SELECT * FROM bank_accounts 
-                WHERE negocio_id = ? AND deleted_at IS NULL 
+                WHERE deleted_at IS NULL 
+                  AND (negocio_id = ? OR negocio_id IS NULL)
                 ORDER BY is_default DESC, created_at DESC
             `, [negocioId]);
             console.log(`${LOG_PREFIX} ✅ No-admin ve ${todas.length} cuentas (permitido ver otros)`);
-            return todas;
+            return todas.map(cuenta => ({
+                ...cuenta,
+                user_id: Number(cuenta.user_id),
+                negocio_id: Number(cuenta.negocio_id) || null,
+                is_default: Number(cuenta.is_default) || 0
+            }));
         } else {
             const propias = query(`
                 SELECT * FROM bank_accounts 
-                WHERE negocio_id = ? AND user_id = ? AND deleted_at IS NULL 
+                WHERE deleted_at IS NULL 
+                  AND user_id = ?
                 ORDER BY is_default DESC, created_at DESC
-            `, [negocioId, user.id]);
+            `, [uid]);
             console.log(`${LOG_PREFIX} ✅ No-admin ve ${propias.length} cuentas propias`);
-            return propias;
+            return propias.map(cuenta => ({
+                ...cuenta,
+                user_id: Number(cuenta.user_id),
+                negocio_id: Number(cuenta.negocio_id) || null,
+                is_default: Number(cuenta.is_default) || 0
+            }));
         }
     } catch (e) {
         console.error(`${LOG_PREFIX} ❌ Error:`, e);
@@ -3244,26 +3387,40 @@ function getBankAccounts() {
 }
 
 function getBankAccount(id) {
-    const LOG_PREFIX = '🏦 [getBankAccount]';
+    const LOG_PREFIX = '🏦 [getBankAccount v2.3.6]';
     
     try {
-        const negocioId = getNegocioIdActual();
+        const aid = Number(id);
+        if (!aid || isNaN(aid)) {
+            console.log(`${LOG_PREFIX} ℹ️ id inválido: ${id}`);
+            return null;
+        }
+        
         const results = query(
-            'SELECT * FROM bank_accounts WHERE id = ? AND negocio_id = ? AND deleted_at IS NULL',
-            [id, negocioId]
+            'SELECT * FROM bank_accounts WHERE id = ? AND deleted_at IS NULL',
+            [aid]
         );
         
-        if (results.length === 0) return null;
+        if (results.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ Cuenta #${aid} no encontrada`);
+            return null;
+        }
         
-        const account = results[0];
+        const account = {
+            ...results[0],
+            user_id: Number(results[0].user_id),
+            negocio_id: Number(results[0].negocio_id) || null,
+            is_default: Number(results[0].is_default) || 0
+        };
         
         if (!puedeUsuarioVerCuenta(account)) {
-            console.warn(`${LOG_PREFIX} ⚠️ Usuario sin permiso para ver cuenta #${id}`);
+            console.warn(`${LOG_PREFIX} ⚠️ Usuario sin permiso para ver cuenta #${aid}`);
             return null;
         }
         
         return account;
     } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
         return null;
     }
 }
@@ -3273,49 +3430,99 @@ function getDefaultBankAccount() {
 }
 
 function saveBankAccount(accountData) {
-    const LOG_PREFIX = '🏦 [saveBankAccount]';
+    const LOG_PREFIX = '🏦 [saveBankAccount v2.3.6]';
     
     const user = window.AuthModule?.getCurrentUser();
-    if (!user) return { success: false, error: 'No hay usuario autenticado' };
+    if (!user) {
+        console.warn(`${LOG_PREFIX} ❌ No hay usuario autenticado`);
+        return { success: false, error: 'No hay usuario autenticado' };
+    }
     
-    const negocioId = getNegocioIdActual();
-    const currentUserId = getCurrentUserId();
-    const esAdmin = user.is_admin === 1;
+    let negocioId = getNegocioIdActual();
+    const currentUserId = Number(getCurrentUserId());
+    const esAdmin = Number(user.is_admin) === 1;
+    const uid = Number(user.id);
+
+    console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+    console.log(`${LOG_PREFIX} user=#${uid}, esAdmin=${esAdmin}, negocioId=${negocioId}`);
+    console.log(`${LOG_PREFIX} accountData:`, {
+        id: accountData.id,
+        bank: accountData.bank,
+        owner_name: accountData.owner_name,
+        account_number: accountData.account_number,
+        phone: accountData.phone,
+        has_qr: !!accountData.qr_code,
+        is_default: accountData.is_default
+    });
 
     try {
+        if (!negocioId) {
+            console.warn(`${LOG_PREFIX} ⚠️ negocioId es null. Intentando fallback...`);
+            const userDb = query('SELECT negocio_id FROM users WHERE id = ?', [uid]);
+            if (userDb.length > 0 && userDb[0].negocio_id) {
+                negocioId = Number(userDb[0].negocio_id);
+                console.log(`${LOG_PREFIX} ✅ negocioId recuperado de BD: ${negocioId}`);
+            } else {
+                const negDefault = query('SELECT id FROM negocios WHERE deleted_at IS NULL ORDER BY id ASC LIMIT 1');
+                negocioId = negDefault.length > 0 ? Number(negDefault[0].id) : 1;
+                console.log(`${LOG_PREFIX} ⚠️ Usando negocio por defecto: ${negocioId}`);
+            }
+        }
+
         if (accountData.id) {
+            const aid = Number(accountData.id);
             const existing = query(
-                'SELECT * FROM bank_accounts WHERE id = ? AND negocio_id = ? AND deleted_at IS NULL',
-                [accountData.id, negocioId]
+                'SELECT * FROM bank_accounts WHERE id = ? AND deleted_at IS NULL',
+                [aid]
             );
             
             if (existing.length === 0) {
+                console.log(`${LOG_PREFIX} ❌ Cuenta #${aid} no encontrada para editar`);
                 return { success: false, error: 'Cuenta no encontrada' };
             }
             
-            if (!puedeUsuarioEditarCuenta(existing[0])) {
+            const cuentaNormalizada = {
+                ...existing[0],
+                user_id: Number(existing[0].user_id),
+                negocio_id: Number(existing[0].negocio_id) || null,
+                is_default: Number(existing[0].is_default) || 0
+            };
+            
+            if (!puedeUsuarioEditarCuenta(cuentaNormalizada)) {
+                console.log(`${LOG_PREFIX} ❌ Sin permiso para editar cuenta #${aid}`);
                 return { success: false, error: 'No tienes permiso para editar esta cuenta' };
             }
             
             execute(`UPDATE bank_accounts SET bank = ?, owner_name = ?, account_number = ?, phone = ?, 
-                    qr_code = ?, is_default = ?, modified_by = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND negocio_id = ?`, [
-                accountData.bank, accountData.owner_name || null, accountData.account_number,
-                accountData.phone || null, accountData.qr_code || null,
-                accountData.is_default ? 1 : 0, currentUserId, accountData.id, negocioId]);
+                    qr_code = ?, is_default = ?, negocio_id = ?, modified_by = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?`, [
+                accountData.bank,
+                accountData.owner_name || null,
+                accountData.account_number,
+                accountData.phone || null,
+                accountData.qr_code || null,
+                accountData.is_default ? 1 : 0,
+                negocioId,
+                currentUserId,
+                aid
+            ]);
             
             if (accountData.is_default) {
-                execute('UPDATE bank_accounts SET is_default = 0 WHERE id != ? AND negocio_id = ?', [accountData.id, negocioId]);
+                execute('UPDATE bank_accounts SET is_default = 0 WHERE id != ? AND negocio_id = ?', [aid, negocioId]);
             }
             
-            console.log(`${LOG_PREFIX} ✅ Cuenta #${accountData.id} actualizada`);
-            return { success: true, id: accountData.id };
+            console.log(`${LOG_PREFIX} ✅ Cuenta #${aid} actualizada`);
+            
+            const cuentaGuardada = getBankAccount(aid);
+            console.log(`${LOG_PREFIX} ========== FIN (update) ==========`);
+            return { success: true, id: aid, cuenta: cuentaGuardada };
         } else {
             const targetUserId = esAdmin && accountData.user_id 
-                ? accountData.user_id 
-                : user.id;
+                ? Number(accountData.user_id) 
+                : uid;
             
-            if (!esAdmin && accountData.user_id && accountData.user_id !== user.id) {
+            if (!esAdmin && accountData.user_id && Number(accountData.user_id) !== uid) {
+                console.log(`${LOG_PREFIX} ❌ No-admin intenta crear cuenta para otro usuario`);
                 return { success: false, error: 'No puedes crear cuentas para otros usuarios' };
             }
             
@@ -3329,8 +3536,11 @@ function saveBankAccount(accountData) {
                 accountData.account_number, accountData.phone || null, accountData.qr_code || null,
                 isFirst ? 1 : 0, currentUserId, currentUserId]);
             
-            console.log(`${LOG_PREFIX} ✅ Cuenta creada para user #${targetUserId}, id=${result.lastId}`);
-            return { success: true, id: result.lastId };
+            console.log(`${LOG_PREFIX} ✅ Cuenta creada para user #${targetUserId}, id=${result.lastId}, negocio=${negocioId}`);
+            
+            const cuentaGuardada = getBankAccount(result.lastId);
+            console.log(`${LOG_PREFIX} ========== FIN (insert) ==========`);
+            return { success: true, id: result.lastId, cuenta: cuentaGuardada };
         }
     } catch (e) {
         console.error(`${LOG_PREFIX} ❌ Error:`, e);
@@ -3343,27 +3553,33 @@ function deleteBankAccount(id) {
     
     try {
         const negocioId = getNegocioIdActual();
+        const aid = Number(id);
         
         const existing = query(
-            'SELECT * FROM bank_accounts WHERE id = ? AND negocio_id = ? AND deleted_at IS NULL',
-            [id, negocioId]
+            'SELECT * FROM bank_accounts WHERE id = ? AND deleted_at IS NULL',
+            [aid]
         );
         
         if (existing.length === 0) {
             return { success: false, error: 'Cuenta no encontrada' };
         }
         
-        if (!puedeUsuarioEditarCuenta(existing[0])) {
+        const cuentaNormalizada = {
+            ...existing[0],
+            user_id: Number(existing[0].user_id)
+        };
+        
+        if (!puedeUsuarioEditarCuenta(cuentaNormalizada)) {
             return { success: false, error: 'No tienes permiso para eliminar esta cuenta' };
         }
         
-        execute('UPDATE bank_accounts SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND negocio_id = ?', [id, negocioId]);
+        execute('UPDATE bank_accounts SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [aid]);
         
         try {
-            execute('DELETE FROM bank_default_user WHERE bank_account_id = ?', [id]);
+            execute('DELETE FROM bank_default_user WHERE bank_account_id = ?', [aid]);
         } catch (e) {}
         
-        console.log(`${LOG_PREFIX} ✅ Cuenta #${id} eliminada`);
+        console.log(`${LOG_PREFIX} ✅ Cuenta #${aid} eliminada`);
         return { success: true };
     } catch (e) {
         console.error(`${LOG_PREFIX} ❌ Error:`, e);
@@ -3376,16 +3592,17 @@ function setDefaultBankAccount(id) {
     
     try {
         const negocioId = getNegocioIdActual();
+        const aid = Number(id);
         
         if (!esUsuarioActualAdmin()) {
             console.warn(`${LOG_PREFIX} ⚠️ No-admin intentó cambiar default global`);
-            return setCuentaDefaultUsuario(getCurrentUserId(), id);
+            return setCuentaDefaultUsuario(getCurrentUserId(), aid);
         }
         
         execute('UPDATE bank_accounts SET is_default = 0 WHERE negocio_id = ?', [negocioId]);
-        execute('UPDATE bank_accounts SET is_default = 1 WHERE id = ? AND negocio_id = ?', [id, negocioId]);
+        execute('UPDATE bank_accounts SET is_default = 1 WHERE id = ? AND negocio_id = ?', [aid, negocioId]);
         
-        console.log(`${LOG_PREFIX} ✅ Cuenta #${id} establecida como default global por admin`);
+        console.log(`${LOG_PREFIX} ✅ Cuenta #${aid} establecida como default global por admin`);
         return { success: true };
     } catch (e) {
         console.error(`${LOG_PREFIX} ❌ Error:`, e);
@@ -3413,7 +3630,7 @@ function exportRecetasProductosSalva() {
 
         const salva = {
             _meta: {
-                app: 'Panario', version: '2.3.4', type: 'salva_recetas_productos',
+                app: 'Panario', version: '2.3.7', type: 'salva_recetas_productos',
                 exportDate: new Date().toISOString(), negocio_id: negocioId,
                 negocio_nombre: getNombreNegocioDB(),
                 counts: {
@@ -4765,6 +4982,7 @@ window.DBModule = {
     initDB, getDB, saveDatabase, saveAndNotify, query, execute,
     forceReloadFromStorage, reloadFromStorageAndNotify,
     ensureUserTableColumns, ensureSoftDeleteColumns, ensureVoidColumns,
+    ensureSalesNotesColumn,
     ensureOrderIdColumn, ensureWaitingListColumns, ensureBankAccountsColumns,
     ensureCorrienteConfigTable, ensureIsLiberatedColumn, ensureDashboardColumns,
     ensurePremiosConfigTable, ensureDiasSinVentasTable,
@@ -4775,6 +4993,8 @@ window.DBModule = {
     ensureNegociosTable, ensureNegocioIdColumn, migrateToMultiUser,
     ensureNegocioIdInAllTables, migrateNegocioIdToAllTables, createNegocioIdIndexes,
     ensureIsAdminColumn,
+    // 🆕 v2.3.6: Reparación de negocio_id en bank_accounts
+    repararNegocioIdEnBankAccounts,
     // 🆕 ENTREGA B
     ensureCapacidadMaxBloqueColumn,
     ensureBloquesDistribucionColumns,
@@ -4809,13 +5029,14 @@ window.DBModule = {
     getWaitingList, getWaitingListCount, getNextWaitingPosition,
     addToWaitingList, removeFromWaitingList, reindexWaitingList,
     attendFromWaitingList, getWaitingListWithDetails, atenderParcialmenteDeLista,
-    // 🆕 CORRECCIÓN #16: Bank accounts con permisos
+    // 🆕 CORRECCIÓN #16 + REFINAMIENTO #16 + v2.3.6
     getBankAccounts, getBankAccount, getDefaultBankAccount, saveBankAccount, deleteBankAccount, setDefaultBankAccount,
     getBankAccountsParaUsuario,
     getConfigBancaria, saveConfigBancaria,
     getCuentaDefaultUsuario, setCuentaDefaultUsuario,
     puedeUsuarioVerCuenta, puedeUsuarioEditarCuenta,
     ensureBankDefaultUserTable, ensureConfigBancariaTable,
+    ensureForzarQRAdminColumn,
     esUsuarioActualAdmin,
     // 🆕 CORRECCIÓN #17: Preferencias individuales
     ensureUserPreferencesColumns,
@@ -4835,7 +5056,6 @@ window.DBModule = {
     saveProduccion,
     deleteProduccion,
     getProduccionRango,
-    // CORRECCIÓN #7
     saveProduccionRango,
     contarProduccionEnRango,
     getProduccionRangoFechas,
@@ -4845,12 +5065,13 @@ window.DBModule = {
     BACKUP_TYPE_COMPLETE, BACKUP_TYPE_DATA_ONLY
 };
 
-console.log('📦 DB Module cargado correctamente v2.3.4');
+console.log('📦 DB Module cargado correctamente v2.3.7');
 console.log('   🎯 Correcciones aplicadas:');
 console.log('      ✅ #16 (240926): Permisos bancarios');
+console.log('      ✅ REFINAMIENTO #16: Tercer toggle forzar_qr_admin');
 console.log('      ✅ #17 (240926): Configuraciones individuales');
 console.log('      ✅ #1 (250926): Conteo de UNIDADES');
-console.log('   🆕 Novedades v2.3.4:');
-console.log('      • 3 nuevas columnas en users: sound_enabled, sound_id, guia_rapida_activa');
-console.log('      • 4 nuevas funciones: getUserSoundConfig, updateUserSoundConfig, getUserGuiaRapidaActiva, updateUserGuiaRapida');
-console.log('      • Migración automática desde localStorage → BD');
+console.log('      ✅ #4 + #7 (260926): Datos bancarios — REGRESIONES CORREGIDAS');
+console.log('   🆕 Novedades v2.3.7:');
+console.log('      • NUEVA COLUMNA: sales.notes (opcional, editable por el creador)');
+console.log('      • NUEVA FUNCIÓN: ensureSalesNotesColumn()');
