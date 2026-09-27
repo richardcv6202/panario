@@ -21,13 +21,19 @@
 // 🆕 ENTREGA 2 (230926 v8): ANULAR VENTA + VENDEDOR
 // 🆕 v2.1.12 (210926 v9): CORRECCIÓN #2 - BLOQUEO POR RECETAS NO COMPARTIDAS
 // 🆕 v2.1.13 (250926 v10): CORRECCIÓN #15 - FILTRO POR VENDEDOR
-//   - ✅ NUEVO: Selector "👤 Vendedor" en el header de filtros de Ventas
-//   - ✅ NUEVO: Solo aparece si hay más de 1 usuario en el negocio
-//   - ✅ NUEVO: Filtra las ventas por user_id (= created_by)
-//   - ✅ NUEVO: Selector de vendedor también en el modal de Reporte
-//   - ✅ NUEVO: El filtro se propaga a reports.js (filters.created_by)
-//   - ✅ NUEVO: clearFilters() limpia el selector de vendedor
-//   - ✅ NUEVA función: poblarSelectorVendedores()
+// 🆕 v2.1.14 (260926 v11): 🎯 NUEVA FUNCIONALIDAD #1 (260926) - NOTA A LA VENTA
+//   - ✅ showSaleForm() ahora incluye un campo <textarea> para la nota
+//     (opcional, se puede dejar vacío).
+//   - ✅ Al editar una venta existente, la nota se precarga.
+//   - ✅ submitSaleForm() envía saleData.notes.
+//   - ✅ viewSale() muestra la nota si existe.
+//   - ✅ viewSale() ahora incluye un botón "✏️ Editar nota" visible
+//     SOLO para el creador de la venta (no anulada).
+//   - ✅ NUEVA función showEditSaleNoteModal(saleId) que permite
+//     editar la nota post-venta mediante un modal simple.
+//   - ✅ Al guardar la nota desde el modal, se llama a
+//     window.SalesModule.updateSaleNote().
+//   - ✅ La nota NO se muestra en el reporte PDF (por decisión de diseño).
 // ============================================================
 
 // ============================================================
@@ -277,7 +283,6 @@ function renderSalesView() {
     
     const showLiberated = getShowLiberatedSales();
     
-    // 🆕 CORRECCIÓN #15: Determinar si hay más de un vendedor en el negocio
     let hayMultiplesVendedores = false;
     try {
         const usuarios = window.AuthModule?.getUsuariosDelNegocio?.() || [];
@@ -423,7 +428,6 @@ function renderSalesView() {
                     <option value="other">🔄 Otra</option>
                 </select>
                 
-                <!-- 🆕 CORRECCIÓN #15: Selector de vendedor (solo si hay más de 1 usuario) -->
                 <div id="filter-vendedor-container" style="display: none; align-items: center; gap: 4px;">
                     <label style="font-weight: 600; font-size: 12px; color: var(--text-label);">👤 Vendedor:</label>
                     <select id="filter-sales-vendedor" onchange="loadSalesAndExpenses()" 
@@ -468,7 +472,6 @@ function renderSalesView() {
     
     window._currentFilterType = 'sales';
     
-    // 🆕 CORRECCIÓN #15: Poblar el selector de vendedores si hay más de uno
     if (hayMultiplesVendedores) {
         setTimeout(() => poblarSelectorVendedores(), 50);
     }
@@ -641,7 +644,6 @@ function setFilterType(type) {
         toggleLiberadas.style.display = (type === 'sales' || type === 'all') ? 'flex' : 'none';
     }
     
-    // 🆕 CORRECCIÓN #15: Ocultar filtro de vendedor en vistas que no son de ventas
     const vendedorContainer = document.getElementById('filter-vendedor-container');
     if (vendedorContainer) {
         const usuarios = window.AuthModule?.getUsuariosDelNegocio?.() || [];
@@ -659,7 +661,6 @@ function clearFilters() {
     document.getElementById('filter-expense-category').value = '';
     document.getElementById('filter-sales-search').value = '';
     
-    // 🆕 CORRECCIÓN #15: Limpiar también el filtro de vendedor
     const vendedorSelect = document.getElementById('filter-sales-vendedor');
     if (vendedorSelect) vendedorSelect.value = '';
     
@@ -790,7 +791,6 @@ async function loadSalesAndExpenses() {
     const search = document.getElementById('filter-sales-search')?.value?.trim() || '';
     const filterType = window._currentFilterType || 'sales';
     
-    // 🆕 CORRECCIÓN #15: Leer el filtro de vendedor
     const vendedorId = document.getElementById('filter-sales-vendedor')?.value || '';
     
     const showLiberated = getShowLiberatedSales();
@@ -805,9 +805,6 @@ async function loadSalesAndExpenses() {
     }
     
     try {
-        // ============================================================
-        // VISTA DE DEUDAS
-        // ============================================================
         if (filterType === 'debts') {
             let debtQuery = `
                 SELECT * FROM sales 
@@ -819,7 +816,6 @@ async function loadSalesAndExpenses() {
             `;
             let debtParams = [negocioId];
             
-            // 🆕 CORRECCIÓN #15: Filtrar deudas por vendedor
             if (vendedorId) {
                 debtQuery += ' AND user_id = ?';
                 debtParams.push(parseInt(vendedorId));
@@ -920,9 +916,6 @@ async function loadSalesAndExpenses() {
             return;
         }
         
-        // ============================================================
-        // VISTA DE VENTAS / GASTOS / TODO
-        // ============================================================
         let sales = [];
         let expenses = [];
         let allTransactions = [];
@@ -945,7 +938,6 @@ async function loadSalesAndExpenses() {
                 params.push(searchTerm, searchTerm);
             }
             
-            // 🆕 CORRECCIÓN #15: Filtrar por vendedor (user_id = created_by)
             if (vendedorId) {
                 query += ' AND user_id = ?';
                 params.push(parseInt(vendedorId));
@@ -1031,8 +1023,6 @@ async function loadSalesAndExpenses() {
                 let checkParams = [negocioId];
                 if (fromDate) { checkQuery += ' AND DATE(sale_date, "localtime") >= DATE(?)'; checkParams.push(fromDate); }
                 if (toDate) { checkQuery += ' AND DATE(sale_date, "localtime") <= DATE(?)'; checkParams.push(toDate); }
-                
-                // 🆕 CORRECCIÓN #15: Aplicar filtro de vendedor también al contador
                 if (vendedorId) { checkQuery += ' AND user_id = ?'; checkParams.push(parseInt(vendedorId)); }
                 
                 try {
@@ -1328,6 +1318,10 @@ function renderSalesGroupedByDay(container, sales) {
                     const statusLabel = isVoid ? '🚫 ANULADA' : (bloqueado ? '🔒 Solo lectura' : (isDebt ? '💳 Deuda' : '✅ Pagado'));
                     const sesionBadge = sale.session ? getBadgeSesion(sale.session) : '';
                     
+                    // 🆕 v2.1.14: Indicador visual si la venta tiene nota
+                    const tieneNota = sale.notes && String(sale.notes).trim() !== '';
+                    const notaIcono = tieneNota ? '<span title="Tiene nota" style="font-size: 12px; margin-left: 4px;">📝</span>' : '';
+                    
                     return `
                         <div class="card" style="border-left: 4px solid ${statusColor}; padding: 12px 16px; margin-bottom: 6px; opacity: ${(isVoid || bloqueado) ? 0.65 : 1};">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
@@ -1336,6 +1330,7 @@ function renderSalesGroupedByDay(container, sales) {
                                         <span style="font-weight: 600; font-size: 15px;">
                                             ${bloqueado ? '🔒' : '🛒'} <span style="color: var(--text-light); font-weight: 600;">#${sale.id}</span> ${sale.product_name}
                                         </span>
+                                        ${notaIcono}
                                         <span style="font-size: 11px; color: ${statusColor}; background: ${statusColor}20; padding: 1px 8px; border-radius: 10px;">${statusLabel}</span>
                                         ${sesionBadge}
                                     </div>
@@ -1400,6 +1395,9 @@ function renderSalesGroupedByDay(container, sales) {
                             const permisos = checkSalePermission(sale.id);
                             const bloqueado = !permisos.puede;
                             
+                            const tieneNota = sale.notes && String(sale.notes).trim() !== '';
+                            const notaIcono = tieneNota ? '<span title="Tiene nota" style="font-size: 11px; margin-left: 4px;">📝</span>' : '';
+                            
                             return `
                                 <div class="card" style="border-left: 4px solid ${(isVoid || bloqueado) ? '#94a3b8' : '#8b5cf6'}; padding: 8px 14px; margin-bottom: 4px; opacity: ${(isVoid || bloqueado) ? 0.65 : 1};">
                                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
@@ -1408,6 +1406,7 @@ function renderSalesGroupedByDay(container, sales) {
                                                 <span style="font-size: 14px;">
                                                     ${bloqueado ? '🔒' : '🛒'} <span style="color: var(--text-light); font-weight: 600;">#${sale.id}</span> ${sale.product_name}
                                                 </span>
+                                                ${notaIcono}
                                                 <span style="font-size: 11px; color: ${bloqueado ? '#94a3b8' : '#8b5cf6'}; background: ${bloqueado ? '#94a3b820' : '#8b5cf620'}; padding: 1px 6px; border-radius: 8px;">
                                                     ${bloqueado ? '🔒 Solo lectura' : '🚀 Liberada'}
                                                 </span>
@@ -2098,6 +2097,13 @@ async function showLiberatedSaleForm() {
                     </select>
                 </div>
                 
+                <!-- 🆕 v2.1.14: Campo de nota opcional -->
+                <div class="form-group">
+                    <label>📝 Nota (opcional)</label>
+                    <textarea id="liberated-notes" rows="2" placeholder="Ej: Venta de mostrador sin cliente"
+                              style="width: 100%; padding: 12px 16px; border: 2px solid var(--border-color); border-radius: 10px; font-size: 15px; background: var(--bg-input); color: var(--text); font-family: inherit; resize: vertical;"></textarea>
+                </div>
+                
                 <div style="text-align: right; font-size: 22px; font-weight: 700; color: #8b5cf6;">
                     Total: $<span id="liberated-total-display">0.00</span>
                 </div>
@@ -2158,6 +2164,7 @@ async function submitLiberatedSale() {
     const quantity = parseFloat(document.getElementById('liberated-quantity').value) || 0;
     const unitPrice = parseFloat(document.getElementById('liberated-price').value) || 0;
     const paymentMethod = document.getElementById('liberated-payment').value;
+    const notes = document.getElementById('liberated-notes')?.value?.trim() || null;
     
     if (!productoId) {
         window.showToast('⚠️ Selecciona un producto', 'error');
@@ -2182,7 +2189,8 @@ async function submitLiberatedSale() {
             quantity: quantity,
             unit_price: unitPrice,
             payment_method: paymentMethod,
-            sale_date: saleDateNormalizada
+            sale_date: saleDateNormalizada,
+            notes: notes   // 🆕 v2.1.14
         });
         
         if (result.success) {
@@ -2214,6 +2222,7 @@ function closeLiberatedSaleModal() {
 
 // ============================================================
 // FORMULARIO: NUEVA VENTA
+// 🆕 v2.1.14: Añadido campo de nota
 // ============================================================
 
 async function showSaleForm(saleId = null) {
@@ -2284,6 +2293,11 @@ async function showSaleForm(saleId = null) {
                 </div>
             `;
         }
+        
+        // 🆕 v2.1.14: Valor actual de la nota (o cadena vacía)
+        const notesValue = (saleData?.notes !== undefined && saleData?.notes !== null) 
+            ? String(saleData.notes) 
+            : '';
         
         modal.innerHTML = `
             <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto;">
@@ -2377,6 +2391,17 @@ async function showSaleForm(saleId = null) {
                         <span style="flex: 1; font-size: 14px; font-weight: 500;">Es una deuda</span>
                         <input type="checkbox" id="sale-is-debt" ${saleData?.is_debt ? 'checked' : ''} 
                                style="width: 20px; height: 20px; cursor: pointer; accent-color: var(--primary);">
+                    </div>
+                    
+                    <!-- 🆕 v2.1.14: Campo de nota opcional -->
+                    <div class="form-group">
+                        <label>📝 Nota (opcional)</label>
+                        <textarea id="sale-notes" rows="2" 
+                                  placeholder="Ej: Producto entregado a domicilio"
+                                  style="width: 100%; padding: 12px 16px; border: 2px solid var(--border-color); border-radius: 10px; font-size: 15px; background: var(--bg-input); color: var(--text); font-family: inherit; resize: vertical;">${notesValue}</textarea>
+                        <small style="font-size: 11px; color: var(--text-light); display: block; margin-top: 4px;">
+                            💡 Solo tú (el creador) puedes modificar esta nota.
+                        </small>
                     </div>
                     
                     <div style="text-align: right; font-size: 20px; font-weight: 700; color: var(--primary);">
@@ -2496,6 +2521,7 @@ function onSaleDateChange() {
 
 // ============================================================
 // ENVIAR FORMULARIO DE VENTA
+// 🆕 v2.1.14: Envía notes
 // ============================================================
 
 async function submitSaleForm(isEdit, isDebtEdit = false) {
@@ -2517,6 +2543,9 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
     
     const paymentMethod = document.getElementById('sale-payment').value;
     const isDebt = document.getElementById('sale-is-debt').checked;
+    
+    // 🆕 v2.1.14: Leer la nota
+    const notes = document.getElementById('sale-notes')?.value?.trim() || null;
     
     let session = '';
     const sesionRadio = document.querySelector('input[name="sale-sesion"]:checked');
@@ -2550,7 +2579,8 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
         is_debt: isDebt,
         paid: isDebt ? 0 : 1,
         sale_date: saleDateNormalizada,
-        session: session
+        session: session,
+        notes: notes   // 🆕 v2.1.14
     };
     
     const idInput = document.getElementById('sale-id');
@@ -2577,6 +2607,7 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
 
 // ============================================================
 // VER VENTA
+// 🆕 v2.1.14: Muestra la nota + botón editar nota
 // ============================================================
 
 async function viewSale(id) {
@@ -2586,6 +2617,11 @@ async function viewSale(id) {
         
         const permisos = checkSalePermission(sale);
         const bloqueado = !permisos.puede;
+        
+        // 🆕 v2.1.14: Determinar si el usuario actual es el creador
+        const currentUser = window.AuthModule.getCurrentUser();
+        const esCreador = currentUser && Number(sale.user_id) === Number(currentUser.id);
+        const puedoEditarNota = esCreador && sale.voided !== 1;
         
         const modal = document.createElement('div');
         modal.id = 'sale-view-modal';
@@ -2653,6 +2689,33 @@ async function viewSale(id) {
             `;
         }
         
+        // 🆕 v2.1.14: Sección de nota
+        const tieneNota = sale.notes && String(sale.notes).trim() !== '';
+        let notaSection = '';
+        
+        if (tieneNota || puedoEditarNota) {
+            notaSection = `
+                <hr>
+                <div style="margin: 12px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <div style="font-size: 13px; font-weight: 600; color: var(--text-label); text-transform: uppercase; letter-spacing: 0.5px;">
+                            📝 Nota
+                        </div>
+                        ${puedoEditarNota ? `
+                            <button onclick="showEditSaleNoteModal(${sale.id})" 
+                                    class="btn secondary" 
+                                    style="padding: 3px 10px; font-size: 11px; width: auto;">
+                                ✏️ Editar nota
+                            </button>
+                        ` : ''}
+                    </div>
+                    <div style="background: ${tieneNota ? '#fef9e7' : 'var(--bg)'}; border-left: 3px solid ${tieneNota ? '#f59e0b' : '#94a3b8'}; border-radius: 6px; padding: 10px 12px; font-size: 13px; color: ${tieneNota ? '#92400e' : 'var(--text-light)'}; font-style: ${tieneNota ? 'normal' : 'italic'}; white-space: pre-wrap; word-break: break-word;">
+                        ${tieneNota ? sale.notes : 'Sin nota. Puedes añadir una con el botón "Editar nota".'}
+                    </div>
+                </div>
+            `;
+        }
+        
         modal.innerHTML = `
             <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 450px; width: 100%; max-height: 90vh; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -2686,6 +2749,8 @@ async function viewSale(id) {
                 </div>
                 
                 ${corrienteSection}
+                
+                ${notaSection}
                 
                 ${auditoriaSection}
                 ${vendedorFallback}
@@ -2723,6 +2788,180 @@ async function viewSale(id) {
         window.showToast('❌ Error: ' + error.message, 'error');
     }
 }
+
+// ============================================================
+// 🆕 v2.1.14: MODAL PARA EDITAR LA NOTA (POST-VENTA)
+// ============================================================
+
+async function showEditSaleNoteModal(saleId) {
+    const LOG_PREFIX = '📝 [showEditSaleNoteModal]';
+    
+    if (!saleId) {
+        window.showToast('❌ ID de venta inválido', 'error');
+        return;
+    }
+    
+    // Verificar que la venta existe y que el usuario es el creador
+    const sale = await window.SalesModule.getSale(saleId);
+    if (!sale) {
+        window.showToast('❌ Venta no encontrada', 'error');
+        return;
+    }
+    
+    const currentUser = window.AuthModule.getCurrentUser();
+    if (!currentUser || Number(sale.user_id) !== Number(currentUser.id)) {
+        window.showToast('🔒 Solo el creador de la venta puede modificar la nota', 'error', 5000);
+        return;
+    }
+    
+    if (sale.voided === 1) {
+        window.showToast('❌ No se puede editar la nota de una venta anulada', 'error', 5000);
+        return;
+    }
+    
+    const existingModal = document.getElementById('edit-sale-note-modal');
+    if (existingModal) existingModal.remove();
+    
+    const notesActuales = (sale.notes !== undefined && sale.notes !== null) 
+        ? String(sale.notes) 
+        : '';
+    
+    const modal = document.createElement('div');
+    modal.id = 'edit-sale-note-modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 999999; padding: 20px;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 440px; width: 100%; max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f59e0b;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 24px;">📝</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 17px; color: #f59e0b;">Editar nota de venta</h2>
+                        <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-light);">
+                            Venta #${sale.id} — ${sale.product_name}
+                        </p>
+                    </div>
+                </div>
+                <button onclick="closeEditSaleNoteModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
+            </div>
+            
+            <div style="background: #fef9e7; border: 1px solid #f59e0b; border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; font-size: 12px; color: #92400e;">
+                💡 La nota es interna. <strong>No aparece en el reporte PDF.</strong>
+                Puedes dejarla vacía si quieres eliminarla.
+            </div>
+            
+            <form id="edit-sale-note-form" style="display: flex; flex-direction: column; gap: 12px;">
+                <div class="form-group">
+                    <label style="font-size: 13px; font-weight: 600;">📝 Nota</label>
+                    <textarea id="edit-sale-note-textarea" 
+                              rows="4" 
+                              placeholder="Escribe aquí tu nota..."
+                              style="width: 100%; padding: 12px 14px; border: 2px solid var(--border-color); border-radius: 10px; font-size: 14px; background: var(--bg-input); color: var(--text); font-family: inherit; resize: vertical; min-height: 100px;">${notesActuales}</textarea>
+                    <small style="font-size: 11px; color: var(--text-light); display: block; margin-top: 4px;">
+                        Máximo 500 caracteres.
+                    </small>
+                </div>
+                
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button type="submit" 
+                            class="btn primary" 
+                            style="flex: 2; padding: 12px; font-size: 14px; background: #f59e0b; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        💾 Guardar nota
+                    </button>
+                    <button type="button" 
+                            onclick="closeEditSaleNoteModal()" 
+                            class="btn secondary" 
+                            style="flex: 1;">
+                        ❌ Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    setTimeout(() => {
+        const textarea = document.getElementById('edit-sale-note-textarea');
+        if (textarea) {
+            textarea.focus();
+            // Colocar el cursor al final
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        }
+    }, 100);
+    
+    const form = document.getElementById('edit-sale-note-form');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await submitEditSaleNote(saleId);
+    });
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeEditSaleNoteModal();
+    });
+}
+
+async function submitEditSaleNote(saleId) {
+    const LOG_PREFIX = '📝 [submitEditSaleNote]';
+    
+    const textarea = document.getElementById('edit-sale-note-textarea');
+    if (!textarea) return;
+    
+    let notes = textarea.value.trim();
+    
+    // Limitar a 500 caracteres
+    if (notes.length > 500) {
+        notes = notes.substring(0, 500);
+    }
+    
+    const notesFinal = notes.length > 0 ? notes : null;
+    
+    try {
+        const result = await window.SalesModule.updateSaleNote(saleId, notesFinal);
+        
+        if (result.success) {
+            window.showToast('✅ Nota guardada correctamente', 'success', 3000);
+            closeEditSaleNoteModal();
+            
+            // Refrescar la vista si está abierta
+            const viewModal = document.getElementById('sale-view-modal');
+            if (viewModal) {
+                // Recargar el modal de vista
+                window.closeSaleViewModal();
+                setTimeout(() => viewSale(saleId), 300);
+            }
+            
+            // Refrescar el listado
+            if (typeof loadSalesAndExpenses === 'function') {
+                loadSalesAndExpenses();
+            }
+        } else {
+            window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 5000);
+        }
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Excepción:`, error);
+        window.showToast('❌ Error: ' + error.message, 'error', 5000);
+    }
+}
+
+function closeEditSaleNoteModal() {
+    const modal = document.getElementById('edit-sale-note-modal');
+    if (modal) {
+        modal.style.animation = 'modalFadeOut 0.2s ease forwards';
+        setTimeout(() => {
+            if (modal.parentNode) modal.remove();
+        }, 200);
+    }
+}
+
+window.showEditSaleNoteModal = showEditSaleNoteModal;
+window.closeEditSaleNoteModal = closeEditSaleNoteModal;
+window.submitEditSaleNote = submitEditSaleNote;
 
 // ============================================================
 // ANULAR VENTA
@@ -3428,7 +3667,6 @@ function showSalesReportModal() {
                         </select>
                     </div>
                     
-                    <!-- 🆕 CORRECCIÓN #15: Selector de vendedor (solo si hay más de 1 usuario) -->
                     <div class="form-group" style="margin-bottom: 8px; display: none;" id="report-sales-vendedor-container">
                         <label style="font-size: 12px;">👤 Vendedor</label>
                         <select id="report-sales-vendedor" class="input-select">
@@ -3462,7 +3700,6 @@ function showSalesReportModal() {
     
     document.body.appendChild(modal);
     
-    // 🆕 CORRECCIÓN #15: Poblar el selector de vendedores en el reporte
     try {
         const usuarios = window.AuthModule?.getUsuariosDelNegocio?.() || [];
         const container = document.getElementById('report-sales-vendedor-container');
@@ -3510,7 +3747,6 @@ function generateSalesReportFromForm() {
         session: document.getElementById('report-sales-session')?.value || ''
     };
     
-    // 🆕 CORRECCIÓN #15: Añadir filtro de vendedor si existe
     const vendedorId = document.getElementById('report-sales-vendedor')?.value || '';
     if (vendedorId) {
         filters.created_by = parseInt(vendedorId);
@@ -3634,16 +3870,20 @@ window.MOTIVOS_DIAS_SIN_VENTAS = MOTIVOS_DIAS_SIN_VENTAS;
 window.checkSalePermission = checkSalePermission;
 window.renderBadgeSoloLecturaVenta = renderBadgeSoloLecturaVenta;
 
-// 🆕 CORRECCIÓN #15
 window.poblarSelectorVendedores = poblarSelectorVendedores;
 
-console.log('📦 UI Sales Module v2.1.13 (CORRECCIÓN #15: filtro por vendedor)');
-console.log('   🆕 Novedades v2.1.13:');
-console.log('      • ✅ NUEVO: Selector "👤 Vendedor" en Ventas');
-console.log('      • ✅ Solo aparece si hay más de 1 usuario en el negocio');
-console.log('      • ✅ Filtra las ventas por user_id (= created_by)');
-console.log('      • ✅ Selector también en el modal de Reporte');
-console.log('      • ✅ El filtro se propaga a reports.js (filters.created_by)');
-console.log('      • ✅ clearFilters() limpia el selector');
-console.log('      • ✅ NUEVA función: poblarSelectorVendedores()');
-console.log('   ✅ Compatibilidad total con versiones anteriores');
+// 🆕 v2.1.14: Exportar funciones de nota
+window.showEditSaleNoteModal = showEditSaleNoteModal;
+window.closeEditSaleNoteModal = closeEditSaleNoteModal;
+window.submitEditSaleNote = submitEditSaleNote;
+
+console.log('📦 UI Sales Module v2.1.14 (NUEVA FUNCIONALIDAD #1: nota a la venta)');
+console.log('   🆕 Novedades v2.1.14:');
+console.log('      • ✅ Campo "Nota" en el formulario de nueva venta/edición');
+console.log('      • ✅ Sección "📝 Nota" en el detalle de venta');
+console.log('      • ✅ Botón "✏️ Editar nota" (solo el creador)');
+console.log('      • ✅ NUEVA función: showEditSaleNoteModal()');
+console.log('      • ✅ Indicador visual 📝 en ventas con nota');
+console.log('   🔄 Correcciones anteriores mantenidas:');
+console.log('      • v2.1.13: Filtro por vendedor (Corrección #15)');
+console.log('      • v2.1.12: Bloqueo por recetas no compartidas');
