@@ -1,617 +1,391 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="light">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     
-    <!-- ============================================================ -->
-    <!-- VIEWPORT CORREGIDO                                           -->
-    <!-- ============================================================ -->
-    <!-- Se ELIMINA: maximum-scale=1.0 y user-scalable=no             -->
-    <!-- Motivo: rompen iframes en móvil y afectan accesibilidad.     -->
-    <!-- Se MANTIENE: viewport-fit=cover para safe-area en iOS.       -->
-    <!-- ============================================================ -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <!-- ============================================================
+         🆕 v2.3.6: METADATOS DE LA APP
+         ============================================================ -->
+    <meta name="app-version" content="2.3.6">
+    <meta name="description" content="Panario - Sistema de gestión para panadería artesanal. Offline-first, multiusuario.">
+    <meta name="author" content="Ricardo Castillo Valdés">
+    <meta name="theme-color" content="#f5a623">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Panario">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no">
     
-    <!-- ============================================================ -->
-    <!-- 📑 TÍTULO DINÁMICO                                            -->
-    <!-- El título se actualiza desde app.js cuando el usuario se      -->
-    <!-- loguea. Formato: "Panadería La Esquina - Panario"            -->
-    <!-- ============================================================ -->
+    <!-- Open Graph -->
+    <meta property="og:title" content="Panario - Sistema de Gestión">
+    <meta property="og:description" content="Sistema de gestión para panadería artesanal. Offline-first.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="./assets/icon-512.png">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Panario - Sistema de Gestión">
+    <meta name="twitter:description" content="Sistema de gestión para panadería artesanal. Offline-first.">
+    <meta name="twitter:image" content="./assets/icon-512.png">
+    
     <title>Panario - Panadería Artesanal</title>
-    <meta name="app-version" content="2.2.1">
-    <meta name="app-build" content="20260923">
     
-    <!-- ============================================================ -->
-    <!-- 📱 ICONOS Y FAVICON                                          -->
-    <!-- ============================================================ -->
-    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
-    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <!-- ============================================================
+         FAVICONS
+         ============================================================ -->
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="icon" type="image/png" sizes="16x16" href="favicon16.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon32.ico">
-    <link rel="apple-touch-icon" href="assets/icon-192.png">
+    <link rel="apple-touch-icon" href="./assets/icon-192.png">
     
-    <!-- ============================================================ -->
-    <!-- 📱 PWA                                                       -->
-    <!-- ============================================================ -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#f5a623">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Panario">
+    <!-- ============================================================
+         MANIFEST PWA
+         ============================================================ -->
+    <link rel="manifest" href="./manifest.json">
     
-    <!-- ============================================================ -->
-    <!-- 📦 ESTILOS                                                   -->
-    <!-- ============================================================ -->
-    <link rel="stylesheet" href="css/style.css">
+    <!-- ============================================================
+         ESTILOS
+         ============================================================ -->
+    <link rel="stylesheet" href="./css/style.css">
     
+    <!-- ============================================================
+         PRELOAD DE ASSETS CRÍTICOS
+         ============================================================ -->
+    <link rel="preload" href="./lib/sql-wasm.wasm" as="fetch" type="application/wasm" crossorigin>
+    <link rel="preload" href="./js/app.js" as="script">
+    <link rel="preload" href="./js/db.js" as="script">
+    
+    <!-- ============================================================
+         SCRIPTS - LIBRERÍAS EXTERNAS (deben ir PRIMERO)
+         ============================================================ -->
+    <script src="./lib/sql-wasm.js"></script>
+    <script src="./lib/qrcode.js"></script>
 </head>
 <body>
-    <!-- ============================================================ -->
-    <!-- PANTALLA DE LOGIN/REGISTRO                                   -->
-    <!-- ============================================================ -->
+
+    <!-- ============================================================
+         PANTALLA DE LOGIN/REGISTRO
+         ============================================================ -->
     <div id="authScreen" class="screen active">
         <div class="auth-wrapper">
             <div class="auth-container">
                 <div class="auth-header">
-                    <div class="logo">🍞</div>
+                    <span class="logo">🍞</span>
                     <h1>Panario</h1>
                     <p class="subtitle">Tu panadería en orden</p>
                 </div>
                 
-                <div id="loginForm" class="auth-form">
+                <!-- LOGIN FORM -->
+                <form id="loginForm" class="auth-form" style="display: flex;">
                     <div class="form-group">
                         <label for="loginUser">👤 Usuario</label>
-                        <input type="text" id="loginUser" placeholder="Ej: richard_pan" autocomplete="username">
+                        <input type="text" id="loginUser" placeholder="nombre_usuario" autocomplete="username" required>
                     </div>
                     <div class="form-group">
                         <label for="loginPass">🔒 Contraseña</label>
-                        <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password">
+                        <input type="password" id="loginPass" placeholder="••••••" autocomplete="current-password" required>
                     </div>
-                    <button id="loginBtn" class="btn primary">Iniciar sesión</button>
-                    <button id="showRegisterBtn" class="btn secondary">📝 Registrarme</button>
+                    <button type="button" id="loginBtn" class="btn primary">🔑 Iniciar sesión</button>
                     <div id="loginError" class="error"></div>
-                </div>
-
-                <div id="registerForm" class="auth-form" style="display:none">
+                    <p style="text-align: center; font-size: 13px; color: var(--text-light); margin-top: 8px;">
+                        ¿No tienes cuenta?
+                        <span id="showRegisterBtn" style="color: var(--primary); cursor: pointer; font-weight: 600;">Crear una</span>
+                    </p>
+                </form>
+                
+                <!-- REGISTER FORM -->
+                <form id="registerForm" class="auth-form" style="display: none;">
                     <div class="form-group">
                         <label for="regUser">👤 Usuario</label>
-                        <input type="text" id="regUser" placeholder="Elige un nombre de usuario" autocomplete="username">
+                        <input type="text" id="regUser" placeholder="nombre_usuario" autocomplete="username" required>
                     </div>
                     <div class="form-group">
                         <label for="regPass">🔒 Contraseña</label>
-                        <input type="password" id="regPass" placeholder="Mínimo 4 caracteres" autocomplete="new-password">
+                        <input type="password" id="regPass" placeholder="Mínimo 4 caracteres" autocomplete="new-password" required>
                     </div>
                     <div class="form-group">
                         <label for="regName">📛 Nombre completo</label>
-                        <input type="text" id="regName" placeholder="Tu nombre y apellidos">
+                        <input type="text" id="regName" placeholder="Tu nombre" required>
                     </div>
                     
-                    <!-- SELECCIÓN DE MODO DE NEGOCIO -->
+                    <!-- Selección de modo de negocio -->
                     <div class="form-group">
                         <label>🏢 Modo de negocio</label>
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <label class="negocio-mode-option" 
-                                   style="flex: 1; min-width: 120px; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--primary); cursor: pointer; text-align: center; background: var(--primary-light); transition: all 0.2s;"
-                                   onclick="selectNegocioMode('crear')">
-                                <input type="radio" name="negocioMode" value="crear" checked style="display: none;">
-                                <div style="font-size: 24px; margin-bottom: 4px;">🆕</div>
-                                <div style="font-size: 13px; font-weight: 600;">Crear negocio</div>
-                                <div style="font-size: 10px; color: var(--text-light);">Soy el administrador</div>
+                        <div style="display: flex; gap: 8px; margin-top: 4px;">
+                            <label class="negocio-mode-option" onclick="selectNegocioMode('crear')" 
+                                   style="flex: 1; display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--primary-light); border: 2px solid var(--primary); border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                                <input type="radio" name="negocioMode" value="crear" checked style="cursor: pointer;">
+                                <span style="font-size: 13px;">✨ Crear nuevo</span>
                             </label>
-                            <label class="negocio-mode-option"
-                                   style="flex: 1; min-width: 120px; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--border-color); cursor: pointer; text-align: center; background: var(--bg); transition: all 0.2s;"
-                                   onclick="selectNegocioMode('unirse')">
-                                <input type="radio" name="negocioMode" value="unirse" style="display: none;">
-                                <div style="font-size: 24px; margin-bottom: 4px;">🔗</div>
-                                <div style="font-size: 13px; font-weight: 600;">Unirme a uno</div>
-                                <div style="font-size: 10px; color: var(--text-light);">Tengo un código</div>
+                            <label class="negocio-mode-option" onclick="selectNegocioMode('unirse')" 
+                                   style="flex: 1; display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--bg); border: 2px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                                <input type="radio" name="negocioMode" value="unirse" style="cursor: pointer;">
+                                <span style="font-size: 13px;">🔗 Unirme</span>
                             </label>
                         </div>
                     </div>
                     
-                    <!-- Campo para NOMBRE DEL NEGOCIO (visible si "crear") -->
+                    <!-- Nombre del negocio (modo crear) -->
                     <div class="form-group" id="negocio-name-group">
                         <label for="regBusiness">🏪 Nombre del negocio</label>
-                        <input type="text" id="regBusiness" placeholder="Ej: Panadería La Esquina">
+                        <input type="text" id="regBusiness" placeholder="Ej: Panadería El Trigal">
                     </div>
                     
-                    <!-- Campo para CÓDIGO DE INVITACIÓN (visible si "unirse") -->
+                    <!-- Código de invitación (modo unirse) -->
                     <div class="form-group" id="negocio-code-group" style="display: none;">
                         <label for="regCodigo">🔑 Código de invitación</label>
-                        <input type="text" id="regCodigo" placeholder="Ej: ABC12345" maxlength="8" 
-                               style="text-transform: uppercase; letter-spacing: 2px; font-weight: 600;"
+                        <input type="text" id="regCodigo" placeholder="ABC12345" maxlength="8" 
+                               style="text-transform: uppercase; letter-spacing: 2px; text-align: center; font-weight: 600;"
                                oninput="previewNegocio(this.value)">
                         <div id="negocio-preview" style="margin-top: 6px; font-size: 12px;"></div>
-                        <small style="font-size: 11px; color: var(--text-light);">Pídele el código al administrador del negocio</small>
                     </div>
                     
-                    <button id="registerBtn" class="btn primary">Crear cuenta</button>
-                    <button id="showLoginBtn" class="btn secondary">← Ya tengo cuenta</button>
+                    <button type="button" id="registerBtn" class="btn primary">✨ Crear cuenta</button>
                     <div id="registerError" class="error"></div>
-                </div>
-
+                    <p style="text-align: center; font-size: 13px; color: var(--text-light); margin-top: 8px;">
+                        ¿Ya tienes cuenta?
+                        <span id="showLoginBtn" style="color: var(--primary); cursor: pointer; font-weight: 600;">Iniciar sesión</span>
+                    </p>
+                </form>
+                
                 <div class="auth-footer">
-                    <small>💾 Datos guardados localmente en tu dispositivo</small>
+                    © 2026 Ricardo Castillo Valdés · v2.3.6
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ============================================================ -->
-    <!-- APP PRINCIPAL (LOGUEADO)                                     -->
-    <!-- ============================================================ -->
+    <!-- ============================================================
+         PANTALLA PRINCIPAL DE LA APP
+         ============================================================ -->
     <div id="appScreen" class="screen">
         <!-- HEADER -->
         <header>
-            <!-- 
-              Logo clickeable → ir al Dashboard
-              El atributo id="appHeaderTitle" permite que app.js lo modifique.
-              Al hacer clic, se navega al Dashboard (Panel de Control).
-              Fallback: "🍞 Panario" si no hay negocio asignado.
-            -->
-            <h1 id="appHeaderTitle" 
-                title="Ir al Panel de Control" 
-                onclick="window.navigate('dashboard')"
-                onmouseover="this.style.opacity='0.8'" 
-                onmouseout="this.style.opacity='1'"
-                style="cursor: pointer; user-select: none; transition: opacity 0.2s;">🍞 Panario</h1>
-            <div style="display: flex; align-items: center; gap: 8px; position: relative;">
-                
-                <!-- 🔔 CAMPANITA DE NOTIFICACIONES -->
-                <div id="notification-bell" 
-                     onclick="window.NotificationsModule?.showNotificationsModal()" 
-                     style="position: relative; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 22px; padding: 4px 8px; border-radius: 8px; transition: all 0.2s; color: var(--text); user-select: none;"
-                     onmouseover="this.style.background='var(--bg)'" 
-                     onmouseout="this.style.background='transparent'"
-                     title="Notificaciones">
-                    <span style="font-size: 22px; line-height: 1;">🔔</span>
-                    <span id="bell-badge" style="position: absolute; top: -2px; right: -4px; background: #ef4444; color: #fff; font-size: 10px; font-weight: 700; min-width: 18px; height: 18px; border-radius: 50%; display: none; align-items: center; justify-content: center; padding: 0 4px; border: 2px solid var(--bg-card); box-shadow: 0 2px 4px rgba(0,0,0,0.2); line-height: 1; font-family: system-ui, -apple-system, sans-serif;">0</span>
-                </div>
-                
-                <!-- ❓ BOTÓN DE AYUDA -->
-                <div id="help-button" 
-                     onclick="if(window.HelpModule && window.HelpModule.showHelpMenu) window.HelpModule.showHelpMenu(); else if(window.showHelpMenu) window.showHelpMenu(); else window.showToast('❓ Centro de ayuda no disponible', 'warning', 3000);" 
-                     style="cursor: pointer; font-size: 20px; padding: 4px 8px; border-radius: 8px; transition: all 0.2s; color: var(--text);" 
-                     title="Centro de Ayuda"
-                     onmouseover="this.style.background='var(--bg)'" 
-                     onmouseout="this.style.background='transparent'">
-                    ❓
-                </div>
-                
-                <!-- AVATAR Y NOMBRE DE USUARIO -->
-                <span id="userDisplay" onclick="toggleUserMenu()" style="cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; background: var(--bg); border: 1px solid var(--border-color); transition: all 0.2s;">
-                    👤 <span id="userNameDisplay">Usuario</span>
-                </span>
-                
-                <!-- BOTÓN DE CERRAR SESIÓN -->
-                <button id="logoutHeaderBtn" onclick="handleLogout()" class="icon-btn" title="Cerrar sesión" style="background: none; border: none; font-size: 22px; cursor: pointer; padding: 4px 8px; border-radius: 8px; transition: background 0.2s; color: var(--text); display: flex; align-items: center; gap: 4px;">
-                    🚪
-                </button>
-            </div>
+            <h1>🍞 Panario</h1>
+            <span id="userDisplay" onclick="toggleUserMenu()">👤 Usuario</span>
+            <button class="icon-btn" onclick="showNotificationsModal()" title="Notificaciones" 
+                    style="position: relative;">
+                🔔
+                <span id="notificationBadge" 
+                      style="display: none; position: absolute; top: -2px; right: -2px; 
+                             background: var(--danger); color: #fff; font-size: 10px; 
+                             font-weight: 700; padding: 1px 5px; border-radius: 10px; 
+                             min-width: 16px; text-align: center;">0</span>
+            </button>
+            <button class="icon-btn" onclick="showHelpMenu()" title="Ayuda">❓</button>
         </header>
-
+        
         <!-- MENÚ DE USUARIO -->
-        <div id="userMenu" style="display: none; position: fixed; top: 60px; right: 16px; background: var(--bg-card); border-radius: var(--radius); box-shadow: 0 8px 30px rgba(0,0,0,0.2); border: 1px solid var(--border-color); min-width: 200px; z-index: 9999; overflow: hidden;">
-            <div style="padding: 12px 16px; border-bottom: 1px solid var(--border-color);">
-                <div style="font-weight: 600; font-size: 14px;" id="menuUserName">Usuario</div>
-                <div style="font-size: 12px; color: var(--text-light);" id="menuUserEmail">usuario@email.com</div>
+        <div id="userMenu" 
+             style="display: none; position: fixed; top: 60px; right: 16px; 
+                    background: var(--bg-card); border-radius: var(--radius); 
+                    box-shadow: var(--shadow-hover); padding: 8px; min-width: 200px; 
+                    z-index: 9999;">
+            <div style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">
+                <div id="menuUserName" style="font-weight: 600; font-size: 14px;">Usuario</div>
+                <div id="menuUserEmail" style="font-size: 11px; color: var(--text-light);">correo@ejemplo.com</div>
             </div>
-            <div style="padding: 8px 0;">
-                <button onclick="window.navigate('profile'); document.getElementById('userMenu').style.display='none'" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 16px; border: none; background: none; cursor: pointer; font-size: 14px; color: var(--text); transition: background 0.2s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
-                    👤 Mi Perfil
-                </button>
-                <button onclick="handleLogout()" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 16px; border: none; background: none; cursor: pointer; font-size: 14px; color: #ef4444; transition: background 0.2s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">
-                    🚪 Cerrar sesión
-                </button>
-            </div>
+            <button onclick="window.navigate('profile'); toggleUserMenu();" 
+                    style="display: block; width: 100%; text-align: left; padding: 10px 12px; 
+                           background: none; border: none; cursor: pointer; font-size: 14px; 
+                           border-radius: 6px; transition: background 0.2s;">
+                👤 Mi Perfil
+            </button>
+            <button onclick="window.navigate('settings'); toggleUserMenu();" 
+                    style="display: block; width: 100%; text-align: left; padding: 10px 12px; 
+                           background: none; border: none; cursor: pointer; font-size: 14px; 
+                           border-radius: 6px; transition: background 0.2s;">
+                ⚙️ Herramientas
+            </button>
+            <button onclick="handleLogout()" 
+                    style="display: block; width: 100%; text-align: left; padding: 10px 12px; 
+                           background: none; border: none; cursor: pointer; font-size: 14px; 
+                           color: var(--danger); border-radius: 6px; transition: background 0.2s;">
+                🚪 Cerrar sesión
+            </button>
         </div>
-
-        <!-- CONTENIDO DINÁMICO -->
+        
+        <!-- CONTENIDO PRINCIPAL -->
         <main id="mainContent">
-            <!-- Se carga por JS -->
+            <div class="card">
+                <h2>⏳ Cargando...</h2>
+                <p>Inicializando la aplicación...</p>
+            </div>
         </main>
-
-        <!-- MENÚ INFERIOR -->
+        
+        <!-- BOTTOM NAVIGATION -->
         <nav class="bottom-nav">
-            <button class="nav-item active" data-section="dashboard" title="Panel">📊</button>
+            <button class="nav-item active" data-section="dashboard" title="Panel de control">📊</button>
             <button class="nav-item" data-section="orders" title="Pedidos">📋</button>
             <button class="nav-item" data-section="insumos" title="Insumos">🛒</button>
             <button class="nav-item" data-section="recipes" title="Recetas">📖</button>
             <button class="nav-item" data-section="productos" title="Productos">🏷️</button>
             <button class="nav-item" data-section="sales" title="Ventas">💰</button>
             <button class="nav-item" data-section="settings" title="Herramientas">⚙️</button>
-            <button class="nav-item" data-section="profile" title="Perfil">👤</button>
         </nav>
     </div>
 
-    <!-- ============================================================ -->
-    <!-- 📦 CARGAR SQLITE (SQL.js) - LOCAL                            -->
-    <!-- ============================================================ -->
-    <script src="lib/sql-wasm.js"></script>
-    
-    <!-- ============================================================ -->
-    <!-- 📦 CARGAR LIBRERÍA QRCODE - LOCAL                            -->
-    <!-- ============================================================ -->
-    <script src="lib/qrcode.js"></script>
-    
-    <!-- ============================================================ -->
-    <!-- 📦 SCRIPTS DE PANARIO - TODOS LOS MÓDULOS                    -->
-    <!-- ============================================================ -->
-    
-    <!-- Módulo de modales (DEBE IR PRIMERO) -->
-    <script src="js/modal.js"></script>
+    <!-- ============================================================
+         SCRIPTS - MÓDULOS CORE (deben ir ANTES que los módulos que los usan)
+         ============================================================ -->
     
     <!-- Módulos base -->
-    <script src="js/db.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/theme.js"></script>
-    <script src="js/profile.js"></script>
+    <script src="./js/modal.js"></script>
+    <script src="./js/db.js"></script>
+    <script src="./js/auth.js"></script>
+    <script src="./js/theme.js"></script>
+    <script src="./js/profile.js"></script>
     
-    <!-- Módulo de notificaciones -->
-    <script src="js/notifications.js"></script>
+    <!-- Módulos auxiliares -->
+    <script src="./js/notifications.js"></script>
+    <script src="./js/corriente-utils.js"></script>
     
-    <!-- Módulo de corriente (utilidades compartidas) -->
-    <script src="js/corriente-utils.js"></script>
+    <!-- Módulos de lógica + UI -->
+    <script src="./js/orders.js"></script>
+    <script src="./js/ui-orders.js"></script>
+    <script src="./js/ui-insumos.js"></script>
+    <script src="./js/recipes.js"></script>
+    <script src="./js/ui-recipes.js"></script>
+    <script src="./js/ui-productos.js"></script>
+    <script src="./js/sales.js"></script>
+    <script src="./js/ui-sales.js"></script>
+    <script src="./js/dashboard.js"></script>
+    <script src="./js/ui-settings.js"></script>
+    <script src="./js/reports.js"></script>
+    <script src="./js/rewards.js"></script>
+    <script src="./js/help.js"></script>
     
-    <!-- Módulo de pedidos -->
-    <script src="js/orders.js"></script>
-    <script src="js/ui-orders.js"></script>
+    <!-- Controlador principal (SIEMPRE AL FINAL) -->
+    <script src="./js/app.js"></script>
     
-    <!-- Módulo de insumos -->
-    <script src="js/ui-insumos.js"></script>
-    
-    <!-- Módulo de recetas -->
-    <script src="js/recipes.js"></script>
-    <script src="js/ui-recipes.js"></script>
-    
-    <!-- Módulo de productos -->
-    <script src="js/ui-productos.js"></script>
-    
-    <!-- Módulo de ventas -->
-    <script src="js/sales.js"></script>
-    <script src="js/ui-sales.js"></script>
-    
-    <!-- Módulo de dashboard -->
-    <script src="js/dashboard.js"></script>
-    
-    <!-- Módulo de herramientas -->
-    <script src="js/ui-settings.js"></script>
-    
-    <!-- Módulo de reportes -->
-    <script src="js/reports.js"></script>
-    
-    <!-- Módulo de premios (FASE 12) -->
-    <script src="js/rewards.js"></script>
-
-    <!-- 🆕 CORRECCIÓN #14: Ayuda detallada como módulo JS -->
-    <script src="js/help-detailed.js"></script>
-    
-    <!-- Módulo de ayuda -->
-    <script src="js/help.js"></script>
-    
-    <!-- Controlador principal (siempre al final) -->
-    <script src="js/app.js"></script>
-
-    <!-- ============================================================ -->
-    <!-- 🆕 SERVICE WORKER - REGISTRO Y ACTUALIZACIÓN                 -->
-    <!-- ============================================================ -->
+    <!-- ============================================================
+         REGISTRO DEL SERVICE WORKER
+         ============================================================ -->
     <script>
-    // ============================================================
-    // SERVICE WORKER REGISTRATION - Panario v2.2.1
-    // ============================================================
-    // Registra el SW con ruta RELATIVA (./sw.js) para que funcione
-    // tanto en localhost como en GitHub Pages (subcarpeta).
-    //
-    // - Detecta nuevas versiones del SW y avisa al usuario.
-    // - Maneja errores sin bloquear la app.
-    // - Solo registra en contextos seguros (HTTPS o localhost).
-    // - Escucha mensajes CACHE_REPAIRED_START/END
-    // ============================================================
-    
-    (function() {
-        'use strict';
-        
-        // ============================================================
-        // VERIFICAR SOPORTE
-        // ============================================================
-        if (!('serviceWorker' in navigator)) {
-            console.log('ℹ️ Service Worker no soportado en este navegador');
-            return;
-        }
-        
-        // ============================================================
-        // VERIFICAR CONTEXTO SEGURO
-        // ============================================================
-        const isSecureContext = (
-            window.location.protocol === 'https:' ||
-            window.location.hostname === 'localhost' ||
-            window.location.hostname === '127.0.0.1' ||
-            window.location.hostname === '[::1]'
-        );
-        
-        if (!isSecureContext) {
-            console.log('ℹ️ Service Worker solo se registra en HTTPS o localhost');
-            return;
-        }
-        
-        // ============================================================
-        // REGISTRAR SERVICE WORKER
-        // ============================================================
-        window.addEventListener('load', function() {
-            navigator.serviceWorker.register('./sw.js', {
-                scope: './'
-            })
-            .then(function(registration) {
-                console.log('✅ Service Worker registrado correctamente');
-                console.log('   📍 Scope:', registration.scope);
-                
-                // ============================================================
-                // ESCUCHAR MENSAJES DEL SW
-                // ============================================================
-                navigator.serviceWorker.addEventListener('message', function(event) {
-                    if (!event.data) return;
-                    
-                    // ---- CACHE_REPAIRED_START ----
-                    if (event.data.type === 'CACHE_REPAIRED_START') {
-                        console.log(`🔧 SW: Iniciando reparación de caché (${event.data.total} assets)...`);
-                        if (window.showToast) {
-                            window.showToast(
-                                `🔧 Reparando caché (${event.data.total} archivos)...`,
-                                'info',
-                                3000
-                            );
-                        }
-                    }
-                    
-                    // ---- CACHE_REPAIRED_END ----
-                    if (event.data.type === 'CACHE_REPAIRED_END') {
-                        console.log(`✅ SW: Caché reparado (${event.data.downloaded} OK, ${event.data.failed} fallidos)`);
-                        if (window.showToast) {
-                            if (event.data.failed === 0) {
-                                window.showToast(
-                                    `✅ Caché reparado correctamente (${event.data.downloaded} archivos)`,
-                                    'success',
-                                    4000
-                                );
-                            } else {
-                                window.showToast(
-                                    `⚠️ Caché parcialmente reparado (${event.data.downloaded} OK, ${event.data.failed} fallidos)`,
-                                    'warning',
-                                    5000
-                                );
-                            }
-                        }
-                    }
-                    
-                    // ---- CACHE_REPAIRED (compatibilidad v2.1.10) ----
-                    if (event.data.type === 'CACHE_REPAIRED') {
-                        console.log(`✅ SW: Caché reparado (compatibilidad v2.1.10)`);
-                    }
-                    
-                    // ---- INTEGRITY_RESULT ----
-                    if (event.data.type === 'INTEGRITY_RESULT') {
-                        console.log(`🔍 SW: Integridad verificada:`, event.data);
-                    }
-                });
-                
-                // ============================================================
-                // DETECTAR ACTUALIZACIONES DEL SERVICE WORKER
-                // ============================================================
-                registration.addEventListener('updatefound', function() {
-                    const newWorker = registration.installing;
-                    if (!newWorker) return;
-                    
-                    console.log('🔄 Nueva versión del SW detectada, instalando...');
-                    
-                    newWorker.addEventListener('statechange', function() {
-                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            console.log('✨ Nueva versión lista. Mostrando aviso al usuario.');
+        (function() {
+            const SW_VERSION = '2.3.6';
+            
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('./sw.js', { scope: './' })
+                        .then(function(registration) {
+                            console.log('✅ Service Worker registrado correctamente');
+                            console.log('   📦 Scope:', registration.scope);
                             
-                            setTimeout(function() {
-                                if (window.ModalModule && window.ModalModule.showConfirm) {
-                                    window.ModalModule.showConfirm({
-                                        title: '✨ Actualización disponible',
-                                        message: 'Hay una nueva versión de Panario disponible.\n\n¿Quieres actualizar ahora?\n\nSe recargará la página.',
-                                        confirmText: '🔄 Sí, actualizar',
-                                        cancelText: '⏰ Más tarde',
-                                        icon: '✨',
-                                        confirmColor: '#f5a623'
-                                    }).then(function(confirm) {
-                                        if (confirm) {
-                                            newWorker.postMessage({ type: 'SKIP_WAITING' });
-                                            
-                                            let refreshing = false;
-                                            navigator.serviceWorker.addEventListener('controllerchange', function() {
-                                                if (refreshing) return;
-                                                refreshing = true;
-                                                window.location.reload();
-                                            });
-                                            
-                                            setTimeout(function() {
-                                                if (!refreshing) {
-                                                    refreshing = true;
-                                                    window.location.reload();
-                                                }
-                                            }, 3000);
-                                        }
-                                    });
-                                } else if (window.confirm) {
-                                    if (window.confirm('✨ Nueva versión de Panario disponible.\n\n¿Actualizar ahora?')) {
-                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
-                                        setTimeout(function() {
-                                            window.location.reload();
-                                        }, 500);
+                            // Detectar actualizaciones
+                            registration.addEventListener('updatefound', function() {
+                                const newWorker = registration.installing;
+                                console.log('🔄 Nueva versión del SW detectada. Instalando...');
+                                
+                                newWorker.addEventListener('statechange', function() {
+                                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        console.log('✨ Actualización disponible');
+                                        showUpdateNotification();
                                     }
-                                }
-                            }, 1500);
+                                });
+                            });
+                        })
+                        .catch(function(error) {
+                            console.error('❌ Error registrando Service Worker:', error);
+                        });
+                    
+                    // Escuchar mensajes del SW
+                    navigator.serviceWorker.addEventListener('message', function(event) {
+                        if (event.data && event.data.type === 'SW_ACTIVATED') {
+                            console.log(`📦 SW v${event.data.version} activado`);
                         }
                     });
                 });
                 
-                // ============================================================
-                // VERIFICAR ACTUALIZACIONES CADA 30 MINUTOS
-                // ============================================================
-                setInterval(function() {
-                    registration.update().catch(function(err) {
-                        // Silenciar errores de actualización
-                    });
-                }, 30 * 60 * 1000);
-                
-                // ============================================================
-                // VERIFICAR ACTUALIZACIONES AL VOLVER A LA PESTAÑA
-                // ============================================================
-                document.addEventListener('visibilitychange', function() {
-                    if (document.visibilityState === 'visible') {
-                        registration.update().catch(function() {});
-                    }
+                // Detectar cuando el SW toma el control
+                let refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', function() {
+                    if (refreshing) return;
+                    refreshing = true;
+                    console.log('🔄 Service Worker actualizado, recargando...');
+                    window.location.reload();
                 });
+            } else {
+                console.warn('⚠️ Service Workers no soportados en este navegador');
+            }
+            
+            // ============================================================
+            // NOTIFICACIÓN DE ACTUALIZACIÓN DISPONIBLE
+            // ============================================================
+            
+            function showUpdateNotification() {
+                const existing = document.getElementById('sw-update-notification');
+                if (existing) return;
                 
-            })
-            .catch(function(error) {
-                console.warn('⚠️ Error registrando Service Worker:', error.message);
-                console.warn('   La app funcionará sin modo offline.');
-            });
-        });
-        
-        // ============================================================
-        // MANEJO DE CAMBIOS DE CONTROLADOR
-        // ============================================================
-        let refreshing = false;
-        navigator.serviceWorker.addEventListener('controllerchange', function() {
-            if (refreshing) return;
-            console.log('🔧 Service Worker ahora controla la página');
-        });
-        
-        // ============================================================
-        // VERIFICAR SI HAY ACTUALIZACIONES PENDIENTES AL CARGAR
-        // ============================================================
-        navigator.serviceWorker.ready.then(function(registration) {
-            console.log('✅ Service Worker listo');
-            console.log('   📦 Scope:', registration.scope);
-            console.log('   🎯 Estado:', registration.active ? 'activo' : 'inactivo');
-        });
-        
-    })();
-    
-    // ============================================================
-    // PROCESAR PARÁMETRO ?section= DE LA URL (Shortcuts del manifest)
-    // ============================================================
-    (function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const sectionParam = urlParams.get('section');
-        
-        if (sectionParam) {
-            console.log('🧭 Sección solicitada por URL:', sectionParam);
+                const notification = document.createElement('div');
+                notification.id = 'sw-update-notification';
+                notification.style.cssText = `
+                    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+                    background: var(--bg-card); border: 2px solid var(--primary);
+                    border-radius: 12px; padding: 12px 16px;
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+                    z-index: 9999999; max-width: 90%; display: flex;
+                    align-items: center; gap: 12px;
+                    animation: slideDown 0.3s ease;
+                `;
+                
+                notification.innerHTML = `
+                    <span style="font-size: 20px;">✨</span>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 14px;">Actualización disponible</div>
+                        <div style="font-size: 12px; color: var(--text-light);">Panario v${SW_VERSION}</div>
+                    </div>
+                    <button onclick="updateServiceWorker()" 
+                            style="padding: 6px 14px; background: var(--primary); color: #fff; 
+                                   border: none; border-radius: 8px; cursor: pointer; 
+                                   font-weight: 600; font-size: 13px;">
+                        Actualizar
+                    </button>
+                `;
+                
+                document.body.appendChild(notification);
+            }
             
-            window._pendingSection = sectionParam;
-            
-            const cleanUrl = window.location.pathname;
-            window.history.replaceState({}, document.title, cleanUrl);
-            
-            document.addEventListener('panario:logged-in', function() {
-                setTimeout(function() {
-                    if (window._pendingSection && window.navigate) {
-                        console.log('🧭 Navegando a sección pendiente:', window._pendingSection);
-                        window.navigate(window._pendingSection);
-                        window._pendingSection = null;
-                    }
-                }, 500);
-            });
-        }
-    })();
-    
-    // ============================================================
-    // PWA: MANEJO DE INSTALACIÓN (beforeinstallprompt)
-    // ============================================================
-    (function() {
-        let deferredPrompt = null;
-        
-        window.addEventListener('beforeinstallprompt', function(e) {
-            e.preventDefault();
-            
-            deferredPrompt = e;
-            
-            console.log('📱 PWA: Disponible para instalar');
-            
-            window._installPWA = function() {
-                if (!deferredPrompt) {
-                    console.log('ℹ️ PWA: No hay prompt de instalación disponible');
-                    return false;
+            window.updateServiceWorker = function() {
+                const notification = document.getElementById('sw-update-notification');
+                if (notification) notification.remove();
+                
+                if (navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+                } else {
+                    window.location.reload();
                 }
-                
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then(function(choiceResult) {
-                    if (choiceResult.outcome === 'accepted') {
-                        console.log('✅ PWA: Usuario aceptó la instalación');
-                        if (window.showToast) {
-                            window.showToast('✅ Panario instalado correctamente', 'success', 3000);
-                        }
-                    } else {
-                        console.log('ℹ️ PWA: Usuario canceló la instalación');
-                    }
-                    deferredPrompt = null;
-                });
-                
-                return true;
             };
-        });
-        
-        // ============================================================
-        // DETECTAR SI YA ESTÁ INSTALADA
-        // ============================================================
-        window.addEventListener('appinstalled', function() {
-            console.log('✅ PWA: Panario instalado');
-            deferredPrompt = null;
-        });
-        
-        // ============================================================
-        // DETECTAR MODO STANDALONE (ya instalada)
-        // ============================================================
-        if (window.matchMedia('(display-mode: standalone)').matches || 
-            window.navigator.standalone === true) {
-            console.log('📱 PWA: Ejecutándose en modo standalone (instalada)');
-            document.documentElement.setAttribute('data-pwa-installed', 'true');
-        }
-        
-        // ============================================================
-        // 🆕 v2.2.1: DETECTAR MODO FULLSCREEN
-        // ============================================================
-        // NOTA: En Android Chrome, matchMedia('(display-mode: fullscreen)')
-        // devuelve false incluso si la PWA está en fullscreen. Esto es un
-        // bug conocido de Chrome Android. Se mantiene la detección por
-        // compatibilidad con navegadores que sí lo soportan.
-        if (window.matchMedia('(display-mode: fullscreen)').matches) {
-            console.log('📱 PWA: Ejecutándose en modo FULLSCREEN');
-            document.documentElement.setAttribute('data-pwa-fullscreen', 'true');
-        }
-    })();
-    
-    // ============================================================
-    // PWA: DETECTAR CAMBIOS DE CONECTIVIDAD
-    // ============================================================
-    (function() {
-        window.addEventListener('online', function() {
-            console.log('🌐 Conexión restaurada');
-            if (window.showToast) {
-                window.showToast('🌐 Conexión restaurada', 'success', 2000);
-            }
-        });
-        
-        window.addEventListener('offline', function() {
-            console.log('📡 Sin conexión — Panario sigue funcionando offline');
-            if (window.showToast) {
-                window.showToast('📡 Sin conexión — Panario sigue funcionando', 'info', 3000);
-            }
-        });
-        
-        if (!navigator.onLine) {
-            console.log('📡 Iniciando sin conexión — modo offline activo');
-        }
-    })();
-    
-    console.log('📦 PWA Scripts cargados correctamente (index.html v2.2.1)');
+            
+            // ============================================================
+            // DETECCIÓN DE ESTADO ONLINE/OFFLINE
+            // ============================================================
+            
+            window.addEventListener('online', function() {
+                console.log('🌐 Conexión restaurada');
+                if (window.showToast) {
+                    window.showToast('✅ Conexión restaurada', 'success', 2000);
+                }
+            });
+            
+            window.addEventListener('offline', function() {
+                console.log('📴 Sin conexión a internet');
+                if (window.showToast) {
+                    window.showToast('📴 Trabajando sin conexión', 'warning', 3000);
+                }
+            });
+            
+            // ============================================================
+            // LOG DE CARGA
+            // ============================================================
+            
+            console.log(`📦 PWA Scripts cargados correctamente (index.html v${SW_VERSION})`);
+            console.log(`   🔧 Viewport: user-scalable=5.0 (zoom permitido)`);
+            console.log(`   🔧 viewport-fit=cover (safe areas respetadas)`);
+        })();
     </script>
-
+    
 </body>
 </html>
