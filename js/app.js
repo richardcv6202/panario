@@ -1,40 +1,39 @@
 // ============================================================
 // 📦 APP CONTROLLER - Panario
-// v3.0.2 (260926): 🎯 CORRECCIONES #2 y #3 (240926)
-//   - ✅ CORRECCIÓN #3: Nueva tarjeta "Días sin ventas" en el
-//     Dashboard, junto a "Días con ventas". Color rojo, icono 📅.
-//   - ✅ CORRECCIÓN #2: El gráfico de barras y línea ahora muestra
-//     el motivo del día sin ventas en vertical, precedido de "SV. ".
-// v3.0.3 (260926): 🎯 REGRESIÓN #5 (260926) - VENTAS POR EMPLEADO
-//   - ✅ FIX en renderSalesByEmployee()
-// v3.0.4 (260926): 🎯 REGRESIONES #8 y #9 (260926)
-//   - ✅ FIX #9: handleLogout() ahora llama a
-//     window.NotificationsModule.cleanupNotificationsResources()
-//     ANTES de recargar la página. Esto cierra el AudioContext,
-//     remueve listeners duplicados y limpia recursos, evitando
-//     el error "AudioContext zombie" al cerrar sesión.
-//   - ✅ FIX #9: showApp() ahora llama a
-//     window.NotificationsModule.reinitAfterLogin() DESPUÉS de un
-//     login exitoso, para volver a registrar los listeners de
-//     audio que fueron removidos en el logout.
-//   - ✅ FIX #8: exportChartAsImage() y exportChartAsPDF() ahora
-//     tienen logging detallado para diagnosticar por qué falla la
-//     descarga. Añadido fallback robusto cuando no hay datos.
-//   - ✅ Actualizados los textos de versión en console.log para
-//     reflejar correctamente v3.0.4.
-//   - ✅ Se mantienen TODAS las funcionalidades anteriores:
-//     * Corrección #5: Top bar reforzada (8 watchers)
-//     * Corrección #14: Integración de ?standalone=1
-//     * Debounce de db-saved (500ms)
+// v3.0.6 (280926): 🎯 FIX - QR del Dashboard respeta forzar_qr_admin
+//   - ✅ FIX CRÍTICO: renderDashboardBankQR() ahora usa
+//     getCuentaDefaultUsuario() en lugar de filtrar directamente
+//     por is_default, respetando la configuración forzar_qr_admin.
+//   - ✅ FIX SECUNDARIO: downloadDashboardQR() también usa
+//     getCuentaDefaultUsuario() para descargar el QR correcto.
+//   - ✅ Mantiene TODAS las correcciones anteriores:
+//     * v3.0.5: Fix CRÍTICO redeclaración dbReady
+//     * v3.0.4: Regresiones #8 y #9 (exportar gráfico + cerrar sesión)
+//     * v3.0.3: Regresión #5 (Ventas por empleado)
+//     * v3.0.2: Correcciones #2 y #3 (motivo SV + tarjeta días sin ventas)
+//     * v3.0.1: Fix MutationObserver (bucle infinito)
+//     * v3.0.0: Corrección #5 (Top bar reforzada) + ?standalone=1
 //     * Corrección #4: Alturas homogéneas de tarjetas
 //     * Corrección #19: Filtros al hacer clic en tarjetas
-//     * renderTarjetaPedidosHoy() con 3 columnas
+//     * Debounce de db-saved (500ms)
 //     * Persistencia del modo del gráfico
 //     * Detección de ?refresh= tras importación
 // ============================================================
 
 let currentUser = null;
-let dbReady = false;
+
+// ============================================================
+// 🆕 v3.0.5: HELPER PARA VERIFICAR SI LA BD ESTÁ LISTA
+// (Reemplaza a la variable local `dbReady` que causaba redeclaración)
+// ============================================================
+
+function isDbReady() {
+    try {
+        return !!(window.DBModule && typeof window.DBModule.getDB === 'function' && window.DBModule.getDB());
+    } catch (e) {
+        return false;
+    }
+}
 
 // ============================================================
 // 🆕 FASE 1.4: CONTROL DE DEBOUNCE PARA db-saved
@@ -111,11 +110,11 @@ function forzarStickyHeader() {
         });
         
         if (!header._stickyForced) {
-            console.log('🔧 [v3.0.4] forzarStickyHeader() aplicado al header');
+            console.log('🔧 [v3.0.6] forzarStickyHeader() aplicado al header');
             header._stickyForced = true;
         }
     } catch (e) {
-        console.warn('⚠️ [v3.0.4] Error en forzarStickyHeader:', e);
+        console.warn('⚠️ [v3.0.6] Error en forzarStickyHeader:', e);
     }
 }
 
@@ -138,7 +137,7 @@ function _debouncedForzarSticky() {
 
 function startHeaderCleanupWatchers() {
     if (_headerCleanupWatchersStarted) {
-        console.log('🔄 [v3.0.4] Watchers de header ya estaban activos');
+        console.log('🔄 [v3.0.6] Watchers de header ya estaban activos');
         return;
     }
     
@@ -182,16 +181,16 @@ function startHeaderCleanupWatchers() {
         });
         
         _headerCleanupWatchersStarted = true;
-        console.log('🔄 [v3.0.4] Watchers de header activados');
+        console.log('🔄 [v3.0.6] Watchers de header activados');
         
     } catch (e) {
-        console.warn('⚠️ [v3.0.4] Error activando watchers de header:', e);
+        console.warn('⚠️ [v3.0.6] Error activando watchers de header:', e);
     }
 }
 
 function stopHeaderCleanupWatchers() {
     _headerCleanupWatchersStarted = false;
-    console.log('🛑 [v3.0.4] Watchers de header detenidos');
+    console.log('🛑 [v3.0.6] Watchers de header detenidos');
 }
 
 // ============================================================
@@ -521,14 +520,14 @@ async function initApp() {
         const standaloneParam = urlParams.get('standalone');
         
         if (standaloneParam === '1') {
-            console.log('📖 [v3.0.0] Modo standalone detectado → renderizando SOLO la ayuda');
+            console.log('📖 [v3.0.6] Modo standalone detectado → renderizando SOLO la ayuda');
             
             setTimeout(() => {
                 if (window.HelpModule && typeof window.HelpModule.renderAyudaStandalone === 'function') {
                     window.HelpModule.renderAyudaStandalone();
-                    console.log('✅ [v3.0.0] Ayuda standalone renderizada');
+                    console.log('✅ [v3.0.6] Ayuda standalone renderizada');
                 } else {
-                    console.error('❌ [v3.0.0] HelpModule.renderAyudaStandalone no disponible');
+                    console.error('❌ [v3.0.6] HelpModule.renderAyudaStandalone no disponible');
                     document.body.innerHTML = `
                         <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; text-align: center; font-family: system-ui, sans-serif;">
                             <div>
@@ -566,7 +565,6 @@ async function initApp() {
         
         console.log('⏳ Inicializando base de datos...');
         await window.DBModule.initDB();
-        dbReady = true;
         console.log('✅ Base de datos lista');
         
         if (refreshParam) {
@@ -643,7 +641,9 @@ async function initApp() {
         setTimeout(adjustForSafeArea, 500);
 
         console.log(`✅ App inicializada correctamente (v${version})`);
-        console.log(`   🔧 [v3.0.4] Corrección #5 aplicada: 8 watchers de header activados`);
+        console.log(`   🔧 [v3.0.6] FIX: QR del Dashboard respeta forzar_qr_admin`);
+        console.log(`   🔧 [v3.0.5] FIX CRÍTICO: redeclaración de dbReady resuelta`);
+        console.log(`   🔧 [v3.0.5] Corrección #5 aplicada: 8 watchers de header activados`);
         console.log(`   📖 [v3.0.0] Corrección #14 aplicada: ?standalone=1 soportado`);
         console.log(`   🐛 [v3.0.1] Fix: MutationObserver eliminado (bucle infinito resuelto)`);
         console.log(`   📅 [v3.0.2] Correcciones #2 y #3 aplicadas: motivo SV en gráfico + tarjeta días sin ventas`);
@@ -875,7 +875,7 @@ function toggleAuthForms(show) {
 async function handleLogin() {
     console.log('🔑 Intentando login...');
     
-    if (!dbReady) {
+    if (!isDbReady()) {
         const errorEl = document.getElementById('loginError');
         if (errorEl) errorEl.textContent = '⏳ Esperando que la base de datos esté lista...';
         return;
@@ -917,7 +917,7 @@ async function handleLogin() {
 async function handleRegister() {
     console.log('📝 Intentando registro...');
     
-    if (!dbReady) {
+    if (!isDbReady()) {
         const errorEl = document.getElementById('registerError');
         if (errorEl) errorEl.textContent = '⏳ Esperando que la base de datos esté lista...';
         return;
@@ -1023,7 +1023,7 @@ async function handleLogout() {
     });
 
     if (confirm) {
-        const LOG_PREFIX = '🚪 [handleLogout v3.0.4]';
+        const LOG_PREFIX = '🚪 [handleLogout v3.0.6]';
         console.log(`${LOG_PREFIX} Cerrando sesión...`);
         
         try {
@@ -1036,7 +1036,6 @@ async function handleLogout() {
             }
             
             // 2. 🆕 v3.0.4: Limpiar recursos de notificaciones
-            //    (Cierra AudioContext, remueve listeners, aborta test de sonidos)
             try {
                 if (window.NotificationsModule && 
                     typeof window.NotificationsModule.cleanupNotificationsResources === 'function') {
@@ -1060,7 +1059,6 @@ async function handleLogout() {
             
             // 4. Resetear estado local
             currentUser = null;
-            dbReady = false;
             document.title = 'Panario - Panadería Artesanal';
             
             console.log(`${LOG_PREFIX} ✅ Todo limpio, recargando página...`);
@@ -1182,15 +1180,13 @@ function showApp(user) {
     setTimeout(forzarStickyHeader, 100);
     
     // 🆕 v3.0.4: Reinicializar notificaciones tras login
-    // (Vuelve a registrar los listeners de audio si fueron removidos
-    //  en un logout previo)
     try {
         if (window.NotificationsModule && 
             typeof window.NotificationsModule.reinitAfterLogin === 'function') {
             window.NotificationsModule.reinitAfterLogin();
         }
     } catch (e) {
-        console.warn('⚠️ [v3.0.4] Error en reinitAfterLogin:', e.message);
+        console.warn('⚠️ [v3.0.6] Error en reinitAfterLogin:', e.message);
     }
     
     document.dispatchEvent(new CustomEvent('panario:logged-in'));
@@ -1954,6 +1950,7 @@ function renderDashboardView() {
 
 // ============================================================
 // QR DE CUENTA BANCARIA EN DASHBOARD
+// 🆕 v3.0.6: FIX - Respeta forzar_qr_admin usando getCuentaDefaultUsuario()
 // ============================================================
 
 async function renderDashboardBankQR() {
@@ -1961,20 +1958,33 @@ async function renderDashboardBankQR() {
     if (!container) return;
     
     try {
-        // 🔧 FIX v3.0.4: getBankAccountsParaUsuario es SÍNCRONA
-        const accounts = window.DBModule.getBankAccountsParaUsuario();
+        const user = window.AuthModule.getCurrentUser();
+        if (!user) {
+            console.warn('⚠️ [renderDashboardBankQR v3.0.6] No hay usuario autenticado');
+            return;
+        }
         
-        let defaultAccount = accounts.find(acc => Number(acc.is_default) === 1);
+        // 🆕 v3.0.6: Usar getCuentaDefaultUsuario() que respeta forzar_qr_admin
+        let defaultAccount = null;
         
-        if (!defaultAccount && accounts.length > 0) {
-            defaultAccount = accounts[0];
+        if (typeof window.DBModule.getCuentaDefaultUsuario === 'function') {
+            defaultAccount = window.DBModule.getCuentaDefaultUsuario(user.id);
+            console.log(`🏦 [renderDashboardBankQR v3.0.6] getCuentaDefaultUsuario(${user.id}) →`,
+                defaultAccount ? `${defaultAccount.bank} (id=${defaultAccount.id})` : 'null');
+        } else {
+            console.warn('⚠️ [renderDashboardBankQR v3.0.6] getCuentaDefaultUsuario no disponible, usando fallback');
+            const accounts = window.DBModule.getBankAccountsParaUsuario();
+            defaultAccount = accounts.find(acc => Number(acc.is_default) === 1);
+            if (!defaultAccount && accounts.length > 0) {
+                defaultAccount = accounts[0];
+            }
         }
         
         if (!defaultAccount) {
             container.innerHTML = `
                 <div style="padding: 20px; color: var(--text-light);">
                     <span style="font-size: 32px;">🏦</span>
-                    <p style="margin-top: 8px; font-size: 13px;">No tienes cuentas bancarias registradas</p>
+                    <p style="margin-top: 8px; font-size: 13px;">No hay cuentas bancarias disponibles</p>
                     <button onclick="window.navigate('profile')" class="btn secondary" style="margin-top: 8px; padding: 6px 14px; font-size: 12px; width: auto;">
                         ➕ Agregar cuenta
                     </button>
@@ -2000,13 +2010,25 @@ async function renderDashboardBankQR() {
         
         const ownerName = defaultAccount.owner_name || defaultAccount.owner || '';
         
+        // 🆕 v3.0.6: Determinar si el QR mostrado es forzado por el admin
+        const config = window.DBModule.getConfigBancaria();
+        const esForzadoPorAdmin = config.forzar_qr_admin && !user.is_admin;
+        const esCuentaDelAdmin = user.is_admin || (defaultAccount.user_id === user.id);
+        
+        let badgeDefault = '';
+        if (esForzadoPorAdmin) {
+            badgeDefault = '<span style="font-size: 10px; background: #8b5cf620; color: #8b5cf6; padding: 1px 6px; border-radius: 8px; margin-left: 4px; font-weight: 600;">🔒 QR del admin</span>';
+        } else if (Number(defaultAccount.is_default) === 1) {
+            badgeDefault = '<span style="font-size: 10px; background: #10b98120; color: #10b981; padding: 1px 6px; border-radius: 8px; margin-left: 4px;">✅ Predeterminada</span>';
+        }
+        
         container.innerHTML = `
             <div style="margin-bottom: 8px; text-align: left;">
                 <div style="font-weight: 600; font-size: 14px;">🏦 ${defaultAccount.bank}</div>
                 ${ownerName ? `<div style="font-size: 12px; color: var(--text-light);">👤 Titular: <strong>${ownerName}</strong></div>` : ''}
                 <div style="font-size: 12px; color: var(--text-light);">
                     📋 ${defaultAccount.account_number}
-                    ${Number(defaultAccount.is_default) === 1 ? '<span style="font-size: 10px; background: #10b98120; color: #10b981; padding: 1px 6px; border-radius: 8px; margin-left: 4px;">✅ Predeterminada</span>' : ''}
+                    ${badgeDefault}
                 </div>
                 ${defaultAccount.phone ? `<div style="font-size: 12px; color: var(--text-light);">📞 ${defaultAccount.phone}</div>` : ''}
             </div>
@@ -2040,11 +2062,28 @@ async function renderDashboardBankQR() {
     }
 }
 
+// ============================================================
+// DESCARGAR QR DEL DASHBOARD
+// 🆕 v3.0.6: FIX - Usa getCuentaDefaultUsuario() para descargar el QR correcto
+// ============================================================
+
 async function downloadDashboardQR(bank, accountNumber) {
     try {
-        // 🔧 FIX v3.0.4: getBankAccountsParaUsuario es SÍNCRONA
-        const accounts = window.DBModule.getBankAccountsParaUsuario();
-        const defaultAccount = accounts.find(acc => Number(acc.is_default) === 1) || accounts[0];
+        const user = window.AuthModule.getCurrentUser();
+        if (!user) {
+            window.showToast('❌ No hay usuario autenticado', 'error');
+            return;
+        }
+        
+        // 🆕 v3.0.6: Usar getCuentaDefaultUsuario() que respeta forzar_qr_admin
+        let defaultAccount = null;
+        
+        if (typeof window.DBModule.getCuentaDefaultUsuario === 'function') {
+            defaultAccount = window.DBModule.getCuentaDefaultUsuario(user.id);
+        } else {
+            const accounts = window.DBModule.getBankAccountsParaUsuario();
+            defaultAccount = accounts.find(acc => Number(acc.is_default) === 1) || accounts[0];
+        }
         
         if (!defaultAccount || !defaultAccount.qr_code) {
             window.showToast('❌ No hay QR para descargar', 'error');
@@ -2069,8 +2108,15 @@ async function downloadDashboardQR(bank, accountNumber) {
         console.error('Error descargando QR:', error);
         
         try {
-            const accounts = window.DBModule.getBankAccountsParaUsuario();
-            const defaultAccount = accounts.find(acc => Number(acc.is_default) === 1) || accounts[0];
+            const user = window.AuthModule.getCurrentUser();
+            let defaultAccount = null;
+            
+            if (user && typeof window.DBModule.getCuentaDefaultUsuario === 'function') {
+                defaultAccount = window.DBModule.getCuentaDefaultUsuario(user.id);
+            } else {
+                const accounts = window.DBModule.getBankAccountsParaUsuario();
+                defaultAccount = accounts.find(acc => Number(acc.is_default) === 1) || accounts[0];
+            }
             
             if (defaultAccount && defaultAccount.qr_code) {
                 const link = document.createElement('a');
@@ -2756,7 +2802,7 @@ async function loadDashboardData() {
 // ============================================================
 
 function renderSalesByEmployee(salesByEmployee) {
-    const LOG_PREFIX = '👥 [renderSalesByEmployee v3.0.4]';
+    const LOG_PREFIX = '👥 [renderSalesByEmployee v3.0.6]';
     
     const container = document.getElementById('sales-by-employee');
     if (!container) {
@@ -3050,7 +3096,7 @@ ${nombreNegocio}
 // ============================================================
 
 function exportChartAsImage() {
-    const LOG_PREFIX = '🖼️ [exportChartAsImage v3.0.4]';
+    const LOG_PREFIX = '🖼️ [exportChartAsImage v3.0.6]';
     console.log(`${LOG_PREFIX} Iniciando exportación de gráfico como imagen...`);
     
     const container = document.getElementById('daily-sales-chart');
@@ -3218,7 +3264,7 @@ function downloadImage(dataUrl, filename) {
 }
 
 function exportChartAsPDF() {
-    const LOG_PREFIX = '📄 [exportChartAsPDF v3.0.4]';
+    const LOG_PREFIX = '📄 [exportChartAsPDF v3.0.6]';
     console.log(`${LOG_PREFIX} Iniciando exportación de gráfico como PDF...`);
     
     const container = document.getElementById('daily-sales-chart');
@@ -3540,13 +3586,14 @@ window.renderSalesByEmployee = renderSalesByEmployee;
 window.openDetailedHelp = openDetailedHelp;
 window.getAppVersion = getAppVersion;
 
-// 🆕 v3.0.4: Exportar funciones nuevas
+// 🆕 v3.0.6: Exportar funciones nuevas
+window.isDbReady = isDbReady;
 window.forzarStickyHeader = forzarStickyHeader;
 window.startHeaderCleanupWatchers = startHeaderCleanupWatchers;
 window.stopHeaderCleanupWatchers = stopHeaderCleanupWatchers;
 window.getMotivoSinVentas = getMotivoSinVentas;
 
-console.log('📦 App Controller v' + getAppVersion() + ' (v3.0.4: Regresiones #8 y #9 corregidas)');
+console.log('📦 App Controller v' + getAppVersion() + ' (v3.0.6: QR Dashboard respeta forzar_qr_admin)');
 
 // ============================================================
 // INICIALIZACIÓN AUTOMÁTICA

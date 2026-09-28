@@ -42,12 +42,19 @@
 // 🆕 v2.3.6 (260926 v21): 🎯 REGRESIONES #4 y #7 (260926) - DATOS BANCARIOS
 // 🆕 v2.3.7 (260926 v22): 🎯 NUEVA FUNCIONALIDAD #1 (260926) - NOTA A LA VENTA
 //   - ✅ NUEVA COLUMNA: sales.notes (TEXT DEFAULT NULL)
-//     * Opcional (puede quedar NULL)
-//     * Editable por el creador de la venta
-//     * En cualquier momento: al crear, al editar o post-venta
-//   - ✅ NUEVA FUNCIÓN: ensureSalesNotesColumn(db)
-//     * Migración idempotente que añade la columna si no existe.
-//     * Se ejecuta en initDB() antes de las semillas.
+// 🆕 v2.3.8 (260926 v23): 🎯 SESIÓN 7 - PERMISOS BANCARIOS + CUENTAS COMPARTIDAS
+//   - ✅ NUEVA COLUMNA: bank_accounts.is_shared (INTEGER DEFAULT 0)
+//     * 0 = Cuenta privada (solo el dueño y admin la ven)
+//     * 1 = Cuenta compartida (todos la ven si permitir_ver_qr_otros está activo)
+//   - ✅ NUEVA COLUMNA: users.is_first_admin (INTEGER DEFAULT 0)
+//     * 0 = Usuario normal o admin regular
+//     * 1 = Primer admin del negocio (el que lo creó)
+//   - ✅ NUEVA FUNCIÓN: ensureBankAccountSharedColumn(db)
+//   - ✅ NUEVA FUNCIÓN: ensureIsFirstAdminColumn(db)
+//   - ✅ NUEVA FUNCIÓN: esPrimerAdmin()
+//   - ✅ MODIFICADO: getBankAccountsParaUsuario() respeta is_shared
+//   - ✅ MODIFICADO: saveConfigBancaria() solo para primer admin
+//   - ✅ MODIFICADO: saveBankAccount() guarda is_shared
 //   - ✅ Se mantiene TODO lo anterior sin cambios.
 // ============================================================
 
@@ -339,6 +346,9 @@ async function initDB() {
         await migratePreferencesFromLocalStorage(db);
         // 🆕 v2.3.6: Reparar negocio_id nulos en bank_accounts
         await repararNegocioIdEnBankAccounts(db);
+        // 🆕 v2.3.8: SESIÓN 7 - Permisos bancarios + cuentas compartidas
+        await ensureBankAccountSharedColumn(db);
+        await ensureIsFirstAdminColumn(db);
         await seedDefaultUnits(db);
         await seedDefaultProducts(db);
         await seedDefaultInsumos(db);
@@ -357,16 +367,6 @@ async function initDB() {
 
 // ============================================================
 // 🆕 v2.3.7: COLUMNA notes EN LA TABLA sales
-// ============================================================
-// 
-// Añade la columna `notes` a la tabla `sales` para permitir
-// que el creador de la venta le añada una nota opcional.
-// 
-// Características:
-//   - Opcional (puede quedar NULL)
-//   - Editable en cualquier momento (crear, editar, post-venta)
-//   - Solo el creador de la venta puede modificarla
-//   - No aparece en el reporte PDF (por decisión de diseño)
 // ============================================================
 
 async function ensureSalesNotesColumn(db) {
@@ -458,6 +458,115 @@ async function repararNegocioIdEnBankAccounts(db) {
         console.log(`${LOG_PREFIX} ✅ ${reparadas} cuentas reparadas`);
         console.log(`${LOG_PREFIX} ========== FIN ==========`);
         
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+// ============================================================
+// 🆕 v2.3.8: SESIÓN 7 - COLUMNA is_shared EN bank_accounts
+// ============================================================
+
+async function ensureBankAccountSharedColumn(db) {
+    const LOG_PREFIX = '🔧 [ensureBankAccountSharedColumn v2.3.8]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='bank_accounts'`);
+        if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ Tabla bank_accounts no existe todavía, se omite.`);
+            return;
+        }
+        
+        const columns = db.exec('PRAGMA table_info(bank_accounts)');
+        const columnNames = columns[0]?.values?.map(row => row[1]) || [];
+        
+        if (!columnNames.includes('is_shared')) {
+            try {
+                db.run('ALTER TABLE bank_accounts ADD COLUMN is_shared INTEGER DEFAULT 0');
+                console.log(`${LOG_PREFIX} ✅ Columna is_shared añadida a bank_accounts`);
+                
+                db.run('UPDATE bank_accounts SET is_shared = 0 WHERE is_shared IS NULL');
+                console.log(`${LOG_PREFIX} ✅ Cuentas existentes marcadas como privadas (is_shared=0)`);
+            } catch (e) {
+                console.warn(`${LOG_PREFIX} ⚠️ Error añadiendo columna:`, e.message);
+            }
+        } else {
+            console.log(`${LOG_PREFIX} ✓ Columna is_shared ya existe`);
+        }
+        
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+// ============================================================
+// 🆕 v2.3.8: SESIÓN 7 - COLUMNA is_first_admin EN users
+// ============================================================
+
+async function ensureIsFirstAdminColumn(db) {
+    const LOG_PREFIX = '🔧 [ensureIsFirstAdminColumn v2.3.8]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='users'`);
+        if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ La tabla users no existe todavía.`);
+            return;
+        }
+        
+        const columns = db.exec('PRAGMA table_info(users)');
+        const columnNames = columns[0]?.values?.map(row => row[1]) || [];
+        
+        if (!columnNames.includes('is_first_admin')) {
+            try {
+                db.run('ALTER TABLE users ADD COLUMN is_first_admin INTEGER DEFAULT 0');
+                console.log(`${LOG_PREFIX} ✅ Columna is_first_admin añadida a users`);
+            } catch (e) {
+                console.warn(`${LOG_PREFIX} ⚠️ Error añadiendo columna:`, e.message);
+            }
+        } else {
+            console.log(`${LOG_PREFIX} ✓ Columna is_first_admin ya existe`);
+        }
+        
+        const negociosResult = db.exec('SELECT id FROM negocios WHERE deleted_at IS NULL');
+        const negocios = negociosResult[0]?.values?.map(row => row[0]) || [];
+        
+        for (const negocioId of negocios) {
+            const primerAdminCheck = db.exec(
+                `SELECT id FROM users 
+                 WHERE negocio_id = ${negocioId} AND is_admin = 1 AND is_first_admin = 1 AND deleted_at IS NULL
+                 LIMIT 1`
+            );
+            
+            const tienePrimerAdmin = primerAdminCheck[0]?.values?.length > 0;
+            
+            if (!tienePrimerAdmin) {
+                const adminResult = db.exec(
+                    `SELECT id FROM users 
+                     WHERE negocio_id = ${negocioId} AND is_admin = 1 AND deleted_at IS NULL
+                     ORDER BY id ASC LIMIT 1`
+                );
+                
+                const adminId = adminResult[0]?.values?.[0]?.[0];
+                
+                if (adminId) {
+                    try {
+                        db.run(`UPDATE users SET is_first_admin = 1 WHERE id = ${adminId}`);
+                        console.log(`${LOG_PREFIX} ✅ Usuario #${adminId} marcado como primer admin del negocio #${negocioId}`);
+                    } catch (e) {
+                        console.warn(`${LOG_PREFIX} ⚠️ Error marcando primer admin:`, e.message);
+                    }
+                }
+            } else {
+                console.log(`${LOG_PREFIX} ✓ Negocio #${negocioId} ya tiene primer admin`);
+            }
+        }
+        
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
     } catch (error) {
         console.error(`${LOG_PREFIX} ❌ Error:`, error);
     }
@@ -800,12 +909,15 @@ function getConfigBancaria() {
     }
 }
 
+// 🆕 v2.3.8: saveConfigBancaria modificada - solo primer admin
 function saveConfigBancaria(config) {
-    const LOG_PREFIX = '🏦 [saveConfigBancaria]';
+    const LOG_PREFIX = '🏦 [saveConfigBancaria v2.3.8]';
     
     try {
-        if (!esUsuarioActualAdmin()) {
-            return { success: false, error: 'Solo el administrador puede modificar la configuración' };
+        // 🆕 v2.3.8: Solo el primer admin puede cambiar la configuración
+        if (!esPrimerAdmin()) {
+            console.warn(`${LOG_PREFIX} 🔒 Usuario no es el primer admin`);
+            return { success: false, error: 'Solo el primer administrador puede cambiar esta configuración' };
         }
         
         const negocioId = getNegocioIdActual();
@@ -843,6 +955,53 @@ function saveConfigBancaria(config) {
     } catch (e) {
         console.error(`${LOG_PREFIX} ❌ Error:`, e);
         return { success: false, error: e.message };
+    }
+}
+
+// 🆕 v2.3.8: Función esPrimerAdmin()
+function esPrimerAdmin() {
+    const LOG_PREFIX = '👑 [esPrimerAdmin v2.3.8]';
+    
+    try {
+        const user = window.AuthModule?.getCurrentUser();
+        if (!user || Number(user.is_admin) !== 1) {
+            return false;
+        }
+        
+        const uid = Number(user.id);
+        const negocioId = getNegocioIdActual();
+        
+        if (!negocioId) return false;
+        
+        const result = query(
+            'SELECT is_first_admin FROM users WHERE id = ? AND deleted_at IS NULL',
+            [uid]
+        );
+        
+        if (result.length > 0 && Number(result[0].is_first_admin) === 1) {
+            console.log(`${LOG_PREFIX} ✅ Usuario #${uid} es el primer admin (flag en BD)`);
+            return true;
+        }
+        
+        const adminMasAntiguo = query(
+            `SELECT id FROM users 
+             WHERE negocio_id = ? AND is_admin = 1 AND deleted_at IS NULL
+             ORDER BY id ASC LIMIT 1`,
+            [negocioId]
+        );
+        
+        const esPrimero = adminMasAntiguo.length > 0 && Number(adminMasAntiguo[0].id) === uid;
+        
+        if (esPrimero) {
+            console.log(`${LOG_PREFIX} ✅ Usuario #${uid} es el primer admin (fallback)`);
+        } else {
+            console.log(`${LOG_PREFIX} ℹ️ Usuario #${uid} NO es el primer admin`);
+        }
+        
+        return esPrimero;
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return false;
     }
 }
 
@@ -1006,8 +1165,11 @@ function puedeUsuarioVerCuenta(account) {
         if (Number(user.is_admin) === 1) return true;
         if (Number(account.user_id) === Number(user.id)) return true;
         
+        // 🆕 v2.3.8: Solo ver cuentas compartidas si permitir_ver_qr_otros está activo
         const config = getConfigBancaria();
-        return config.permitir_ver_qr_otros === true;
+        if (config.permitir_ver_qr_otros && Number(account.is_shared) === 1) return true;
+        
+        return false;
     } catch (e) {
         return false;
     }
@@ -2393,6 +2555,7 @@ async function createAllTables(db) {
             id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL,
             name TEXT, business_name TEXT, email TEXT, phone TEXT, photo TEXT,
             theme TEXT DEFAULT 'light', negocio_id INTEGER, is_admin INTEGER DEFAULT 0,
+            is_first_admin INTEGER DEFAULT 0,
             dash_show_corriente INTEGER DEFAULT 1, dash_show_top_clients INTEGER DEFAULT 1,
             dash_show_top_products INTEGER DEFAULT 1, dash_show_funds_analysis INTEGER DEFAULT 1,
             dash_show_payment_methods INTEGER DEFAULT 1, dash_show_quick_actions INTEGER DEFAULT 1,
@@ -2540,6 +2703,7 @@ async function createAllTables(db) {
             id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, negocio_id INTEGER,
             bank TEXT NOT NULL, owner_name TEXT, account_number TEXT NOT NULL, phone TEXT,
             qr_code TEXT, is_default INTEGER DEFAULT 0,
+            is_shared INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             deleted_at DATETIME DEFAULT NULL, FOREIGN KEY (user_id) REFERENCES users(id))`);
 
@@ -2864,7 +3028,7 @@ function getProduccionByFecha(fecha) {
 }
 
 function saveProduccion(data) {
-    const LOG_PREFIX = '💾 [saveProduccion v2.3.7]';
+    const LOG_PREFIX = '💾 [saveProduccion v2.3.8]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -3062,7 +3226,7 @@ function getProduccionRango(desde, hasta) {
 }
 
 function saveProduccionRango(data) {
-    const LOG_PREFIX = '💾💾 [saveProduccionRango v2.3.7]';
+    const LOG_PREFIX = '💾💾 [saveProduccionRango v2.3.8]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -3281,7 +3445,7 @@ function writeBackupMeta(db, backupType) {
         db.run(`INSERT INTO ${BACKUP_META_TABLE} 
             (backup_type, backup_date, backup_version, backup_negocio_id, backup_negocio_nombre, backup_user, backup_user_role)
             VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-            backupType, new Date().toISOString(), '2.3.7', negocioId,
+            backupType, new Date().toISOString(), '2.3.8', negocioId,
             negocio?.nombre || 'Desconocido', user?.username || 'Desconocido',
             user?.is_admin === 1 ? 'admin' : 'user'
         ]);
@@ -3311,11 +3475,11 @@ function readBackupMeta(backupDb) {
 }
 
 // ============================================================
-// 🆕 CORRECCIÓN #16 + v2.3.6: BANK ACCOUNTS CON PERMISOS
+// 🆕 CORRECCIÓN #16 + v2.3.8: BANK ACCOUNTS CON PERMISOS
 // ============================================================
 
 function getBankAccountsParaUsuario() {
-    const LOG_PREFIX = '🏦 [getBankAccountsParaUsuario v2.3.6]';
+    const LOG_PREFIX = '🏦 [getBankAccountsParaUsuario v2.3.8]';
     
     try {
         const user = window.AuthModule?.getCurrentUser();
@@ -3343,23 +3507,28 @@ function getBankAccountsParaUsuario() {
                 ...cuenta,
                 user_id: Number(cuenta.user_id),
                 negocio_id: Number(cuenta.negocio_id) || null,
-                is_default: Number(cuenta.is_default) || 0
+                is_default: Number(cuenta.is_default) || 0,
+                is_shared: Number(cuenta.is_shared) || 0
             }));
         }
         
+        // 🆕 v2.3.8: Usuario no-admin
+        // Regla: ve sus propias cuentas + cuentas compartidas si permitir_ver_qr_otros está activo
         if (config.permitir_ver_qr_otros) {
-            const todas = query(`
+            const visibles = query(`
                 SELECT * FROM bank_accounts 
                 WHERE deleted_at IS NULL 
                   AND (negocio_id = ? OR negocio_id IS NULL)
+                  AND (user_id = ? OR is_shared = 1)
                 ORDER BY is_default DESC, created_at DESC
-            `, [negocioId]);
-            console.log(`${LOG_PREFIX} ✅ No-admin ve ${todas.length} cuentas (permitido ver otros)`);
-            return todas.map(cuenta => ({
+            `, [negocioId, uid]);
+            console.log(`${LOG_PREFIX} ✅ No-admin ve ${visibles.length} cuentas (propias + compartidas)`);
+            return visibles.map(cuenta => ({
                 ...cuenta,
                 user_id: Number(cuenta.user_id),
                 negocio_id: Number(cuenta.negocio_id) || null,
-                is_default: Number(cuenta.is_default) || 0
+                is_default: Number(cuenta.is_default) || 0,
+                is_shared: Number(cuenta.is_shared) || 0
             }));
         } else {
             const propias = query(`
@@ -3368,12 +3537,13 @@ function getBankAccountsParaUsuario() {
                   AND user_id = ?
                 ORDER BY is_default DESC, created_at DESC
             `, [uid]);
-            console.log(`${LOG_PREFIX} ✅ No-admin ve ${propias.length} cuentas propias`);
+            console.log(`${LOG_PREFIX} ✅ No-admin ve ${propias.length} cuentas propias (permitir_ver_qr_otros OFF)`);
             return propias.map(cuenta => ({
                 ...cuenta,
                 user_id: Number(cuenta.user_id),
                 negocio_id: Number(cuenta.negocio_id) || null,
-                is_default: Number(cuenta.is_default) || 0
+                is_default: Number(cuenta.is_default) || 0,
+                is_shared: Number(cuenta.is_shared) || 0
             }));
         }
     } catch (e) {
@@ -3387,7 +3557,7 @@ function getBankAccounts() {
 }
 
 function getBankAccount(id) {
-    const LOG_PREFIX = '🏦 [getBankAccount v2.3.6]';
+    const LOG_PREFIX = '🏦 [getBankAccount v2.3.8]';
     
     try {
         const aid = Number(id);
@@ -3410,7 +3580,8 @@ function getBankAccount(id) {
             ...results[0],
             user_id: Number(results[0].user_id),
             negocio_id: Number(results[0].negocio_id) || null,
-            is_default: Number(results[0].is_default) || 0
+            is_default: Number(results[0].is_default) || 0,
+            is_shared: Number(results[0].is_shared) || 0
         };
         
         if (!puedeUsuarioVerCuenta(account)) {
@@ -3430,7 +3601,7 @@ function getDefaultBankAccount() {
 }
 
 function saveBankAccount(accountData) {
-    const LOG_PREFIX = '🏦 [saveBankAccount v2.3.6]';
+    const LOG_PREFIX = '🏦 [saveBankAccount v2.3.8]';
     
     const user = window.AuthModule?.getCurrentUser();
     if (!user) {
@@ -3452,7 +3623,8 @@ function saveBankAccount(accountData) {
         account_number: accountData.account_number,
         phone: accountData.phone,
         has_qr: !!accountData.qr_code,
-        is_default: accountData.is_default
+        is_default: accountData.is_default,
+        is_shared: accountData.is_shared
     });
 
     try {
@@ -3468,6 +3640,9 @@ function saveBankAccount(accountData) {
                 console.log(`${LOG_PREFIX} ⚠️ Usando negocio por defecto: ${negocioId}`);
             }
         }
+
+        // 🆕 v2.3.8: Coerción de is_shared
+        const isShared = (accountData.is_shared === true || accountData.is_shared === 1) ? 1 : 0;
 
         if (accountData.id) {
             const aid = Number(accountData.id);
@@ -3494,7 +3669,7 @@ function saveBankAccount(accountData) {
             }
             
             execute(`UPDATE bank_accounts SET bank = ?, owner_name = ?, account_number = ?, phone = ?, 
-                    qr_code = ?, is_default = ?, negocio_id = ?, modified_by = ?, updated_at = CURRENT_TIMESTAMP
+                    qr_code = ?, is_default = ?, is_shared = ?, negocio_id = ?, modified_by = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?`, [
                 accountData.bank,
                 accountData.owner_name || null,
@@ -3502,6 +3677,7 @@ function saveBankAccount(accountData) {
                 accountData.phone || null,
                 accountData.qr_code || null,
                 accountData.is_default ? 1 : 0,
+                isShared,
                 negocioId,
                 currentUserId,
                 aid
@@ -3511,7 +3687,7 @@ function saveBankAccount(accountData) {
                 execute('UPDATE bank_accounts SET is_default = 0 WHERE id != ? AND negocio_id = ?', [aid, negocioId]);
             }
             
-            console.log(`${LOG_PREFIX} ✅ Cuenta #${aid} actualizada`);
+            console.log(`${LOG_PREFIX} ✅ Cuenta #${aid} actualizada (is_shared=${isShared})`);
             
             const cuentaGuardada = getBankAccount(aid);
             console.log(`${LOG_PREFIX} ========== FIN (update) ==========`);
@@ -3530,13 +3706,13 @@ function saveBankAccount(accountData) {
             const isFirst = existing.length === 0;
             
             const result = execute(`INSERT INTO bank_accounts 
-                (user_id, negocio_id, bank, owner_name, account_number, phone, qr_code, is_default, created_by, modified_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+                (user_id, negocio_id, bank, owner_name, account_number, phone, qr_code, is_default, is_shared, created_by, modified_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
                 targetUserId, negocioId, accountData.bank, accountData.owner_name || null,
                 accountData.account_number, accountData.phone || null, accountData.qr_code || null,
-                isFirst ? 1 : 0, currentUserId, currentUserId]);
+                isFirst ? 1 : 0, isShared, currentUserId, currentUserId]);
             
-            console.log(`${LOG_PREFIX} ✅ Cuenta creada para user #${targetUserId}, id=${result.lastId}, negocio=${negocioId}`);
+            console.log(`${LOG_PREFIX} ✅ Cuenta creada para user #${targetUserId}, id=${result.lastId}, negocio=${negocioId}, is_shared=${isShared}`);
             
             const cuentaGuardada = getBankAccount(result.lastId);
             console.log(`${LOG_PREFIX} ========== FIN (insert) ==========`);
@@ -3630,7 +3806,7 @@ function exportRecetasProductosSalva() {
 
         const salva = {
             _meta: {
-                app: 'Panario', version: '2.3.7', type: 'salva_recetas_productos',
+                app: 'Panario', version: '2.3.8', type: 'salva_recetas_productos',
                 exportDate: new Date().toISOString(), negocio_id: negocioId,
                 negocio_nombre: getNombreNegocioDB(),
                 counts: {
@@ -4995,6 +5171,10 @@ window.DBModule = {
     ensureIsAdminColumn,
     // 🆕 v2.3.6: Reparación de negocio_id en bank_accounts
     repararNegocioIdEnBankAccounts,
+    // 🆕 v2.3.8: SESIÓN 7 - Permisos bancarios + cuentas compartidas
+    ensureBankAccountSharedColumn,
+    ensureIsFirstAdminColumn,
+    esPrimerAdmin,
     // 🆕 ENTREGA B
     ensureCapacidadMaxBloqueColumn,
     ensureBloquesDistribucionColumns,
@@ -5029,7 +5209,7 @@ window.DBModule = {
     getWaitingList, getWaitingListCount, getNextWaitingPosition,
     addToWaitingList, removeFromWaitingList, reindexWaitingList,
     attendFromWaitingList, getWaitingListWithDetails, atenderParcialmenteDeLista,
-    // 🆕 CORRECCIÓN #16 + REFINAMIENTO #16 + v2.3.6
+    // 🆕 CORRECCIÓN #16 + REFINAMIENTO #16 + v2.3.6 + v2.3.8
     getBankAccounts, getBankAccount, getDefaultBankAccount, saveBankAccount, deleteBankAccount, setDefaultBankAccount,
     getBankAccountsParaUsuario,
     getConfigBancaria, saveConfigBancaria,
@@ -5065,13 +5245,12 @@ window.DBModule = {
     BACKUP_TYPE_COMPLETE, BACKUP_TYPE_DATA_ONLY
 };
 
-console.log('📦 DB Module cargado correctamente v2.3.7');
-console.log('   🎯 Correcciones aplicadas:');
-console.log('      ✅ #16 (240926): Permisos bancarios');
-console.log('      ✅ REFINAMIENTO #16: Tercer toggle forzar_qr_admin');
-console.log('      ✅ #17 (240926): Configuraciones individuales');
-console.log('      ✅ #1 (250926): Conteo de UNIDADES');
-console.log('      ✅ #4 + #7 (260926): Datos bancarios — REGRESIONES CORREGIDAS');
-console.log('   🆕 Novedades v2.3.7:');
-console.log('      • NUEVA COLUMNA: sales.notes (opcional, editable por el creador)');
-console.log('      • NUEVA FUNCIÓN: ensureSalesNotesColumn()');
+console.log('📦 DB Module cargado correctamente v2.3.8');
+console.log('   🆕 SESIÓN 7 aplicada:');
+console.log('      ✅ Columna is_shared en bank_accounts');
+console.log('      ✅ Columna is_first_admin en users');
+console.log('      ✅ Función esPrimerAdmin()');
+console.log('      ✅ getBankAccountsParaUsuario() respeta is_shared');
+console.log('      ✅ saveConfigBancaria() solo para primer admin');
+console.log('      ✅ saveBankAccount() guarda is_shared');
+console.log('   🔄 Correcciones anteriores mantenidas: #1 a #17');

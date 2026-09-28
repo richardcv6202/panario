@@ -17,11 +17,70 @@
 //     consultarse después del login.
 //   - ✅ Retrocompatible: si las columnas no existen, se usan
 //     valores por defecto.
+// 🆕 v2.3.5 (280926): 🎯 SESIÓN 7 - MARCAR PRIMER ADMIN (is_first_admin)
+//   - ✅ registerUser(): si es el PRIMER usuario del negocio, se marca
+//     con is_first_admin = 1. Los siguientes usuarios -> is_first_admin = 0.
+//   - ✅ createUserAsAdmin(): los nuevos usuarios creados por admin
+//     SIEMPRE se marcan con is_first_admin = 0.
+//   - ✅ loginUser(): carga is_first_admin en el objeto user.
+//   - ✅ getUsuariosDelNegocio(): incluye is_first_admin en la consulta.
+//   - ✅ Migración automática: si un negocio tiene usuarios pero
+//     ninguno es is_first_admin, se marca al más antiguo.
+//   - ✅ Retrocompatible: si la columna no existe, se asume 0.
 // ============================================================
 
 window.AuthModule = {};
 
 const LAST_USER_KEY = 'panario_last_user';
+
+// ============================================================
+// 🆕 v2.3.5: HELPERS INTERNOS PARA is_first_admin
+// ============================================================
+
+/**
+ * 🆕 v2.3.5: Verifica si el negocio tiene al menos un usuario
+ * marcado como is_first_admin. Si no lo tiene y hay usuarios,
+ * marca al más antiguo. Idempotente.
+ */
+async function _ensureFirstAdminOfNegocio(negocioId) {
+    if (!negocioId) return;
+    try {
+        const db = window.DBModule.getDB();
+        if (!db) return;
+        
+        // 1. Verificar si ya existe un is_first_admin
+        const existing = window.DBModule.query(
+            `SELECT id FROM users 
+             WHERE negocio_id = ? AND is_first_admin = 1 AND deleted_at IS NULL 
+             LIMIT 1`,
+            [negocioId]
+        );
+        
+        if (existing && existing.length > 0) {
+            return; // Ya hay uno marcado, no hacer nada
+        }
+        
+        // 2. Buscar el usuario más antiguo del negocio
+        const oldest = window.DBModule.query(
+            `SELECT id, username FROM users 
+             WHERE negocio_id = ? AND deleted_at IS NULL 
+             ORDER BY created_at ASC, id ASC 
+             LIMIT 1`,
+            [negocioId]
+        );
+        
+        if (oldest && oldest.length > 0) {
+            const userId = oldest[0].id;
+            window.DBModule.execute(
+                `UPDATE users SET is_first_admin = 1 WHERE id = ?`,
+                [userId]
+            );
+            console.log(`👑 [v2.3.5] Migración: usuario "${oldest[0].username}" (#${userId}) marcado como primer admin del negocio #${negocioId}`);
+        }
+    } catch (e) {
+        console.warn('⚠️ [v2.3.5] Error en _ensureFirstAdminOfNegocio:', e);
+    }
+}
 
 // ============================================================
 // REGISTRO
@@ -35,6 +94,7 @@ async function registerUser(username, password, name, business, negocioMode = 'c
         let negocioId = null;
         let negocioNombre = '';
         let isAdmin = 0;
+        let isFirstAdmin = 0;  // 🆕 v2.3.5
         let codigoFinal = '';
         
         // ============================================================
@@ -56,6 +116,7 @@ async function registerUser(username, password, name, business, negocioMode = 'c
             negocioId = negocio.id;
             negocioNombre = negocio.nombre;
             isAdmin = 0;
+            isFirstAdmin = 0;  // 🆕 v2.3.5: los que se unen nunca son first_admin
             codigoFinal = negocio.codigo_invitacion;
             
             console.log(`🔗 Usuario se une al negocio: "${negocioNombre}" (ID: ${negocioId})`);
@@ -80,17 +141,20 @@ async function registerUser(username, password, name, business, negocioMode = 'c
             negocioId = negocioResult.id;
             negocioNombre = business.trim();
             isAdmin = 1;
+            isFirstAdmin = 1;  // 🆕 v2.3.5: el que crea el negocio ES el primer admin
             codigoFinal = negocioResult.codigo;
             
             console.log(`🏢 Negocio creado: "${negocioNombre}" (ID: ${negocioId}, Código: ${codigoFinal})`);
+            console.log(`👑 [v2.3.5] Usuario "${normalizedUsername}" será el PRIMER ADMIN del negocio #${negocioId}`);
         }
         
         // ============================================================
         // INSERTAR USUARIO
+        // 🆕 v2.3.5: Incluye is_first_admin
         // ============================================================
         const stmt = db.prepare(`
-            INSERT INTO users (username, password, name, business_name, theme, negocio_id, is_admin) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO users (username, password, name, business_name, theme, negocio_id, is_admin, is_first_admin) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
         stmt.bind([
             normalizedUsername,
@@ -99,7 +163,8 @@ async function registerUser(username, password, name, business, negocioMode = 'c
             negocioNombre,
             'light',
             negocioId,
-            isAdmin
+            isAdmin,
+            isFirstAdmin
         ]);
         stmt.step();
         stmt.free();
@@ -112,6 +177,7 @@ async function registerUser(username, password, name, business, negocioMode = 'c
             negocioNombre: negocioNombre,
             codigo: codigoFinal,
             isAdmin: isAdmin,
+            isFirstAdmin: isFirstAdmin,  // 🆕 v2.3.5
             mode: negocioMode
         };
         
@@ -126,6 +192,7 @@ async function registerUser(username, password, name, business, negocioMode = 'c
 
 // ============================================================
 // LOGIN
+// 🆕 v2.3.5: Carga is_first_admin (con migración automática)
 // ============================================================
 
 async function loginUser(username, password) {
@@ -137,6 +204,10 @@ async function loginUser(username, password) {
         await window.DBModule.ensureDashboardColumns(db);
         await window.DBModule.ensureNegocioIdColumn(db);
         await window.DBModule.ensureIsAdminColumn(db);
+        // 🆕 v2.3.5: Asegurar columna is_first_admin
+        if (typeof window.DBModule.ensureIsFirstAdminColumn === 'function') {
+            await window.DBModule.ensureIsFirstAdminColumn(db);
+        }
         // 🆕 CORRECCIÓN #17: Asegurar que las columnas de preferencias existen
         if (typeof window.DBModule.ensureUserPreferencesColumns === 'function') {
             await window.DBModule.ensureUserPreferencesColumns(db);
@@ -194,13 +265,35 @@ async function loginUser(username, password) {
                 if (result.negocio_id) {
                     const negocio = window.DBModule.getNegocio(result.negocio_id);
                     result.negocio = negocio;
-                    console.log(`🏢 Usuario ${result.username} pertenece al negocio: "${negocio?.nombre || 'N/A'}" ${result.is_admin ? '(ADMIN)' : ''}`);
+                    
+                    // 🆕 v2.3.5: Migración automática de is_first_admin
+                    // Si el negocio no tiene ningún is_first_admin, marcar al más antiguo.
+                    if (result.is_first_admin === undefined || result.is_first_admin === null) {
+                        result.is_first_admin = 0;
+                    }
+                    await _ensureFirstAdminOfNegocio(result.negocio_id);
+                    
+                    // 🆕 v2.3.5: Re-leer is_first_admin del usuario (por si la migración lo afectó)
+                    try {
+                        const fresh = window.DBModule.query(
+                            'SELECT is_first_admin FROM users WHERE id = ?',
+                            [result.id]
+                        );
+                        if (fresh && fresh.length > 0 && fresh[0].is_first_admin !== undefined) {
+                            result.is_first_admin = Number(fresh[0].is_first_admin) || 0;
+                        }
+                    } catch (e) {
+                        console.warn('⚠️ Error re-leyendo is_first_admin:', e);
+                    }
+                    
+                    console.log(`🏢 Usuario ${result.username} pertenece al negocio: "${negocio?.nombre || 'N/A'}" ${result.is_admin ? '(ADMIN)' : ''} ${result.is_first_admin ? '(PRIMER ADMIN)' : ''}`);
                 } else {
                     await window.DBModule.migrateToMultiUser(db);
-                    const userUpdated = window.DBModule.query('SELECT negocio_id, is_admin FROM users WHERE id = ?', [result.id]);
+                    const userUpdated = window.DBModule.query('SELECT negocio_id, is_admin, is_first_admin FROM users WHERE id = ?', [result.id]);
                     if (userUpdated.length > 0 && userUpdated[0].negocio_id) {
                         result.negocio_id = userUpdated[0].negocio_id;
                         result.is_admin = userUpdated[0].is_admin;
+                        result.is_first_admin = Number(userUpdated[0].is_first_admin) || 0;
                         result.negocio = window.DBModule.getNegocio(result.negocio_id);
                     }
                 }
@@ -552,16 +645,33 @@ function isCurrentUserAdmin() {
     return user && user.is_admin === 1;
 }
 
+// ============================================================
+// 🆕 v2.3.5: VERIFICAR SI EL USUARIO ACTUAL ES EL PRIMER ADMIN
+// ============================================================
+
+/**
+ * 🆕 v2.3.5: Devuelve true si el usuario actual es el primer admin
+ * del negocio (is_first_admin = 1).
+ */
+function isCurrentUserFirstAdmin() {
+    const user = getCurrentUser();
+    return user && Number(user.is_first_admin) === 1;
+}
+
+// ============================================================
+// 🆕 v2.3.5: OBTENER USUARIOS DEL NEGOCIO (con is_first_admin)
+// ============================================================
+
 function getUsuariosDelNegocio() {
     const user = getCurrentUser();
     if (!user || !user.negocio_id) return [];
     
     try {
         return window.DBModule.query(
-            `SELECT id, username, name, email, phone, photo, is_admin, created_at 
+            `SELECT id, username, name, email, phone, photo, is_admin, is_first_admin, created_at 
              FROM users 
              WHERE negocio_id = ? AND deleted_at IS NULL 
-             ORDER BY is_admin DESC, created_at ASC`,
+             ORDER BY is_first_admin DESC, is_admin DESC, created_at ASC`,
             [user.negocio_id]
         );
     } catch (e) {
@@ -578,6 +688,7 @@ function contarUsuariosDelNegocio() {
 
 // ============================================================
 // 🆕 FASE B: GESTIÓN DE USUARIOS POR ADMIN
+// 🆕 v2.3.5: Los nuevos usuarios siempre is_first_admin = 0
 // ============================================================
 
 async function createUserAsAdmin(data) {
@@ -609,9 +720,10 @@ async function createUserAsAdmin(data) {
             return { success: false, error: '⚠️ El usuario ya existe. Elige otro nombre.' };
         }
         
+        // 🆕 v2.3.5: Los usuarios creados por admin SIEMPRE tienen is_first_admin = 0
         const stmt = db.prepare(`
-            INSERT INTO users (username, password, name, email, phone, theme, negocio_id, is_admin) 
-            VALUES (?, ?, ?, ?, ?, 'light', ?, ?)
+            INSERT INTO users (username, password, name, email, phone, theme, negocio_id, is_admin, is_first_admin) 
+            VALUES (?, ?, ?, ?, ?, 'light', ?, ?, 0)
         `);
         stmt.bind([
             username,
@@ -632,13 +744,14 @@ async function createUserAsAdmin(data) {
             [username]
         );
         
-        console.log(`✅ FASE B: Usuario "${username}" creado por admin ${admin.username}`);
+        console.log(`✅ FASE B: Usuario "${username}" creado por admin ${admin.username} (is_first_admin = 0)`);
         
         return { 
             success: true, 
             userId: newUser[0]?.id,
             username: username,
-            isAdmin: isAdmin
+            isAdmin: isAdmin,
+            isFirstAdmin: 0
         };
         
     } catch (e) {
@@ -710,7 +823,7 @@ async function toggleUserAdmin(userId, isAdmin) {
     
     try {
         const targetUser = window.DBModule.query(
-            'SELECT id, is_admin, negocio_id FROM users WHERE id = ? AND deleted_at IS NULL',
+            'SELECT id, is_admin, negocio_id, is_first_admin FROM users WHERE id = ? AND deleted_at IS NULL',
             [userId]
         );
         
@@ -720,6 +833,11 @@ async function toggleUserAdmin(userId, isAdmin) {
         
         if (targetUser[0].negocio_id !== currentUser.negocio_id) {
             return { success: false, error: '⚠️ El usuario no pertenece a tu negocio' };
+        }
+        
+        // 🆕 v2.3.5: No se puede degradar al primer admin (is_first_admin)
+        if (!isAdmin && Number(targetUser[0].is_first_admin) === 1) {
+            return { success: false, error: '⚠️ No puedes degradar al primer administrador del negocio' };
         }
         
         const newAdminValue = isAdmin ? 1 : 0;
@@ -762,7 +880,7 @@ async function deleteUserByAdmin(userId) {
     
     try {
         const targetUser = window.DBModule.query(
-            'SELECT id, is_admin, username, negocio_id FROM users WHERE id = ? AND deleted_at IS NULL',
+            'SELECT id, is_admin, username, negocio_id, is_first_admin FROM users WHERE id = ? AND deleted_at IS NULL',
             [userId]
         );
         
@@ -772,6 +890,11 @@ async function deleteUserByAdmin(userId) {
         
         if (targetUser[0].negocio_id !== currentUser.negocio_id) {
             return { success: false, error: '⚠️ El usuario no pertenece a tu negocio' };
+        }
+        
+        // 🆕 v2.3.5: No se puede eliminar al primer admin
+        if (Number(targetUser[0].is_first_admin) === 1) {
+            return { success: false, error: '⚠️ No puedes eliminar al primer administrador del negocio' };
         }
         
         if (targetUser[0].is_admin === 1) {
@@ -894,6 +1017,8 @@ window.AuthModule = {
     updateNegocioNombre,
     validarCodigoInvitacion,
     isCurrentUserAdmin,
+    // 🆕 v2.3.5: Primer admin
+    isCurrentUserFirstAdmin,
     getUsuariosDelNegocio,
     contarUsuariosDelNegocio,
     userExists,
@@ -908,10 +1033,15 @@ window.AuthModule = {
     updateUserDataByAdmin
 };
 
-console.log('📦 Auth Module cargado correctamente v2.3.4 (CORRECCIÓN #17: preferencias individuales)');
-console.log('   🆕 Novedades v2.3.4:');
-console.log('      • loginUser() carga sound_enabled, sound_id, guia_rapida_activa');
-console.log('      • NUEVAS funciones delegadas: getUserSoundConfig, updateUserSoundConfig');
-console.log('      • NUEVAS funciones delegadas: getUserGuiaRapidaActiva, updateUserGuiaRapida');
+console.log('📦 Auth Module cargado correctamente v2.3.5 (SESIÓN 7: marcar primer admin)');
+console.log('   🆕 Novedades v2.3.5:');
+console.log('      • registerUser(): marca is_first_admin=1 al primer usuario del negocio');
+console.log('      • createUserAsAdmin(): siempre is_first_admin=0');
+console.log('      • loginUser(): carga is_first_admin (con migración automática)');
+console.log('      • getUsuariosDelNegocio(): incluye is_first_admin');
+console.log('      • NUEVA función: isCurrentUserFirstAdmin()');
+console.log('      • Migración automática: _ensureFirstAdminOfNegocio()');
+console.log('      • Protecciones: no degradar/eliminar al primer admin');
 console.log('   🔄 Correcciones anteriores mantenidas:');
+console.log('      • v2.3.4: Preferencias individuales (sonido + guía rápida)');
 console.log('      • FASE B: gestión completa de usuarios por admin');

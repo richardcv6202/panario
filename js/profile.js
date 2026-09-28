@@ -45,6 +45,15 @@
 //   - ✅ Fallback a localStorage si la BD falla (retrocompatibilidad).
 //   - ✅ Cada usuario tiene sus propias preferencias de guía rápida
 //     y sonido.
+// 🆕 v2.3.6 (280926): 🎯 SESIÓN 7 - TOGGLE "COMPARTIDA" EN CUENTAS
+//   - ✅ NUEVO toggle "Compartida" en el formulario de crear cuenta:
+//     si está activado, la cuenta es visible para todos los usuarios
+//     del negocio (is_shared = 1).
+//   - ✅ NUEVO toggle "Compartida" en el formulario de editar cuenta.
+//   - ✅ NUEVO badge visual "🔗 Compartida" en cuentas compartidas.
+//   - ✅ saveBankAccount() ahora envía is_shared al guardar.
+//   - ✅ Se muestran indicadores de "Cuenta compartida" en la lista.
+//   - ✅ Retrocompatible: si is_shared no existe, se asume 0.
 // ============================================================
 
 // ============================================================
@@ -954,7 +963,7 @@ function generarEditQRPreview() {
 }
 
 // ============================================================
-// 🆕 CORRECCIÓN #16: MODAL DE DATOS BANCARIOS CON PERMISOS
+// 🆕 CORRECCIÓN #16 + v2.3.6: MODAL DE DATOS BANCARIOS CON PERMISOS
 // ============================================================
 
 async function showBankAccountsModal() {
@@ -998,6 +1007,7 @@ async function showBankAccountsModal() {
             const esMiCuenta = acc.user_id === user.id;
             const esMiDefaultIndividual = acc.id === cuentaDefaultUsuarioId;
             const esDefaultGlobal = acc.is_default === 1;
+            const esCompartida = Number(acc.is_shared) === 1;  // 🆕 v2.3.6
             
             let badgeDefault = '';
             if (esMiDefaultIndividual) {
@@ -1006,13 +1016,18 @@ async function showBankAccountsModal() {
                 badgeDefault = '<span style="font-size: 11px; background: #f59e0b20; color: #f59e0b; padding: 1px 8px; border-radius: 10px; font-weight: 600;">👑 Default global</span>';
             }
             
-            const badgeAjena = (!esMiCuenta && esAdmin) 
+            // 🆕 v2.3.6: Badge de "Compartida"
+            const badgeCompartida = esCompartida
+                ? '<span style="font-size: 10px; background: #8b5cf620; color: #8b5cf6; padding: 1px 8px; border-radius: 10px; margin-left: 4px; font-weight: 600;">🔗 Compartida</span>'
+                : '';
+            
+            const badgeAjena = (!esMiCuenta && !esCompartida && esAdmin) 
                 ? `<span style="font-size: 10px; background: #94a3b820; color: var(--text-light); padding: 1px 6px; border-radius: 8px; margin-left: 4px;">👤 ${acc.user_id}</span>`
                 : '';
             
             const borderColor = esMiDefaultIndividual 
                 ? '#10b981' 
-                : (esDefaultGlobal ? '#f59e0b' : '#94a3b8');
+                : (esDefaultGlobal ? '#f59e0b' : (esCompartida ? '#8b5cf6' : '#94a3b8'));
             
             const puedeCambiarDefault = esAdmin || config.permitir_cambiar_default;
             const mostrarBotonDefault = puedeCambiarDefault 
@@ -1027,6 +1042,7 @@ async function showBankAccountsModal() {
                         <div style="font-weight: 600; font-size: 14px;">
                             🏦 ${acc.bank}
                             ${badgeDefault}
+                            ${badgeCompartida}
                             ${badgeAjena}
                         </div>
                         ${ownerName ? `<div style="font-size: 13px; color: var(--text-light);">👤 Titular: <strong>${ownerName}</strong></div>` : ''}
@@ -1172,6 +1188,18 @@ async function showBankAccountsModal() {
                     </div>
                 </div>
                 
+                <!-- 🆕 v2.3.6: Toggle "Compartida" -->
+                <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #8b5cf610; border-radius: 6px; border: 1px solid #8b5cf6;">
+                    <span style="font-size: 16px;">🔗</span>
+                    <div style="flex: 1;">
+                        <div style="font-size: 13px; font-weight: 600; color: #8b5cf6;">Compartida</div>
+                        <div style="font-size: 10px; color: var(--text-light); margin-top: 2px;">
+                            Si la marcas, <strong>todos los usuarios del negocio</strong> podrán ver esta cuenta (solo lectura).
+                        </div>
+                    </div>
+                    <input type="checkbox" id="bank-account-shared" style="width: 18px; height: 18px; cursor: pointer; accent-color: #8b5cf6;">
+                </div>
+                
                 <div style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--bg); border-radius: 6px; border: 1px solid var(--border-color);">
                     <span style="font-size: 16px;">⭐</span>
                     <span style="flex: 1; font-size: 13px;">Establecer como predeterminada</span>
@@ -1250,6 +1278,7 @@ async function showBankAccountsModal() {
         const accountNumber = document.getElementById('bank-account-number').value.trim();
         const phone = document.getElementById('bank-account-phone').value.trim();
         const isDefault = document.getElementById('bank-account-default').checked;
+        const isShared = document.getElementById('bank-account-shared').checked;  // 🆕 v2.3.6
         
         if (!bank) { window.showToast('⚠️ El nombre del banco es obligatorio', 'error'); return; }
         if (!accountNumber) { window.showToast('⚠️ El número de cuenta es obligatorio', 'error'); return; }
@@ -1260,7 +1289,8 @@ async function showBankAccountsModal() {
             account_number: accountNumber,
             phone: phone || null,
             qr_code: window._qrDataTemp || null,
-            is_default: isDefault
+            is_default: isDefault,
+            is_shared: isShared ? 1 : 0  // 🆕 v2.3.6
         };
         
         const result = await window.DBModule.saveBankAccount(accountData);
@@ -1388,6 +1418,18 @@ async function editBankAccount(accountId) {
                     </small>
                 </div>
                 
+                <!-- 🆕 v2.3.6: Toggle "Compartida" (edición) -->
+                <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #8b5cf610; border-radius: 6px; border: 1px solid #8b5cf6;">
+                    <span style="font-size: 16px;">🔗</span>
+                    <div style="flex: 1;">
+                        <div style="font-size: 13px; font-weight: 600; color: #8b5cf6;">Compartida</div>
+                        <div style="font-size: 10px; color: var(--text-light); margin-top: 2px;">
+                            Si la marcas, <strong>todos los usuarios del negocio</strong> podrán ver esta cuenta (solo lectura).
+                        </div>
+                    </div>
+                    <input type="checkbox" id="edit-bank-account-shared" ${Number(account.is_shared) === 1 ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer; accent-color: #8b5cf6;">
+                </div>
+                
                 <div style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--bg); border-radius: 6px; border: 1px solid var(--border-color);">
                     <span style="font-size: 16px;">👑</span>
                     <span style="flex: 1; font-size: 13px;">Establecer como predeterminada global (admin)</span>
@@ -1476,6 +1518,7 @@ async function editBankAccount(accountId) {
         const accountNumber = document.getElementById('edit-bank-account-number').value.trim();
         const phone = document.getElementById('edit-bank-account-phone').value.trim();
         const isDefault = document.getElementById('edit-bank-account-default').checked;
+        const isShared = document.getElementById('edit-bank-account-shared').checked;  // 🆕 v2.3.6
         const currentQr = document.getElementById('edit-bank-qr-data').value;
         
         if (!bank) { window.showToast('⚠️ El nombre del banco es obligatorio', 'error'); return; }
@@ -1495,7 +1538,8 @@ async function editBankAccount(accountId) {
             account_number: accountNumber,
             phone: phone || null,
             qr_code: finalQr,
-            is_default: isDefault
+            is_default: isDefault,
+            is_shared: isShared ? 1 : 0  // 🆕 v2.3.6
         };
         
         const result = await window.DBModule.saveBankAccount(accountData);
@@ -1537,6 +1581,7 @@ async function viewBankAccountQR(accountId) {
         `;
         
         const ownerName = account.owner_name || '';
+        const esCompartida = Number(account.is_shared) === 1;  // 🆕 v2.3.6
         
         let qrHtml = '';
         if (account.qr_code) {
@@ -1560,7 +1605,10 @@ async function viewBankAccountQR(accountId) {
                     <button onclick="closeQRViewModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
                 </div>
                 <div style="margin-bottom: 12px;">
-                    <div style="font-weight: 600;">🏦 ${account.bank}</div>
+                    <div style="font-weight: 600;">
+                        🏦 ${account.bank}
+                        ${esCompartida ? '<span style="font-size: 10px; background: #8b5cf620; color: #8b5cf6; padding: 1px 8px; border-radius: 10px; margin-left: 4px; font-weight: 600;">🔗 Compartida</span>' : ''}
+                    </div>
                     ${ownerName ? `<div style="font-size: 13px; color: var(--text-light);">👤 Titular: <strong>${ownerName}</strong></div>` : ''}
                     <div style="font-size: 13px; color: var(--text-light);">📋 ${account.account_number}</div>
                 </div>
@@ -1728,12 +1776,14 @@ window.generarQRPreview = generarQRPreview;
 window.generarEditQRPreview = generarEditQRPreview;
 window.construirTextoQR = construirTextoQR;
 
-console.log('📦 Profile Module cargado correctamente v2.3.4');
-console.log('   🆕 CORRECCIÓN #17 (240926) aplicada:');
-console.log('      ✅ toggleGuiaRapida() guarda en BD con user_id');
-console.log('      ✅ loadProfile() lee guía rápida desde BD con user_id');
-console.log('      ✅ loadProfile() lee sonido desde BD con user_id');
-console.log('      ✅ Fallback a localStorage si BD falla');
+console.log('📦 Profile Module cargado correctamente v2.3.6');
+console.log('   🆕 SESIÓN 7 (280926) - Toggle "Compartida" en cuentas bancarias:');
+console.log('      ✅ Nuevo toggle "🔗 Compartida" en crear cuenta');
+console.log('      ✅ Nuevo toggle "🔗 Compartida" en editar cuenta');
+console.log('      ✅ Badge visual "🔗 Compartida" en la lista');
+console.log('      ✅ saveBankAccount() envía is_shared');
+console.log('      ✅ Badge "🔗 Compartida" también en vista de QR');
 console.log('   🔄 Correcciones anteriores mantenidas:');
 console.log('      • #16 (240926): Permisos bancarios');
+console.log('      • #17 (240926): Configuraciones individuales');
 console.log('      • #2, #3, #4 (250926)');
