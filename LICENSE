@@ -1,0 +1,265 @@
+LICENCIA DE USO DE SOFTWARE PROPIETARIO
+PANARIO — SISTEMA DE GESTIÓN PARA PANADERÍA ARTESANAL
+
+Versión del software: 2.3.7
+Fecha de emisión: 29 de septiembre de 2026
+Titular de los derechos: Ricardo Castillo Valdés
+Contacto: 3sayricardo@gmail.com · WhatsApp: +53 55031725
+
+================================================================
+1. DEFINICIONES
+================================================================
+
+1.1. "Software" se refiere a la aplicación Panario, incluyendo
+     todo su código fuente, código objeto, documentación,
+     recursos gráficos, sonidos, textos, diseño, estructura,
+     base de datos, lógica de negocio, algoritmos y cualquier
+     otro componente que la integre.
+
+1.2. "Titular" se refiere a Ricardo Castillo Valdés, creador y
+     propietario exclusivo de todos los derechos de propiedad
+     intelectual sobre el Software.
+
+1.3. "Usuario" se refiere a cualquier persona física o jurídica
+     que instale, acceda, ejecute o utilice el Software.
+
+1.4. "Uso Permitido" se refiere a las actividades expresamente
+     autorizadas en la Sección 2 de esta licencia.
+
+1.5. "Uso Prohibido" se refiere a las actividades expresamente
+     vedadas en la Sección 3 de esta licencia.
+
+================================================================
+2. USO PERMITIDO
+================================================================
+
+El Titular otorga al Usuario una licencia LIMITADA, NO EXCLUSIVA,
+NO TRANSFERIBLE, REVOCABLE y GRATUITA para:
+
+2.1. Instalar y ejecutar el Software en dispositivos de su
+     propiedad o bajo su control legítimo, con el propósito de
+     gestionar su panadería artesanal.
+
+2.2. Utilizar todas las funcionalidades del Software según lo
+     descrito en el MANUAL.md.
+
+2.3. Realizar copias de seguridad de los datos generados por el
+     uso del Software, en los formatos provistos oficialmente
+     (archivos .db, salvas diferenciales, etc.).
+
+2.4. Instalar el Software como PWA (Progressive Web App) en
+     dispositivos Android, iOS, Windows, macOS o Linux.
+
+2.5. Utilizar el Software en modo multiusuario dentro de un mismo
+     negocio, según lo descrito en el MANUAL.md.
+
+2.6. Exportar los datos generados por el Software (ventas,
+     pedidos, insumos, recetas, productos, etc.) para uso
+     interno del negocio del Usuario.
+
+================================================================
+3. USO PROHIBIDO
+================================================================
+
+Queda EXPRESAMENTE PROHIBIDO, sin autorización previa y por
+escrito del Titular:
+
+3.1. COPIAR, REPRODUCIR, DISTRIBUIR, PUBLICAR, COMUNICAR
+     PÚBLICAMENTE o PONER A DISPOSICIÓN de terceros el Software,
+     en su totalidad o en parte, por cualquier medio (físico,
+     digital, electrónico o de cualquier otra naturaleza).
+
+3.2. MODIFICAR, ADAPTAR, TRADUCIR, TRANSFORMAR o CREAR OBRAS
+     DERIVADAS basadas en el Software, su código fuente o
+     cualquiera de sus componentes.
+
+3.3. DESCOMPILAR, DESENSAMBLAR, APLICAR INGENIERÍA INVERSA o
+     intentar obtener el código fuente del Software, salvo en
+     los casos expresamente permitidos por la ley aplicable.
+
+3.4. VENDER, ALQUILAR, ARRENDAR, SUBLICENCIAR, CEDER,
+     TRANSFERIR o EXPLOTAR COMERCIALMENTE el Software o
+     cualquiera de sus componentes, ya sea de forma directa o
+     indirecta.
+
+3.5. ELIMINAR, OCULTAR O ALTERAR los avisos de copyright, las
+     marcas registradas, los logotipos o cualquier otra
+     indicación de propiedad intelectual incluida en el
+     Software.
+
+3.6. Utilizar el Software para actividades ilegales, fraudulentas,
+     maliciosas o que violen derechos de terceros.
+
+3.7. Redistribuir el Software en repositorios públicos (GitHub,
+     GitLab, Bitbucket, etc.) sin autorización expresa del
+     Titular.
+
+3.8. Utilizar el Software como base para crear productos
+     competidores o servicios similares.
+
+3.9. Extraer, reutilizar o redistribuir el contenido del sistema
+     de ayuda (manual, FAQs, tour, guía rápida, créditos) con
+     fines distintos al uso personal del Software.
+
+================================================================
+4. PROPIEDAD INTELECTUAL
+================================================================
+
+4.1. Todos los derechos de propiedad intelectual sobre el
+     Software (incluyendo, sin limitación, derechos de autor,
+     marcas, nombres comerciales, secretos industriales,
+     patentes y cualquier otro derecho de propiedad industrial
+     o intelectual) son y permanecerán en todo momento
+     propiedad exclusiva del Titular.
+
+4.2. Esta licencia NO transfiere al Usuario ningún derecho de
+     propiedad sobre el Software. El Usuario únicamente adquiere
+     un derecho de uso limitado según los términos de esta
+     licencia.
+
+4.3. El nombre "Panario", su logotipo (🍞), su eslogan ("Tu
+     panadería en orden") y cualquier otro signo distintivo
+     asociado al Software son propiedad exclusiva del Titular.
+
+4.4. Los datos generados por el Usuario al utilizar el Software
+     (ventas, pedidos, insumos, recetas, productos, cuentas
+     bancarias, etc.) son y permanecerán propiedad del Usuario.
+
+================================================================
+5. PRIVACIDAD Y DATOS
+================================================================
+
+5.1. El Software opera íntegramente de forma LOCAL en el
+     dispositivo del Usuario. NO requiere conexión a servidores
+     externos para su funcionamiento.
+
+5.2. El Titular NO recopila, almacena, transmite ni procesa
+     ningún dato personal o comercial del Usuario.
+
+5.3. Todos los datos generados por el Software se almacenan
+     localmente (SQLite + localStorage) en el dispositivo del
+     Usuario.
+
+5.4. El Usuario es el único responsable de la seguridad física y
+     lógica de sus datos, incluyendo la realización de copias de
+     seguridad periódicas.
+
+5.5. El Titular NO se hace responsable de la pérdida de datos
+     derivada de fallos del dispositivo, eliminación accidental,
+     limpieza de caché, reinstalación de la PWA o cualquier otra
+     circunstancia ajena al Software.
+
+================================================================
+6. GARANTÍAS Y RESPONSABILIDAD
+================================================================
+
+6.1. El Software se proporciona "TAL CUAL" ("AS IS"), sin
+     garantías de ningún tipo, expresas o implícitas,
+     incluyendo, sin limitación, garantías de comerciabilidad,
+     idoneidad para un propósito particular o no infracción.
+
+6.2. El Titular NO garantiza que el Software funcione de forma
+     ininterrumpida, libre de errores o que todos los errores
+     puedan ser corregidos.
+
+6.3. El Titular NO será responsable, en ningún caso, por daños
+     directos, indirectos, incidentales, especiales, ejemplares
+     o consecuentes (incluyendo, sin limitación, pérdida de
+     beneficios, pérdida de datos, interrupción del negocio o
+     cualquier otro daño) derivados del uso o la imposibilidad
+     de uso del Software, incluso si el Titular hubiera sido
+     advertido de la posibilidad de tales daños.
+
+6.4. El Usuario utiliza el Software bajo su propio riesgo y
+     asume toda la responsabilidad por cualquier consecuencia
+     derivada de su uso.
+
+================================================================
+7. SOPORTE Y ACTUALIZACIONES
+================================================================
+
+7.1. El Titular PODRÁ, a su entera discreción, proporcionar
+     actualizaciones, mejoras, correcciones o nuevas versiones
+     del Software, sin que ello implique obligación alguna.
+
+7.2. El Usuario podrá reportar errores, sugerir mejoras o
+     solicitar soporte técnico a través de los canales
+     indicados al final de este documento.
+
+7.3. El Titular NO está obligado a proporcionar soporte técnico,
+     aunque podrá hacerlo de forma voluntaria.
+
+7.4. Las actualizaciones del Software estarán sujetas a los
+     mismos términos y condiciones de esta licencia.
+
+================================================================
+8. VIGENCIA Y TERMINACIÓN
+================================================================
+
+8.1. Esta licencia entra en vigor en el momento en que el
+     Usuario instala o utiliza el Software por primera vez.
+
+8.2. El Titular se reserva el derecho de revocar esta licencia
+     en cualquier momento, sin previo aviso, si el Usuario
+     incumple cualquiera de los términos aquí establecidos.
+
+8.3. En caso de terminación, el Usuario deberá cesar
+     inmediatamente el uso del Software y eliminar todas las
+     copias en su posesión o control.
+
+8.4. Las disposiciones de las Secciones 3 (Uso Prohibido),
+     4 (Propiedad Intelectual), 6 (Garantías y
+     Responsabilidad) y 9 (Ley Aplicable) sobrevivirán a
+     cualquier terminación de esta licencia.
+
+================================================================
+9. LEY APLICABLE Y JURISDICCIÓN
+================================================================
+
+9.1. Esta licencia se rige por las leyes de la República de
+     Cuba, sin perjuicio de las normas de derecho internacional
+     privado aplicables.
+
+9.2. Cualquier controversia derivada de la interpretación o
+     cumplimiento de esta licencia será resuelta por los
+     tribunales competentes de la República de Cuba.
+
+9.3. En caso de que cualquier disposición de esta licencia sea
+     declarada nula o inaplicable, las demás disposiciones
+     permanecerán en pleno vigor y efecto.
+
+================================================================
+10. ACEPTACIÓN
+================================================================
+
+10.1. La instalación, el acceso, la ejecución o el uso del
+      Software por parte del Usuario constituye la ACEPTACIÓN
+      PLENA E INCONDICIONAL de todos los términos y condiciones
+      establecidos en esta licencia.
+
+10.2. Si el Usuario NO está de acuerdo con alguno de los
+      términos de esta licencia, deberá ABSTENERSE de instalar,
+      acceder o utilizar el Software.
+
+================================================================
+11. INFORMACIÓN DE CONTACTO
+================================================================
+
+Para consultas relacionadas con esta licencia, autorizaciones
+especiales, licencias comerciales o soporte técnico:
+
+    Desarrollador:  Ricardo Castillo Valdés
+    WhatsApp:       +53 55031725
+    Email:          3sayricardo@gmail.com
+
+================================================================
+
+© 2026 Ricardo Castillo Valdés
+Todos los derechos reservados.
+
+Hecho con ❤️ para panaderos artesanales
+Desarrollado en Cuba 🇨🇺
+
+================================================================
+FIN DE LA LICENCIA
+================================================================

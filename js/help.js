@@ -1,5 +1,17 @@
 // ============================================================
 // 📦 HELP MODULE - Panario (Sistema de Ayuda y Tutorial)
+// v3.0.1 (290926): 🎯 CORRECCIÓN #15 (290926)
+//   - ✅ NUEVO: FAQs cargadas desde window.FAQS_DB (js/faqs.js)
+//   - ✅ ELIMINADO: array FAQS_DB local (solo tenía 10 FAQs)
+//   - ✅ VERIFICACIÓN: si window.FAQS_DB no existe, muestra error
+//   - ✅ MANTENIDO: Corrección #14 (modal sin iframe)
+//   - ✅ MANTENIDO: Tour, guía rápida, créditos, léeme
+//   - ✅ MANTENIDO: Popover del Centro de Ayuda
+//   - ✅ MANTENIDO: renderAyudaStandalone() para ?standalone=1
+//   - ✅ MANTENIDO: imprimirAyudaModal() (sin iframe)
+//   - ✅ MANTENIDO: listener CLOSE_HELP (compatibilidad v2.x)
+//
+// HISTORIAL:
 // v3.0.0 (250926): 🎯 CORRECCIÓN #14 (240926)
 //   - ✅ ELIMINADO: iframe de ayuda-panario.html
 //   - ✅ ELIMINADO: postMessage CLOSE_HELP/PONG/NAVIGATE
@@ -39,6 +51,40 @@ let _helpAppBlockState = null;
 
 const DEV_AVATAR_PATH = './assets/dev-avatar.png';
 const DEV_AVATAR_FALLBACK_EMOJI = '👨‍💻';
+
+// ============================================================
+// 🆕 CORRECCIÓN #15: OBTENER FAQs DESDE WINDOW.FAQS_DB
+// ============================================================
+// Las FAQs se cargan desde js/faqs.js (archivo externo).
+// Esto mantiene help.js ligero y permite que help-detailed.js
+// también use las mismas FAQs.
+// ============================================================
+
+function obtenerFAQs() {
+    try {
+        if (!window.FAQS_DB || !Array.isArray(window.FAQS_DB)) {
+            console.error('❌ [help] window.FAQS_DB no está cargado. Verifica que js/faqs.js esté incluido ANTES de help.js en index.html.');
+            return [];
+        }
+        if (window.FAQS_DB.length === 0) {
+            console.warn('⚠️ [help] window.FAQS_DB está vacío.');
+            return [];
+        }
+        return window.FAQS_DB;
+    } catch (e) {
+        console.error('❌ [help] Error leyendo window.FAQS_DB:', e);
+        return [];
+    }
+}
+
+// Alias de compatibilidad: algunos módulos externos podían referenciar
+// window.HelpModule.FAQS_DB directamente. Se mantiene como getter.
+Object.defineProperty(window.HelpModule, 'FAQS_DB', {
+    get: function() {
+        return window.FAQS_DB || [];
+    },
+    configurable: true
+});
 
 // ============================================================
 // CONFIGURACIÓN DEL TOUR
@@ -146,7 +192,7 @@ function _restaurarAppTrasAyuda() {
 }
 
 // ============================================================
-// 🆕 CORRECCIÓN #14: ABRIR AYUDA DETALLADA (SIN IFRAME)
+// CORRECCIÓN #14: ABRIR AYUDA DETALLADA (SIN IFRAME)
 // ============================================================
 // 
 // CAMBIO CLAVE:
@@ -210,7 +256,7 @@ function abrirAyudaDetallada() {
 }
 
 /**
- * 🆕 CORRECCIÓN #14: Abre la ayuda detallada en un modal controlado
+ * CORRECCIÓN #14: Abre la ayuda detallada en un modal controlado
  * (sin iframe). El contenido se monta desde help-detailed.js.
  */
 function abrirAyudaEnModalControlado(sectionIdInicial = 'intro') {
@@ -347,7 +393,7 @@ function abrirAyudaEnModalControlado(sectionIdInicial = 'intro') {
 }
 
 /**
- * 🆕 CORRECCIÓN #14: Cierra el modal de ayuda (sin iframe).
+ * CORRECCIÓN #14: Cierra el modal de ayuda (sin iframe).
  */
 function cerrarAyudaModal() {
     const LOG_PREFIX = '📖 [help]';
@@ -390,7 +436,7 @@ function cerrarAyudaModal() {
 }
 
 /**
- * 🆕 CORRECCIÓN #14: Imprime el contenido del modal de ayuda.
+ * CORRECCIÓN #14: Imprime el contenido del modal de ayuda.
  * (Reemplaza a imprimirAyudaIframe())
  */
 function imprimirAyudaModal() {
@@ -501,7 +547,7 @@ function imprimirAyudaModal() {
 }
 
 /**
- * 🆕 CORRECCIÓN #14: Abre la ayuda en modo standalone (pestaña nueva).
+ * CORRECCIÓN #14: Abre la ayuda en modo standalone (pestaña nueva).
  * Solo se usa en desktop, como alternativa al modal.
  * 
  * Carga la app con ?standalone=1, y app.js detecta este parámetro
@@ -532,7 +578,7 @@ function abrirAyudaStandalone() {
 }
 
 /**
- * 🆕 CORRECCIÓN #14: Renderiza la ayuda en modo standalone.
+ * CORRECCIÓN #14: Renderiza la ayuda en modo standalone.
  * Se llama desde app.js cuando detecta ?standalone=1 en la URL.
  * 
  * Reemplaza toda la pantalla con la ayuda, sin header, sin nav, sin app.
@@ -616,6 +662,12 @@ function mostrarPopoverAyuda(anchorElement = null) {
         return _mostrarHelpMenuFallback();
     }
     _helpPopoverAnchor = anchor;
+    
+    // 🆕 CORRECCIÓN #15: Obtener FAQs desde window.FAQS_DB
+    const faqs = obtenerFAQs();
+    const faqCount = faqs.length > 0 ? faqs.length : 0;
+    const faqLabel = faqCount > 0 ? `${faqCount} respuestas` : 'Cargando...';
+    
     const popover = document.createElement('div');
     popover.id = 'help-popover';
     popover.setAttribute('role', 'menu');
@@ -653,7 +705,7 @@ function mostrarPopoverAyuda(anchorElement = null) {
             </button>
             <button class="help-popover-item" data-action="faq" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; text-align: left; font-family: inherit; transition: background 0.15s; color: var(--text);">
                 <span style="font-size: 20px; flex-shrink: 0;">❓</span>
-                <div style="flex: 1; min-width: 0;"><div style="font-weight: 600; font-size: 13px;">Preguntas Frecuentes</div><div style="font-size: 11px; color: var(--text-light);">${FAQS_DB.length} respuestas</div></div>
+                <div style="flex: 1; min-width: 0;"><div style="font-weight: 600; font-size: 13px;">Preguntas Frecuentes</div><div style="font-size: 11px; color: var(--text-light);">${faqLabel}</div></div>
                 <span style="font-size: 12px; color: var(--text-light); flex-shrink: 0;">▶</span>
             </button>
             <button class="help-popover-item" data-action="detailed" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; text-align: left; font-family: inherit; transition: background 0.15s; color: var(--text);">
@@ -884,7 +936,7 @@ function showReadmeModal() {
                 </ul>
                 <h4 style="margin: 16px 0 8px 0; color: var(--text);">📱 Información técnica</h4>
                 <div style="background: var(--bg); padding: 12px; border-radius: 8px; font-size: 13px;">
-                    <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span style="color: var(--text-light);">Versión:</span><strong>2.3.0</strong></div>
+                    <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span style="color: var(--text-light);">Versión:</span><strong>2.3.6</strong></div>
                     <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span style="color: var(--text-light);">Estado:</span><strong style="color: #10b981;">✅ Producción</strong></div>
                     <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span style="color: var(--text-light);">Arquitectura:</span><strong>Cliente local (SQLite WASM)</strong></div>
                     <div style="display: flex; justify-content: space-between; padding: 2px 0;"><span style="color: var(--text-light);">Tecnología:</span><strong>HTML5 + CSS3 + JS (ES6+)</strong></div>
@@ -962,7 +1014,7 @@ function showCreditsModal() {
                 </a>
             </div>
             <div style="background: linear-gradient(135deg, #0ea5e915 0%, #0284c715 100%); border: 1px solid #0ea5e9; border-radius: 10px; padding: 14px; margin-bottom: 16px;">
-                <div style="font-size: 13px; font-weight: 600; color: #0ea5e9; margin-bottom: 4px;">🍞 Panario v2.3.0</div>
+                <div style="font-size: 13px; font-weight: 600; color: #0ea5e9; margin-bottom: 4px;">🍞 Panario v2.3.6</div>
                 <div style="font-size: 12px; color: var(--text-light);">"Tu panadería en orden"</div>
                 <div style="font-size: 11px; color: var(--text-light); margin-top: 8px;">© 2026 Ricardo Castillo Valdés<br>Todos los derechos reservados</div>
             </div>
@@ -1199,37 +1251,42 @@ function initHelpButton() {
 }
 
 // ============================================================
-// BASE DE DATOS DE FAQs — 315+ PREGUNTAS LITERALES
-// ============================================================
-// 
-// NOTA: Este array se mantiene intacto. NO SE TOCA.
-// Las correcciones se hacen en help-detailed.js, no aquí.
-// ============================================================
-
-const FAQS_DB = [
-    // 🏠 SECCIÓN 1: GENERALES (P1-P10)
-    { cat: '🏠 Generales', q: '¿Qué es Panario?', a: 'Es una aplicación PWA para la gestión integral de una panadería artesanal. Permite gestionar insumos, recetas, productos, ventas, pedidos y finanzas.' },
-    { cat: '🏠 Generales', q: '¿Funciona sin conexión?', a: 'Sí, Panario funciona completamente offline. Todos tus datos están guardados localmente en tu dispositivo.' },
-    { cat: '🏠 Generales', q: '¿Dónde se guardan mis datos?', a: 'En SQLite (base de datos local) y localStorage. Todo queda en tu dispositivo. Nada se envía a servidores externos.' },
-    { cat: '🏠 Generales', q: '¿Cómo hago una copia de seguridad?', a: 'Ve a ⚙️ Herramientas y haz clic en "📥 Descargar copia de seguridad". Se descarga un archivo .db con todos tus datos.' },
-    { cat: '🏠 Generales', q: '¿Cómo restauro una copia de seguridad?', a: 'En ⚙️ Herramientas, haz clic en "📤 Importar copia de seguridad" y selecciona el archivo .db. Se reemplazarán todos los datos actuales.' },
-    { cat: '🏠 Generales', q: '¿Puedo exportar solo recetas y productos?', a: 'Sí. En Herramientas usa "🧩 Salva diferencial" para exportar/importar solo las recetas y productos, sin afectar al resto de la base de datos.' },
-    { cat: '🏠 Generales', q: '¿Qué navegadores soporta Panario?', a: 'Chrome, Firefox, Edge, Safari (versiones recientes). Se recomienda Chrome para mejor rendimiento.' },
-    { cat: '🏠 Generales', q: '¿Cómo instalo Panario en mi móvil?', a: 'Abre Panario en el navegador y usa "Añadir a pantalla de inicio" o "Instalar aplicación".' },
-    { cat: '🏠 Generales', q: '¿Quién desarrolló Panario?', a: 'Panario fue desarrollado por Ricardo Castillo Valdés. Puedes contactarlo por WhatsApp (+53 55031725) o email (3sayricardo@gmail.com).' },
-    { cat: '🏠 Generales', q: '¿Por qué no suenan las notificaciones?', a: 'Los navegadores modernos bloquean el audio hasta que el usuario interactúa con la página. Haz clic en cualquier parte de la app y las notificaciones sonarán desde ese momento.' },
-    // ... (resto de FAQS_DB se mantiene igual, 315+ preguntas)
-    // NOTA: El array completo se mantiene intacto del archivo anterior.
-];
-
-// ============================================================
 // MOSTRAR FAQ CON NUMERACIÓN Y BUSCADOR
+// ============================================================
+// 🆕 CORRECCIÓN #15: Las FAQs se cargan desde window.FAQS_DB
+// (js/faqs.js) en lugar de estar embebidas en este archivo.
 // ============================================================
 
 function showFAQModal() {
+    const LOG_PREFIX = '❓ [help]';
+    console.log(`${LOG_PREFIX} showFAQModal() llamado`);
+    
+    // 🆕 CORRECCIÓN #15: Obtener FAQs desde window.FAQS_DB
+    const faqs = obtenerFAQs();
+    
+    // Si no hay FAQs cargadas, mostrar error
+    if (faqs.length === 0) {
+        console.error(`${LOG_PREFIX} ❌ window.FAQS_DB no está cargado o está vacío`);
+        
+        if (window.ModalModule && typeof window.ModalModule.showAlert === 'function') {
+            window.ModalModule.showAlert({
+                title: '⚠️ FAQs no disponibles',
+                message: 'El módulo de Preguntas Frecuentes no se ha cargado correctamente.\n\nVerifica que el archivo js/faqs.js esté incluido en el HTML antes de js/help.js.',
+                icon: '⚠️',
+                type: 'warning'
+            });
+        } else if (window.showToast) {
+            window.showToast('⚠️ FAQs no disponibles. Recarga la página.', 'warning', 5000);
+        }
+        return;
+    }
+    
     const existingModal = document.getElementById('faq-modal');
     if (existingModal) existingModal.remove();
-    const faqsNumeradas = FAQS_DB.map((f, i) => ({ ...f, num: i + 1 }));
+    
+    const faqsNumeradas = faqs.map((f, i) => ({ ...f, num: i + 1 }));
+    
+    // Construir HTML agrupado por categoría
     let faqHtml = '';
     let currentCat = '';
     faqsNumeradas.forEach(f => {
@@ -1250,7 +1307,8 @@ function showFAQModal() {
             </div>
         `;
     });
-    const totalFaqs = FAQS_DB.length;
+    
+    const totalFaqs = faqs.length;
     const modal = document.createElement('div');
     modal.id = 'faq-modal';
     modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease;`;
@@ -1294,6 +1352,8 @@ function showFAQModal() {
     };
     modal.addEventListener('click', function(e) { if (e.target === this) closeFAQModal(); });
     setTimeout(() => { document.getElementById('faq-search-input')?.focus(); }, 100);
+    
+    console.log(`${LOG_PREFIX} ✅ Modal de FAQs abierto con ${totalFaqs} preguntas`);
 }
 
 function filtrarFAQs(query) {
@@ -1412,13 +1472,21 @@ function initEscapeKey() {
 document.addEventListener('DOMContentLoaded', function() {
     initParentMessageListener();
     initEscapeKey();
-    console.log('📦 Help Module cargado correctamente v3.0.0');
+    
+    // 🆕 CORRECCIÓN #15: Verificar que FAQs estén cargadas
+    const faqs = obtenerFAQs();
+    console.log('📦 Help Module cargado correctamente v3.0.1');
+    console.log(`   📚 FAQs disponibles: ${faqs.length}`);
+    console.log(`   📂 Categorías: ${faqs.length > 0 ? [...new Set(faqs.map(f => f.cat))].length : 0}`);
 });
 
 if (document.readyState !== 'loading') {
     initParentMessageListener();
     initEscapeKey();
-    console.log('📦 Help Module cargado correctamente v3.0.0 (inmediato)');
+    const faqs = obtenerFAQs();
+    console.log('📦 Help Module cargado correctamente v3.0.1 (inmediato)');
+    console.log(`   📚 FAQs disponibles: ${faqs.length}`);
+    console.log(`   📂 Categorías: ${faqs.length > 0 ? [...new Set(faqs.map(f => f.cat))].length : 0}`);
 }
 
 // ============================================================
@@ -1434,7 +1502,8 @@ window.HelpModule = {
     abrirAyudaDetallada, abrirAyudaEnModalControlado, cerrarAyudaModal,
     imprimirAyudaModal, abrirAyudaStandalone, renderAyudaStandalone,
     isMobileDevice,
-    FAQS_DB, DEV_AVATAR_PATH,
+    obtenerFAQs,
+    DEV_AVATAR_PATH,
     _bloquearAppMientrasAyuda, _restaurarAppTrasAyuda,
     initParentMessageListener, initEscapeKey
 };
@@ -1456,14 +1525,15 @@ window.abrirAyudaStandalone = abrirAyudaStandalone;
 window.renderAyudaStandalone = renderAyudaStandalone;
 window.filtrarFAQs = filtrarFAQs;
 window.isMobileDevice = isMobileDevice;
+window.obtenerFAQs = obtenerFAQs;
 window._bloquearAppMientrasAyuda = _bloquearAppMientrasAyuda;
 window._restaurarAppTrasAyuda = _restaurarAppTrasAyuda;
 window.closeHelpMenuFallback = window.closeHelpMenuFallback || (() => {});
 
-console.log('📦 Help Module v3.0.0 (CORRECCIÓN #14: ayuda como módulo JS integrado)');
+console.log('📦 Help Module v3.0.1 (CORRECCIÓN #15: FAQs cargadas desde js/faqs.js)');
+console.log('   ✅ FAQs externas — help.js ligero');
 console.log('   ✅ Sin iframe — el contenido se monta en un modal controlado');
 console.log('   ✅ Respeta el tema actual (claro/oscuro)');
 console.log('   ✅ Búsqueda en vivo y navegación suave');
 console.log('   ✅ Impresión directa del contenido');
 console.log('   ✅ Modo standalone (?standalone=1) para abrir en pestaña nueva');
-console.log('   📚 FAQs cargadas:', FAQS_DB.length);

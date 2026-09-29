@@ -1,5 +1,16 @@
 // ============================================================
 // 📦 HELP DETAILED MODULE - Panario
+// v1.1.0 (290926): 🎯 CORRECCIÓN #15 (290926)
+//   - ✅ NUEVO: Sección "❓ Preguntas Frecuentes" al final
+//   - ✅ NUEVO: renderFAQsEnAyudaDetallada() — lee window.FAQS_DB
+//   - ✅ NUEVO: Buscador y acordeón dentro de la sección de FAQs
+//   - ✅ MANTENIDO: Todo el contenido original de las 14 secciones
+//   - ✅ MANTENIDO: Estilos integrados con variables CSS de la app
+//   - ✅ MANTENIDO: Navegación lateral con scroll suave
+//   - ✅ MANTENIDO: Búsqueda en vivo del contenido del manual
+//   - ✅ MANTENIDO: Compatible con desktop y móvil
+//
+// HISTORIAL:
 // v1.0.0 (250926): CORRECCIÓN #14 (240926)
 //   - ✅ Convierte ayuda-panario.html en módulo JS integrado
 //   - ✅ Elimina el uso de iframe
@@ -21,6 +32,7 @@ window.HelpDetailedModule = {};
 //   - icon: emoji representativo
 //   - title: título de la sección
 //   - html: contenido HTML de la sección
+//   - dynamic: (opcional) si true, el contenido se genera en runtime
 // ============================================================
 
 const HELP_SECTIONS = [
@@ -60,7 +72,7 @@ const HELP_SECTIONS = [
             <div class="help-table-wrapper">
                 <table class="help-table">
                     <tr><th style="width: 40%;">Propiedad</th><th>Valor</th></tr>
-                    <tr><td>Versión</td><td><strong>2.3.0</strong></td></tr>
+                    <tr><td>Versión</td><td><strong>2.3.6</strong></td></tr>
                     <tr><td>Estado</td><td><span class="help-badge success">✅ Producción</span></td></tr>
                     <tr><td>Arquitectura</td><td>Cliente local (SQLite WASM)</td></tr>
                     <tr><td>Tecnología</td><td>HTML5 + CSS3 + JavaScript (ES6+)</td></tr>
@@ -828,7 +840,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 </div>
 
                 <div style="margin-top: 24px; color: var(--text-light); font-size: 12px; line-height: 1.7;">
-                    <p><strong>Panario v2.3.0</strong></p>
+                    <p><strong>Panario v2.3.6</strong></p>
                     <p>© 2026 Ricardo Castillo Valdés</p>
                     <p>Todos los derechos reservados</p>
                     <p style="margin-top: 12px;">Hecho con ❤️ para panaderos artesanales</p>
@@ -836,6 +848,14 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 </div>
             </div>
         `
+    },
+    // 🆕 CORRECCIÓN #15: Sección dinámica de FAQs
+    {
+        id: 'faqs',
+        icon: '❓',
+        title: 'Preguntas Frecuentes',
+        dynamic: true,
+        html: `<!-- Se genera dinámicamente desde window.FAQS_DB -->`
     }
 ];
 
@@ -1088,6 +1108,109 @@ function inyectarEstilosAyuda() {
         .help-badge.info { background: var(--info-bg); color: var(--info); }
         .help-badge.purple { background: #8b5cf620; color: #8b5cf6; }
         
+        /* ============================================================
+           🆕 SECCIÓN FAQs DENTRO DE LA AYUDA DETALLADA
+           ============================================================ */
+        
+        .help-faqs-search {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-card);
+            color: var(--text);
+            font-size: 14px;
+            margin: 12px 0;
+            font-family: inherit;
+        }
+        
+        .help-faqs-search:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .help-faqs-count {
+            font-size: 11px;
+            margin-top: -6px;
+            margin-bottom: 10px;
+            display: none;
+        }
+        
+        .help-faqs-category {
+            margin-top: 18px;
+            margin-bottom: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--primary);
+            padding: 6px 10px;
+            background: var(--primary-light);
+            border-radius: 6px;
+            border-left: 3px solid var(--primary);
+        }
+        
+        .help-faqs-item {
+            background: var(--bg-card);
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            transition: border-color 0.15s;
+        }
+        
+        .help-faqs-item:hover {
+            border-color: var(--primary);
+        }
+        
+        .help-faqs-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .help-faqs-item-question {
+            font-weight: 600;
+            font-size: 13px;
+            flex: 1;
+            display: flex;
+            gap: 8px;
+            align-items: baseline;
+            color: var(--text);
+        }
+        
+        .help-faqs-item-num {
+            color: var(--primary);
+            font-weight: 700;
+            min-width: 28px;
+            text-align: right;
+        }
+        
+        .help-faqs-item-arrow {
+            font-size: 14px;
+            flex-shrink: 0;
+            transition: transform 0.2s;
+        }
+        
+        .help-faqs-item-answer {
+            display: none;
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--text-light);
+            padding-top: 8px;
+            padding-left: 36px;
+            border-top: 1px solid var(--border-color);
+            line-height: 1.6;
+            white-space: pre-line;
+        }
+        
+        .help-faqs-empty {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-light);
+        }
+        
         /* Móvil */
         @media (max-width: 768px) {
             .help-detailed-layout {
@@ -1124,6 +1247,181 @@ function inyectarEstilosAyuda() {
     `;
     
     document.head.appendChild(style);
+}
+
+// ============================================================
+// 🆕 CORRECCIÓN #15: RENDERIZAR FAQs DENTRO DE LA AYUDA DETALLADA
+// ============================================================
+// Genera el HTML de la sección "❓ Preguntas Frecuentes" a partir
+// de window.FAQS_DB (cargado desde js/faqs.js).
+// ============================================================
+
+function renderFAQsEnAyudaDetallada() {
+    const LOG_PREFIX = '📖 [help-detailed]';
+    console.log(`${LOG_PREFIX} renderFAQsEnAyudaDetallada() llamado`);
+    
+    try {
+        const container = document.getElementById('help-section-faqs');
+        if (!container) {
+            console.warn(`${LOG_PREFIX} ⚠️ No se encontró #help-section-faqs`);
+            return;
+        }
+        
+        // Obtener FAQs desde window.FAQS_DB
+        const faqs = window.FAQS_DB;
+        
+        if (!faqs || !Array.isArray(faqs) || faqs.length === 0) {
+            console.warn(`${LOG_PREFIX} ⚠️ window.FAQS_DB no está cargado o está vacío`);
+            container.innerHTML = `
+                <h2>❓ Preguntas Frecuentes</h2>
+                <div class="help-card warning">
+                    <div class="help-card-title">⚠️ FAQs no disponibles</div>
+                    <p>El archivo <code>js/faqs.js</code> no se ha cargado correctamente. Verifica que esté incluido en el HTML antes de <code>js/help-detailed.js</code>.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Renumerar secuencialmente
+        const faqsNumeradas = faqs.map((f, i) => ({ ...f, num: i + 1 }));
+        
+        // Construir HTML agrupado por categoría
+        let faqHtml = '';
+        let currentCat = '';
+        
+        faqsNumeradas.forEach(f => {
+            if (f.cat !== currentCat) {
+                currentCat = f.cat;
+                faqHtml += `<div class="help-faqs-category" data-category="${currentCat}">${currentCat}</div>`;
+            }
+            // Escapar comillas para los data attributes
+            const qEscaped = String(f.q).replace(/"/g, '&quot;');
+            const aEscaped = String(f.a).replace(/"/g, '&quot;');
+            faqHtml += `
+                <div class="help-faqs-item" data-num="${f.num}" data-q="${qEscaped.toLowerCase()}" data-a="${aEscaped.toLowerCase()}" onclick="toggleFAQEnAyudaDetallada(this)">
+                    <div class="help-faqs-item-header">
+                        <span class="help-faqs-item-question">
+                            <span class="help-faqs-item-num">${f.num}.</span>
+                            <span>${f.q}</span>
+                        </span>
+                        <span class="help-faqs-item-arrow">▶️</span>
+                    </div>
+                    <div class="help-faqs-item-answer">${f.a}</div>
+                </div>
+            `;
+        });
+        
+        const totalFaqs = faqs.length;
+        const totalCats = [...new Set(faqs.map(f => f.cat))].length;
+        
+        container.innerHTML = `
+            <h2>❓ Preguntas Frecuentes</h2>
+            <p>Aquí tienes las <strong>${totalFaqs} preguntas frecuentes</strong> organizadas en <strong>${totalCats} categorías</strong>. Usa el buscador para encontrar respuestas rápidas, o haz clic en cada pregunta para expandirla.</p>
+            
+            <input type="text" 
+                   class="help-faqs-search" 
+                   id="help-faqs-search-input"
+                   placeholder="🔍 Buscar por número o texto..."
+                   oninput="filtrarFAQsEnAyudaDetallada(this.value)">
+            <div class="help-faqs-count" id="help-faqs-count"></div>
+            
+            <div id="help-faqs-list">${faqHtml}</div>
+            
+            <div class="help-faqs-empty" id="help-faqs-empty">
+                <span style="font-size: 48px;">🔍</span>
+                <p style="margin-top: 12px;">No se encontraron preguntas que coincidan</p>
+            </div>
+        `;
+        
+        console.log(`${LOG_PREFIX} ✅ FAQs renderizadas: ${totalFaqs} preguntas en ${totalCats} categorías`);
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error renderizando FAQs:`, e);
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #15: Expande/colapsa una FAQ en la ayuda detallada.
+ */
+function toggleFAQEnAyudaDetallada(element) {
+    try {
+        const answer = element.querySelector('.help-faqs-item-answer');
+        const arrow = element.querySelector('.help-faqs-item-arrow');
+        if (!answer) return;
+        
+        if (answer.style.display === 'none' || answer.style.display === '') {
+            answer.style.display = 'block';
+            if (arrow) arrow.textContent = '🔽';
+        } else {
+            answer.style.display = 'none';
+            if (arrow) arrow.textContent = '▶️';
+        }
+    } catch (e) {
+        console.warn('⚠️ [help-detailed] Error toggleFAQ:', e);
+    }
+}
+
+/**
+ * 🆕 CORRECCIÓN #15: Filtra las FAQs dentro de la ayuda detallada.
+ */
+function filtrarFAQsEnAyudaDetallada(query) {
+    const q = String(query || '').trim().toLowerCase();
+    const items = document.querySelectorAll('#help-faqs-list .help-faqs-item');
+    const categories = document.querySelectorAll('#help-faqs-list .help-faqs-category');
+    const emptyMsg = document.getElementById('help-faqs-empty');
+    const countEl = document.getElementById('help-faqs-count');
+    
+    if (!q) {
+        items.forEach(item => item.style.display = '');
+        categories.forEach(cat => cat.style.display = '');
+        if (emptyMsg) emptyMsg.style.display = 'none';
+        if (countEl) countEl.style.display = 'none';
+        return;
+    }
+    
+    let visibleCount = 0;
+    const visibleCategories = new Set();
+    
+    items.forEach(item => {
+        const num = item.dataset.num || '';
+        const qText = item.dataset.q || '';
+        const aText = item.dataset.a || '';
+        const matches = num === q || num.startsWith(q) || qText.includes(q) || aText.includes(q);
+        
+        if (matches) {
+            item.style.display = '';
+            visibleCount++;
+            // Marcar la categoría padre como visible
+            let prev = item.previousElementSibling;
+            while (prev) {
+                if (prev.classList.contains('help-faqs-category')) {
+                    visibleCategories.add(prev.dataset.category);
+                    break;
+                }
+                prev = prev.previousElementSibling;
+            }
+        } else {
+            item.style.display = 'none';
+        }
+    });
+    
+    categories.forEach(cat => {
+        cat.style.display = visibleCategories.has(cat.dataset.category) ? '' : 'none';
+    });
+    
+    if (countEl) {
+        if (visibleCount > 0) {
+            countEl.textContent = `✅ ${visibleCount} resultado${visibleCount !== 1 ? 's' : ''} encontrado${visibleCount !== 1 ? 's' : ''}`;
+            countEl.style.color = '#10b981';
+            countEl.style.display = 'block';
+        } else {
+            countEl.textContent = '⚠️ Sin resultados';
+            countEl.style.color = '#f59e0b';
+            countEl.style.display = 'block';
+        }
+    }
+    
+    if (emptyMsg) emptyMsg.style.display = visibleCount === 0 ? 'block' : 'none';
 }
 
 // ============================================================
@@ -1181,6 +1479,9 @@ function renderHelpDetailed(containerId) {
     
     // Guardar referencia para uso posterior
     window._helpDetailedContainerId = containerId;
+    
+    // 🆕 CORRECCIÓN #15: Renderizar FAQs dinámicamente en su sección
+    renderFAQsEnAyudaDetallada();
 }
 
 // ============================================================
@@ -1249,6 +1550,9 @@ window.HelpDetailedModule = {
     scrollToHelpSection,
     filtrarAyudaDetallada,
     inyectarEstilosAyuda,
+    renderFAQsEnAyudaDetallada,
+    toggleFAQEnAyudaDetallada,
+    filtrarFAQsEnAyudaDetallada,
     HELP_SECTIONS
 };
 
@@ -1257,9 +1561,14 @@ window.renderHelpDetailed = renderHelpDetailed;
 window.scrollToHelpSection = scrollToHelpSection;
 window.filtrarAyudaDetallada = filtrarAyudaDetallada;
 window.inyectarEstilosAyuda = inyectarEstilosAyuda;
+window.renderFAQsEnAyudaDetallada = renderFAQsEnAyudaDetallada;
+window.toggleFAQEnAyudaDetallada = toggleFAQEnAyudaDetallada;
+window.filtrarFAQsEnAyudaDetallada = filtrarFAQsEnAyudaDetallada;
 
-console.log('📦 Help Detailed Module cargado correctamente v1.0.0 (CORRECCIÓN #14 240926)');
-console.log('   📚 Secciones:', HELP_SECTIONS.length);
+console.log('📦 Help Detailed Module cargado correctamente v1.1.0 (CORRECCIÓN #15 290926)');
+console.log('   📚 Secciones estáticas:', HELP_SECTIONS.length - 1);
+console.log('   ❓ Sección dinámica de FAQs: se renderiza desde window.FAQ S_DB');
 console.log('   ✅ Sin iframe - todo dentro del mismo documento');
 console.log('   ✅ Respeta el tema actual (claro/oscuro)');
 console.log('   ✅ Búsqueda en vivo y navegación suave');
+console.log('   ✅ FAQs integradas al final del manual');

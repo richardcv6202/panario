@@ -2,8 +2,8 @@
   "name": "Panario - Sistema de Gestión",
   "short_name": "Panario",
   "description": "Sistema de gestión para panadería artesanal. Offline-first, multiusuario, con control de producción, pedidos, ventas y finanzas.",
-  "version": "2.3.6",
-  "start_url": "./index.html?v=2.3.6",
+  "version": "2.3.7",
+  "start_url": "./index.html?v=2.3.7",
   "scope": "./",
   "id": "./",
   "display": "standalone",
@@ -17,25 +17,25 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "assets/icon-192.png",
+      "src": "./assets/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "assets/icon-512.png",
+      "src": "./assets/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "assets/icon-maskable-192.png",
+      "src": "./assets/icon-maskable-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "assets/icon-maskable-512.png",
+      "src": "./assets/icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -46,91 +46,21 @@
       "name": "Inicio",
       "short_name": "Inicio",
       "description": "Ir al Dashboard principal",
-      "url": "./index.html?nav=dashboard&v=2.3.6",
-      "icons": [
-        {
-          "src": "assets/icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
+      "url": "./index.html?nav=dashboard&v=2.3.7",
+      "icons": [{ "src": "./assets/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
-    {
-      "name": "Pedidos",
-      "short_name": "Pedidos",
-      "description": "Ver y gestionar pedidos",
-      "url": "./index.html?nav=orders&v=2.3.6",
-      "icons": [
-        {
-          "src": "assets/icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "Lista de espera",
-      "short_name": "Lista espera",
-      "description": "Gestionar clientes en lista de espera",
-      "url": "./index.html?nav=orders&action=waiting&v=2.3.6",
-      "icons": [
-        {
-          "src": "assets/icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "Ventas",
-      "short_name": "Ventas",
-      "description": "Registrar y ver ventas",
-      "url": "./index.html?nav=sales&v=2.3.6",
-      "icons": [
-        {
-          "src": "assets/icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "Producción",
-      "short_name": "Producción",
-      "description": "Planificar producción del día",
-      "url": "./index.html?nav=settings&action=corriente&v=2.3.6",
-      "icons": [
-        {
-          "src": "assets/icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "Herramientas",
-      "short_name": "Herramientas",
-      "description": "Configuración y herramientas del sistema",
-      "url": "./index.html?nav=settings&v=2.3.6",
-      "icons": [
-        {
-          "src": "assets/icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    }
+    // ... resto de shortcuts con v=2.3.7
   ],
   "screenshots": [
     {
-      "src": "assets/icon-512.png",
+      "src": "./assets/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Dashboard de Panario"
     },
     {
-      "src": "assets/icon-512.png",
+      "src": "./assets/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "form_factor": "wide",
@@ -146,8 +76,6 @@
       "url": "url"
     }
   },
-  "protocol_handlers": [],
-  "file_handlers": [],
   "launch_handler": {
     "client_mode": "auto"
   },

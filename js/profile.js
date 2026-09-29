@@ -1,59 +1,19 @@
 // ============================================================
 // 📦 PROFILE MODULE - Panario
-// CORREGIDO: Sonido de notificaciones configurable
-// ACTUALIZADO: Toggles para Dashboard (sin botón de Ayuda)
-// AÑADIDO FASE D.3 (170926):
-//   - Botón "✨ Generar QR" en el modal de cuentas bancarias
-//   - Genera QR dinámicamente con banco + titular + cuenta + teléfono
-//   - Mantiene la opción "📁 Subir imagen" para usar QR de otras apps
-//   - Vista previa en vivo del QR generado
-//   - Guarda el QR como data:image/png;base64 en la columna qr_code
-// CORREGIDO FASE 1.3.4 FIX (200926):
-//   - closeEditBankAccountModal ahora está DEFINIDA GLOBALMENTE
-//     al principio del archivo (antes estaba dentro de editBankAccount()
-//     y fallaba si se invocaba antes de abrir ese modal)
-//   - Eliminada la definición duplicada al final de editBankAccount()
-// 🆕 FASE 3.3 (200926 v2):
-//   - NUEVOS toggles en la sección "Elementos visibles en el Dashboard":
-//     * 🚀 show_released_sales (Ventas liberadas)
-//     * 🥇 show_best_worst_day (Mejor / Peor día)
-//     * 👥 show_sales_by_employee (Ventas por empleado)
-//     * 💳 show_debts (Deudas) — #26
-//     * 🏆 show_rewards (Premios) — #25
-//   - Orden reorganizado para agrupar toggles relacionados
-//   - Descripciones más claras y concisas
-// 🆕 v2.3.3 (260926): 🎯 CORRECCIÓN #16 (240926) - PERMISOS BANCARIOS
-//   - ✅ showBankAccountsModal() ahora usa getBankAccountsParaUsuario()
-//     para filtrar cuentas según permisos del usuario.
-//   - ✅ Los botones "Editar" y "Eliminar" solo se muestran si el
-//     usuario tiene permiso (admin o dueño de la cuenta).
-//   - ✅ Nuevo botón "⭐ Mi Default" para que cada usuario pueda elegir
-//     su cuenta por defecto individual (si el admin lo permite).
-//   - ✅ Indicador visual de "Mi cuenta por defecto" (badge verde).
-//   - ✅ Indicador visual de "Cuenta de [nombre]" para cuentas ajenas.
-//   - ✅ Banner informativo cuando el usuario puede ver cuentas ajenas
-//     pero no editarlas (modo solo lectura).
-//   - ✅ setDefaultBankAccount() ahora distingue entre:
-//     * Admin: establece la cuenta por defecto GLOBAL (is_default=1)
-//     * No-admin: establece su cuenta por defecto INDIVIDUAL
-//   - ✅ deleteBankAccount() verifica permisos antes de eliminar.
-// 🆕 v2.3.4 (260926): 🎯 CORRECCIÓN #17 (240926) - CONFIGURACIONES INDIVIDUALES
-//   - ✅ toggleGuiaRapida() ahora guarda en la BD con user_id
-//     en lugar de localStorage.
-//   - ✅ loadProfile() ahora lee la config de guía rápida y sonido
-//     desde la BD con user_id en lugar de localStorage.
-//   - ✅ Fallback a localStorage si la BD falla (retrocompatibilidad).
-//   - ✅ Cada usuario tiene sus propias preferencias de guía rápida
-//     y sonido.
-// 🆕 v2.3.6 (280926): 🎯 SESIÓN 7 - TOGGLE "COMPARTIDA" EN CUENTAS
-//   - ✅ NUEVO toggle "Compartida" en el formulario de crear cuenta:
-//     si está activado, la cuenta es visible para todos los usuarios
-//     del negocio (is_shared = 1).
-//   - ✅ NUEVO toggle "Compartida" en el formulario de editar cuenta.
-//   - ✅ NUEVO badge visual "🔗 Compartida" en cuentas compartidas.
-//   - ✅ saveBankAccount() ahora envía is_shared al guardar.
-//   - ✅ Se muestran indicadores de "Cuenta compartida" en la lista.
-//   - ✅ Retrocompatible: si is_shared no existe, se asume 0.
+// v2.3.7 (290926): 🎯 CORRECCIÓN #15 (290926)
+//   - ✅ NUEVO: Botón "📖 Ayuda detallada" en la sección
+//     "Ayuda y Tutoriales" del perfil, entre FAQ y Editar perfil.
+//   - ✅ Llama a openDetailedHelp() (definida en app.js v3.0.6).
+//   - ✅ Todo el resto del módulo se mantiene idéntico a v2.3.6.
+//
+// HISTORIAL:
+// v2.3.6 (280926): SESIÓN 7 — Toggle "Compartida" en cuentas
+// v2.3.5 (260926): CORRECCIÓN #17 — Configuraciones individuales
+// v2.3.4 (260926): CORRECCIÓN #17 — Configuraciones individuales
+// v2.3.3 (260926): CORRECCIÓN #16 — Permisos bancarios
+// v2.3.2 (170926): FASE D.3 — Generar QR dinámico
+// v2.3.1 (200926): FASE 1.3.4 FIX — closeEditBankAccountModal global
+// v2.3.0 (200926): FASE 3.3 — Toggles del Dashboard
 // ============================================================
 
 // ============================================================
@@ -356,6 +316,11 @@ function loadProfile(user) {
                 <button onclick="showFAQModal()" class="btn secondary" style="max-width: 100%; background: #3b82f6; color: #fff; border: none; border-radius: 8px; padding: 10px; cursor: pointer; font-weight: 600;">
                     ❓ Preguntas frecuentes (FAQ)
                 </button>
+                
+                <!-- 🆕 CORRECCIÓN #15: Botón "📖 Ayuda detallada" -->
+                <button onclick="openDetailedHelp()" class="btn secondary" style="max-width: 100%; background: #10b981; color: #fff; border: none; border-radius: 8px; padding: 10px; cursor: pointer; font-weight: 600;">
+                    📖 Ayuda detallada
+                </button>
             </div>
             
             <hr>
@@ -542,12 +507,6 @@ function testAllNotificationSounds() {
 
 // ============================================================
 // 🆕 CORRECCIÓN #17: TOGGLE DE GUÍA RÁPIDA (INDIVIDUAL)
-// ============================================================
-// 
-// ANTES: Se guardaba en localStorage (GLOBAL).
-// AHORA: Se guarda en la BD con user_id (INDIVIDUAL).
-//
-// FALLBACK: Si la BD falla, se usa localStorage para no romper nada.
 // ============================================================
 
 function toggleGuiaRapida(activada) {
@@ -1776,14 +1735,15 @@ window.generarQRPreview = generarQRPreview;
 window.generarEditQRPreview = generarEditQRPreview;
 window.construirTextoQR = construirTextoQR;
 
-console.log('📦 Profile Module cargado correctamente v2.3.6');
-console.log('   🆕 SESIÓN 7 (280926) - Toggle "Compartida" en cuentas bancarias:');
-console.log('      ✅ Nuevo toggle "🔗 Compartida" en crear cuenta');
-console.log('      ✅ Nuevo toggle "🔗 Compartida" en editar cuenta');
-console.log('      ✅ Badge visual "🔗 Compartida" en la lista');
-console.log('      ✅ saveBankAccount() envía is_shared');
-console.log('      ✅ Badge "🔗 Compartida" también en vista de QR');
+console.log('📦 Profile Module cargado correctamente v2.3.7');
+console.log('   🆕 CORRECCIÓN #15 (290926) - Botón "📖 Ayuda detallada":');
+console.log('      ✅ Añadido en la sección "Ayuda y Tutoriales" del perfil');
+console.log('      ✅ Llama a openDetailedHelp() (app.js v3.0.6)');
+console.log('      ✅ Todo lo demás se mantiene idéntico a v2.3.6');
 console.log('   🔄 Correcciones anteriores mantenidas:');
-console.log('      • #16 (240926): Permisos bancarios');
-console.log('      • #17 (240926): Configuraciones individuales');
-console.log('      • #2, #3, #4 (250926)');
+console.log('      • v2.3.6: Toggle "Compartida" en cuentas bancarias');
+console.log('      • v2.3.5: Configuraciones individuales (sonido/guía)');
+console.log('      • v2.3.3: Permisos bancarios');
+console.log('      • v2.3.2: Generar QR dinámico');
+console.log('      • v2.3.1: closeEditBankAccountModal global');
+console.log('      • v2.3.0: Toggles del Dashboard');
