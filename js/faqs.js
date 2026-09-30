@@ -1,321 +1,1243 @@
 // ============================================================
 // 📦 FAQs - Panario
-// v1.0.1 (290926): Base de datos de Preguntas Frecuentes
-//   - ✅ Extraídas del documento "RESUMEN DE FAQ - Panario.md"
-//   - ✅ FILTRADAS: solo usuario final (sin nivel técnico)
-//   - ✅ DEDUPLICADAS: sin preguntas repetidas
-//   - ✅ EXCLUIDAS: funciones JS, logs, estructura BD, SW,
-//      cache técnico, IDs internos, versiones, migraciones,
-//      diagnóstico técnico, producto_id, distribucion_bloques.
+// v1.0.0 (290926): Base de datos de Preguntas Frecuentes
+//   - ✅ Extraídas del manual técnico y resúmenes de correcciones
+//   - ✅ Filtradas: solo usuario final (sin nivel técnico)
 //   - ✅ Organizadas por categoría temática
-//   - ✅ Renumeradas secuencialmente (1 → N)
 //   - ✅ Usadas por help.js y help-detailed.js
-//
-// TOTAL: 204 FAQs únicas en 19 categorías
 // ============================================================
 
 window.FAQS_DB = [
+    // ============================================================
+    // 🏠 SECCIÓN 1: GENERALES
+    // ============================================================
+    { 
+        cat: '🏠 Generales', 
+        q: '¿Qué es Panario?', 
+        a: 'Es una aplicación PWA para la gestión integral de una panadería artesanal. Permite gestionar insumos, recetas, productos, ventas, pedidos y finanzas, todo desde tu móvil y sin necesidad de internet.' 
+    },
+    { 
+        cat: '🏠 Generales', 
+        q: '¿Por qué se llama "Panario"?', 
+        a: 'El nombre es un juego con "pan" y "diario" (de contabilidad). Es corto, original y describe perfectamente el propósito: llevar el diario contable de una panadería.' 
+    },
+    { 
+        cat: '🏠 Generales', 
+        q: '¿Necesito internet para usar Panario?', 
+        a: 'No. Panario funciona 100% offline. Todos los datos se guardan en tu dispositivo. Solo necesitas internet para la primera carga y para recibir actualizaciones.' 
+    },
+    { 
+        cat: '🏠 Generales', 
+        q: '¿Mis datos están seguros?', 
+        a: 'Sí. Todos los datos se guardan localmente en tu dispositivo, no se envían a ningún servidor externo. Puedes hacer copias de seguridad periódicas desde Herramientas.' 
+    },
+    { 
+        cat: '🏠 Generales', 
+        q: '¿En qué dispositivos funciona Panario?', 
+        a: 'Funciona en cualquier navegador moderno (Chrome, Firefox, Safari, Edge) en Android, iOS, Windows, macOS y Linux. Está optimizado para móviles.' 
+    },
+    { 
+        cat: '🏠 Generales', 
+        q: '¿Cómo instalo Panario en mi móvil?', 
+        a: 'Abre Panario en Chrome, toca el menú (tres puntos) y selecciona "Añadir a pantalla de inicio". La app se instalará como una app nativa y funcionará offline.' 
+    },
+    { 
+        cat: '🏠 Generales', 
+        q: '¿Cuántos usuarios pueden usar Panario a la vez?', 
+        a: 'Panario está diseñado para 1 a 3 usuarios por negocio. Todos comparten los mismos datos (insumos, ventas, pedidos) pero con permisos diferentes (admin o usuario regular).' 
+    },
+    { 
+        cat: '🏠 Generales', 
+        q: '¿Qué es un "negocio" en Panario?', 
+        a: 'Un negocio es tu panadería. Cada negocio tiene su propio código de invitación para que otros usuarios puedan unirse y trabajar contigo.' 
+    },
+    { 
+        cat: '🏠 Generales', 
+        q: '¿Qué es un "usuario administrador"?', 
+        a: 'El administrador es el dueño del negocio. Puede crear, editar y eliminar todo: insumos, recetas, productos, usuarios, etc. Los usuarios regulares tienen permisos limitados.' 
+    },
+    { 
+        cat: '🏠 Generales', 
+        q: '¿Qué es un "usuario regular"?', 
+        a: 'Es un usuario con permisos limitados. Puede ver insumos, recetas y productos, y registrar ventas y pedidos. No puede modificar la configuración del negocio.' 
+    },
+    { 
+        cat: '🏠 Generales', 
+        q: '¿Qué es el "primer administrador"?', 
+        a: 'Es el usuario que creó el negocio. Tiene todos los permisos de un admin y además es el único que puede cambiar la configuración bancaria. No puede ser degradado ni eliminado.' 
+    },
+    { 
+        cat: '🏠 Generales', 
+        q: '¿Cómo puedo ver la versión de Panario que tengo?', 
+        a: 'Ve a Herramientas → Información. Ahí verás la versión actual de la aplicación.' 
+    },
+    { 
+        cat: '🏠 Generales', 
+        q: '¿Qué significan los emojis en la app?', 
+        a: 'Los emojis son una forma rápida de identificar acciones y módulos. Por ejemplo: 🛒 Insumos, 📖 Recetas, 💰 Ventas, 📋 Pedidos. Están diseñados para que puedas usar la app sin leer mucho texto.' 
+    },
+    { 
+        cat: '🏠 Generales', 
+        q: '¿Cómo puedo contactar al desarrollador?', 
+        a: 'Puedes contactar a Ricardo Castillo Valdés por WhatsApp (+53 55031725) o por email (3sayricardo@gmail.com). Los datos están en Ayuda → Créditos.' 
+    },
 
     // ============================================================
-    // 🏠 SECCIÓN 1: GENERALES (1-10)
+    // 🚀 SECCIÓN 2: PRIMEROS PASOS
     // ============================================================
-    { cat: '🏠 Generales', q: '¿Qué es Panario?', a: 'Es una aplicación PWA para la gestión integral de una panadería artesanal. Permite gestionar insumos, recetas, productos, ventas, pedidos y finanzas.' },
-    { cat: '🏠 Generales', q: '¿Funciona sin conexión?', a: 'Sí, Panario funciona completamente offline. Todos tus datos están guardados localmente en tu dispositivo.' },
-    { cat: '🏠 Generales', q: '¿Dónde se guardan mis datos?', a: 'En SQLite (base de datos local) y localStorage. Todo queda en tu dispositivo. Nada se envía a servidores externos.' },
-    { cat: '🏠 Generales', q: '¿Cómo hago una copia de seguridad?', a: 'Ve a ⚙️ Herramientas y haz clic en "📥 Descargar copia de seguridad". Se descarga un archivo .db con todos tus datos.' },
-    { cat: '🏠 Generales', q: '¿Cómo restauro una copia de seguridad?', a: 'En ⚙️ Herramientas, haz clic en "📤 Importar copia de seguridad" y selecciona el archivo .db. Se reemplazarán todos los datos actuales.' },
-    { cat: '🏠 Generales', q: '¿Puedo exportar solo recetas y productos?', a: 'Sí. En Herramientas usa "🧩 Salva diferencial" para exportar/importar solo las recetas y productos, sin afectar al resto de la base de datos.' },
-    { cat: '🏠 Generales', q: '¿Qué navegadores soporta Panario?', a: 'Chrome, Firefox, Edge, Safari (versiones recientes). Se recomienda Chrome para mejor rendimiento.' },
-    { cat: '🏠 Generales', q: '¿Cómo instalo Panario en mi móvil?', a: 'Abre Panario en el navegador y usa "Añadir a pantalla de inicio" o "Instalar aplicación".' },
-    { cat: '🏠 Generales', q: '¿Quién desarrolló Panario?', a: 'Panario fue desarrollado por Ricardo Castillo Valdés. Puedes contactarlo por WhatsApp (+53 55031725) o email (3sayricardo@gmail.com).' },
-    { cat: '🏠 Generales', q: '¿Por qué no suenan las notificaciones la primera vez que abro la app?', a: 'Los navegadores modernos bloquean el audio hasta que el usuario interactúa con la página. Haz clic en cualquier parte de la app (incluso en login) y las notificaciones sonarán desde ese momento.' },
+    { 
+        cat: '🚀 Primeros Pasos', 
+        q: '¿Cómo empiezo a usar Panario?', 
+        a: 'Sigue estos 5 pasos: 1) Registra tus insumos, 2) Crea tus recetas, 3) Define tus productos, 4) Registra tus ventas, 5) Gestiona tus pedidos. Puedes ver una guía rápida desde Ayuda → Guía rápida.' 
+    },
+    { 
+        cat: '🚀 Primeros Pasos', 
+        q: '¿Cómo registro un insumo?', 
+        a: 'Ve a 🛒 Insumos → "➕ Nuevo Insumo". Completa nombre, unidad (kg, g, L), costo, stock actual y stock mínimo. Guarda.' 
+    },
+    { 
+        cat: '🚀 Primeros Pasos', 
+        q: '¿Cómo creo una receta?', 
+        a: 'Ve a 📖 Recetas → "➕ Nueva Receta". Dale un nombre, define el rendimiento (ej: 33 panes) y asocia los insumos con sus cantidades. Guarda.' 
+    },
+    { 
+        cat: '🚀 Primeros Pasos', 
+        q: '¿Cómo defino un producto?', 
+        a: 'Ve a 🏷️ Productos → "➕ Nuevo Producto". Define nombre, precio de venta, unidad de venta (jaba, docena, unidad) y asócialo a una receta. Opcionalmente, define su CMPBC.' 
+    },
+    { 
+        cat: '🚀 Primeros Pasos', 
+        q: '¿Cómo registro una venta?', 
+        a: 'Ve a 💰 Ventas → "➕ Nueva Venta". Selecciona el producto, cantidad, método de pago y cliente. Guarda. El stock de insumos se descuenta automáticamente.' 
+    },
+    { 
+        cat: '🚀 Primeros Pasos', 
+        q: '¿Cómo gestiono un pedido?', 
+        a: 'Ve a 📋 Pedidos → "➕ Nuevo Pedido". Completa cliente, teléfono, fecha de entrega y productos. Al entregar el pedido, se crea la venta automáticamente.' 
+    },
+    { 
+        cat: '🚀 Primeros Pasos', 
+        q: '¿Qué es el CMPBC?', 
+        a: 'CMPBC significa Capacidad Máxima de Producción por Bloque de Corriente. Es el número máximo de unidades de un producto que puedes producir en un solo bloque de corriente. Se usa para calcular automáticamente cuántos bloques necesitas.' 
+    },
+    { 
+        cat: '🚀 Primeros Pasos', 
+        q: '¿Dónde configuro el CMPBC?', 
+        a: 'Al crear o editar un producto, en el campo "🏭 CMPBC". Si lo dejas vacío o en 0, el producto no cuenta para el cupo de producción.' 
+    },
+    { 
+        cat: '🚀 Primeros Pasos', 
+        q: '¿Cómo sé si un insumo tiene stock bajo?', 
+        a: 'En la lista de insumos, el stock se muestra con colores: verde (OK), amarillo (stock bajo) y rojo (sin stock). También recibirás notificaciones cuando el stock esté bajo.' 
+    },
+    { 
+        cat: '🚀 Primeros Pasos', 
+        q: '¿Cómo puedo hacer una copia de seguridad?', 
+        a: 'Ve a ⚙️ Herramientas → 📤 Exportar copia. Como admin puedes crear una copia completa o solo de datos. Guarda el archivo en un lugar seguro.' 
+    },
 
     // ============================================================
-    // 📊 SECCIÓN 2: DASHBOARD (11-27)
+    // 📊 SECCIÓN 3: DASHBOARD
     // ============================================================
-    { cat: '📊 Dashboard', q: '¿Puedo personalizar qué veo en el Dashboard?', a: 'Sí. Ve a tu Perfil y en la sección "📊 Elementos visibles en el Dashboard" activa o desactiva las secciones que quieres ver.' },
-    { cat: '📊 Dashboard', q: '¿Qué significa "Días con ventas"?', a: 'Es el número de días únicos en los que registraste al menos una venta. No cuenta días sin actividad.' },
-    { cat: '📊 Dashboard', q: '¿Cómo se calcula el "Promedio diario"?', a: 'Se divide el total de ingresos entre los días con ventas. Ej: si vendiste $1000 en 5 días, el promedio es $200/día.' },
-    { cat: '📊 Dashboard', q: '¿Qué es "Clientes diferentes"?', a: 'Es la cantidad de clientes únicos que han comprado al menos una vez. No cuenta clientes repetidos.' },
-    { cat: '📊 Dashboard', q: '¿Por qué los pedidos pendientes no aparecen como deudas?', a: 'Porque un pedido es una solicitud, no una venta ejecutada. Solo se considera deuda cuando se ha completado la venta y el cliente no ha pagado.' },
-    { cat: '📊 Dashboard', q: '¿Cómo funcionan las flechas ◀▶ del gráfico?', a: 'Permiten navegar entre semanas. ◀ va a semanas anteriores, ▶ vuelve a la semana actual.' },
-    { cat: '📊 Dashboard', q: '¿Qué significan los colores del gráfico?', a: '🥇 Verde = día con mayor venta de la semana. 📉 Rojo = día con menor venta. ⭐ Amarillo = día actual.' },
-    { cat: '📊 Dashboard', q: '¿Qué es el "modo del gráfico"?', a: 'Es la forma en que se agrupan los días. Puedes elegir "Últimos 7 días", "Semana Dom-Sáb" o "Semana Lun-Dom". Tu elección se guarda automáticamente.' },
-    { cat: '📊 Dashboard', q: '¿Qué son las "Ventas liberadas"?', a: 'Son ventas sin cliente identificado (tipo "mostrador anónimo"). Se contabilizan en los totales pero se pueden ocultar del listado.' },
-    { cat: '📊 Dashboard', q: '¿Qué es el "Mejor día" y el "Peor día"?', a: 'Son las fechas con mayor y menor facturación histórica de tu negocio. Sirven para identificar patrones de venta.' },
-    { cat: '📊 Dashboard', q: '¿Qué son las "Ventas por empleado"?', a: 'Es un ranking de los usuarios de tu negocio según sus ventas registradas. Te permite evaluar el desempeño del equipo.' },
-    { cat: '📊 Dashboard', q: '¿Qué significa "Pedidos mañana" en el Dashboard?', a: 'Es el número total de pedidos activos cuya fecha de entrega es mañana. Excluye pedidos cancelados, entregados y los que ya compraron por lista de espera.' },
-    { cat: '📊 Dashboard', q: '¿Por qué algunos pedidos de mañana no se cuentan?', a: 'Porque están en estado cancelado, entregado o compró por lista de espera. Solo se cuentan los pedidos activos (pendiente, confirmado, en producción, listo o en lista de espera).' },
-    { cat: '📊 Dashboard', q: '¿Puedo ver más detalles de los pedidos de mañana?', a: 'Sí. Haz clic en la tarjeta de "Pedidos mañana" para ir a la lista de Pedidos filtrada por mañana.' },
-    { cat: '📊 Dashboard', q: '¿Qué significa cada columna de la tarjeta "Pedidos activos"?', a: '📋 Pedidos hoy: pedidos activos con fecha de entrega = hoy. 📅 Pedidos mañana: pedidos activos con fecha de entrega = mañana. ⏰ En lista de espera: clientes en cola sin fecha concreta o con fecha futura.' },
-    { cat: '📊 Dashboard', q: '¿Puedo hacer clic en las columnas del resumen de pedidos?', a: 'Sí. Al hacer clic en cualquier columna (Pedidos hoy, Pedidos mañana o Lista de espera), la app navega automáticamente al módulo de 📋 Pedidos para que puedas gestionarlos.' },
-    { cat: '📊 Dashboard', q: '¿Los pedidos cancelados cuentan en "Pedidos mañana"?', a: 'No. Solo se cuentan pedidos activos (pendiente, confirmado, en producción, listo o en lista de espera). Los cancelados, entregados y compró-por-lista se excluyen.' },
-    { cat: '📊 Dashboard', q: '¿Cómo se ve la tarjeta "Pedidos activos" en móvil?', a: 'En pantallas pequeñas, las 3 columnas se apilan verticalmente (1 columna por fila). Cada columna mantiene su altura homogénea.' },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué es el Dashboard?', 
+        a: 'Es la pantalla principal de Panario. Muestra un resumen completo de tu negocio: ventas, ingresos, gastos, ganancias, pedidos pendientes, deudas y más.' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué significan las tarjetas del Dashboard?', 
+        a: 'Cada tarjeta muestra una estadística clave: Ventas totales, Ingresos, Gastos, Ganancia, Pedidos pendientes, Deudas, Ventas hoy, Fondo en caja y Fondo en banco.' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué son las "Ventas liberadas"?', 
+        a: 'Son ventas sin cliente identificado (mostrador anónimo). Se registran con el modo "Venta liberada" y no aparecen en el ranking de mejores clientes.' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué es el "Mejor día" y "Peor día"?', 
+        a: 'Son el día con mayor facturación y el día con menor facturación en el historial de ventas. Te ayudan a identificar patrones de venta.' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué son los "Días con ventas" y "Días sin ventas"?', 
+        a: 'Días con ventas: número de días únicos con al menos una venta. Días sin ventas: días registrados como inactivos (apagón, vacaciones, etc.).' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Cómo puedo personalizar el Dashboard?', 
+        a: 'Ve a tu Perfil → "Elementos visibles en el Dashboard". Puedes activar o desactivar las secciones que quieres ver.' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué es el "Promedio diario"?', 
+        a: 'Es el promedio de ingresos por día. Se calcula dividiendo los ingresos totales entre los días con ventas.' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué es el "Fondo en caja" y "Fondo en banco"?', 
+        a: 'Fondo en caja: saldo en efectivo (ingresos - gastos en efectivo). Fondo en banco: saldo por transferencia (ingresos - gastos por transferencia).' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Cómo funciona el gráfico de ventas diarias?', 
+        a: 'Muestra las ventas de los últimos 7 días. Puedes cambiar el modo (últimos 7 días, semana Dom-Sáb, semana Lun-Dom) y el tipo (barras, línea, pastel).' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué significan los colores del gráfico?', 
+        a: 'Verde: día con mayor venta. Rojo: día con menor venta. Amarillo: día actual. Azul: días normales. Gris: día sin ventas (muestra el motivo si está registrado).' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Cómo exporto el gráfico?', 
+        a: 'En la sección del gráfico, usa los botones 🖼️ (exportar como imagen PNG) o 📄 (exportar como PDF).' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué es la tarjeta de "Pedidos activos"?', 
+        a: 'Muestra 3 columnas: Pedidos hoy, Pedidos mañana y En lista de espera. Al hacer clic en cada columna, te lleva a la lista de pedidos filtrada.' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué es la tarjeta de "Mejores clientes"?', 
+        a: 'Muestra los 3 clientes que más han comprado (por monto total). Se calcula a partir de las ventas con cliente identificado.' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué es la tarjeta de "Productos más vendidos"?', 
+        a: 'Muestra los 5 productos más vendidos (por cantidad de ventas). Te ayuda a identificar tus productos estrella.' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué es la tarjeta de "Métodos de pago"?', 
+        a: 'Muestra el desglose de ventas por método de pago: efectivo, transferencia, deuda y otros. Incluye el monto total y el porcentaje.' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué es la tarjeta de "Análisis de fondos"?', 
+        a: 'Muestra el desglose de ingresos, gastos y saldo para efectivo y banco. Te ayuda a ver de dónde viene y a dónde va el dinero.' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué es la tarjeta de "Deudas"?', 
+        a: 'Muestra el total de deudas pendientes de cobro y el detalle por cliente. Desde aquí puedes ir a Ventas para cobrar.' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué es la tarjeta de "Premios"?', 
+        a: 'Si el sistema de premios está activo, muestra al mejor cliente del mes y del año, con sus premios correspondientes.' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué es la tarjeta de "QR de cuenta bancaria"?', 
+        a: 'Si está activada, muestra el QR de tu cuenta bancaria por defecto. Puedes ampliarlo o descargarlo para compartirlo con tus clientes.' 
+    },
 
     // ============================================================
-    // 🛒 SECCIÓN 3: INSUMOS (28-33)
+    // 📋 SECCIÓN 4: PEDIDOS
     // ============================================================
-    { cat: '🛒 Insumos', q: '¿Qué es un insumo?', a: 'Es todo lo que compras para producir: harina, levadura, yogur, mantequilla, etc.' },
-    { cat: '🛒 Insumos', q: '¿Cómo registro un insumo?', a: 'Ve a 🛒 Insumos → clic en "➕ Nuevo Insumo". Completa nombre, unidad, costo, stock y stock mínimo.' },
-    { cat: '🛒 Insumos', q: '¿Los insumos se descuentan automáticamente?', a: 'Sí. Al vender un producto o confirmar un pedido, el stock de los insumos se descuenta según la receta asociada.' },
-    { cat: '🛒 Insumos', q: '¿Qué es el stock mínimo?', a: 'Es la cantidad mínima que debe tener un insumo. Cuando el stock baja de ese nivel, aparece una alerta roja.' },
-    { cat: '🛒 Insumos', q: '¿Puedo eliminar un insumo?', a: 'Sí, pero se aplica soft-delete. Puedes limpiarlo permanentemente desde Herramientas.' },
-    { cat: '🛒 Insumos', q: '¿Los usuarios no-admin pueden editar insumos?', a: 'No. Solo los administradores pueden crear, editar o eliminar insumos. Los usuarios regulares tienen modo solo lectura.' },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Qué es un pedido?', 
+        a: 'Un pedido es una reserva de productos que un cliente hace para una fecha futura. No es una venta hasta que se entrega.' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Cómo creo un pedido?', 
+        a: 'Ve a 📋 Pedidos → "➕ Nuevo Pedido". Completa cliente, teléfono, fecha de entrega, sesión de recogida y productos. Guarda.' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Qué estados puede tener un pedido?', 
+        a: 'Pendiente, Confirmado, En producción, Listo, Entregado, Cancelado, En lista de espera y Compró por lista.' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Qué es la "sesión de recogida"?', 
+        a: 'Es el momento del día en que el cliente recogerá el pedido: Mañana (10:00 AM), Tarde (3:00 PM) o Noche (7:00 PM).' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Qué es la "reserva por período"?', 
+        a: 'Es una función que permite crear múltiples pedidos a la vez para el mismo cliente, repitiendo el pedido en varios días (por ejemplo, todos los martes del mes).' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Cómo entrego un pedido?', 
+        a: 'Abre el pedido y pulsa "Entregar (sin deuda)" si el cliente paga al momento, o "Entregar (con deuda)" si pagará después. Se crea la venta automáticamente.' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Qué pasa si un cliente no recoge su pedido?', 
+        a: 'Puedes cambiar el estado a "Cancelado". El stock de insumos se repone automáticamente.' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Puedo cancelar varios pedidos a la vez?', 
+        a: 'Sí, como administrador puedes usar la "Cancelación Global" en Herramientas para cancelar todos los pedidos de un rango de fechas.' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Puedo mover pedidos de una fecha a otra?', 
+        a: 'Sí, como administrador puedes usar "Reprogramar Pedidos por Rango" en Herramientas para mover todos los pedidos de un rango a una fecha destino.' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Qué es la "lista de espera"?', 
+        a: 'Es una cola de clientes que esperan a que haya producción disponible. Se usa cuando la demanda supera la oferta.' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Cómo añado un cliente a la lista de espera?', 
+        a: 'Desde la gestión de Lista de Espera, pulsa "➕ Añadir a lista" y completa los datos del cliente y el producto que desea.' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Cómo proceso a un cliente de la lista de espera?', 
+        a: 'En la lista de espera, pulsa "Procesar" junto al cliente. Se crea la venta automáticamente y el cliente sale de la lista.' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Qué pasa si quito a un cliente de la lista de espera?', 
+        a: 'Si quitas a un cliente de la lista sin cancelar su pedido, el pedido vuelve a estado "Pendiente" (no se cancela).' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Cómo se reindexan las posiciones de la lista?', 
+        a: 'Cuando quitas o atiendes a un cliente, las posiciones de los demás se reajustan automáticamente para que no queden huecos.' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Puedo generar un reporte de la lista de espera?', 
+        a: 'Sí, desde Herramientas → Lista de Espera → "Reporte PDF".' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Qué es el "badge de producción" en los pedidos?', 
+        a: 'Es un icono 🔨 que aparece en los pedidos que tienen producción programada. Al hacer clic, abre el modal de configuración de producción.' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Qué es el "cupo de producción"?', 
+        a: 'Es la cantidad máxima de un producto que puedes producir en un día, según el CMPBC y los bloques de corriente disponibles. Si el cupo se llena, no se pueden crear más pedidos para ese día.' 
+    },
+    { 
+        cat: '📋 Pedidos', 
+        q: '¿Cómo sé cuántos pedidos tengo para hoy?', 
+        a: 'En el Dashboard, la tarjeta "Pedidos activos" muestra el número de pedidos para hoy, mañana y en lista de espera.' 
+    },
 
     // ============================================================
-    // 📖 SECCIÓN 4: RECETAS (34-42)
+    // 🛒 SECCIÓN 5: INSUMOS
     // ============================================================
-    { cat: '📖 Recetas', q: '¿Qué es una receta?', a: 'Es la fórmula de producción que indica qué insumos se necesitan y en qué cantidad. Ej: "Pan de Yogur" con harina, levadura y yogur.' },
-    { cat: '📖 Recetas', q: '¿Cómo se calcula el costo de una receta?', a: 'La suma de (cantidad × costo_unitario) de todos los insumos asociados.' },
-    { cat: '📖 Recetas', q: '¿Qué hace el botón "🔄 Recalcular"?', a: 'Permite ajustar una receta para un nuevo rendimiento usando regla de 3. Ej: receta para 33 panes → quiero 50 panes.' },
-    { cat: '📖 Recetas', q: '¿Cómo comparto una receta?', a: 'En la vista de detalle de la receta, clic en "💬 Compartir". Puedes enviarla por WhatsApp, Messenger, Email o copiarla al portapapeles. Solo admin.' },
-    { cat: '📖 Recetas', q: '¿Puedo duplicar una receta?', a: 'Sí. En la lista de recetas, clic en "📋 Duplicar". Se creará una copia con el nombre que elijas. Solo admin.' },
-    { cat: '📖 Recetas', q: '¿Qué significa "receta compartida"?', a: 'Es una receta que otros usuarios del mismo negocio pueden ver y usar como plantilla.' },
-    { cat: '📖 Recetas', q: '¿Por qué no puedo editar las recetas?', a: 'Las recetas son fórmulas críticas del negocio. Solo los administradores pueden crearlas, editarlas, duplicarlas o eliminarlas. Los usuarios regulares pueden verlas, recalcularlas, usarlas como plantilla y exportarlas en PDF (sin costos).' },
-    { cat: '📖 Recetas', q: '¿Por qué no veo los costos de las recetas?', a: 'Los costos son información sensible del negocio. Solo los administradores los ven. Como usuario regular, ves los ingredientes y cantidades pero no los precios.' },
-    { cat: '📖 Recetas', q: '¿Puedo recalcular una receta siendo usuario no-admin?', a: 'Sí. Puedes recalcular, pero solo podrás guardar el resultado como una receta nueva (no modificar la original).' },
+    { 
+        cat: '🛒 Insumos', 
+        q: '¿Qué es un insumo?', 
+        a: 'Un insumo es una materia prima que usas para producir: harina, levadura, yogur, mantequilla, etc.' 
+    },
+    { 
+        cat: '🛒 Insumos', 
+        q: '¿Cómo registro un insumo?', 
+        a: 'Ve a 🛒 Insumos → "➕ Nuevo Insumo". Completa nombre, unidad de medida, costo unitario, stock actual y stock mínimo.' 
+    },
+    { 
+        cat: '🛒 Insumos', 
+        q: '¿Qué es el "stock mínimo"?', 
+        a: 'Es el nivel de stock por debajo del cual se considera que el insumo está bajo. Sirve para generar alertas de reposición.' 
+    },
+    { 
+        cat: '🛒 Insumos', 
+        q: '¿Cómo sé si un insumo tiene stock bajo?', 
+        a: 'En la lista de insumos, el stock se muestra con colores: verde (OK), amarillo (stock bajo) y rojo (sin stock). También recibirás notificaciones.' 
+    },
+    { 
+        cat: '🛒 Insumos', 
+        q: '¿Cómo se descuenta el stock?', 
+        a: 'Al registrar una venta o confirmar un pedido, el stock de los insumos se descuenta automáticamente según la receta asociada al producto.' 
+    },
+    { 
+        cat: '🛒 Insumos', 
+        q: '¿Puedo editar un insumo?', 
+        a: 'Sí, como administrador puedes editar cualquier insumo. Pulsa el botón "✏️ Editar" en la lista de insumos.' 
+    },
+    { 
+        cat: '🛒 Insumos', 
+        q: '¿Puedo eliminar un insumo?', 
+        a: 'Sí, como administrador puedes eliminar un insumo. Se aplica un "soft-delete" (se marca como eliminado pero no se borra físicamente).' 
+    },
+    { 
+        cat: '🛒 Insumos', 
+        q: '¿Qué es el "soft-delete"?', 
+        a: 'Es un borrado lógico: el registro se marca como eliminado (con una fecha) pero no se borra físicamente de la base de datos. Se puede restaurar si fue un error.' 
+    },
+    { 
+        cat: '🛒 Insumos', 
+        q: '¿Los usuarios regulares pueden editar insumos?', 
+        a: 'No, solo los administradores pueden crear, editar o eliminar insumos. Los usuarios regulares solo pueden verlos.' 
+    },
+    { 
+        cat: '🛒 Insumos', 
+        q: '¿Cómo puedo ver el valor total de mi inventario?', 
+        a: 'En la lista de insumos, se muestra el valor total del inventario (suma de stock × costo unitario).' 
+    },
+    { 
+        cat: '🛒 Insumos', 
+        q: '¿Qué unidades de medida puedo usar?', 
+        a: 'Puedes usar kg, g, L, ml, unidad, docena, jaba, etc. La app viene con unidades predefinidas pero puedes añadir más.' 
+    },
 
     // ============================================================
-    // 🏷️ SECCIÓN 5: PRODUCTOS (43-46)
+    // 📖 SECCIÓN 6: RECETAS
     // ============================================================
-    { cat: '🏷️ Productos', q: '¿Qué es un producto?', a: 'Es lo que vendes al cliente. Ej: "Jaba de Pan" con precio $550 y 10 panes por jaba.' },
-    { cat: '🏷️ Productos', q: '¿Cómo asocio un producto a una receta?', a: 'Al crear/editar el producto, selecciona la receta en el desplegable "📋 Receta asociada".' },
-    { cat: '🏷️ Productos', q: '¿Qué es "cantidad por unidad"?', a: 'Es cuántas unidades del producto contiene una unidad de venta. Ej: una jaba tiene 10 panes → cantidad_por_unidad = 10.' },
-    { cat: '🏷️ Productos', q: '¿Cómo sé el margen de ganancia?', a: 'En la lista de productos, se muestra el margen calculado automáticamente: (precio - costo) / precio × 100.' },
+    { 
+        cat: '📖 Recetas', 
+        q: '¿Qué es una receta?', 
+        a: 'Una receta es la fórmula de producción. Indica qué insumos se necesitan y en qué cantidad para producir un producto.' 
+    },
+    { 
+        cat: '📖 Recetas', 
+        q: '¿Cómo creo una receta?', 
+        a: 'Ve a 📖 Recetas → "➕ Nueva Receta". Dale un nombre, define el rendimiento (ej: 33 panes) y asocia los insumos con sus cantidades.' 
+    },
+    { 
+        cat: '📖 Recetas', 
+        q: '¿Qué es el "rendimiento" de una receta?', 
+        a: 'Es la cantidad de unidades que produce la receta. Por ejemplo, una receta de "Pan de Yogur" puede rendir 33 panes.' 
+    },
+    { 
+        cat: '📖 Recetas', 
+        q: '¿Cómo se calcula el costo de una receta?', 
+        a: 'El costo se calcula automáticamente: suma de (cantidad de cada insumo × costo unitario). Luego se divide entre el rendimiento para obtener el costo por unidad.' 
+    },
+    { 
+        cat: '📖 Recetas', 
+        q: '¿Qué es "recalcular receta"?', 
+        a: 'Es una función que permite ajustar una receta para un nuevo rendimiento usando regla de 3. Por ejemplo, si quieres producir 50 panes en vez de 33.' 
+    },
+    { 
+        cat: '📖 Recetas', 
+        q: '¿Cómo se redondean las cantidades al recalcular?', 
+        a: 'Si el resultado es entero, se deja entero. Si es decimal, se redondea hacia arriba manteniendo decimales. Ej: 1.005 kg → 1.01 kg, 0.333 kg → 0.34 kg.' 
+    },
+    { 
+        cat: '📖 Recetas', 
+        q: '¿Puedo compartir una receta?', 
+        a: 'Sí, como administrador puedes compartir recetas con otros usuarios del negocio. Pulsa "📤 Compartir" en el detalle de la receta.' 
+    },
+    { 
+        cat: '📖 Recetas', 
+        q: '¿Qué pasa si un usuario no-admin usa una receta no compartida?', 
+        a: 'Se bloquea la operación. El usuario verá un banner rojo indicando que la receta no está compartida y que contacte al administrador.' 
+    },
+    { 
+        cat: '📖 Recetas', 
+        q: '¿Puedo duplicar una receta?', 
+        a: 'Sí, puedes duplicar una receta para crear una variante. Pulsa "📋 Duplicar" en el detalle de la receta.' 
+    },
+    { 
+        cat: '📖 Recetas', 
+        q: '¿Puedo exportar una receta a PDF?', 
+        a: 'Sí, puedes exportar una receta a PDF. Como admin incluye costos, como usuario regular no los incluye.' 
+    },
+    { 
+        cat: '📖 Recetas', 
+        q: '¿Los usuarios regulares pueden ver los costos de las recetas?', 
+        a: 'No, los usuarios regulares no pueden ver los costos de las recetas. Solo los administradores pueden verlos.' 
+    },
+    { 
+        cat: '📖 Recetas', 
+        q: '¿Cómo puedo usar una receta como plantilla?', 
+        a: 'Puedes usar cualquier receta como plantilla para crear una nueva. Pulsa "📋 Usar como plantilla" en el detalle de la receta.' 
+    },
 
     // ============================================================
-    // 💰 SECCIÓN 6: VENTAS (47-58)
+    // 🏷️ SECCIÓN 7: PRODUCTOS
     // ============================================================
-    { cat: '💰 Ventas', q: '¿Cómo registro una venta?', a: 'Ve a 💰 Ventas → clic en "➕ Nueva Venta". Selecciona el producto, cantidad, precio, método de pago y cliente.' },
-    { cat: '💰 Ventas', q: '¿Qué es una "venta liberada"?', a: 'Es una venta sin cliente identificado, tipo "mostrador anónimo". Se agrupa visualmente y no permite deuda.' },
-    { cat: '💰 Ventas', q: '¿Qué es una deuda?', a: 'Es una venta donde el cliente no pagó al momento. Se marca con is_debt = 1 y paid = 0.' },
-    { cat: '💰 Ventas', q: '¿Cómo cobro una deuda?', a: 'En Ventas, ve al filtro "💳 Deudas", encuentra al cliente y haz clic en "💰 Cobrar".' },
-    { cat: '💰 Ventas', q: '¿Puedo anular una venta?', a: 'Sí. En el detalle de la venta, clic en "🚫 Anular". Se repondrá el stock automáticamente.' },
-    { cat: '💰 Ventas', q: '¿Cómo edito el nombre del cliente?', a: 'Al editar una venta, el campo "👤 Comprador" es editable. Si la venta está vinculada a un pedido, se desvinculará.' },
-    { cat: '💰 Ventas', q: '¿Para qué sirve registrar un día sin ventas?', a: 'Sirve para llevar un historial y entender mejor las estadísticas. Sin esta información, un día sin ventas parecería simplemente "un mal día" cuando en realidad no abriste.' },
-    { cat: '💰 Ventas', q: '¿Qué motivos puedo usar para un día sin ventas?', a: 'Hay 8 predefinidos: ⚡ Apagón, 🛒 Falta de insumos, 🎉 Feriado, 🏖️ Vacaciones, 🏥 Enfermedad, 🔧 Mantenimiento, 🌧️ Mal clima, y 🔄 Otro.' },
-    { cat: '💰 Ventas', q: '¿Cómo veo quién hizo cada venta?', a: 'En el detalle de la venta, en la sección de Auditoría, aparece "👤 Creado por: [nombre del vendedor]".' },
-    { cat: '💰 Ventas', q: '¿Qué hago si veo ventas duplicadas?', a: 'Ve a ⚙️ Herramientas → 🚨 Eliminación por error. Selecciona las ventas duplicadas y elimínalas permanentemente.' },
-    { cat: '💰 Ventas', q: '¿Cómo añado una nota a una venta?', a: 'Al crear una venta (o al editarla), verás un campo "📝 Nota (opcional)". También puedes añadirla después desde el detalle de la venta, pulsando "✏️ Editar nota".' },
-    { cat: '💰 Ventas', q: '¿Quién puede modificar la nota de una venta?', a: 'Solo el usuario que creó la venta. Otros usuarios ven la nota pero no pueden editarla.' },
+    { 
+        cat: '🏷️ Productos', 
+        q: '¿Qué es un producto?', 
+        a: 'Un producto es un artículo que vendes al cliente. Puede ser una jaba de pan, una docena de croissants, un pan suelto, etc.' 
+    },
+    { 
+        cat: '🏷️ Productos', 
+        q: '¿Cómo defino un producto?', 
+        a: 'Ve a 🏷️ Productos → "➕ Nuevo Producto". Define nombre, precio de venta, unidad de venta, cantidad por unidad y asócialo a una receta.' 
+    },
+    { 
+        cat: '🏷️ Productos', 
+        q: '¿Qué es la "unidad de venta"?', 
+        a: 'Es la forma en que vendes el producto: unidad, jaba, docena, etc. Por ejemplo, una "Jaba de Pan" tiene 10 panes.' 
+    },
+    { 
+        cat: '🏷️ Productos', 
+        q: '¿Qué es la "cantidad por unidad"?', 
+        a: 'Es cuántas unidades contiene una unidad de venta. Por ejemplo, si vendes una jaba de 10 panes, la cantidad por unidad es 10.' 
+    },
+    { 
+        cat: '🏷️ Productos', 
+        q: '¿Qué es el CMPBC?', 
+        a: 'CMPBC significa Capacidad Máxima de Producción por Bloque de Corriente. Es el número máximo de unidades de este producto que puedes producir en un solo bloque de corriente.' 
+    },
+    { 
+        cat: '🏷️ Productos', 
+        q: '¿Cómo configuro el CMPBC?', 
+        a: 'Al crear o editar un producto, en el campo "🏭 CMPBC". Si lo dejas vacío o en 0, el producto no cuenta para el cupo de producción.' 
+    },
+    { 
+        cat: '🏷️ Productos', 
+        q: '¿Para qué sirve el CMPBC?', 
+        a: 'Sirve para que el sistema calcule automáticamente cuántos bloques de corriente necesitas para producir una cantidad determinada.' 
+    },
+    { 
+        cat: '🏷️ Productos', 
+        q: '¿Cómo se calcula el margen de ganancia?', 
+        a: 'El margen se calcula como: (precio de venta - costo del producto) / precio de venta × 100. El costo del producto se obtiene de la receta asociada.' 
+    },
+    { 
+        cat: '🏷️ Productos', 
+        q: '¿Puedo vender un producto sin receta?', 
+        a: 'Sí, pero en ese caso no se descontará stock de insumos automáticamente. Se recomienda asociar siempre una receta.' 
+    },
+    { 
+        cat: '🏷️ Productos', 
+        q: '¿Los usuarios regulares pueden crear productos?', 
+        a: 'No, solo los administradores pueden crear, editar o eliminar productos.' 
+    },
 
     // ============================================================
-    // 📋 SECCIÓN 7: PEDIDOS (59-74)
+    // 💰 SECCIÓN 8: VENTAS
     // ============================================================
-    { cat: '📋 Pedidos', q: '¿Cuál es la diferencia entre pedido y venta?', a: 'Un pedido es una solicitud de un cliente. Una venta es una transacción completada. Los pedidos no son deudas hasta que se entregan.' },
-    { cat: '📋 Pedidos', q: '¿Qué estados tiene un pedido?', a: 'Pendiente, Confirmado, En producción, Listo, Entregado, Cancelado, En lista de espera, Compró por lista de espera.' },
-    { cat: '📋 Pedidos', q: '¿Qué es la lista de espera?', a: 'Cuando la demanda supera la oferta, los clientes se ponen en cola. Al haber disponibilidad, se les atiende en orden.' },
-    { cat: '📋 Pedidos', q: '¿Cómo funciona la reserva por período?', a: 'Permite crear múltiples pedidos a la vez para el mismo cliente. Elige el patrón: rango completo, días de la semana o días específicos.' },
-    { cat: '📋 Pedidos', q: '¿Qué es la paridad en reservas?', a: 'Permite filtrar días pares o impares. Ej: "Solo pares" crea pedidos los días 2, 4, 6, 8, 10...' },
-    { cat: '📋 Pedidos', q: '¿Cómo se cancelan pedidos automáticamente?', a: 'Los pedidos pendientes/confirmados con más de 48h sin procesar se cancelan automáticamente.' },
-    { cat: '📋 Pedidos', q: '¿Qué es "sesión de recogida"?', a: 'Indica si el cliente recogerá el pedido en la mañana (10:00), tarde (15:00) o noche (19:00).' },
-    { cat: '📋 Pedidos', q: '¿Cómo gestiono la lista de espera?', a: 'Ve a 📋 Pedidos → botón "⏰ Lista de espera" o a ⚙️ Herramientas → "⏰ Gestionar lista de espera". Desde ahí puedes procesar, cancelar, eliminar o limpiar la lista.' },
-    { cat: '📋 Pedidos', q: '¿Qué es la "cancelación global de pedidos"?', a: 'Es una herramienta de admin que cancela TODOS los pedidos en un rango de fechas. Útil para apagones prolongados, falta de insumos o cierres temporales.' },
-    { cat: '📋 Pedidos', q: '¿Qué significa cada botón en la lista de espera?', a: '✅ Procesar → crea la venta. ❌ Cancelar → cancela el pedido y repone stock. 🗑️ Quitar → solo quita al cliente de la lista sin cancelar el pedido.' },
-    { cat: '📋 Pedidos', q: '¿Qué diferencia hay entre "Cancelar" y "Quitar"?', a: 'Cancelar → cambia el estado del pedido a "cancelado" y repone stock. Quitar → solo elimina al cliente de la lista, el pedido vuelve a "pendiente".' },
-    { cat: '📋 Pedidos', q: '¿Cuál es la diferencia entre "Entregar (sin deuda)" y "Entregar (con deuda)"?', a: '✅ Entregar (sin deuda): Crea la venta con is_debt = 0 y paid = 1. Úsalo cuando el cliente paga al momento. 🚚 Entregar (con deuda): Crea la venta con is_debt = 1 y paid = 0. Úsalo cuando el cliente se lleva el producto y paga después.' },
-    { cat: '📋 Pedidos', q: '¿Dónde están los botones de entrega?', a: 'En el modal de detalle del pedido (👁️ Ver). Aparecen en la parte inferior, en un contenedor destacado con borde punteado verde.' },
-    { cat: '📋 Pedidos', q: '¿Qué pasa si el pedido tenía pago adelantado y uso "Entregar (sin deuda)"?', a: 'Se ignora el saldo pendiente y se marca la venta como pagada completamente. Útil cuando el cliente decide pagar el resto al momento.' },
-    { cat: '📋 Pedidos', q: '¿Qué pasa si el pedido tenía pago adelantado parcial y uso "Entregar (con deuda)"?', a: 'La venta se marca como deuda solo por el saldo pendiente (la diferencia entre el total y lo ya pagado). El pago adelantado se respeta.' },
-    { cat: '📋 Pedidos', q: '¿Puedo cambiar de opinión después de entregar?', a: 'No directamente. Una vez entregado, el pedido ya generó una venta. Si necesitas corregir el tipo de deuda, debes ir a 💰 Ventas, anular la venta y volver a crearla manualmente.' },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Cómo registro una venta?', 
+        a: 'Ve a 💰 Ventas → "➕ Nueva Venta". Selecciona el producto, cantidad, método de pago y cliente. Guarda.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Qué tipos de venta existen?', 
+        a: 'Venta normal (con cliente), venta liberada (sin cliente), venta a deuda (paga después), venta desde pedido y venta desde lista de espera.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Qué es una "venta liberada"?', 
+        a: 'Es una venta sin cliente identificado (mostrador anónimo). Se usa para ventas rápidas en el mostrador.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Qué es una "venta a deuda"?', 
+        a: 'Es una venta donde el cliente paga después. Queda pendiente de cobro y aparece en la sección de deudas.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Cómo cobro una deuda?', 
+        a: 'En la lista de ventas, filtra por "💳 Deudas" y pulsa "💰 Cobrar" en la venta correspondiente.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Qué métodos de pago puedo usar?', 
+        a: 'Efectivo, Transferencia, Deuda y Otra. El método de pago determina si el ingreso va a caja o a banco.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Qué es el "Fondo en caja"?', 
+        a: 'Es el saldo en efectivo. Se calcula como ingresos en efectivo - gastos en efectivo.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Qué es el "Fondo en banco"?', 
+        a: 'Es el saldo por transferencia. Se calcula como ingresos por transferencia - gastos por transferencia.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Cómo anulo una venta?', 
+        a: 'En el detalle de la venta, pulsa "🚫 Anular". Se marca como anulada, se repone el stock y se puede recuperar.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Cuál es la diferencia entre anular y eliminar una venta?', 
+        a: 'Anular: la venta se marca como anulada pero se conserva en el historial. Eliminar: la venta se borra permanentemente (soft-delete) y no se puede recuperar.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Qué es una "venta desde pedido"?', 
+        a: 'Es una venta que se crea automáticamente al entregar un pedido. La fecha de la venta es la fecha actual (momento de la entrega).' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Qué es una "venta desde lista de espera"?', 
+        a: 'Es una venta que se crea al procesar a un cliente de la lista de espera. La fecha de la venta es la fecha actual.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Puedo añadir una nota a una venta?', 
+        a: 'Sí, puedes añadir una nota opcional a cualquier venta. Solo el creador de la venta puede editar la nota.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Cómo registro un gasto?', 
+        a: 'Ve a 💰 Ventas → "➕ Nuevo Gasto". Completa concepto, monto, categoría y método de pago. Guarda.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Qué categorías de gastos existen?', 
+        a: 'Insumos, Materiales, Transporte, Inversión y Otros. Puedes filtrar los gastos por categoría.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Puedo filtrar las ventas por vendedor?', 
+        a: 'Sí, si hay más de un usuario en el negocio, aparece un selector "👤 Vendedor" para filtrar las ventas por vendedor específico.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Cómo registro un día sin ventas?', 
+        a: 'Ve a 💰 Ventas → "📅 Días sin ventas". Añade la fecha y el motivo (apagón, vacaciones, enfermedad, etc.).' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Por qué es importante registrar los días sin ventas?', 
+        a: 'Porque así las estadísticas no mienten. Un día sin ventas por apagón no es lo mismo que un día sin ventas por mal servicio.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Qué motivos puedo usar para un día sin ventas?', 
+        a: 'Apagón, Falta de insumos, Feriado, Vacaciones, Enfermedad, Mantenimiento, Mal clima y Otro.' 
+    },
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Cómo puedo ver el reporte de ventas?', 
+        a: 'En Ventas, pulsa "📊 Reporte" para abrir el modal de reporte. Puedes filtrar por fecha, cliente, producto, método de pago y vendedor.' 
+    },
 
     // ============================================================
-    // ⚡ SECCIÓN 8: CORRIENTE (75-80)
+    // ⚡ SECCIÓN 9: CORRIENTE Y PRODUCCIÓN
     // ============================================================
-    { cat: '⚡ Corriente', q: '¿Cómo funcionan los horarios de corriente?', a: 'Define el patrón (ej: 3h corriente / 12h apagón) y el sistema calcula automáticamente todos los bloques de cada día.' },
-    { cat: '⚡ Corriente', q: '¿Qué necesito para configurar corriente?', a: 'Una fecha y hora de referencia donde conociste un bloque de corriente. Ej: "Hoy tuve corriente de 10:00 a 13:00".' },
-    { cat: '⚡ Corriente', q: '¿Puedo descargar el reporte de corriente?', a: 'Sí. En Herramientas → ⚡ Gestionar Horarios → pestaña 📊 Reporte, elige semanal o mensual y se genera un PDF.' },
-    { cat: '⚡ Corriente', q: '¿Por qué el calendario muestra algunos días sin corriente?', a: 'Porque según el patrón configurado, ese día no tiene bloques de corriente. Aparecen en gris.' },
-    { cat: '⚡ Corriente', q: '¿Cómo sé si un producto tiene CMPBC configurado?', a: 'En el dropdown del modal de producción, los productos con CMPBC muestran el texto "🏭 X/bloque" (ej: 🏭 7/bloque). Los productos sin CMPBC muestran "— Sin CMPBC —".' },
-    { cat: '⚡ Corriente', q: '¿Por qué el modal de producción no guardaba el producto?', a: 'Era un bug de versiones anteriores. En la versión actual, el producto seleccionado se guarda correctamente y al reabrir el modal aparece preseleccionado.' },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Qué es la "corriente"?', 
+        a: 'Es la electricidad. En Cuba, la corriente llega en bloques programados (ej: 3 horas de corriente, 12 horas de apagón). Panario te ayuda a planificar la producción según estos horarios.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Cómo configuro los horarios de corriente?', 
+        a: 'Ve a ⚡ Herramientas → "Gestionar Horarios". Configura el patrón (horas de corriente y horas de apagón) y la referencia inicial (una fecha y hora donde hubo corriente).' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Qué es el "patrón de corriente"?', 
+        a: 'Es la duración de los bloques de corriente y apagón. Por ejemplo: 3 horas de corriente / 12 horas de apagón.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Qué es la "referencia inicial"?', 
+        a: 'Es una fecha y hora conocida donde hubo corriente. Se usa como punto de partida para calcular todos los bloques futuros.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Cómo se calculan los bloques de corriente?', 
+        a: 'El sistema usa la referencia inicial y el patrón para calcular todos los bloques. Por ejemplo, si la referencia es "hoy de 10:00 a 13:00" y el patrón es 3h/12h, el siguiente bloque será mañana de 1:00 a 4:00, luego de 16:00 a 19:00, etc.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Qué es un "bloque de producción"?', 
+        a: 'Es el bloque de corriente que eliges para hornear un producto. Puede ser un bloque del día o el último bloque del día anterior.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Qué es la "producción programada"?', 
+        a: 'Es la cantidad de un producto que planeas hornear en un día específico. Se configura desde el calendario de corriente.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Cómo programo la producción de un día?', 
+        a: 'En el calendario de corriente, haz clic en un día, selecciona el producto, la cantidad y el bloque de producción. Guarda.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Qué es el "cálculo automático de bloques"?', 
+        a: 'Es una función que calcula automáticamente cuántos bloques necesitas para producir una cantidad determinada, distribuyendo la producción de manera óptima.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Cómo funciona el "algoritmo del amanecer"?', 
+        a: 'Es un algoritmo que elige el bloque de producción ideal para que el pan esté listo antes de las 8:00 AM del día de venta. Prioriza bloques que terminen antes de las 8 AM, luego bloques que terminen entre 8 y 9 AM, y finalmente el último bloque del día anterior.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Puedo aplicar producción a un rango de días?', 
+        a: 'Sí, en el modal de producción, pulsa "📅 Aplicar a rango". Puedes excluir domingos y días sin corriente, y elegir entre bloque relativo o fijo.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Qué es "bloque relativo" y "bloque fijo"?', 
+        a: 'Bloque relativo: cada día usa su bloque equivalente (ej: si el día base usa el bloque 1, cada día usará su bloque 1). Bloque fijo: se usan las mismas horas exactas del día base.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Puedo generar un reporte de corriente?', 
+        a: 'Sí, en la pestaña "📊 Reporte" del modal de corriente. Puedes generar un reporte semanal o mensual.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Cómo consulto los horarios de un día específico?', 
+        a: 'En la pestaña "🔍 Fecha" del modal de corriente. Selecciona una fecha y pulsa "Consultar".' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Qué es el "CMPBC"?', 
+        a: 'CMPBC significa Capacidad Máxima de Producción por Bloque de Corriente. Es el número máximo de unidades de un producto que puedes producir en un solo bloque.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Cómo se distribuye la producción entre bloques?', 
+        a: 'El primer bloque lleva más cantidad. Por ejemplo, si CPD=12 y CMPBC=7, necesitas 2 bloques: el primero lleva 7, el segundo 5.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Qué es la "producción en el bloque del día anterior"?', 
+        a: 'Es cuando la producción se programa para el último bloque del día anterior, para que el pan esté listo al amanecer del día de venta. Se marca con el icono 🌙.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Qué es el "diagnóstico de producción"?', 
+        a: 'Es una herramienta técnica que verifica si el sistema de producción está funcionando correctamente. Ejecuta 12 comprobaciones y muestra los resultados.' 
+    },
+    { 
+        cat: '⚡ Corriente y Producción', 
+        q: '¿Dónde encuentro el diagnóstico de producción?', 
+        a: 'En Herramientas → "🔍 Diagnóstico de Producción". También puedes acceder desde el modal de corriente, pestaña Config.' 
+    },
 
     // ============================================================
-    // 🏭 SECCIÓN 9: PRODUCCIÓN (81-108)
+    // 🏆 SECCIÓN 10: PREMIOS
     // ============================================================
-    { cat: '🏭 Producción', q: '¿Qué es el horario de producción?', a: 'Es el bloque de corriente que has marcado como el momento en que hornearás tu producción. Se muestra en la tarjeta del pedido para saber cuándo estará listo el pan.' },
-    { cat: '🏭 Producción', q: '¿Cómo defino el horario de producción para un día?', a: 'Ve a ⚙️ Herramientas → ⚡ Gestionar Horarios → 📅 Calendario. Haz clic en un día con corriente, selecciona el bloque y la cantidad a producir, y guarda.' },
-    { cat: '🏭 Producción', q: '¿Qué significa "Pedidos: 5/50"?', a: 'Significa que hay 5 pedidos reservados para ese día y la producción programada es de 50 unidades. Aún quedan 45 cupos disponibles.' },
-    { cat: '🏭 Producción', q: '¿Por qué no puedo crear más pedidos para un día?', a: 'Porque la producción de ese día está completa. El sistema bloquea la creación para evitar sobreventa. Cambia la fecha o aumenta la cantidad de producción.' },
-    { cat: '🏭 Producción', q: '¿Cómo elimino la producción de un día?', a: 'Ve al día en el calendario, haz clic en el modal de detalle y pulsa el botón 🗑️ junto a la sección de producción.' },
-    { cat: '🏭 Producción', q: '¿Las ventas directas afectan el cupo de pedidos?', a: 'Sí. Si vendes directamente sin pedido, esas unidades se descuentan del cupo disponible.' },
-    { cat: '🏭 Producción', q: '¿Puedo vender más de la cantidad de producción?', a: 'Sí, las ventas directas no se bloquean. Solo los pedidos respetan el cupo de producción.' },
-    { cat: '🏭 Producción', q: '¿Qué pasa si no defino producción para un día?', a: 'No hay límite de pedidos para ese día. La tarjeta no muestra el bloque de producción.' },
-    { cat: '🏭 Producción', q: '¿Cómo sé si un día tiene producción programada desde la lista de pedidos?', a: 'En la tarjeta de cada fecha verás un bloque morado con: 🔨 Horario de producción, 📋 Pedidos: n/m, 💰 Ventas directas y ✅ x disponibles o ⛔ COMPLETO.' },
-    { cat: '🏭 Producción', q: '¿Qué pasa con las reservas por período si algún día está completo?', a: 'En la vista previa de reserva por período, los días completos aparecen con ⛔ Completo (n/m) y se omiten automáticamente al crear. Solo se crean pedidos en los días con disponibilidad.' },
-    { cat: '🏭 Producción', q: '¿Puedo producir cantidades que no sean enteras?', a: 'Sí. El campo "Cantidad a producir" acepta decimales. Por ejemplo: 6.5 significa 6 jabas y media, 2.25 significa 2 jabas y cuarto, 0.5 significa media jaba.' },
-    { cat: '🏭 Producción', q: '¿Cómo se calcula la cantidad disponible si la producción es decimal?', a: 'La fórmula es: disponibles = cantidad_produccion - pedidos_reservados - ventas_directas. Ejemplo: si produces 6.5 jabas, tienes 5 pedidos y 1 venta directa: 6.5 - 5 - 1 = 0.5 disponibles.' },
-    { cat: '🏭 Producción', q: '¿Se puede guardar una cantidad con muchos decimales?', a: 'Sí, pero se recomienda usar máximo 2 decimales para mayor claridad. El sistema los mostrará formateados (ej: 6.33).' },
-    { cat: '🏭 Producción', q: '¿Qué pasa si un pedido consume más de lo disponible?', a: 'El sistema bloquea la creación del pedido cuando disponibles <= 0. Muestra un modal informativo.' },
-    { cat: '🏭 Producción', q: '¿Cómo veo la cantidad exacta que falta por producir?', a: 'En la tarjeta del día en el calendario, el tooltip muestra la cantidad formateada. En el modal de detalle hay una sección con: Pedidos, Ventas directas y Disponibles.' },
-    { cat: '🏭 Producción', q: '¿Puedo cambiar una cantidad ya guardada de entero a decimal?', a: 'Sí. Simplemente abre el día, edita el input y guarda. No hay restricción para cambiar entre enteros y decimales.' },
-    { cat: '🏭 Producción', q: '¿Los reportes muestran cantidades decimales?', a: 'Sí. El reporte de corriente y producción muestra las cantidades formateadas sin ceros innecesarios. Ejemplo: 6.5 aparece como 6.5, 6.0 aparece como 6, 0.5 aparece como 0.5.' },
-    { cat: '🏭 Producción', q: '¿Qué pasa si intento guardar cantidad 0 o negativa?', a: 'El sistema muestra un error: "⚠️ La cantidad a producir debe ser mayor a 0". Debes ingresar al menos 0.01.' },
-    { cat: '🏭 Producción', q: '¿Qué significa "📋 Pedidos: 3/6.5"?', a: 'Significa: 3 pedidos reservados para ese día, 6.5 producción total programada. Aún hay disponibles 6.5 - 3 = 3.5 cupos.' },
-    { cat: '🏭 Producción', q: '¿Cuándo aparece "⛔ COMPLETO"?', a: 'Cuando disponibles <= 0, es decir, cuando los pedidos reservados + ventas directas alcanzan o superan la producción total del día.' },
-    { cat: '🏭 Producción', q: '¿Puedo crear pedidos para un día sin producción configurada?', a: 'Sí. Los días sin producción no tienen límite de cupos. Solo se aplica la validación cuando hay configuración de producción.' },
-    { cat: '🏭 Producción', q: '¿Qué pasa si edito un pedido y cambio la fecha a un día completo?', a: 'En modo edición, el sistema permite guardar aunque esté completo (para no bloquear la edición de otros campos). La validación estricta solo aplica a pedidos nuevos.' },
-    { cat: '🏭 Producción', q: '¿Cómo veo cuántos cupos quedan en un día?', a: 'Tres formas: 1) Tarjeta de fecha en la lista de pedidos: ✅ x disponibles. 2) Formulario de pedido: banner morado al seleccionar la fecha. 3) Modal de horario (Calendario → clic en día): sección "✅ Disponibles: x / m".' },
-    { cat: '🏭 Producción', q: '¿Los decimales afectan el bloqueo?', a: 'Sí. Ejemplos: Producción 6.5 con 0.5 disponibles → permite 1 pedido más. Producción 6.5 con 0 disponibles → bloquea. Producción 2.25 con 0.25 disponibles → permite 1 pedido más.' },
-    { cat: '🏭 Producción', q: '¿Qué pasa si reduzco la producción después de tener pedidos?', a: 'El sistema recalcula disponibles automáticamente. Si reduces la producción por debajo de los pedidos existentes, los nuevos pedidos se bloquearán. Los pedidos ya existentes no se cancelan.' },
-    { cat: '🏭 Producción', q: '¿Puedo ver el historial de producción de días pasados?', a: 'Sí. En el calendario, navega a meses anteriores y haz clic en cualquier día. Los días con producción tienen un borde morado y el icono 🔨.' },
-    { cat: '🏭 Producción', q: '¿Qué es la "regla del amanecer" en el algoritmo de bloques?', a: 'Es la regla que determina si un bloque de corriente es válido para producir el pan que se venderá al amanecer del día siguiente. Un bloque es válido si termina antes de las 9:00 AM del día de venta.' },
-    { cat: '🏭 Producción', q: '¿Por qué un bloque que comienza a las 8:00 AM no es válido para el amanecer?', a: 'Porque si comienza a las 8:00 AM y dura 3 horas, termina a las 11:00 AM. Para entonces, el desayuno ya pasó. El pan debe estar listo antes de las 9:00 AM.' },
-    { cat: '🏭 Producción', q: '¿Cuándo se usa el bloque del día anterior?', a: 'Se usa cuando el primer bloque del día de venta comienza demasiado tarde (después de las 8:00 AM) o cuando no hay bloques válidos para el amanecer. El algoritmo prioriza el último bloque del día anterior porque el pan horneado ahí estará listo mucho antes del desayuno.' },
-    { cat: '🏭 Producción', q: '¿El algoritmo prioriza el bloque de ayer o el de hoy?', a: 'Prioriza el bloque del día anterior si termina antes de las 9 AM del día de venta. Si no hay bloque del día anterior válido, usa los bloques del día actual que terminen antes de las 9 AM.' },
-    { cat: '🏭 Producción', q: '¿Qué pasa si el bloque del día anterior cruza medianoche?', a: 'Se considera válido si su hora de fin es <= 9:00 AM del día de venta. Por ejemplo, un bloque del 23/09 de 11:00 PM a 2:00 AM del 24/09 es válido porque termina a las 2:00 AM.' },
-    { cat: '🏭 Producción', q: '¿Puedo modificar manualmente la distribución sugerida?', a: 'Sí. Después de confirmar el cálculo, puedes editar el bloque y la cantidad manualmente en el modal de producción y volver a guardar.' },
-    { cat: '🏭 Producción', q: '¿Qué pasa si no hay suficientes bloques disponibles?', a: 'El algoritmo muestra un error indicando cuántas unidades máximo se pueden producir. Puedes: aumentar el CMPBC del producto, elegir otro producto con mayor CMPBC, o dividir la producción en varios días.' },
-    { cat: '🏭 Producción', q: '¿Cómo funciona el cálculo automático de bloques?', a: 'Selecciona un producto (con CMPBC), escribe la cantidad y pulsa "✨ Calcular bloques automáticamente". El sistema sugiere cómo distribuir la producción entre los bloques de corriente.' },
-    { cat: '🏭 Producción', q: '¿Qué es la "tolerancia del amanecer"?', a: 'Los bloques que terminan entre las 8:00 y 9:00 AM también son válidos para producir el pan del desayuno.' },
+    { 
+        cat: '🏆 Premios', 
+        q: '¿Qué es el sistema de premios?', 
+        a: 'Es un sistema de fidelización que premia a los clientes que más compran. El mejor cliente del mes y del año reciben un premio.' 
+    },
+    { 
+        cat: '🏆 Premios', 
+        q: '¿Cómo activo el sistema de premios?', 
+        a: 'Ve a 💰 Ventas → 🏆 Premios. Activa el toggle "🎁 Activar sistema" y configura los premios mensual y anual.' 
+    },
+    { 
+        cat: '🏆 Premios', 
+        q: '¿Cómo se calcula el mejor cliente del mes?', 
+        a: 'Se suma el total de compras de cada cliente en el mes actual. El que tenga el mayor total es el ganador.' 
+    },
+    { 
+        cat: '🏆 Premios', 
+        q: '¿Cómo se calcula el mejor cliente del año?', 
+        a: 'Se suma el total de compras de cada cliente en el rango configurado (por ejemplo, del 1 de enero al 31 de diciembre).' 
+    },
+    { 
+        cat: '🏆 Premios', 
+        q: '¿Qué opciones hay para el cálculo del premio anual?', 
+        a: 'Navidad (24 dic), Fin de año (31 dic) o Inicio de año. También puedes configurar una fecha específica.' 
+    },
+    { 
+        cat: '🏆 Premios', 
+        q: '¿Cómo se notifica a los ganadores?', 
+        a: 'Al inicio de cada mes (días 1-5), el sistema notifica al ganador del mes anterior con su premio correspondiente.' 
+    },
+    { 
+        cat: '🏆 Premios', 
+        q: '¿Dónde se muestra la tarjeta de premios?', 
+        a: 'En el Dashboard, si el sistema de premios está activo. Muestra el mejor cliente del mes, del año y el top 5 del mes.' 
+    },
 
     // ============================================================
-    // 🏆 SECCIÓN 10: PREMIOS (109-112)
+    // 🔔 SECCIÓN 11: NOTIFICACIONES
     // ============================================================
-    { cat: '🏆 Premios', q: '¿Cómo funciona el sistema de premios?', a: 'Premia a tus mejores clientes. Se calcula automáticamente el cliente con mayor total gastado en el mes y en el año.' },
-    { cat: '🏆 Premios', q: '¿Dónde configuro los premios?', a: 'Ve a 💰 Ventas → botón 🏆 Premios. Ahí puedes activar/desactivar, editar los premios y elegir cuándo se calcula el premio anual.' },
-    { cat: '🏆 Premios', q: '¿Por qué hay tres opciones para calcular el premio anual?', a: 'Cada negocio es diferente. Puedes elegir entregar el premio en Navidad (24 dic), a fin de año (31 dic) o al inicio del siguiente año (comportamiento por defecto).' },
-    { cat: '🏆 Premios', q: '¿Qué pasa si tengo el sistema de premios desactivado?', a: 'El selector de cálculo anual se guarda igualmente, pero no se muestra la tarjeta de premios en el Dashboard ni se envían notificaciones.' },
+    { 
+        cat: '🔔 Notificaciones', 
+        q: '¿Qué son las notificaciones?', 
+        a: 'Son alertas que te informan de eventos importantes: pedidos pendientes, deudas, stock bajo, premios, etc.' 
+    },
+    { 
+        cat: '🔔 Notificaciones', 
+        q: '¿Cómo funciona la campanita?', 
+        a: 'En la barra superior, el icono 🔔 muestra un badge rojo con el número de notificaciones no leídas. Al hacer clic, se abre el modal de notificaciones.' 
+    },
+    { 
+        cat: '🔔 Notificaciones', 
+        q: '¿Puedo configurar el sonido de las notificaciones?', 
+        a: 'Sí, ve a 👤 Perfil → "🔔 Sonido de notificaciones". Puedes activar/desactivar el sonido y elegir entre varios tonos.' 
+    },
+    { 
+        cat: '🔔 Notificaciones', 
+        q: '¿Qué sonidos puedo elegir?', 
+        a: 'Beep, Chime, Pop, Alert y Success. También puedes elegir "Silencio" para desactivar el sonido.' 
+    },
+    { 
+        cat: '🔔 Notificaciones', 
+        q: '¿Puedo probar los sonidos?', 
+        a: 'Sí, en la configuración de sonido, pulsa "🔊 Probar" para escuchar cada sonido individualmente, o "🔊 Probar todos" para escucharlos todos en secuencia.' 
+    },
+    { 
+        cat: '🔔 Notificaciones', 
+        q: '¿Por qué no suenan las notificaciones?', 
+        a: 'Asegúrate de haber interactuado con la app (clic, toque, tecla) para desbloquear el audio. Revisa también el volumen de tu dispositivo.' 
+    },
+    { 
+        cat: '🔔 Notificaciones', 
+        q: '¿Las notificaciones se guardan?', 
+        a: 'Sí, las notificaciones se guardan en el historial. Puedes verlas en el modal de notificaciones y marcarlas como resueltas.' 
+    },
+
+	{ 
+		cat: '🔔 Notificaciones', 
+		q: '¿Por qué no veo el número rojo en la campanita?', 
+		a: 'Si el badge rojo de la campanita no aparece, puede ser porque no hay notificaciones no leídas (ya las abriste todas). Si hay nuevas notificaciones sin leer, el badge se actualiza automáticamente con el número. Si el problema persiste, prueba recargar la app con Ctrl + Shift + R (hard refresh).' 
+	},
+	{ 
+		cat: '🔔 Notificaciones', 
+		q: '¿Dónde veo el historial completo de notificaciones?', 
+		a: 'Toca el icono 🔔 en la barra superior. Se abrirá un modal con todas las notificaciones, ordenadas de más reciente a más antigua. Puedes marcar cada una como "resuelta" individualmente o usar el botón "Resolver todas".' 
+	},	
+	
+    // ============================================================
+    // 👤 SECCIÓN 12: PERFIL
+    // ============================================================
+    { 
+        cat: '👤 Perfil', 
+        q: '¿Qué puedo hacer en mi Perfil?', 
+        a: 'Editar tu información personal (nombre, email, teléfono, foto), cambiar el tema (claro/oscuro), configurar el Dashboard, gestionar cuentas bancarias y acceder a la ayuda.' 
+    },
+    { 
+        cat: '👤 Perfil', 
+        q: '¿Cómo cambio mi foto de perfil?', 
+        a: 'En tu Perfil, pulsa sobre tu foto actual y selecciona una nueva imagen desde tu dispositivo.' 
+    },
+    { 
+        cat: '👤 Perfil', 
+        q: '¿Cómo cambio el tema de la app?', 
+        a: 'En tu Perfil, busca la opción "🌓 Tema" y selecciona Claro u Oscuro.' 
+    },
+    { 
+        cat: '👤 Perfil', 
+        q: '¿Qué son los "Elementos visibles en el Dashboard"?', 
+        a: 'Son 13 interruptores que te permiten personalizar qué secciones quieres ver en el Dashboard. Puedes activar o desactivar cada una.' 
+    },
+    { 
+        cat: '👤 Perfil', 
+        q: '¿Cómo gestiono mis cuentas bancarias?', 
+        a: 'En tu Perfil → "🏦 Datos bancarios". Puedes añadir, editar o eliminar cuentas, y definir cuál es tu cuenta por defecto.' 
+    },
+    { 
+        cat: '👤 Perfil', 
+        q: '¿Qué datos incluye una cuenta bancaria?', 
+        a: 'Nombre del banco, nombre del propietario, número de cuenta, teléfono de confirmación y código QR (generado o subido).' 
+    },
+    { 
+        cat: '👤 Perfil', 
+        q: '¿Cómo puedo subir el QR de mi cuenta bancaria?', 
+        a: 'En el formulario de cuenta bancaria, pulsa "📷 Subir QR" y selecciona una imagen desde tu dispositivo. También puedes generarlo automáticamente.' 
+    },
+    { 
+        cat: '👤 Perfil', 
+        q: '¿Qué es la "cuenta por defecto"?', 
+        a: 'Es la cuenta que se muestra en el Dashboard y en los reportes. Puedes tener varias cuentas pero solo una es la predeterminada.' 
+    },
+    { 
+        cat: '👤 Perfil', 
+        q: '¿Puedo ver las cuentas bancarias de otros usuarios?', 
+        a: 'Depende de la configuración del administrador. Si "Permitir a usuarios ver QRs de otros" está activado, puedes verlas (solo lectura).' 
+    },
+    { 
+        cat: '👤 Perfil', 
+        q: '¿Qué es el "QR compartido"?', 
+        a: 'Es una cuenta bancaria que el administrador ha marcado como compartida. Todos los usuarios del negocio pueden verla y usarla.' 
+    },
+    { 
+        cat: '👤 Perfil', 
+        q: '¿Cómo accedo a la Ayuda?', 
+        a: 'En tu Perfil → "❓ Ayuda y Tutoriales". Puedes acceder a la Guía rápida, Tutorial interactivo, Preguntas frecuentes y Ayuda detallada.' 
+    },
 
     // ============================================================
-    // 🔔 SECCIÓN 11: NOTIFICACIONES Y AYUDA (113-124)
+    // ⚙️ SECCIÓN 13: HERRAMIENTAS
     // ============================================================
-    { cat: '🔔 Notificaciones y Ayuda', q: '¿Puedo cambiar el sonido de las notificaciones?', a: 'Sí. Ve a tu Perfil → 🔔 Sonido de notificaciones. Puedes elegir entre 5 sonidos embutidos o desactivarlo.' },
-    { cat: '🔔 Notificaciones y Ayuda', q: '¿Por qué no se repiten las notificaciones?', a: 'Una vez que abres el modal de notificaciones, se marcan como vistas y no se vuelven a mostrar hasta que sean necesarias de nuevo.' },
-    { cat: '🔔 Notificaciones y Ayuda', q: '¿Cómo abro el Centro de Ayuda?', a: 'Haz clic en el botón ❓ de la barra superior. Se abrirá un menú flotante con Guía Rápida, Tutorial, FAQ, Ayuda Detallada, Léeme y Créditos.' },
-    { cat: '🔔 Notificaciones y Ayuda', q: '¿Qué es la "Ayuda detallada"?', a: 'Es un manual completo que se abre DENTRO de la app, respetando tu tema actual y abriéndose en la sección del módulo donde estés.' },
-    { cat: '🔔 Notificaciones y Ayuda', q: '¿Puedo volver a ver el tutorial?', a: 'Sí. Ve a Ayuda → Tutorial Interactivo. Si ya lo completaste, la app te preguntará si quieres volver a verlo.' },
-    { cat: '🔔 Notificaciones y Ayuda', q: '¿Cómo contacto al desarrollador?', a: 'En Ayuda → Créditos. WhatsApp: +53 55031725, Email: 3sayricardo@gmail.com.' },
-    { cat: '🔔 Notificaciones y Ayuda', q: '¿El Centro de Ayuda bloquea la pantalla?', a: 'No. El Centro de Ayuda es un menú flotante que aparece debajo del botón ❓. Se cierra automáticamente al hacer clic fuera o presionar Escape.' },
-    { cat: '🔔 Notificaciones y Ayuda', q: '¿Qué sonidos hay disponibles?', a: 'Cinco sonidos embutidos: 🔔 Beep (tono corto), 🎵 Chime (tono medio), 💧 Pop (tono corto y agudo), ⚠️ Alert (tono grave), ✅ Success (tono agudo y largo). Más la opción 🔇 Silencio.' },
-    { cat: '🔔 Notificaciones y Ayuda', q: '¿El "Probar todos" cambia mi sonido configurado?', a: 'No. Al finalizar la prueba, se restaura automáticamente el sonido que tenías configurado. Además, si detienes la prueba con "⏹️ Detener", tampoco se modifica tu configuración.' },
-    { cat: '🔔 Notificaciones y Ayuda', q: '¿Puedo desactivar los sonidos completamente?', a: 'Sí. Ve a Perfil → Sonido de notificaciones y desactiva el toggle. También puedes elegir el sonido "🔇 Silencio".' },
-    { cat: '🔔 Notificaciones y Ayuda', q: '¿El sonido funciona si no he hecho login todavía?', a: 'Sí. El audio se desbloquea con cualquier gesto, incluso en la pantalla de login. No necesitas estar logueado para que las notificaciones suenen.' },
-    { cat: '🔔 Notificaciones y Ayuda', q: '¿Cómo puedo verificar si el audio está desbloqueado?', a: 'Simplemente interactúa con la app (clic, toque o tecla). Si el sonido no suena, verifica que no tengas el modo silencio activado o que el volumen del dispositivo esté subido.' },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Qué hay en Herramientas?', 
+        a: 'Gestión de usuarios, configuración bancaria, lista de espera, cancelación global, reprogramación de pedidos, horarios de corriente, diagnóstico de producción, backups, y más.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Quién puede acceder a Herramientas?', 
+        a: 'Todos los usuarios pueden acceder, pero algunas secciones solo son visibles para administradores (Gestión de Usuarios, Cancelación Global, etc.).' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cómo gestiono los usuarios?', 
+        a: 'Como admin, ve a Herramientas → "👥 Gestión de Usuarios". Puedes crear, editar, promover, degradar o eliminar usuarios.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cómo creo un nuevo usuario?', 
+        a: 'En Gestión de Usuarios, pulsa "➕ Crear usuario". Completa usuario, contraseña, nombre y decide si es admin. Guarda.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cómo comparto el código de invitación?', 
+        a: 'En Gestión de Usuarios, pulsa "📋 Copiar código" para copiar el código de 8 caracteres. Compártelo con el nuevo usuario.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Puedo regenerar el código de invitación?', 
+        a: 'Sí, como admin puedes regenerar el código. Pulsa "🔄 Regenerar código". El código anterior dejará de funcionar.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Qué es la "Configuración Bancaria"?', 
+        a: 'Es una sección solo para administradores donde se controlan los permisos sobre las cuentas bancarias: ver QRs de otros, cambiar cuenta por defecto, forzar QR del admin.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Qué significa "Permitir a usuarios ver QRs de otros"?', 
+        a: 'Si está activado, los usuarios no-admin pueden ver (solo lectura) las cuentas bancarias de otros usuarios del negocio.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Qué significa "Permitir a usuarios cambiar su cuenta por defecto"?', 
+        a: 'Si está activado, cada usuario puede elegir cuál de sus cuentas usar por defecto. Si está desactivado, el admin designa la cuenta predeterminada global.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Qué significa "Forzar QR del admin"?', 
+        a: 'Si está activado, TODOS los usuarios verán en el Dashboard únicamente el QR del administrador, ignorando su cuenta por defecto individual.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cómo funciona la "Cancelación Global"?', 
+        a: 'Como admin, ve a Herramientas → "🚨 Cancelación Global". Selecciona un rango de fechas, una causa y una nota. Se cancelarán todos los pedidos activos en ese rango.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cómo funciona la "Reprogramación por Rango"?', 
+        a: 'Como admin, ve a Herramientas → "🔄 Reprogramar Pedidos". Selecciona el rango origen, la fecha destino, la causa y una nota. Se moverán todos los pedidos.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cómo genero un reporte de gastos?', 
+        a: 'En Herramientas → "📊 Reporte de Gastos". Selecciona el rango de fechas y los filtros opcionales (categoría, origen del pago, concepto).' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cómo exporto una copia de seguridad?', 
+        a: 'En Herramientas → "📤 Exportar copia". Como admin puedes elegir entre copia completa o solo datos. Los usuarios regulares solo pueden exportar datos.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cuál es la diferencia entre "copia completa" y "copia de datos"?', 
+        a: 'Copia completa: incluye usuarios y negocios. Copia de datos: solo datos operativos (ventas, pedidos, insumos, etc.), conserva los usuarios.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cómo importo una copia de seguridad?', 
+        a: 'En Herramientas → "📥 Importar copia". Puedes elegir entre importar copia (reemplaza todo), importar solo datos (reemplaza datos operativos) o fusionar bases.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Qué es la "fusión de bases de datos"?', 
+        a: 'Es una función que combina dos copias de la BD sin perder datos ni crear duplicados. Se comparan los registros por UUID.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Qué es la "salva diferencial"?', 
+        a: 'Es un backup que solo incluye recetas y productos en formato JSON. No afecta ventas, pedidos, insumos ni clientes.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cómo limpio los datos eliminados?', 
+        a: 'En Herramientas → "🧹 Limpiar datos eliminados". Se eliminan permanentemente todos los registros con soft-delete. Requiere contraseña "panario".' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cómo funciona la "Eliminación por error"?', 
+        a: 'En Herramientas → "🚨 Eliminación por error". Selecciona registros de pedidos o ventas creados por error y elimínalos permanentemente. Requiere contraseña "panario".' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cómo reinicio la base de datos?', 
+        a: 'En Herramientas → "🚨 Reiniciar Base de Datos". Elimina TODOS los datos excepto usuarios y temas. Requiere contraseña "panario".' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Qué es el "Diagnóstico de Producción"?', 
+        a: 'Es una herramienta técnica que verifica si el sistema de producción está correctamente configurado. Ejecuta 12 comprobaciones.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Qué es "Restaurar Estilos"?', 
+        a: 'Es una función que limpia estilos residuales que puedan estar deformando la interfaz. Útil si la barra superior se ve mal.' 
+    },
 
     // ============================================================
-    // 👥 SECCIÓN 12: MULTIUSUARIO Y ADMINISTRACIÓN (125-140)
+    // 📄 SECCIÓN 14: REPORTES
     // ============================================================
-    { cat: '👥 Multiusuario', q: '¿Puedo tener varios usuarios en el mismo negocio?', a: 'Sí. Al registrarte puedes crear un negocio nuevo o unirte a uno existente con un código de invitación de 8 caracteres.' },
-    { cat: '👥 Multiusuario', q: '¿Cómo comparto el código de invitación?', a: 'En tu Perfil, junto al nombre del negocio, verás el código con un botón "📋 Copiar". Envíalo a quien quieras invitar.' },
-    { cat: '👥 Multiusuario', q: '¿Quién es el administrador del negocio?', a: 'El primer usuario que crea el negocio es el administrador. Los siguientes usuarios que se unan tendrán rol de usuario regular.' },
-    { cat: '👥 Multiusuario', q: '¿Cómo promuevo a un usuario a admin?', a: 'Ve a ⚙️ Herramientas → 👥 Gestionar Usuarios → botón 👑 junto al usuario.' },
-    { cat: '👥 Multiusuario', q: '¿Qué puede hacer un admin que un usuario no puede?', a: 'Crear/editar/eliminar insumos, recetas, productos. Gestionar usuarios. Hacer copias completas. Ver costos de recetas. Cancelar/reprogramar pedidos globalmente.' },
-    { cat: '👥 Multiusuario', q: '¿Qué es el "primer administrador"?', a: 'Es el usuario que creó el negocio. Se marca con is_first_admin = 1 y tiene privilegios especiales: solo él puede cambiar la configuración bancaria del negocio.' },
-    { cat: '👥 Multiusuario', q: '¿Quién es el primer administrador de mi negocio?', a: 'El usuario que creó el negocio. Puedes verificarlo en Herramientas → Gestión de Usuarios: aparece con el badge 👑 y "PRIMER ADMIN".' },
-    { cat: '👥 Multiusuario', q: '¿Puedo cambiar quién es el primer administrador?', a: 'No directamente. El primer administrador se establece al crear el negocio y no se puede transferir.' },
-    { cat: '👥 Multiusuario', q: '¿Por qué no puedo degradar a un admin a usuario normal?', a: 'Si el admin es el primer administrador del negocio, no se puede degradar. Es una protección para garantizar que siempre haya al menos un primer admin.' },
-    { cat: '👥 Multiusuario', q: '¿Por qué no puedo eliminar a un usuario?', a: 'Si el usuario es el primer administrador del negocio, no se puede eliminar. Es una protección para garantizar que siempre haya al menos un primer admin.' },
-    { cat: '👥 Multiusuario', q: '¿Qué pasa si el negocio tenía usuarios antes de esta actualización?', a: 'Al hacer login por primera vez después de actualizar, el sistema marca automáticamente al usuario más antiguo del negocio como is_first_admin = 1.' },
-    { cat: '👥 Multiusuario', q: '¿Cómo sé si un usuario es el primer admin?', a: 'En Herramientas → Gestión de Usuarios, el primer admin aparece con el badge "👑 PRIMER ADMIN" junto a su nombre.' },
-    { cat: '👥 Multiusuario', q: '¿Qué pasa si un usuario es eliminado?', a: 'Sus ventas se mantienen, pero el nombre del vendedor aparecerá como "Desconocido" en la auditoría.' },
-    { cat: '👥 Multiusuario', q: '¿Puedo filtrar ventas por vendedor?', a: 'Puedes ver el ranking de ventas por empleado en el Dashboard. Además, si hay más de 1 usuario en el negocio, aparece un selector "👤 Vendedor" en Ventas para ver solo las ventas de un vendedor específico.' },
-    { cat: '👥 Multiusuario', q: '¿Cómo sé quién vendió cada producto?', a: 'En el detalle de cada venta, en la sección de Auditoría, aparece "👤 Creado por: [nombre del vendedor]".' },
-    { cat: '👥 Multiusuario', q: '¿Qué configuraciones son individuales por usuario?', a: 'Todas las del perfil: 🎨 Tema (claro/oscuro), 📷 Foto de perfil, 🔔 Sonido de notificaciones, 🚀 Guía rápida activada, 📊 13+ toggles del Dashboard, 📈 Modo del gráfico, 🏦 Cuenta bancaria por defecto.' },
+    { 
+        cat: '📄 Reportes', 
+        q: '¿Qué reportes puedo generar?', 
+        a: 'Pedidos, Ventas, Gastos, Insumos, Recetas, Lista de espera, Días sin ventas, Corriente, Producción y más.' 
+    },
+    { 
+        cat: '📄 Reportes', 
+        q: '¿Cómo genero un reporte de ventas?', 
+        a: 'En Ventas, pulsa "📊 Reporte". Selecciona los filtros (fecha, cliente, producto, pago) y pulsa "Generar Reporte".' 
+    },
+    { 
+        cat: '📄 Reportes', 
+        q: '¿Puedo filtrar el reporte de ventas por vendedor?', 
+        a: 'Sí, si hay más de un usuario en el negocio, el modal de reporte incluye un selector de vendedor.' 
+    },
+    { 
+        cat: '📄 Reportes', 
+        q: '¿Cómo genero un reporte de pedidos?', 
+        a: 'En Pedidos, pulsa "📊 Reporte". Selecciona los filtros y pulsa "Generar Reporte".' 
+    },
+    { 
+        cat: '📄 Reportes', 
+        q: '¿Cómo genero un reporte de gastos?', 
+        a: 'En Herramientas → "📊 Reporte de Gastos". Selecciona el rango de fechas y los filtros opcionales.' 
+    },
+    { 
+        cat: '📄 Reportes', 
+        q: '¿Los reportes se guardan?', 
+        a: 'No, los reportes se generan en el momento y se abren en una ventana de impresión. Puedes guardarlos como PDF.' 
+    },
+    { 
+        cat: '📄 Reportes', 
+        q: '¿Los reportes incluyen el orden ascendente por ID?', 
+        a: 'Sí, los pedidos y ventas en los reportes se ordenan por ID ascendente dentro de cada fecha.' 
+    },
 
     // ============================================================
-    // ⚙️ SECCIÓN 13: HERRAMIENTAS (141-150)
+    // ❓ SECCIÓN 15: PREGUNTAS TÉCNICAS (Usuario Final)
     // ============================================================
-    { cat: '⚙️ Herramientas', q: '¿Qué hace "Reiniciar base de datos"?', a: 'Elimina TODOS los datos excepto usuarios y temas. Se conservan las cuentas de usuario para que puedas volver a entrar. Contraseña: "panario".' },
-    { cat: '⚙️ Herramientas', q: '¿Qué diferencia hay entre "Limpiar datos eliminados" y "Eliminación por error"?', a: 'Ambas son destructivas. "Limpiar datos eliminados" borra todos los registros con soft-delete. "Eliminación por error" permite seleccionar pedidos o ventas específicos para eliminar permanentemente.' },
-    { cat: '⚙️ Herramientas', q: '¿Cómo fusiono dos bases de datos?', a: 'Ve a ⚙️ Herramientas → 📥 Importar → 🔀 Fusionar bases de datos. Los registros nuevos se añaden, los existentes se comparan por UUID (gana el más reciente).' },
-    { cat: '⚙️ Herramientas', q: '¿Qué pasa si importo datos duplicados?', a: 'El sistema evita duplicados al fusionar: compara por UUID y solo actualiza si el backup es más reciente. Los duplicados se omiten automáticamente.' },
-    { cat: '⚙️ Herramientas', q: '¿Cómo evito duplicados al importar?', a: 'Usa la opción "🔀 Fusionar bases de datos". El sistema compara por UUID y solo añade registros nuevos, actualizando los existentes solo si son más recientes.' },
-    { cat: '⚙️ Herramientas', q: '¿Puedo importar la misma salva dos veces?', a: 'Sí, no habrá duplicados. El sistema detecta los registros ya importados y los omite o actualiza según corresponda.' },
-    { cat: '⚙️ Herramientas', q: '¿Cómo verifico si hay duplicados en mi base de datos?', a: 'Ve a ⚙️ Herramientas → 🚨 Eliminación por error. Revisa la lista de pedidos y ventas. Si ves entradas idénticas, selecciónalas y elimínalas.' },
-    { cat: '⚙️ Herramientas', q: '¿Qué hace el botón "📊 Reporte de gastos"?', a: 'Genera un reporte parametrizable de gastos por rango, categoría y origen del pago. Te permite analizar en qué se va el dinero.' },
-    { cat: '⚙️ Herramientas', q: '¿Qué es la "Reprogramación por rango"?', a: 'Es una herramienta de admin que mueve todos los pedidos de un rango de fechas a una fecha destino. Útil para reprogramar múltiples pedidos a la vez.' },
-    { cat: '⚙️ Herramientas', q: '¿Qué pasa si no hay registros eliminados para limpiar?', a: 'El modal de progreso mostrará un mensaje indicando "No había registros eliminados para limpiar" y se cerrará automáticamente.' },
+    { 
+        cat: '❓ Preguntas Técnicas', 
+        q: '¿Qué hago si la app no carga?', 
+        a: 'Intenta hacer un "hard refresh": Ctrl + Shift + R. Si no funciona, limpia la caché desde DevTools (F12) → Application → Clear storage. Si persiste, desregistra el Service Worker.' 
+    },
+    { 
+        cat: '❓ Preguntas Técnicas', 
+        q: '¿Qué hago si no se guardan los datos?', 
+        a: 'Verifica la consola (F12) para errores. Ejecuta el diagnóstico de producción. Verifica el espacio en localStorage. Exporta un backup y limpia datos antiguos.' 
+    },
+    { 
+        cat: '❓ Preguntas Técnicas', 
+        q: '¿Qué hago si la BD está corrupta?', 
+        a: 'Restaura desde un backup. Si no tienes, ejecuta "Fusionar bases de datos" con un backup reciente. Como último recurso, "Reiniciar Base de Datos".' 
+    },
+    { 
+        cat: '❓ Preguntas Técnicas', 
+        q: '¿Por qué la PWA no se instala?', 
+        a: 'Verifica que el manifest sea válido, que el SW esté registrado y que la app se sirva por HTTPS.' 
+    },
+    { 
+        cat: '❓ Preguntas Técnicas', 
+        q: '¿Por qué la PWA no se actualiza?', 
+        a: 'Limpia la caché, verifica que el CACHE_NAME haya cambiado y fuerza la actualización del Service Worker.' 
+    },
+    { 
+        cat: '❓ Preguntas Técnicas', 
+        q: '¿Por qué el top bar se deforma?', 
+        a: 'Es un bug de navegadores móviles que aplican transform residual. Usa "Restaurar Estilos" en Herramientas o limpia la caché.' 
+    },
+    { 
+        cat: '❓ Preguntas Técnicas', 
+        q: '¿Por qué no suenan las notificaciones?', 
+        a: 'Interactúa con la app (clic, toque, tecla) para desbloquear el audio. Sube el volumen del dispositivo.' 
+    },
+    { 
+        cat: '❓ Preguntas Técnicas', 
+        q: '¿Por qué la fusión duplica registros?', 
+        a: 'Verifica que todos los registros tengan UUID. Si faltan, ejecuta la migración de UUIDs.' 
+    },
+    { 
+        cat: '❓ Preguntas Técnicas', 
+        q: '¿Por qué no se genera el PDF?', 
+        a: 'Permite popups en el navegador. Verifica que haya datos para el rango seleccionado. Revisa la consola para errores.' 
+    },
+    { 
+        cat: '❓ Preguntas Técnicas', 
+        q: '¿Qué hago si el stock no se descuenta?', 
+        a: 'Verifica que el producto tenga una receta asociada. Si no tiene receta, no se descuenta stock. Revisa la consola para errores.' 
+    },
+    { 
+        cat: '❓ Preguntas Técnicas', 
+        q: '¿Qué hago si el algoritmo del amanecer elige mal el bloque?', 
+        a: 'Verifica que la configuración de corriente esté correcta. Revisa que el algoritmo tenga las 3 condiciones del amanecer.' 
+    },
+    { 
+        cat: '❓ Preguntas Técnicas', 
+        q: '¿Cómo puedo ver los logs de la app?', 
+        a: 'Abre DevTools (F12) → pestaña Console. Ahí verás todos los logs detallados de la app.' 
+    },
 
     // ============================================================
-    // 🏦 SECCIÓN 14: BANCOS (151-170)
+    // 📚 SECCIÓN 16: GLOSARIO
     // ============================================================
-    { cat: '🏦 Bancos', q: '¿Cómo agrego una cuenta bancaria?', a: 'Ve a tu Perfil → 🏦 Datos Bancarios → completa banco, titular, número de cuenta, teléfono y guarda.' },
-    { cat: '🏦 Bancos', q: '¿Puedo generar un QR para mi cuenta bancaria?', a: 'Sí. En el formulario de cuenta bancaria, pulsa "✨ Generar QR". Panario lo crea con los datos que ingresaste (banco, titular, cuenta, teléfono).' },
-    { cat: '🏦 Bancos', q: '¿Puedo subir mi propio QR en vez de generarlo?', a: 'Sí. Usa "📁 Subir imagen" para subir el QR de tu app bancaria, o "📸 Cámara" para capturarlo directamente.' },
-    { cat: '🏦 Bancos', q: '¿Qué es el toggle "Compartida" en una cuenta bancaria?', a: 'Si lo activas, todos los usuarios de tu negocio podrán ver esa cuenta (solo lectura). Útil para que todos cobren a la misma cuenta.' },
-    { cat: '🏦 Bancos', q: '¿Cómo marco una cuenta como compartida?', a: 'Al crear o editar una cuenta bancaria, activa el toggle 🔗 Compartida. La cuenta aparecerá con un badge morado en la lista.' },
-    { cat: '🏦 Bancos', q: '¿Puedo descompartir una cuenta?', a: 'Sí. Edita la cuenta y desactiva el toggle 🔗 Compartida. Los demás usuarios dejarán de verla inmediatamente.' },
-    { cat: '🏦 Bancos', q: '¿Quién ve las cuentas compartidas?', a: 'Todos los usuarios del mismo negocio, siempre que el admin tenga activada la opción "Permitir a usuarios ver QRs de otros" en Configuración Bancaria.' },
-    { cat: '🏦 Bancos', q: '¿Cómo puedo tener mi propia cuenta bancaria por defecto?', a: 'Ve a tu Perfil → Datos Bancarios → marca la casilla "Establecer como predeterminada" en la cuenta que quieras. Tu elección es individual: no afecta a lo que ven otros usuarios.' },
-    { cat: '🏦 Bancos', q: '¿Qué significa el badge "⭐ Mi default" en una cuenta bancaria?', a: 'Significa que esa cuenta es tu cuenta por defecto individual. Se usará para mostrar el QR en tu Dashboard. Cada usuario puede tener su propia cuenta por defecto si el admin lo permite.' },
-    { cat: '🏦 Bancos', q: '¿Qué significa el badge "👑 Default global"?', a: 'Es la cuenta designada por el administrador como predeterminada del negocio. Solo la ve el admin. Se usa cuando un usuario no-admin no tiene una cuenta por defecto individual configurada.' },
-    { cat: '🏦 Bancos', q: '¿Cómo cambio mi cuenta bancaria por defecto?', a: 'Ve a Perfil → Datos Bancarios → en tu cuenta bancaria, pulsa ⭐ Mi Default. Si no ves este botón, es porque el administrador ha desactivado la opción.' },
-    { cat: '🏦 Bancos', q: '¿Qué significa "Solo lectura" en una cuenta bancaria?', a: 'Es una cuenta de otro usuario que puedes ver (porque el admin activó "Permitir a usuarios ver QRs de otros") pero no editar ni eliminar. Solo el dueño de la cuenta o el administrador pueden modificar sus datos.' },
-    { cat: '🏦 Bancos', q: '¿Por qué el QR del Dashboard cambió sin que yo lo tocara?', a: 'Porque el administrador cambió la cuenta por defecto global, o porque tú cambiaste tu cuenta por defecto individual. El Dashboard muestra la cuenta por defecto del usuario actual.' },
-    { cat: '🏦 Bancos', q: '¿Puedo elegir la cuenta por defecto de otro usuario?', a: 'No. La cuenta por defecto es individual: cada usuario elige la suya (si el admin lo permite). Solo el administrador puede cambiar la cuenta por defecto global del negocio.' },
-    { cat: '🏦 Bancos', q: '¿Qué pasa si no tengo ninguna cuenta por defecto configurada?', a: 'El sistema usa la cuenta que el administrador haya designado como "default global". Si tampoco existe, se usa la primera cuenta disponible.' },
-    { cat: '🏦 Bancos', q: '¿Dónde configuro los permisos de las cuentas bancarias?', a: 'En Herramientas → 🔐 Configuración Bancaria (solo admin). Ahí puedes activar o desactivar: "Permitir a usuarios ver QRs de otros" y "Permitir a usuarios cambiar su cuenta por defecto".' },
-    { cat: '🏦 Bancos', q: '¿Qué pasa si activo "Permitir a usuarios ver QRs de otros"?', a: 'Los usuarios no-admin podrán ver TODAS las cuentas bancarias del negocio, pero solo en modo lectura para las ajenas. Solo el dueño o el admin pueden editar/eliminar.' },
-    { cat: '🏦 Bancos', q: '¿Qué pasa si activo "Permitir a usuarios cambiar su cuenta por defecto"?', a: 'Cada usuario podrá elegir cuál de sus cuentas usar por defecto (individual). Verá el botón "⭐ Mi Default" en sus cuentas.' },
-    { cat: '🏦 Bancos', q: '¿Qué es el toggle "Solo usar y mostrar el QR del administrador"?', a: 'Es un tercer toggle en Herramientas → Configuración Bancaria. Si lo activas, todos los usuarios del negocio verán en su Dashboard únicamente el QR que tú (admin) hayas designado como predeterminado global, ignorando sus cuentas individuales.' },
-    { cat: '🏦 Bancos', q: '¿Por qué ya no veo las cuentas bancarias de otros usuarios?', a: 'Los usuarios no administradores solo ven sus propias cuentas bancarias. Esta es una medida de privacidad. Si necesitas ver las cuentas de otros, pídele al administrador que active la opción "Permitir a usuarios ver QRs de otros".' },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es un "insumo"?', 
+        a: 'Materia prima que usas para producir: harina, levadura, yogur, mantequilla, etc.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es una "receta"?', 
+        a: 'Fórmula de producción que asocia insumos con cantidades. Ej: "Pan de Yogur" con harina, levadura y yogur.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es un "producto"?', 
+        a: 'Artículo que vendes al cliente. Ej: "Jaba de Pan" (10 panes).' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es una "jaba"?', 
+        a: 'Unidad de venta típica en panadería. Generalmente contiene 10 panes.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es "media jaba"?', 
+        a: 'Unidad de venta que contiene 5 panes.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es "consumo interno"?', 
+        a: 'Pan que se queda en casa (no se vende). Se puede registrar como gasto o como consumo.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es un "bloque de corriente"?', 
+        a: 'Período de tiempo con electricidad. Ej: de 10:00 AM a 1:00 PM.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es un "apagón"?', 
+        a: 'Período de tiempo sin electricidad. Ej: de 1:00 PM a 1:00 AM.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es "CMPBC"?', 
+        a: 'Capacidad Máxima de Producción por Bloque de Corriente. Ej: 7 jabas por bloque.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es "CPD"?', 
+        a: 'Cantidad de Producción Diaria. Es la cantidad total que quieres producir en un día.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es "VD"?', 
+        a: 'Ventas Directas. Son las ventas que se hacen sin pedido previo.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es "P"?', 
+        a: 'Pedidos. Son las reservas de productos para una fecha futura.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es "UUID"?', 
+        a: 'Identificador Único Universal. Se usa para fusionar bases de datos sin duplicar registros.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es "soft-delete"?', 
+        a: 'Borrado lógico: el registro se marca como eliminado pero no se borra físicamente. Se puede restaurar.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es "PWA"?', 
+        a: 'Progressive Web App. Es una aplicación web que se puede instalar como app nativa y funciona offline.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es "Service Worker"?', 
+        a: 'Script que cachea los assets de la app para que funcione offline.' 
+    },
+    { 
+        cat: '📚 Glosario', 
+        q: '¿Qué es "localStorage"?', 
+        a: 'Almacenamiento local del navegador. Ahí se guarda la base de datos de Panario.' 
+    },
 
     // ============================================================
-    // 📱 SECCIÓN 15: PWA Y OFFLINE (171-185)
+    // 🎯 SECCIÓN 17: CONSEJOS Y TRUCOS
     // ============================================================
-    { cat: '📱 PWA y Offline', q: '¿Por qué la app no funciona offline después de limpiar el caché?', a: 'Cuando limpias el caché de Chrome, se borran los archivos de la PWA. Abre Panario con conexión a internet una vez y espera 5-10 segundos para que se vuelvan a cachear.' },
-    { cat: '📱 PWA y Offline', q: '¿Cómo reinstalo la PWA correctamente?', a: 'Desinstala la PWA, limpia el caché del navegador, abre Panario online, espera a que cargue completamente y vuelve a instalarla.' },
-    { cat: '📱 PWA y Offline', q: '¿Qué hacer si veo "Sin conexión" pero tengo internet?', a: 'Es posible que el Service Worker tenga una versión antigua. Ve a offline.html y pulsa "Limpiar caché y recargar".' },
-    { cat: '📱 PWA y Offline', q: '¿Qué es la página "Sin conexión" de Panario?', a: 'Es una pantalla que se muestra cuando el Service Worker no puede servir la app desde caché ni desde red. Desde ahí puedes reintentar la conexión, limpiar el caché, o esperar a que el auto-retry detecte la reconexión.' },
-    { cat: '📱 PWA y Offline', q: '¿Qué significa el indicador de conexión (punto rojo/verde)?', a: '🟢 Verde: Hay conexión al servidor. 🔴 Rojo parpadeante: No hay conexión (o el servidor no responde).' },
-    { cat: '📱 PWA y Offline', q: '¿Qué hace el botón "Reintentar conexión"?', a: 'Verifica si navigator.onLine es true Y si el servidor responde. Si ambos son OK, recarga la app automáticamente.' },
-    { cat: '📱 PWA y Offline', q: '¿Qué hace el botón "Limpiar caché y recargar"?', a: 'Desregistra todos los Service Workers, elimina todas las cachés, y recarga la página con un parámetro anti-caché. Útil si la app muestra datos obsoletos o no carga correctamente.' },
-    { cat: '📱 PWA y Offline', q: '¿Qué es el auto-retry?', a: 'Es un mecanismo que reintenta la conexión automáticamente cada 5 segundos (máximo 12 intentos = 1 minuto). Si detecta reconexión, recarga la app sola.' },
-    { cat: '📱 PWA y Offline', q: '¿Qué atajos de teclado hay en la página offline?', a: 'R: Reintentar conexión. Esc: Ir al inicio (index.html).' },
-    { cat: '📱 PWA y Offline', q: '¿Por qué a veces dice "Servidor no accesible" si tengo internet?', a: 'Porque navigator.onLine puede reportar true aunque el servidor no responda (por ejemplo, si estás conectado a una WiFi que no tiene salida a internet). El check de fetch HEAD al index.html es más fiable.' },
-    { cat: '📱 PWA y Offline', q: '¿La página offline funciona en modo oscuro?', a: 'Sí. Detecta la preferencia del sistema con prefers-color-scheme: dark y adapta los colores.' },
-    { cat: '📱 PWA y Offline', q: '¿Qué pasa si limpio el caché pero sigo sin internet?', a: 'La app no podrá cargarse offline hasta que tengas internet al menos una vez. La página offline te mostrará el mensaje "Servidor no accesible" o "Sin conexión".' },
-    { cat: '📱 PWA y Offline', q: '¿Cuánto tiempo tengo que esperar para que el auto-retry funcione?', a: 'Máximo 5 segundos después de recuperar la conexión. El auto-retry verifica cada 5 segundos, y si detecta reconexión, recarga en menos de 1 segundo.' },
-    { cat: '📱 PWA y Offline', q: '¿Puedo desactivar el auto-retry?', a: 'No directamente, pero si cierras la pestaña o pulsas Esc para ir al inicio, el auto-retry se detiene. Si vuelves a la página offline, se reinicia.' },
-    { cat: '📱 PWA y Offline', q: '¿Qué diferencia hay entre "Reintentar conexión" y "Limpiar caché y recargar"?', a: 'Reintentar: solo verifica conexión. Si hay red, recarga. No toca el caché. Limpiar caché: desregistra SWs y elimina cachés. Útil si el caché está corrupto.' },
-
-    // ============================================================
-    // 🔄 SECCIÓN 16: REPROGRAMACIÓN (186-196)
-    // ============================================================
-    { cat: '🔄 Reprogramación', q: '¿Cómo reprogramo pedidos a otra fecha?', a: 'Ve a ⚙️ Herramientas → 🔄 Reprogramar Pedidos por Rango. Selecciona el rango de fechas origen, la fecha destino, la causa y confirma.' },
-    { cat: '🔄 Reprogramación', q: '¿Puedo reprogramar solo los pedidos de un cliente?', a: 'Sí. En el modal de reprogramación, hay un campo opcional de cliente. Si lo llenas, solo se reprograman los pedidos de ese cliente.' },
-    { cat: '🔄 Reprogramación', q: '¿Qué pasa con la causa y nota al reprogramar?', a: 'La causa y nota se añaden automáticamente al campo de notas de cada pedido, para tener un historial de por qué se movió.' },
-    { cat: '🔄 Reprogramación', q: '¿Se puede deshacer una reprogramación?', a: 'No directamente. Deberás volver a reprogramar los pedidos a la fecha original o editar cada pedido manualmente.' },
-    { cat: '🔄 Reprogramación', q: '¿Los pedidos entregados se pueden reprogramar?', a: 'No. Solo se reprograman pedidos en estado pendiente, confirmado, en producción o listo.' },
-    { cat: '🔄 Reprogramación', q: '¿Qué pasa si la fecha destino ya tiene pedidos?', a: 'Los pedidos reprogramados se añaden a los ya existentes. Se respeta el cupo de producción si está configurado.' },
-    { cat: '🔄 Reprogramación', q: '¿Quién puede reprogramar pedidos?', a: 'Solo el administrador del negocio. Es una operación crítica que afecta a múltiples clientes a la vez.' },
-    { cat: '🔄 Reprogramación', q: '¿La reprogramación afecta el stock?', a: 'No directamente. El stock ya fue descontado (o no) según el estado original del pedido. La reprogramación solo cambia la fecha.' },
-    { cat: '🔄 Reprogramación', q: '¿La reprogramación conserva la hora de entrega?', a: 'Sí. Solo cambia la fecha, la hora se mantiene igual que antes (por ejemplo, si era a las 10:00, sigue siendo a las 10:00).' },
-    { cat: '🔄 Reprogramación', q: '¿Puedo reprogramar pedidos a una fecha pasada?', a: 'Sí, técnicamente. Pero no es recomendable porque puede afectar a las estadísticas. Si necesitas corregir, considera editar el pedido individualmente.' },
-    { cat: '🔄 Reprogramación', q: '¿Qué pasa con las notas y la causa al reprogramar?', a: 'La causa y la nota se añaden automáticamente al campo notes de cada pedido afectado, precedido del texto "Reprogramado: ". Ej: Reprogramado: 🔄 Falta de insumos | Se pospone una semana.' },
-
-    // ============================================================
-    // 📈 SECCIÓN 17: REPORTES (197-205)
-    // ============================================================
-    { cat: '📈 Reportes', q: '¿En qué orden aparecen las ventas en el reporte PDF?', a: 'Se ordenan por fecha ascendente y, dentro de la misma fecha, por ID ascendente. La venta más antigua del día aparece primero.' },
-    { cat: '📈 Reportes', q: '¿En qué orden aparecen los pedidos en el reporte PDF?', a: 'Igual: por fecha de entrega ascendente y luego por ID ascendente. El primer pedido creado para esa fecha aparece primero.' },
-    { cat: '📈 Reportes', q: '¿Las deudas también se ordenan?', a: 'Sí. En el reporte de deudas, se ordenan por fecha de venta ascendente y luego por ID ascendente. La deuda más antigua aparece primero.' },
-    { cat: '📈 Reportes', q: '¿Por qué añadieron la columna # en los reportes?', a: 'Para que puedas identificar rápidamente cada venta/pedido por su ID y relacionarlo con el módulo de Eliminación por Error o con la lista de la app.' },
-    { cat: '📈 Reportes', q: '¿Puedo cambiar el orden de los reportes?', a: 'Actualmente no. Los reportes usan un orden fijo (fecha ASC + ID ASC) que refleja el orden cronológico real. Si necesitas otro orden, exporta a CSV o edita manualmente.' },
-    { cat: '📈 Reportes', q: '¿Puedo ver el número total de ventas/pedidos al final del reporte?', a: 'Sí. El reporte de ventas muestra el total de ventas, ingresos totales, promedio por venta, ventas liberadas y deudas pendientes. El reporte de pedidos muestra la distribución por estado.' },
-    { cat: '📈 Reportes', q: '¿Por qué el reporte de ventas muestra solo 100 filas?', a: 'Para que el PDF no se haga demasiado largo. Si necesitas ver más, filtra por un rango de fechas más específico o usa la exportación de la base de datos.' },
-    { cat: '📈 Reportes', q: '¿Qué significa la columna 🚀 en el detalle de ventas?', a: 'Indica que esa venta es una venta liberada (sin cliente identificado).' },
-    { cat: '📈 Reportes', q: '¿Los reportes respetan el tema oscuro?', a: 'No. Los reportes PDF siempre se generan en fondo blanco con texto negro, para garantizar legibilidad al imprimir. El tema de la app no afecta al PDF.' },
-
-    // ============================================================
-    // 📅 SECCIÓN 18: DÍAS SIN VENTAS (206-208)
-    // ============================================================
-    { cat: '📅 Días sin ventas', q: '¿Qué significa "SV." en el gráfico de ventas?', a: 'Es la abreviatura de "Sin Ventas". Aparece sobre los días que no tuvieron ventas y muestra el motivo registrado (ej: "SV. Apagón", "SV. Falta de insumos").' },
-    { cat: '📅 Días sin ventas', q: '¿Por qué algunos días del gráfico no muestran el motivo SV?', a: 'Solo se muestra el motivo si ese día está registrado en la tabla de "Días sin ventas". Si no se registró, el día aparece en blanco pero sin texto.' },
-    { cat: '📅 Días sin ventas', q: '¿Cómo registro un día sin ventas?', a: 'Ve a 💰 Ventas → botón "📅 Día sin ventas", selecciona la fecha y el motivo. También puedes hacerlo desde Herramientas si está disponible.' },
-
-    // ============================================================
-    // 💳 SECCIÓN 19: DEUDAS Y PAGOS (209-216)
-    // ============================================================
-    { cat: '💳 Deudas y Pagos', q: '¿Qué es una deuda?', a: 'Es una venta donde el cliente no pagó al momento. Se marca con is_debt = 1 y paid = 0.' },
-    { cat: '💳 Deudas y Pagos', q: '¿Cómo cobro una deuda?', a: 'En Ventas, ve al filtro "💳 Deudas", encuentra al cliente y haz clic en "💰 Cobrar".' },
-    { cat: '💳 Deudas y Pagos', q: '¿Qué pasa si el pedido tenía pago adelantado y uso "Entregar (sin deuda)"?', a: 'Se ignora el saldo pendiente y se marca la venta como pagada completamente. Esto es útil cuando el cliente decide pagar el resto al momento de la entrega.' },
-    { cat: '💳 Deudas y Pagos', q: '¿Qué pasa si el pedido tenía pago adelantado parcial y uso "Entregar (con deuda)"?', a: 'La venta se marca como deuda solo por el saldo pendiente (la diferencia entre el total y lo ya pagado). El pago adelantado se respeta.' },
-    { cat: '💳 Deudas y Pagos', q: '¿Qué pasa si el pedido no tiene pago adelantado y uso "Entregar (sin deuda)"?', a: 'La venta se crea con is_debt = 0 y paid = 1. El check "Es una deuda" queda desmarcado en Ventas. Es como si el cliente hubiera pagado al momento.' },
-    { cat: '💳 Deudas y Pagos', q: '¿Qué pasa si el pedido no tiene pago adelantado y uso "Entregar (con deuda)"?', a: 'La venta se crea con is_debt = 1 y paid = 0. El check "Es una deuda" queda marcado. Debes ir a Ventas → Deudas para cobrarla.' },
-    { cat: '💳 Deudas y Pagos', q: '¿Por qué el botón "sin deuda" es verde y el "con deuda" es naranja?', a: 'Por convención visual: verde significa "todo en orden / pagado", naranja significa "pendiente / atención requerida". Esto ayuda a elegir rápidamente la opción correcta.' },
-
+    { 
+        cat: '🎯 Consejos y Trucos', 
+        q: '¿Cómo puedo aprovechar mejor Panario?', 
+        a: 'Registra todo: insumos, recetas, productos, ventas, pedidos. Configura el CMPBC de tus productos. Usa el Dashboard para tomar decisiones. Haz backups semanales.' 
+    },
+    { 
+        cat: '🎯 Consejos y Trucos', 
+        q: '¿Cómo puedo saber cuál es mi producto más rentable?', 
+        a: 'Revisa el margen de ganancia en la lista de productos. Los productos con mayor margen son los más rentables.' 
+    },
+    { 
+        cat: '🎯 Consejos y Trucos', 
+        q: '¿Cómo puedo mejorar mi producción?', 
+        a: 'Usa el cálculo automático de bloques para distribuir la producción de manera óptima. Configura el CMPBC de cada producto.' 
+    },
+    { 
+        cat: '🎯 Consejos y Trucos', 
+        q: '¿Cómo puedo fidelizar a mis clientes?', 
+        a: 'Activa el sistema de premios. El mejor cliente del mes y del año reciben un premio.' 
+    },
+    { 
+        cat: '🎯 Consejos y Trucos', 
+        q: '¿Cómo puedo controlar mejor mis finanzas?', 
+        a: 'Registra todos los gastos. Usa el Dashboard para ver el análisis de fondos. Revisa el Fondo en caja y Fondo en banco.' 
+    },
+    { 
+        cat: '🎯 Consejos y Trucos', 
+        q: '¿Cómo puedo saber si un día fue malo o simplemente no hubo corriente?', 
+        a: 'Registra los días sin ventas con su motivo. Así las estadísticas reflejan la realidad (apagón ≠ mal día).' 
+    },
+    { 
+        cat: '🎯 Consejos y Trucos', 
+        q: '¿Cómo puedo prepararme para un apagón?', 
+        a: 'Usa el calendario de corriente para planificar la producción. Produce en los bloques de corriente y almacena el pan para los días de apagón.' 
+    },
+    { 
+        cat: '🎯 Consejos y Trucos', 
+        q: '¿Cómo puedo vender más?', 
+        a: 'Ofrece ventas a deuda a clientes de confianza. Usa la lista de espera para no perder ventas. Premia a tus mejores clientes.' 
+    },
+    { 
+        cat: '🎯 Consejos y Trucos', 
+        q: '¿Cómo puedo organizar mejor mis pedidos?', 
+        a: 'Usa la reserva por período para clientes frecuentes. Usa la sesión de recogida para organizar las entregas.' 
+    },
+    { 
+        cat: '🎯 Consejos y Trucos', 
+        q: '¿Cómo puedo reducir el desperdicio?', 
+        a: 'Ajusta la producción a la demanda real. Usa el CMPBC para no sobreproducir. Revisa el historial de ventas para prever la demanda.' 
+    },
+    { 
+        cat: '🎯 Consejos y Trucos', 
+        q: '¿Cómo puedo ahorrar tiempo en la gestión?', 
+        a: 'Usa la app en el móvil. Registra las ventas al momento. Usa los reportes para no tener que hacer cuentas manualmente.' 
+    },
+    { 
+        cat: '🎯 Consejos y Trucos', 
+        q: '¿Qué hago si me quedo sin espacio en el dispositivo?', 
+        a: 'Limpia los datos eliminados (soft-delete). Exporta un backup y luego reinicia la base de datos. Elimina fotos antiguas de productos.' 
+    }
 ];
 
-console.log('📚 FAQs cargadas: ' + window.FAQS_DB.length + ' preguntas');
-console.log('📂 Categorías: ' + [...new Set(window.FAQS_DB.map(f => f.cat))].length);
+// ============================================================
+// LOG DE CARGA
+// ============================================================
+
+console.log('📚 FAQs cargadas correctamente v1.0.0');
+console.log(`   📝 Total de preguntas: ${window.FAQS_DB.length}`);
+console.log(`   📂 Categorías: ${[...new Set(window.FAQS_DB.map(f => f.cat))].length}`);
+console.log('   🎯 Filtradas para usuario final (sin nivel técnico)');

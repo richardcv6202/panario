@@ -1,33 +1,28 @@
 // ============================================================
 // 📦 HELP MODULE - Panario (Sistema de Ayuda y Tutorial)
-// v3.0.1 (290926): 🎯 CORRECCIÓN #15 (290926)
-//   - ✅ NUEVO: FAQs cargadas desde window.FAQS_DB (js/faqs.js)
-//   - ✅ ELIMINADO: array FAQS_DB local (solo tenía 10 FAQs)
-//   - ✅ VERIFICACIÓN: si window.FAQS_DB no existe, muestra error
-//   - ✅ MANTENIDO: Corrección #14 (modal sin iframe)
-//   - ✅ MANTENIDO: Tour, guía rápida, créditos, léeme
-//   - ✅ MANTENIDO: Popover del Centro de Ayuda
-//   - ✅ MANTENIDO: renderAyudaStandalone() para ?standalone=1
-//   - ✅ MANTENIDO: imprimirAyudaModal() (sin iframe)
-//   - ✅ MANTENIDO: listener CLOSE_HELP (compatibilidad v2.x)
+// v3.0.3 (300926): 🎯 CORRECCIÓN #3 (parte 2)
+//   - ✅ NUEVO: Botones flotantes ⬆️⬇️ en Modal de FAQs
+//   - ✅ NUEVO: Botones flotantes ⬆️⬇️ en Modal de Guía Rápida
+//   - ✅ NUEVO: IDs únicos en contenedores con scroll (faq-modal-container, quickstart-modal-container)
+//   - ✅ NUEVO: crearBotonesFlotantesAyuda() se invoca tras abrir cada modal
+//   - ✅ NUEVO: eliminarBotonesFlotantesAyuda() se invoca al cerrar cada modal
+//   - ✅ REUTILIZA: Funciones de HelpDetailedModule (v1.2.0)
+//   - ✅ MANTENIDO: Todo lo de v3.0.2 (Corrección #7: tutorial 9 pasos + Perfil)
 //
 // HISTORIAL:
+// v3.0.2 (300926): 🎯 CORRECCIÓN #7
+//   - ✅ NUEVO: Paso del Perfil añadido a TOUR_STEPS (9 pasos)
+//   - ✅ CORREGIDO: showStep() ya no se salta pasos ni entra en bucle
+//   - ✅ CORREGIDO: startTour() asegura currentStep = 0
+//
+// v3.0.1 (290926): 🎯 CORRECCIÓN #15
+//   - ✅ NUEVO: FAQs cargadas desde window.FAQS_DB (js/faqs.js)
+//   - ✅ ELIMINADO: array FAQS_DB local (solo tenía 10 FAQs)
+//
 // v3.0.0 (250926): 🎯 CORRECCIÓN #14 (240926)
 //   - ✅ ELIMINADO: iframe de ayuda-panario.html
-//   - ✅ ELIMINADO: postMessage CLOSE_HELP/PONG/NAVIGATE
-//   - ✅ ELIMINADO: forzarModalAlFrente (ya no se necesita)
-//   - ✅ ELIMINADO: ofrecerFallbackPestanaNueva
-//   - ✅ ELIMINADO: imprimirAyudaIframe (reemplazado por imprimirAyudaModal)
 //   - ✅ NUEVO: abrirAyudaDetallada() usa HelpDetailedModule.renderHelpDetailed()
-//   - ✅ NUEVO: modal controlado con ModalModule (coherencia con resto de la app)
-//   - ✅ NUEVO: botón 🖨️ imprime el contenido del modal directamente
-//   - ✅ NUEVO: botón 🔗 ↗ solo en desktop, abre URL con ?standalone=1
-//   - ✅ NUEVO: listener de CLOSE_HELP mantenido para compatibilidad v2.x
-//   - ✅ NUEVO: función renderAyudaStandalone() para la URL ?standalone=1
-//   - ✅ Respeta el tema actual (claro/oscuro) usando variables CSS de la app
-//   - ✅ Mantiene las 315+ FAQs literales
-//   - ✅ Mantiene el tour, la guía rápida, los créditos, el léeme
-//   - ✅ Mantiene el popover del Centro de Ayuda
+//   - ✅ NUEVO: modal controlado con ModalModule
 // ============================================================
 
 window.HelpModule = {};
@@ -55,10 +50,6 @@ const DEV_AVATAR_FALLBACK_EMOJI = '👨‍💻';
 // ============================================================
 // 🆕 CORRECCIÓN #15: OBTENER FAQs DESDE WINDOW.FAQS_DB
 // ============================================================
-// Las FAQs se cargan desde js/faqs.js (archivo externo).
-// Esto mantiene help.js ligero y permite que help-detailed.js
-// también use las mismas FAQs.
-// ============================================================
 
 function obtenerFAQs() {
     try {
@@ -77,8 +68,7 @@ function obtenerFAQs() {
     }
 }
 
-// Alias de compatibilidad: algunos módulos externos podían referenciar
-// window.HelpModule.FAQS_DB directamente. Se mantiene como getter.
+// Alias de compatibilidad
 Object.defineProperty(window.HelpModule, 'FAQS_DB', {
     get: function() {
         return window.FAQS_DB || [];
@@ -89,6 +79,8 @@ Object.defineProperty(window.HelpModule, 'FAQS_DB', {
 // ============================================================
 // CONFIGURACIÓN DEL TOUR
 // ============================================================
+// 🆕 CORRECCIÓN #7: Tour de 9 pasos (incluye Perfil)
+// ============================================================
 
 const TOUR_STEPS = [
     { target: '#stat-total-sales', title: '📊 Dashboard', content: 'Aquí puedes ver todas las estadísticas clave de tu negocio: ventas, ingresos, gastos y ganancias.', position: 'bottom' },
@@ -98,6 +90,7 @@ const TOUR_STEPS = [
     { target: '.nav-item[data-section="productos"]', title: '🏷️ Productos', content: 'Define los productos que vendes. Cada producto puede tener una receta asociada.', position: 'top' },
     { target: '.nav-item[data-section="sales"]', title: '💰 Ventas', content: 'Registra tus ventas y gastos. El stock se descuenta automáticamente al vender.', position: 'top' },
     { target: '.nav-item[data-section="settings"]', title: '⚙️ Herramientas', content: 'Configura tu negocio, exporta/importa datos, gestiona horarios de corriente y más.', position: 'top' },
+    { target: '.nav-item[data-section="profile"]', title: '👤 Mi Perfil', content: 'Accede a tu información personal, configura el tema, gestiona tus cuentas bancarias y ajusta qué se ve en el Dashboard.', position: 'top' },
     { target: '#notification-bell', title: '🔔 Notificaciones', content: 'Recibe alertas de pedidos pendientes, deudas y recordatorios importantes.', position: 'bottom' }
 ];
 
@@ -137,6 +130,34 @@ function isMobileDevice() {
     }
 }
 window.isMobileDevice = isMobileDevice;
+
+// ============================================================
+// 🆕 CORRECCIÓN #3 (parte 2): WRAPPERS PARA BOTONES FLOTANTES
+// ============================================================
+// Delegan en HelpDetailedModule (v1.2.0) para reutilizar código.
+// Si HelpDetailedModule no está cargado, se degradan silenciosamente.
+// ============================================================
+
+function _crearBotonesFlotantesEnModal(containerSelector, containerId) {
+    try {
+        if (!window.HelpDetailedModule || typeof window.HelpDetailedModule.crearBotonesFlotantesAyuda !== 'function') {
+            console.warn(`⚠️ [help] HelpDetailedModule no disponible — no se pueden crear botones flotantes para ${containerId}`);
+            return;
+        }
+        window.HelpDetailedModule.crearBotonesFlotantesAyuda(containerSelector, containerId);
+    } catch (e) {
+        console.warn(`⚠️ [help] Error creando botones flotantes para ${containerId}:`, e);
+    }
+}
+
+function _eliminarBotonesFlotantesDeModal(containerId) {
+    try {
+        if (!window.HelpDetailedModule || typeof window.HelpDetailedModule.eliminarBotonesFlotantesAyuda !== 'function') return;
+        window.HelpDetailedModule.eliminarBotonesFlotantesAyuda(containerId);
+    } catch (e) {
+        console.warn(`⚠️ [help] Error eliminando botones flotantes para ${containerId}:`, e);
+    }
+}
 
 // ============================================================
 // BLOQUEAR LA APP (ocultar header + bottom-nav + inert)
@@ -194,29 +215,14 @@ function _restaurarAppTrasAyuda() {
 // ============================================================
 // CORRECCIÓN #14: ABRIR AYUDA DETALLADA (SIN IFRAME)
 // ============================================================
-// 
-// CAMBIO CLAVE:
-//   Antes: abría un iframe con ayuda-panario.html
-//   Ahora: monta el contenido de help-detailed.js directamente en
-//          un modal controlado, usando las variables CSS de la app.
-// 
-// VENTAJAS:
-//   - No hay problemas de postMessage
-//   - No hay problemas de z-index
-//   - Respeta el tema actual (claro/oscuro)
-//   - Se puede imprimir directamente (sin iframe)
-//   - Se cierra como cualquier modal
-// ============================================================
 
 function abrirAyudaDetallada() {
     const LOG_PREFIX = '📖 [help]';
     console.log(`${LOG_PREFIX} abrirAyudaDetallada() llamado`);
     
     try {
-        // Cerrar popover si está abierto
         cerrarPopoverAyuda();
         
-        // Verificar que help-detailed.js esté cargado
         if (!window.HelpDetailedModule || typeof window.HelpDetailedModule.renderHelpDetailed !== 'function') {
             console.error(`${LOG_PREFIX} ❌ HelpDetailedModule no está cargado`);
             if (window.showToast) {
@@ -225,7 +231,6 @@ function abrirAyudaDetallada() {
             return;
         }
         
-        // Determinar la sección inicial según el módulo activo
         const activeNav = document.querySelector('.nav-item.active');
         let sectionId = 'intro';
         if (activeNav && activeNav.dataset && activeNav.dataset.section) {
@@ -243,8 +248,6 @@ function abrirAyudaDetallada() {
         }
         
         console.log(`${LOG_PREFIX} Abriendo ayuda en sección: ${sectionId}`);
-        
-        // Crear modal controlado
         abrirAyudaEnModalControlado(sectionId);
         
     } catch (e) {
@@ -255,18 +258,12 @@ function abrirAyudaDetallada() {
     }
 }
 
-/**
- * CORRECCIÓN #14: Abre la ayuda detallada en un modal controlado
- * (sin iframe). El contenido se monta desde help-detailed.js.
- */
 function abrirAyudaEnModalControlado(sectionIdInicial = 'intro') {
     const LOG_PREFIX = '📖 [help]';
     
-    // Eliminar modal previo si existe
     const existing = document.getElementById('ayuda-modal');
     if (existing) existing.remove();
     
-    // Crear overlay del modal
     const modal = document.createElement('div');
     modal.id = 'ayuda-modal';
     modal.style.cssText = `
@@ -288,7 +285,6 @@ function abrirAyudaEnModalControlado(sectionIdInicial = 'intro') {
         overscroll-behavior: contain;
     `;
     
-    // Inyectar estilos de animación si no existen
     if (!document.getElementById('ayuda-modal-styles')) {
         const style = document.createElement('style');
         style.id = 'ayuda-modal-styles';
@@ -338,16 +334,13 @@ function abrirAyudaEnModalControlado(sectionIdInicial = 'intro') {
     
     document.body.appendChild(modal);
     
-    // Mostrar botón de pestaña nueva solo en desktop
     if (!isMobileDevice()) {
         const standaloneBtn = document.getElementById('ayuda-standalone-btn');
         if (standaloneBtn) standaloneBtn.style.display = 'inline-flex';
     }
     
-    // Renderizar el contenido de la ayuda dentro del contenedor
     window.HelpDetailedModule.renderHelpDetailed('help-detailed-container');
     
-    // Bloquear app
     _bloquearAppMientrasAyuda();
     if (typeof window.lockBodyScroll === 'function') {
         window.lockBodyScroll();
@@ -357,14 +350,12 @@ function abrirAyudaEnModalControlado(sectionIdInicial = 'intro') {
         window._ayudaModalPrevOverflow = prevOverflow;
     }
     
-    // Navegar a la sección inicial (después de un pequeño delay para que se monte el DOM)
     setTimeout(() => {
         if (sectionIdInicial && typeof window.HelpDetailedModule.scrollToHelpSection === 'function') {
             window.HelpDetailedModule.scrollToHelpSection(sectionIdInicial);
         }
     }, 150);
     
-    // Cerrar al hacer clic fuera del contenedor
     modal.addEventListener('click', function(e) {
         if (e.target === modal) {
             e.stopPropagation();
@@ -378,7 +369,6 @@ function abrirAyudaEnModalControlado(sectionIdInicial = 'intro') {
     modal.addEventListener('pointerdown', function(e) { e.stopPropagation(); });
     modal.addEventListener('wheel', function(e) { e.stopPropagation(); }, { passive: true });
     
-    // Escape cierra el modal
     const escHandler = function(e) {
         if (e.key === 'Escape') {
             e.stopPropagation();
@@ -392,9 +382,6 @@ function abrirAyudaEnModalControlado(sectionIdInicial = 'intro') {
     console.log(`${LOG_PREFIX} ✅ Modal de ayuda abierto (sin iframe)`);
 }
 
-/**
- * CORRECCIÓN #14: Cierra el modal de ayuda (sin iframe).
- */
 function cerrarAyudaModal() {
     const LOG_PREFIX = '📖 [help]';
     const modal = document.getElementById('ayuda-modal');
@@ -402,12 +389,14 @@ function cerrarAyudaModal() {
     
     console.log(`${LOG_PREFIX} cerrarAyudaModal() llamado`);
     
+    // 🆕 CORRECCIÓN #3: Eliminar botones flotantes del modal de ayuda detallada
+    _eliminarBotonesFlotantesDeModal('detailed');
+    
     modal.style.animation = 'ayudaModalFadeOut 0.2s ease forwards';
     
     setTimeout(() => {
         if (modal.parentNode) modal.remove();
         
-        // Limpiar listener de Escape
         if (window._ayudaModalState) {
             if (window._ayudaModalState.escHandler) {
                 document.removeEventListener('keydown', window._ayudaModalState.escHandler);
@@ -415,10 +404,8 @@ function cerrarAyudaModal() {
             window._ayudaModalState = null;
         }
         
-        // Restaurar app
         _restaurarAppTrasAyuda();
         
-        // Desbloquear scroll
         if (typeof window.unlockBodyScroll === 'function') {
             window.unlockBodyScroll();
         } else if (window._ayudaModalPrevOverflow !== undefined) {
@@ -426,7 +413,6 @@ function cerrarAyudaModal() {
             delete window._ayudaModalPrevOverflow;
         }
         
-        // Limpiar estilos residuales
         if (typeof window.limpiarEstilosResiduales === 'function') {
             setTimeout(() => { window.limpiarEstilosResiduales(); }, 50);
         }
@@ -435,10 +421,6 @@ function cerrarAyudaModal() {
     }, 200);
 }
 
-/**
- * CORRECCIÓN #14: Imprime el contenido del modal de ayuda.
- * (Reemplaza a imprimirAyudaIframe())
- */
 function imprimirAyudaModal() {
     const LOG_PREFIX = '📖 [help]';
     console.log(`${LOG_PREFIX} imprimirAyudaModal() llamado`);
@@ -452,10 +434,8 @@ function imprimirAyudaModal() {
             return;
         }
         
-        // Clonar el contenido para no afectar el modal
         const contentClone = container.cloneNode(true);
         
-        // Crear ventana de impresión
         const printWindow = window.open('', '_blank', 'width=800,height=600');
         if (!printWindow) {
             if (window.showToast) {
@@ -464,7 +444,6 @@ function imprimirAyudaModal() {
             return;
         }
         
-        // Recopilar estilos: variables CSS de la app + estilos de la ayuda
         const rootStyles = getComputedStyle(document.documentElement);
         const cssVars = [
             '--bg', '--bg-card', '--bg-input', '--text', '--text-light', '--text-label',
@@ -495,7 +474,6 @@ function imprimirAyudaModal() {
                         font-size: 13px;
                         line-height: 1.5;
                     }
-                    /* Forzar fondo blanco para impresión */
                     .help-detailed-section, .help-card, .help-table-wrapper {
                         background: #fff !important;
                         border-color: #ddd !important;
@@ -504,6 +482,7 @@ function imprimirAyudaModal() {
                     .help-detailed-sidebar { display: none !important; }
                     .help-detailed-content { overflow: visible !important; }
                     .help-detailed-layout { display: block !important; }
+                    .help-float-buttons { display: none !important; }
                     .help-table th { background: #f5a623 !important; color: #fff !important; }
                     .help-table td { border-color: #ddd !important; }
                     h2 { color: #d4891b !important; }
@@ -526,7 +505,6 @@ function imprimirAyudaModal() {
         
         printWindow.document.close();
         
-        // Esperar a que se renderice y luego imprimir
         setTimeout(() => {
             try {
                 printWindow.focus();
@@ -546,13 +524,6 @@ function imprimirAyudaModal() {
     }
 }
 
-/**
- * CORRECCIÓN #14: Abre la ayuda en modo standalone (pestaña nueva).
- * Solo se usa en desktop, como alternativa al modal.
- * 
- * Carga la app con ?standalone=1, y app.js detecta este parámetro
- * y renderiza solo la ayuda a pantalla completa (sin la app).
- */
 function abrirAyudaStandalone() {
     const LOG_PREFIX = '📖 [help]';
     console.log(`${LOG_PREFIX} abrirAyudaStandalone() llamado`);
@@ -577,24 +548,16 @@ function abrirAyudaStandalone() {
     }
 }
 
-/**
- * CORRECCIÓN #14: Renderiza la ayuda en modo standalone.
- * Se llama desde app.js cuando detecta ?standalone=1 en la URL.
- * 
- * Reemplaza toda la pantalla con la ayuda, sin header, sin nav, sin app.
- */
 function renderAyudaStandalone() {
     const LOG_PREFIX = '📖 [help]';
     console.log(`${LOG_PREFIX} renderAyudaStandalone() llamado`);
     
     try {
-        // Ocultar pantallas principales
         const authScreen = document.getElementById('authScreen');
         const appScreen = document.getElementById('appScreen');
         if (authScreen) authScreen.style.display = 'none';
         if (appScreen) appScreen.style.display = 'none';
         
-        // Verificar que help-detailed.js esté cargado
         if (!window.HelpDetailedModule || typeof window.HelpDetailedModule.renderHelpDetailed !== 'function') {
             document.body.innerHTML = `
                 <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; text-align: center; font-family: system-ui, sans-serif;">
@@ -609,7 +572,6 @@ function renderAyudaStandalone() {
             return;
         }
         
-        // Crear contenedor de la ayuda standalone
         const container = document.createElement('div');
         container.id = 'ayuda-standalone-container';
         container.style.cssText = `
@@ -640,7 +602,6 @@ function renderAyudaStandalone() {
         
         document.body.appendChild(container);
         
-        // Renderizar el contenido de la ayuda
         window.HelpDetailedModule.renderHelpDetailed('help-detailed-container-standalone');
         
         console.log(`${LOG_PREFIX} ✅ Ayuda standalone renderizada`);
@@ -663,7 +624,6 @@ function mostrarPopoverAyuda(anchorElement = null) {
     }
     _helpPopoverAnchor = anchor;
     
-    // 🆕 CORRECCIÓN #15: Obtener FAQs desde window.FAQS_DB
     const faqs = obtenerFAQs();
     const faqCount = faqs.length > 0 ? faqs.length : 0;
     const faqLabel = faqCount > 0 ? `${faqCount} respuestas` : 'Cargando...';
@@ -1058,8 +1018,12 @@ async function startTour() {
         });
         if (!restart) return;
     }
+    
     isTourActive = true;
     currentStep = 0;
+    
+    console.log(`🎯 [help] Tutorial iniciado — ${TOUR_STEPS.length} pasos disponibles`);
+    
     createOverlay();
     showStep(currentStep);
 }
@@ -1081,10 +1045,34 @@ function createOverlay() {
 }
 
 function showStep(index) {
-    if (index >= TOUR_STEPS.length) { completeTour(); return; }
+    if (index < 0) {
+        console.warn('⚠️ [tour] showStep() llamado con index negativo, forzando 0');
+        index = 0;
+    }
+    
+    if (index >= TOUR_STEPS.length) {
+        completeTour();
+        return;
+    }
+    
     const step = TOUR_STEPS[index];
     const target = document.querySelector(step.target);
-    if (!target) { currentStep++; showStep(currentStep); return; }
+    
+    if (!target) {
+        console.warn(`⚠️ [tour] Paso ${index + 1}/${TOUR_STEPS.length} — target no encontrado: ${step.target}. Saltando...`);
+        const nextIndex = index + 1;
+        if (nextIndex >= TOUR_STEPS.length) {
+            console.warn('⚠️ [tour] No quedan más pasos. Completando tour.');
+            completeTour();
+        } else {
+            currentStep = nextIndex;
+            setTimeout(() => showStep(nextIndex), 0);
+        }
+        return;
+    }
+    
+    currentStep = index;
+    
     const rect = target.getBoundingClientRect();
     const padding = 12;
     tourHighlight.style.top = (rect.top - padding) + 'px';
@@ -1092,6 +1080,7 @@ function showStep(index) {
     tourHighlight.style.width = (rect.width + padding * 2) + 'px';
     tourHighlight.style.height = (rect.height + padding * 2) + 'px';
     tourHighlight.style.display = 'block';
+    
     let tooltipTop, tooltipLeft;
     const tooltipWidth = Math.min(340, window.innerWidth - 40);
     const tooltipHeight = 200;
@@ -1107,8 +1096,10 @@ function showStep(index) {
     if (tooltipTop < 20) tooltipTop = 20;
     if (tooltipLeft < 20) tooltipLeft = 20;
     if (tooltipLeft + tooltipWidth > window.innerWidth - 20) tooltipLeft = window.innerWidth - tooltipWidth - 20;
+    
     const isFirst = index === 0;
     const isLast = index === TOUR_STEPS.length - 1;
+    
     tourTooltip.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <span style="font-weight: 700; font-size: 16px; color: var(--primary);">${step.title}</span>
@@ -1128,11 +1119,18 @@ function showStep(index) {
 }
 
 function tourNext() {
-    if (currentStep < TOUR_STEPS.length - 1) { currentStep++; showStep(currentStep); }
-    else completeTour();
+    if (currentStep < TOUR_STEPS.length - 1) {
+        currentStep++;
+        showStep(currentStep);
+    } else {
+        completeTour();
+    }
 }
 function tourPrev() {
-    if (currentStep > 0) { currentStep--; showStep(currentStep); }
+    if (currentStep > 0) {
+        currentStep--;
+        showStep(currentStep);
+    }
 }
 async function tourSkip() {
     const confirmSkip = await window.ModalModule.showConfirm({
@@ -1177,15 +1175,19 @@ function showContextualHelp(section) {
 // ============================================================
 // GUÍA RÁPIDA DE INICIO
 // ============================================================
+// 🆕 CORRECCIÓN #3 (parte 2): Añadido id="quickstart-modal-container"
+// para poder inyectar los botones flotantes ⬆️⬇️.
+// ============================================================
 
 function showQuickStartGuide() {
     const existingModal = document.getElementById('quickstart-modal');
     if (existingModal) existingModal.remove();
+    
     const modal = document.createElement('div');
     modal.id = 'quickstart-modal';
     modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease;`;
     modal.innerHTML = `
-        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
+        <div id="quickstart-modal-container" style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color); position: relative;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                 <div style="display: flex; align-items: center; gap: 10px;"><span style="font-size: 28px;">🚀</span><h2 style="margin: 0; font-size: 18px; color: #8b5cf6;">Guía rápida de inicio</h2></div>
                 <button onclick="closeQuickStartGuide()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px;">✕</button>
@@ -1220,9 +1222,18 @@ function showQuickStartGuide() {
     `;
     document.body.appendChild(modal);
     if (typeof window.lockBodyScroll === 'function') window.lockBodyScroll();
+    
+    // 🆕 CORRECCIÓN #3 (parte 2): Crear botones flotantes tras un pequeño delay
+    setTimeout(() => {
+        _crearBotonesFlotantesEnModal('#quickstart-modal-container', 'quickstart');
+    }, 200);
+    
     window.closeQuickStartGuide = function() {
         const m = document.getElementById('quickstart-modal');
         if (m) {
+            // 🆕 CORRECCIÓN #3 (parte 2): Eliminar botones flotantes al cerrar
+            _eliminarBotonesFlotantesDeModal('quickstart');
+            
             m.style.animation = 'modalFadeOut 0.2s ease forwards';
             setTimeout(() => {
                 if (m.parentNode) m.remove();
@@ -1253,18 +1264,16 @@ function initHelpButton() {
 // ============================================================
 // MOSTRAR FAQ CON NUMERACIÓN Y BUSCADOR
 // ============================================================
-// 🆕 CORRECCIÓN #15: Las FAQs se cargan desde window.FAQS_DB
-// (js/faqs.js) en lugar de estar embebidas en este archivo.
+// 🆕 CORRECCIÓN #3 (parte 2): Añadido id="faq-modal-container"
+// para poder inyectar los botones flotantes ⬆️⬇️.
 // ============================================================
 
 function showFAQModal() {
     const LOG_PREFIX = '❓ [help]';
     console.log(`${LOG_PREFIX} showFAQModal() llamado`);
     
-    // 🆕 CORRECCIÓN #15: Obtener FAQs desde window.FAQS_DB
     const faqs = obtenerFAQs();
     
-    // Si no hay FAQs cargadas, mostrar error
     if (faqs.length === 0) {
         console.error(`${LOG_PREFIX} ❌ window.FAQS_DB no está cargado o está vacío`);
         
@@ -1286,7 +1295,6 @@ function showFAQModal() {
     
     const faqsNumeradas = faqs.map((f, i) => ({ ...f, num: i + 1 }));
     
-    // Construir HTML agrupado por categoría
     let faqHtml = '';
     let currentCat = '';
     faqsNumeradas.forEach(f => {
@@ -1313,7 +1321,7 @@ function showFAQModal() {
     modal.id = 'faq-modal';
     modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: ${HELP_MODAL_Z_INDEX}; padding: 20px; animation: modalFadeIn 0.25s ease;`;
     modal.innerHTML = `
-        <div style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
+        <div id="faq-modal-container" style="background: var(--bg-card); border-radius: var(--radius); padding: 24px; max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color); position: relative;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #3b82f6;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 28px;">❓</span>
@@ -1339,9 +1347,18 @@ function showFAQModal() {
     `;
     document.body.appendChild(modal);
     if (typeof window.lockBodyScroll === 'function') window.lockBodyScroll();
+    
+    // 🆕 CORRECCIÓN #3 (parte 2): Crear botones flotantes tras un pequeño delay
+    setTimeout(() => {
+        _crearBotonesFlotantesEnModal('#faq-modal-container', 'faq');
+    }, 200);
+    
     window.closeFAQModal = function() {
         const m = document.getElementById('faq-modal');
         if (m) {
+            // 🆕 CORRECCIÓN #3 (parte 2): Eliminar botones flotantes al cerrar
+            _eliminarBotonesFlotantesDeModal('faq');
+            
             m.style.animation = 'modalFadeOut 0.2s ease forwards';
             setTimeout(() => {
                 if (m.parentNode) m.remove();
@@ -1418,11 +1435,6 @@ function toggleFAQ(element) {
 // ============================================================
 // LISTENER DE MENSAJES (mantenido por compatibilidad v2.x)
 // ============================================================
-// 
-// NOTA: Desde v3.0.0 ya NO usamos iframe, pero mantenemos este
-// listener por si algún día se reabre el iframe o por si hay
-// algún componente externo que envíe postMessage.
-// ============================================================
 
 function initParentMessageListener() {
     window.addEventListener('message', function(event) {
@@ -1473,20 +1485,23 @@ document.addEventListener('DOMContentLoaded', function() {
     initParentMessageListener();
     initEscapeKey();
     
-    // 🆕 CORRECCIÓN #15: Verificar que FAQs estén cargadas
     const faqs = obtenerFAQs();
-    console.log('📦 Help Module cargado correctamente v3.0.1');
+    console.log('📦 Help Module cargado correctamente v3.0.3 (CORRECCIÓN #3 parte 2)');
     console.log(`   📚 FAQs disponibles: ${faqs.length}`);
     console.log(`   📂 Categorías: ${faqs.length > 0 ? [...new Set(faqs.map(f => f.cat))].length : 0}`);
+    console.log(`   🎯 Tour: ${TOUR_STEPS.length} pasos (incluye Perfil)`);
+    console.log(`   ⬆️⬇️ Botones flotantes: activos en FAQs y Guía Rápida`);
 });
 
 if (document.readyState !== 'loading') {
     initParentMessageListener();
     initEscapeKey();
     const faqs = obtenerFAQs();
-    console.log('📦 Help Module cargado correctamente v3.0.1 (inmediato)');
+    console.log('📦 Help Module cargado correctamente v3.0.3 (CORRECCIÓN #3 parte 2 — inmediato)');
     console.log(`   📚 FAQs disponibles: ${faqs.length}`);
     console.log(`   📂 Categorías: ${faqs.length > 0 ? [...new Set(faqs.map(f => f.cat))].length : 0}`);
+    console.log(`   🎯 Tour: ${TOUR_STEPS.length} pasos (incluye Perfil)`);
+    console.log(`   ⬆️⬇️ Botones flotantes: activos en FAQs y Guía Rápida`);
 }
 
 // ============================================================
@@ -1505,7 +1520,8 @@ window.HelpModule = {
     obtenerFAQs,
     DEV_AVATAR_PATH,
     _bloquearAppMientrasAyuda, _restaurarAppTrasAyuda,
-    initParentMessageListener, initEscapeKey
+    initParentMessageListener, initEscapeKey,
+    TOUR_STEPS
 };
 
 window.showHelpMenu = showHelpMenu;
@@ -1530,9 +1546,13 @@ window._bloquearAppMientrasAyuda = _bloquearAppMientrasAyuda;
 window._restaurarAppTrasAyuda = _restaurarAppTrasAyuda;
 window.closeHelpMenuFallback = window.closeHelpMenuFallback || (() => {});
 
-console.log('📦 Help Module v3.0.1 (CORRECCIÓN #15: FAQs cargadas desde js/faqs.js)');
+console.log('📦 Help Module v3.0.3 (CORRECCIÓN #3 parte 2: Botones flotantes en FAQs y Guía Rápida)');
 console.log('   ✅ FAQs externas — help.js ligero');
+console.log('   ✅ Tour de 9 pasos (incluye Perfil)');
+console.log('   ✅ showStep() sin saltos ni bucles');
+console.log('   ✅ startTour() siempre empieza por paso 1');
 console.log('   ✅ Sin iframe — el contenido se monta en un modal controlado');
+console.log('   ⬆️⬇️ Botones flotantes en FAQs y Guía Rápida');
 console.log('   ✅ Respeta el tema actual (claro/oscuro)');
 console.log('   ✅ Búsqueda en vivo y navegación suave');
 console.log('   ✅ Impresión directa del contenido');

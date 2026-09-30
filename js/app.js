@@ -1,30 +1,24 @@
 // ============================================================
 // 📦 APP CONTROLLER - Panario
-// v3.0.6 (280926): 🎯 FIX - QR del Dashboard respeta forzar_qr_admin
-//   - ✅ FIX CRÍTICO: renderDashboardBankQR() ahora usa
-//     getCuentaDefaultUsuario() en lugar de filtrar directamente
-//     por is_default, respetando la configuración forzar_qr_admin.
-//   - ✅ FIX SECUNDARIO: downloadDashboardQR() también usa
-//     getCuentaDefaultUsuario() para descargar el QR correcto.
-//   - ✅ Mantiene TODAS las correcciones anteriores:
+// v3.0.8 (300926): 🎯 CORRECCIÓN #6
+//   - ✅ CORREGIDO: renderDashboardView() — título más pegado al header
+//     * margin-bottom del contenedor: 16px → 8px
+//     * h2 con margin-top: 0 explícito
+//   - ✅ MANTENIDO: TODAS las correcciones anteriores:
+//     * v3.0.7: Punto #5 (deudas agrupadas por cliente)
+//     * v3.0.6: QR del Dashboard respeta forzar_qr_admin
 //     * v3.0.5: Fix CRÍTICO redeclaración dbReady
 //     * v3.0.4: Regresiones #8 y #9 (exportar gráfico + cerrar sesión)
 //     * v3.0.3: Regresión #5 (Ventas por empleado)
 //     * v3.0.2: Correcciones #2 y #3 (motivo SV + tarjeta días sin ventas)
 //     * v3.0.1: Fix MutationObserver (bucle infinito)
 //     * v3.0.0: Corrección #5 (Top bar reforzada) + ?standalone=1
-//     * Corrección #4: Alturas homogéneas de tarjetas
-//     * Corrección #19: Filtros al hacer clic en tarjetas
-//     * Debounce de db-saved (500ms)
-//     * Persistencia del modo del gráfico
-//     * Detección de ?refresh= tras importación
 // ============================================================
 
 let currentUser = null;
 
 // ============================================================
 // 🆕 v3.0.5: HELPER PARA VERIFICAR SI LA BD ESTÁ LISTA
-// (Reemplaza a la variable local `dbReady` que causaba redeclaración)
 // ============================================================
 
 function isDbReady() {
@@ -110,11 +104,11 @@ function forzarStickyHeader() {
         });
         
         if (!header._stickyForced) {
-            console.log('🔧 [v3.0.6] forzarStickyHeader() aplicado al header');
+            console.log('🔧 [v3.0.8] forzarStickyHeader() aplicado al header');
             header._stickyForced = true;
         }
     } catch (e) {
-        console.warn('⚠️ [v3.0.6] Error en forzarStickyHeader:', e);
+        console.warn('⚠️ [v3.0.8] Error en forzarStickyHeader:', e);
     }
 }
 
@@ -137,7 +131,7 @@ function _debouncedForzarSticky() {
 
 function startHeaderCleanupWatchers() {
     if (_headerCleanupWatchersStarted) {
-        console.log('🔄 [v3.0.6] Watchers de header ya estaban activos');
+        console.log('🔄 [v3.0.8] Watchers de header ya estaban activos');
         return;
     }
     
@@ -181,16 +175,16 @@ function startHeaderCleanupWatchers() {
         });
         
         _headerCleanupWatchersStarted = true;
-        console.log('🔄 [v3.0.6] Watchers de header activados');
+        console.log('🔄 [v3.0.8] Watchers de header activados');
         
     } catch (e) {
-        console.warn('⚠️ [v3.0.6] Error activando watchers de header:', e);
+        console.warn('⚠️ [v3.0.8] Error activando watchers de header:', e);
     }
 }
 
 function stopHeaderCleanupWatchers() {
     _headerCleanupWatchersStarted = false;
-    console.log('🛑 [v3.0.6] Watchers de header detenidos');
+    console.log('🛑 [v3.0.8] Watchers de header detenidos');
 }
 
 // ============================================================
@@ -247,7 +241,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.3.1';
+    return '2.3.7';
 }
 
 window.getAppVersion = getAppVersion;
@@ -432,7 +426,8 @@ function cerrarTodosLosModalesRespaldo() {
         'tour-overlay', 'tour-highlight', 'tour-tooltip',
         'waiting-manager-modal', 'global-cancel-modal',
         'help-popover', 'ayuda-modal', 'dias-sin-ventas-modal',
-        'dia-sin-venta-form-modal', 'reprogramar-modal'
+        'dia-sin-venta-form-modal', 'reprogramar-modal',
+        'debt-detail-modal'  // 🆕 v3.0.7 (Punto #5)
     ];
     
     let cerrados = 0;
@@ -440,10 +435,10 @@ function cerrarTodosLosModalesRespaldo() {
         const modal = document.getElementById(id);
         if (modal) {
             modal.style.animation = 'modalFadeOut 0.2s ease forwards';
-            setTimeout(() => { if (modal.parentNode) modal.remove(); }, 200);
+            setTimeout(() => { if (modal.parentNode) modal.parentNode.removeChild(modal); }, 200);
             setTimeout(() => {
                 const still = document.getElementById(id);
-                if (still && still.parentNode) still.remove();
+                if (still && still.parentNode) still.parentNode.removeChild(still);
             }, 400);
             cerrados++;
         }
@@ -520,14 +515,14 @@ async function initApp() {
         const standaloneParam = urlParams.get('standalone');
         
         if (standaloneParam === '1') {
-            console.log('📖 [v3.0.6] Modo standalone detectado → renderizando SOLO la ayuda');
+            console.log('📖 [v3.0.8] Modo standalone detectado → renderizando SOLO la ayuda');
             
             setTimeout(() => {
                 if (window.HelpModule && typeof window.HelpModule.renderAyudaStandalone === 'function') {
                     window.HelpModule.renderAyudaStandalone();
-                    console.log('✅ [v3.0.6] Ayuda standalone renderizada');
+                    console.log('✅ [v3.0.8] Ayuda standalone renderizada');
                 } else {
-                    console.error('❌ [v3.0.6] HelpModule.renderAyudaStandalone no disponible');
+                    console.error('❌ [v3.0.8] HelpModule.renderAyudaStandalone no disponible');
                     document.body.innerHTML = `
                         <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; text-align: center; font-family: system-ui, sans-serif;">
                             <div>
@@ -641,14 +636,7 @@ async function initApp() {
         setTimeout(adjustForSafeArea, 500);
 
         console.log(`✅ App inicializada correctamente (v${version})`);
-        console.log(`   🔧 [v3.0.6] FIX: QR del Dashboard respeta forzar_qr_admin`);
-        console.log(`   🔧 [v3.0.5] FIX CRÍTICO: redeclaración de dbReady resuelta`);
-        console.log(`   🔧 [v3.0.5] Corrección #5 aplicada: 8 watchers de header activados`);
-        console.log(`   📖 [v3.0.0] Corrección #14 aplicada: ?standalone=1 soportado`);
-        console.log(`   🐛 [v3.0.1] Fix: MutationObserver eliminado (bucle infinito resuelto)`);
-        console.log(`   📅 [v3.0.2] Correcciones #2 y #3 aplicadas: motivo SV en gráfico + tarjeta días sin ventas`);
-        console.log(`   👥 [v3.0.3] Regresión #5 corregida: Ventas por empleado`);
-        console.log(`   🚪 [v3.0.4] Regresiones #8 y #9 corregidas: exportar gráfico + cerrar sesión`);
+        console.log(`   🔧 [v3.0.8] CORRECCIÓN #6: Espacio superior/inferior ajustado`);
 
     } catch (error) {
         console.error('❌ Error inicializando app:', error);
@@ -1023,11 +1011,10 @@ async function handleLogout() {
     });
 
     if (confirm) {
-        const LOG_PREFIX = '🚪 [handleLogout v3.0.6]';
+        const LOG_PREFIX = '🚪 [handleLogout v3.0.8]';
         console.log(`${LOG_PREFIX} Cerrando sesión...`);
         
         try {
-            // 1. Guardar BD antes de cerrar
             try {
                 window.DBModule.saveDatabase();
                 console.log(`${LOG_PREFIX} ✅ BD guardada`);
@@ -1035,7 +1022,6 @@ async function handleLogout() {
                 console.warn(`${LOG_PREFIX} ⚠️ Error guardando BD:`, e.message);
             }
             
-            // 2. 🆕 v3.0.4: Limpiar recursos de notificaciones
             try {
                 if (window.NotificationsModule && 
                     typeof window.NotificationsModule.cleanupNotificationsResources === 'function') {
@@ -1048,7 +1034,6 @@ async function handleLogout() {
                 console.warn(`${LOG_PREFIX} ⚠️ Error limpiando notificaciones:`, e.message);
             }
             
-            // 3. Limpiar sessionStorage y localStorage
             try {
                 sessionStorage.removeItem('panario_user');
                 localStorage.removeItem('panario-theme');
@@ -1057,20 +1042,17 @@ async function handleLogout() {
                 console.warn(`${LOG_PREFIX} ⚠️ Error limpiando storage:`, e.message);
             }
             
-            // 4. Resetear estado local
             currentUser = null;
             document.title = 'Panario - Panadería Artesanal';
             
             console.log(`${LOG_PREFIX} ✅ Todo limpio, recargando página...`);
             
-            // 5. Recargar (con pequeño delay para que los logs se impriman)
             setTimeout(() => {
                 window.location.reload(true);
             }, 200);
             
         } catch (e) {
             console.error(`${LOG_PREFIX} ❌ Error durante logout:`, e);
-            // Fallback: recargar de todas formas
             setTimeout(() => {
                 window.location.reload(true);
             }, 100);
@@ -1179,14 +1161,13 @@ function showApp(user) {
     
     setTimeout(forzarStickyHeader, 100);
     
-    // 🆕 v3.0.4: Reinicializar notificaciones tras login
     try {
         if (window.NotificationsModule && 
             typeof window.NotificationsModule.reinitAfterLogin === 'function') {
             window.NotificationsModule.reinitAfterLogin();
         }
     } catch (e) {
-        console.warn('⚠️ [v3.0.6] Error en reinitAfterLogin:', e.message);
+        console.warn('⚠️ [v3.0.8] Error en reinitAfterLogin:', e.message);
     }
     
     document.dispatchEvent(new CustomEvent('panario:logged-in'));
@@ -1573,6 +1554,7 @@ function renderTarjetaPedidosHoy(stats) {
 
 // ============================================================
 // RENDER DASHBOARD VIEW
+// 🆕 v3.0.8 (Corrección #6): Título más pegado al header
 // ============================================================
 
 function renderDashboardView() {
@@ -1631,9 +1613,9 @@ function renderDashboardView() {
     const GRID_STYLE = 'display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; align-items: stretch;';
     
     main.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; margin-top: 0; flex-wrap: wrap; gap: 8px;">
             <div>
-                <h2 style="margin: 0;">📊 Panel de Control</h2>
+                <h2 style="margin: 0; margin-top: 0;">📊 Panel de Control</h2>
                 <div style="font-size: 13px; color: var(--primary); font-weight: 600; margin-top: 2px;">
                     🏢 ${nombreNegocio}
                 </div>
@@ -1960,19 +1942,18 @@ async function renderDashboardBankQR() {
     try {
         const user = window.AuthModule.getCurrentUser();
         if (!user) {
-            console.warn('⚠️ [renderDashboardBankQR v3.0.6] No hay usuario autenticado');
+            console.warn('⚠️ [renderDashboardBankQR v3.0.8] No hay usuario autenticado');
             return;
         }
         
-        // 🆕 v3.0.6: Usar getCuentaDefaultUsuario() que respeta forzar_qr_admin
         let defaultAccount = null;
         
         if (typeof window.DBModule.getCuentaDefaultUsuario === 'function') {
             defaultAccount = window.DBModule.getCuentaDefaultUsuario(user.id);
-            console.log(`🏦 [renderDashboardBankQR v3.0.6] getCuentaDefaultUsuario(${user.id}) →`,
+            console.log(`🏦 [renderDashboardBankQR v3.0.8] getCuentaDefaultUsuario(${user.id}) →`,
                 defaultAccount ? `${defaultAccount.bank} (id=${defaultAccount.id})` : 'null');
         } else {
-            console.warn('⚠️ [renderDashboardBankQR v3.0.6] getCuentaDefaultUsuario no disponible, usando fallback');
+            console.warn('⚠️ [renderDashboardBankQR v3.0.8] getCuentaDefaultUsuario no disponible, usando fallback');
             const accounts = window.DBModule.getBankAccountsParaUsuario();
             defaultAccount = accounts.find(acc => Number(acc.is_default) === 1);
             if (!defaultAccount && accounts.length > 0) {
@@ -2010,7 +1991,6 @@ async function renderDashboardBankQR() {
         
         const ownerName = defaultAccount.owner_name || defaultAccount.owner || '';
         
-        // 🆕 v3.0.6: Determinar si el QR mostrado es forzado por el admin
         const config = window.DBModule.getConfigBancaria();
         const esForzadoPorAdmin = config.forzar_qr_admin && !user.is_admin;
         const esCuentaDelAdmin = user.is_admin || (defaultAccount.user_id === user.id);
@@ -2075,7 +2055,6 @@ async function downloadDashboardQR(bank, accountNumber) {
             return;
         }
         
-        // 🆕 v3.0.6: Usar getCuentaDefaultUsuario() que respeta forzar_qr_admin
         let defaultAccount = null;
         
         if (typeof window.DBModule.getCuentaDefaultUsuario === 'function') {
@@ -2675,6 +2654,8 @@ async function loadDashboardData() {
 
         window._dailySalesData = stats.dailySales || [];
         window._diasSinVentasDetalle = stats.diasSinVentasDetalle || {};
+        // 🆕 v3.0.8: Guardar debtDetailsByClient para el modal
+        window._debtDetailsByClient = stats.debtDetailsByClient || [];
 
         const elements = {
             'stat-total-sales': stats.totalSales || 0,
@@ -2757,7 +2738,7 @@ async function loadDashboardData() {
         }
 
         if (dashConfig.show_debts !== false) {
-            renderDebtDetails(stats.debtDetails || []);
+            renderDebtDetails(stats.debtDetailsByClient || []);
             const debtTotalEl = document.getElementById('stat-debts-total');
             if (debtTotalEl) {
                 debtTotalEl.textContent = '$' + (stats.totalDebts || 0).toFixed(2);
@@ -2785,10 +2766,7 @@ async function loadDashboardData() {
         }
 
         console.log('✅ Dashboard actualizado correctamente (v' + getAppVersion() + ')');
-        console.log('   📅 Pedidos HOY:', stats.ordersTodayCount, '| MAÑANA:', stats.ordersTomorrowCount, '| Lista espera:', stats.waitingListCount);
-        console.log('   📅 Días con ventas:', stats.diasConVentas, '| Días sin ventas:', stats.diasSinVentas);
-        console.log('   📊 Modo del gráfico:', stats.chartMode, '| isCurrentRange:', stats.isCurrentRange);
-        console.log('   👥 Empleados con ventas:', stats.salesByEmployee?.length || 0);
+        console.log('   💰 [Punto #5] Deudas: ' + (stats.debtCount || 0) + ' ventas en ' + (stats.debtDetailsByClient?.length || 0) + ' cliente(s)');
 
     } catch (error) {
         console.error('❌ Error cargando dashboard:', error);
@@ -2797,12 +2775,192 @@ async function loadDashboardData() {
 }
 
 // ============================================================
+// 🆕 v3.0.7 (Punto #5): RENDER DEUDAS AGRUPADAS POR CLIENTE
+// ============================================================
+
+function renderDebtDetails(debtDetailsByClient) {
+    const container = document.getElementById('debt-details');
+    if (!container) return;
+
+    if (!debtDetailsByClient || debtDetailsByClient.length === 0) {
+        container.innerHTML = `<div style="text-align: center; padding: 10px 0; color: var(--text-light);">✅ No hay deudas pendientes</div>`;
+        return;
+    }
+
+    const headerHtml = `
+        <div style="display: grid; grid-template-columns: 2fr 1fr 1.2fr auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 2px solid var(--border-color); font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.3px;">
+            <span style="text-align: left;">👤 Cliente</span>
+            <span style="text-align: center;">📦 Compras</span>
+            <span style="text-align: right;">💰 Importe</span>
+            <span style="text-align: center; width: 30px;"></span>
+        </div>
+    `;
+
+    const rowsHtml = debtDetailsByClient.map((grupo, idx) => {
+        const nombreEscapado = String(grupo.client_name).replace(/'/g, "\\'");
+        
+        return `
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1.2fr auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: ${idx < debtDetailsByClient.length - 1 ? '1px solid var(--border-color)' : 'none'}; font-size: 13px;">
+                <span style="text-align: left; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${grupo.client_name}">
+                    ${grupo.client_name}
+                </span>
+                <span style="text-align: center; color: var(--text-light);">
+                    ${grupo.count} ${grupo.count === 1 ? 'compra' : 'compras'}
+                </span>
+                <span style="text-align: right; color: #ef4444; font-weight: 700;">
+                    $${grupo.total.toFixed(2)}
+                </span>
+                <button 
+                    onclick="showDebtDetailModal('${nombreEscapado}')" 
+                    class="btn secondary" 
+                    style="padding: 4px 8px; font-size: 11px; width: auto; white-space: nowrap;"
+                    title="Ver detalle de deudas de ${grupo.client_name}">
+                    👁️ Detalle
+                </button>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = headerHtml + rowsHtml;
+}
+
+// ============================================================
+// 🆕 v3.0.7 (Punto #5): MODAL CON DETALLE DE DEUDAS POR CLIENTE
+// ============================================================
+
+function showDebtDetailModal(clientName) {
+    const LOG_PREFIX = '💳 [showDebtDetailModal v3.0.8]';
+    console.log(`${LOG_PREFIX} Abriendo detalle de deudas para: ${clientName}`);
+    
+    try {
+        const grupos = window._debtDetailsByClient || [];
+        const grupo = grupos.find(g => g.client_name === clientName);
+        
+        if (!grupo) {
+            console.warn(`${LOG_PREFIX} ⚠️ No se encontró el grupo para: ${clientName}`);
+            window.showToast('⚠️ No se encontró el detalle de este cliente', 'warning', 3000);
+            return;
+        }
+        
+        const existing = document.getElementById('debt-detail-modal');
+        if (existing) existing.remove();
+        
+        const itemsHtml = grupo.items.map(item => {
+            const fechaFormateada = formatearFechaYYYYMMDD(item.delivery_date);
+            return `
+                <div style="display: grid; grid-template-columns: 2fr 1.2fr 1.2fr; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--border-color); font-size: 13px;">
+                    <span style="text-align: left; color: var(--text-light);">
+                        ${item.product_name || 'Producto'}
+                        ${item.quantity && item.quantity > 1 ? `<span style="font-size: 11px;">(x${item.quantity})</span>` : ''}
+                    </span>
+                    <span style="text-align: right; color: #ef4444; font-weight: 600;">
+                        $${parseFloat(item.remaining || item.total || 0).toFixed(2)}
+                    </span>
+                    <span style="text-align: right; font-size: 11px; color: var(--text-light);">
+                        📅 ${fechaFormateada}
+                    </span>
+                </div>
+            `;
+        }).join('');
+        
+        const modal = document.createElement('div');
+        modal.id = 'debt-detail-modal';
+        modal.style.cssText = `
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(6px);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 999999; padding: 20px;
+            animation: modalFadeIn 0.25s ease;
+        `;
+        
+        modal.innerHTML = `
+            <div style="background: var(--bg-card); border-radius: var(--radius); padding: 20px 24px; max-width: 520px; width: 100%; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: modalSlideUp 0.3s ease; border: 1px solid var(--border-color);">
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #ef4444;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 24px;">💳</span>
+                        <div>
+                            <h2 style="margin: 0; font-size: 16px; color: #ef4444;">Detalle de deudas</h2>
+                            <div style="font-size: 13px; color: var(--text); margin-top: 2px; font-weight: 600;">
+                                👤 ${grupo.client_name}
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="closeDebtDetailModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-light); padding: 0 4px; line-height: 1;">✕</button>
+                </div>
+                
+                <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                    <div style="flex: 1; background: #ef444415; border-left: 3px solid #ef4444; padding: 8px 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 20px; font-weight: 700; color: #ef4444;">${grupo.count}</div>
+                        <div style="font-size: 11px; color: var(--text-light);">Compra${grupo.count !== 1 ? 's' : ''}</div>
+                    </div>
+                    <div style="flex: 1; background: #ef444415; border-left: 3px solid #ef4444; padding: 8px 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 20px; font-weight: 700; color: #ef4444;">$${grupo.total.toFixed(2)}</div>
+                        <div style="font-size: 11px; color: var(--text-light);">Total adeudado</div>
+                    </div>
+                </div>
+                
+                <div style="flex: 1; overflow-y: auto; max-height: 400px; padding-right: 4px;">
+                    <div style="display: grid; grid-template-columns: 2fr 1.2fr 1.2fr; gap: 8px; align-items: center; padding: 6px 10px; border-bottom: 2px solid var(--border-color); font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.3px;">
+                        <span style="text-align: left;">📦 Producto</span>
+                        <span style="text-align: right;">💰 Importe</span>
+                        <span style="text-align: right;">📅 Fecha</span>
+                    </div>
+                    ${itemsHtml}
+                </div>
+                
+                <div style="display: flex; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color); flex-wrap: wrap;">
+                    <button onclick="window.navigate('sales')" class="btn primary" style="flex: 1; padding: 8px 16px; font-size: 13px; background: #10b981; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        💰 Ir a cobrar
+                    </button>
+                    <button onclick="closeDebtDetailModal()" class="btn secondary" style="flex: 1; padding: 8px 16px; font-size: 13px;">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        window.closeDebtDetailModal = function() {
+            const m = document.getElementById('debt-detail-modal');
+            if (m) {
+                m.style.animation = 'modalFadeOut 0.2s ease forwards';
+                setTimeout(() => { if (m.parentNode) m.remove(); }, 200);
+            }
+        };
+        
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeDebtDetailModal();
+            }
+        });
+        
+        const escHandler = function(e) {
+            if (e.key === 'Escape') {
+                closeDebtDetailModal();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+        
+        console.log(`${LOG_PREFIX} ✅ Modal abierto (${grupo.count} deudas, total $${grupo.total.toFixed(2)})`);
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        window.showToast('❌ Error abriendo detalle: ' + e.message, 'error', 4000);
+    }
+}
+
+window.showDebtDetailModal = showDebtDetailModal;
+
+// ============================================================
 // RENDER VENTAS POR EMPLEADO
 // 🆕 REGRESIÓN #5: Logging + fallbacks + tolerancia a formatos
 // ============================================================
 
 function renderSalesByEmployee(salesByEmployee) {
-    const LOG_PREFIX = '👥 [renderSalesByEmployee v3.0.6]';
+    const LOG_PREFIX = '👥 [renderSalesByEmployee v3.0.8]';
     
     const container = document.getElementById('sales-by-employee');
     if (!container) {
@@ -2898,28 +3056,6 @@ function renderTopClients(topClients) {
             <span style="font-size: 14px; font-weight: 600; text-align: left;">${client.buyer || 'Cliente'}</span>
             <span style="font-size: 13px; color: var(--text-light); text-align: right;">🛒 ${client.sales_count} compras</span>
             <span style="font-size: 15px; font-weight: 700; color: var(--primary); text-align: right; min-width: 80px;">$${client.total_spent.toFixed(2)}</span>
-        </div>
-    `).join('');
-}
-
-// ============================================================
-// RENDER DEUDAS DETALLADAS
-// ============================================================
-
-function renderDebtDetails(debtDetails) {
-    const container = document.getElementById('debt-details');
-    if (!container) return;
-
-    if (!debtDetails || debtDetails.length === 0) {
-        container.innerHTML = `<div style="text-align: center; padding: 10px 0; color: var(--text-light);">✅ No hay deudas pendientes</div>`;
-        return;
-    }
-
-    container.innerHTML = debtDetails.map(d => `
-        <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border-color); font-size: 13px;">
-            <span style="text-align: left;">👤 ${d.client_name}</span>
-            <span style="text-align: right; color: #ef4444; font-weight: 600; min-width: 70px;">$${d.remaining.toFixed(2)}</span>
-            <span style="text-align: right; font-size: 11px; color: var(--text-light); min-width: 80px;">📅 ${formatearFechaYYYYMMDD(d.delivery_date)}</span>
         </div>
     `).join('');
 }
@@ -3096,7 +3232,7 @@ ${nombreNegocio}
 // ============================================================
 
 function exportChartAsImage() {
-    const LOG_PREFIX = '🖼️ [exportChartAsImage v3.0.6]';
+    const LOG_PREFIX = '🖼️ [exportChartAsImage v3.0.8]';
     console.log(`${LOG_PREFIX} Iniciando exportación de gráfico como imagen...`);
     
     const container = document.getElementById('daily-sales-chart');
@@ -3107,7 +3243,6 @@ function exportChartAsImage() {
     }
     
     try {
-        // 1. Intentar canvas (gráfico pastel)
         const canvas = container.querySelector('canvas');
         if (canvas) {
             console.log(`${LOG_PREFIX} ✅ Canvas encontrado (gráfico pastel)`);
@@ -3117,7 +3252,6 @@ function exportChartAsImage() {
         }
         console.log(`${LOG_PREFIX} ℹ️ No hay canvas, buscando SVG...`);
         
-        // 2. Intentar SVG (gráfico línea)
         const svg = container.querySelector('svg');
         if (svg) {
             console.log(`${LOG_PREFIX} ✅ SVG encontrado (gráfico línea)`);
@@ -3157,7 +3291,6 @@ function exportChartAsImage() {
         }
         console.log(`${LOG_PREFIX} ℹ️ No hay SVG, usando fallback HTML/CSS (gráfico barras)`);
         
-        // 3. Fallback: gráfico de barras (HTML/CSS puro)
         const dailySales = window._dailySalesData || [];
         if (dailySales.length === 0) {
             console.warn(`${LOG_PREFIX} ⚠️ No hay datos en window._dailySalesData`);
@@ -3264,7 +3397,7 @@ function downloadImage(dataUrl, filename) {
 }
 
 function exportChartAsPDF() {
-    const LOG_PREFIX = '📄 [exportChartAsPDF v3.0.6]';
+    const LOG_PREFIX = '📄 [exportChartAsPDF v3.0.8]';
     console.log(`${LOG_PREFIX} Iniciando exportación de gráfico como PDF...`);
     
     const container = document.getElementById('daily-sales-chart');
@@ -3585,15 +3718,16 @@ window.formatearFechaInteligente = formatearFechaInteligente;
 window.renderSalesByEmployee = renderSalesByEmployee;
 window.openDetailedHelp = openDetailedHelp;
 window.getAppVersion = getAppVersion;
+window.renderDebtDetails = renderDebtDetails;
+window.showDebtDetailModal = showDebtDetailModal;
 
-// 🆕 v3.0.6: Exportar funciones nuevas
 window.isDbReady = isDbReady;
 window.forzarStickyHeader = forzarStickyHeader;
 window.startHeaderCleanupWatchers = startHeaderCleanupWatchers;
 window.stopHeaderCleanupWatchers = stopHeaderCleanupWatchers;
 window.getMotivoSinVentas = getMotivoSinVentas;
 
-console.log('📦 App Controller v' + getAppVersion() + ' (v3.0.6: QR Dashboard respeta forzar_qr_admin)');
+console.log('📦 App Controller v' + getAppVersion() + ' (v3.0.8: Corrección #6 - Espacio superior/inferior ajustado)');
 
 // ============================================================
 // INICIALIZACIÓN AUTOMÁTICA

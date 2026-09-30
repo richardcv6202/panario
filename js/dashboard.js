@@ -1,23 +1,18 @@
 // ============================================================
 // 📦 DASHBOARD MODULE - Panario (Panel de Control)
-// v2.2.3 (260926): 🎯 CORRECCIONES #2 y #3 (240926)
-//   - ✅ NUEVO: diasSinVentas → total de días registrados sin ventas.
-//   - ✅ NUEVO: diasSinVentasDetalle → mapa { fecha: { motivo, nota } }
-//   - ✅ Se consulta la tabla dias_sin_ventas.
-// v2.2.4 (260926): 🎯 REGRESIÓN #5 (260926) - VENTAS POR EMPLEADO
-//   - ✅ FIX CRÍTICO en la query de salesByEmployee:
-//     * Antes filtraba por s.created_by IS NOT NULL, lo que excluía
-//       TODAS las ventas antiguas (created_by es columna nueva).
-//     * Ahora usa COALESCE(s.created_by, s.user_id) para que siempre
-//       haya un vendedor asignado (fallback al user_id original).
-//     * LEFT JOIN a users para no perder ventas si el usuario fue
-//       eliminado (muestra "Usuario desconocido" en ese caso).
-//     * GROUP BY con COALESCE para agrupar correctamente.
-//   - ✅ Añadido logging detallado del resultado de la query.
-//   - ✅ Se mantienen TODAS las funcionalidades anteriores:
-//     * Conteo unificado de pedidos (CORRECCIÓN #2 230926)
-//     * Ventas liberadas, mejor/peor día, ventas por empleado
-//     * 3 modos de gráfico: 'last7' | 'dom-sab' | 'lun-dom'
+// v2.2.5 (290926): 🎯 Correcciones GitHub 290926 (Punto #5 - Parte 1/2)
+//   - ✅ NUEVO: debtDetailsByClient → agrupación de deudas por cliente
+//     * Campo: { client_name, total, count, items: [...] }
+//     * items contiene las deudas individuales (id, total, remaining, delivery_date, product_name, quantity)
+//   - ✅ MANTENIDO: debtDetails intacto (vista plana, compatibilidad)
+//   - ✅ MANTENIDO: salesByEmployee (COALESCE created_by/user_id)
+//   - ✅ MANTENIDO: diasSinVentas + diasSinVentasDetalle
+//   - ✅ MANTENIDO: releasedSales, bestWorstDay, topClients, topProducts
+//   - ✅ MANTENIDO: 3 modos de gráfico (last7 | dom-sab | lun-dom)
+//
+// HISTORIAL:
+// v2.2.4 (260926): REGRESIÓN #5 — Ventas por empleado (COALESCE)
+// v2.2.3 (260926): CORRECCIONES #2 y #3 — Días sin ventas
 // ============================================================
 
 window.DashboardModule = {};
@@ -101,7 +96,7 @@ function calcularRangoGrafico(weekOffset, chartMode) {
 
 // ============================================================
 // 📊 ESTADÍSTICAS DEL DASHBOARD
-// 🆕 CORRECCIONES #2 y #3 + REGRESIÓN #5
+// 🆕 v2.2.5: + debtDetailsByClient (agrupación por cliente)
 // ============================================================
 
 async function getDashboardStats(options = {}) {
@@ -320,10 +315,12 @@ async function getDashboardStats(options = {}) {
 
         // ============================================================
         // DEUDAS
+        // 🆕 v2.2.5: + debtDetailsByClient (agrupación por cliente)
         // ============================================================
         let totalDebts = 0;
         let debtCount = 0;
         let debtDetails = [];
+        let debtDetailsByClient = [];  // 🆕 v2.2.5
         try {
             const debtSales = window.DBModule.query(`
                 SELECT id, product_name, total, buyer, sale_date, payment_method, quantity, is_debt, paid
@@ -332,6 +329,7 @@ async function getDashboardStats(options = {}) {
                 ORDER BY sale_date ASC, id ASC
             `, [negocioId]);
             
+            // Vista plana (compatibilidad, ya existía)
             debtDetails = debtSales.map(s => ({
                 id: s.id,
                 client_name: s.buyer || 'Cliente sin nombre',
@@ -346,6 +344,37 @@ async function getDashboardStats(options = {}) {
             
             totalDebts = debtDetails.reduce((sum, d) => sum + d.remaining, 0);
             debtCount = debtDetails.length;
+            
+            // 🆕 v2.2.5: Vista agrupada por cliente
+            const gruposPorCliente = {};
+            for (const d of debtDetails) {
+                const nombre = d.client_name;
+                if (!gruposPorCliente[nombre]) {
+                    gruposPorCliente[nombre] = {
+                        client_name: nombre,
+                        total: 0,
+                        count: 0,
+                        items: []
+                    };
+                }
+                gruposPorCliente[nombre].total += d.remaining;
+                gruposPorCliente[nombre].count += 1;
+                gruposPorCliente[nombre].items.push({
+                    id: d.id,
+                    total: d.total,
+                    remaining: d.remaining,
+                    delivery_date: d.delivery_date,
+                    product_name: d.product_name,
+                    quantity: d.quantity,
+                    payment_method: d.payment_method
+                });
+            }
+            
+            // Convertir a array y ordenar por total descendente
+            debtDetailsByClient = Object.values(gruposPorCliente)
+                .sort((a, b) => b.total - a.total);
+            
+            console.log(`💰 [Punto #5] Deudas: ${debtCount} ventas en ${debtDetailsByClient.length} cliente(s)`);
         } catch (e) {
             console.warn('⚠️ Error obteniendo deudas:', e);
         }
@@ -615,22 +644,12 @@ async function getDashboardStats(options = {}) {
         }
 
         // ============================================================
-        // 🆕 v2.2.4: VENTAS POR EMPLEADO (REGRESIÓN #5 CORREGIDA)
-        // ============================================================
-        // 
-        // ANTES: Filtraba por s.created_by IS NOT NULL, lo que excluía
-        //        TODAS las ventas antiguas (created_by es columna nueva).
-        // 
-        // AHORA: 
-        //   - COALESCE(s.created_by, s.user_id) → siempre hay un vendedor.
-        //   - LEFT JOIN a users → no perder ventas si el usuario fue eliminado.
-        //   - GROUP BY con el COALESCE.
+        // VENTAS POR EMPLEADO (REGRESIÓN #5 CORREGIDA)
         // ============================================================
         let salesByEmployee = [];
         try {
             console.log('🔍 [REGRESIÓN #5] Consultando ventas por empleado...');
             
-            // Query principal con COALESCE y LEFT JOIN
             const ventasPorUsuario = window.DBModule.query(`
                 SELECT 
                     COALESCE(s.created_by, s.user_id) as vendedor_id,
@@ -665,7 +684,6 @@ async function getDashboardStats(options = {}) {
             console.log(`✅ [REGRESIÓN #5] ${salesByEmployee.length} empleado(s) con ventas:`, 
                 salesByEmployee.map(e => `${e.name}: ${e.count} ventas ($${e.total.toFixed(2)})`));
             
-            // Si no hay empleados con ventas, intentar una query de diagnóstico
             if (salesByEmployee.length === 0) {
                 console.warn('⚠️ [REGRESIÓN #5] No se encontraron ventas por empleado. Ejecutando diagnóstico...');
                 
@@ -682,12 +700,9 @@ async function getDashboardStats(options = {}) {
                 
                 console.log('🔍 [REGRESIÓN #5] Diagnóstico:', diagnostico[0]);
                 
-                // Fallback: si hay ventas pero ninguna tiene vendedor reconocible
                 if (diagnostico[0]?.total_ventas > 0) {
                     console.warn('⚠️ [REGRESIÓN #5] Hay ventas pero no se pudo asociar un vendedor');
-                    console.warn('   → Puede que created_by y user_id sean ambos NULL (datos antiguos)');
                     
-                    // Intentar agrupar solo por created_by sin COALESCE
                     const fallback = window.DBModule.query(`
                         SELECT 
                             s.user_id as vendedor_id,
@@ -721,7 +736,6 @@ async function getDashboardStats(options = {}) {
         } catch (e) {
             console.error('❌ [REGRESIÓN #5] Error obteniendo ventas por empleado:', e);
             
-            // Fallback de emergencia
             try {
                 const fallback = window.DBModule.query(`
                     SELECT 
@@ -763,12 +777,12 @@ async function getDashboardStats(options = {}) {
             ordersTomorrowCount,
             waitingListCount,
             totalDebts, debtCount, debtDetails,
+            // 🆕 v2.2.5: Agrupación de deudas por cliente
+            debtDetailsByClient,
             topProducts, topClients, clientesDiferentes,
             diasConVentas, promedioVentasDiarias, primerDiaVenta,
-            // 🆕 CORRECCIONES #2 y #3
             diasSinVentas,
             diasSinVentasDetalle,
-            // Fin correcciones
             dailySales, paymentMethods,
             totalExpenses, initialInvestment, totalRecipes,
             netProfit: totalRevenue - totalExpenses,
@@ -809,12 +823,10 @@ window.DashboardModule = {
     calcularRangoGrafico
 };
 
-console.log('📦 Dashboard Module cargado correctamente v2.2.4');
-console.log('   🎯 CORRECCIONES #2 y #3 (240926) aplicadas:');
-console.log('      ✅ diasSinVentas → total de días sin ventas');
-console.log('      ✅ diasSinVentasDetalle → mapa { fecha: { motivo, nota } }');
-console.log('   🎯 REGRESIÓN #5 (260926) CORREGIDA:');
-console.log('      ✅ Query de salesByEmployee con COALESCE(created_by, user_id)');
-console.log('      ✅ LEFT JOIN a users para no perder ventas huérfanas');
-console.log('      ✅ Fallback de emergencia si la query principal falla');
-console.log('      ✅ Logs detallados para diagnóstico');
+console.log('📦 Dashboard Module cargado correctamente v2.2.5');
+console.log('   🎯 PUNTO #5 (290926) - Parte 1/2:');
+console.log('      ✅ debtDetailsByClient → agrupación de deudas por cliente');
+console.log('      ✅ Estructura: { client_name, total, count, items: [...] }');
+console.log('   🔄 Correcciones anteriores mantenidas:');
+console.log('      • v2.2.4: REGRESIÓN #5 — Ventas por empleado (COALESCE)');
+console.log('      • v2.2.3: CORRECCIONES #2 y #3 — Días sin ventas');

@@ -6,9 +6,9 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     
     <!-- ============================================================
-         🆕 v2.3.7: METADATOS DE LA APP
+         🆕 v2.3.9: METADATOS DE LA APP
          ============================================================ -->
-    <meta name="app-version" content="2.3.7">
+    <meta name="app-version" content="2.3.9">
     <meta name="description" content="Panario - Sistema de gestión para panadería artesanal. Offline-first, multiusuario.">
     <meta name="author" content="Ricardo Castillo Valdés">
     <meta name="theme-color" content="#f5a623">
@@ -151,7 +151,7 @@
                 </form>
                 
                 <div class="auth-footer">
-                    © 2026 Ricardo Castillo Valdés · v2.3.7
+                    © 2026 Ricardo Castillo Valdés · v2.3.9
                 </div>
             </div>
         </div>
@@ -165,16 +165,20 @@
         <header>
             <h1>🍞 Panario</h1>
             <span id="userDisplay" onclick="toggleUserMenu()">👤 Usuario</span>
-            <button class="icon-btn" onclick="showNotificationsModal()" title="Notificaciones" 
+            <!-- 🆕 v2.3.9 (#2): Añadido id="notification-bell" para que notifications.js lo encuentre -->
+            <button class="icon-btn" id="notification-bell" onclick="showNotificationsModal()" title="Notificaciones" 
                     style="position: relative;">
                 🔔
-                <span id="notificationBadge" 
+                <!-- 🆕 v2.3.9 (#2): Cambiado id="notificationBadge" a id="bell-badge" (kebab-case, coincide con notifications.js) -->
+                <span id="bell-badge" 
                       style="display: none; position: absolute; top: -2px; right: -2px; 
                              background: var(--danger); color: #fff; font-size: 10px; 
                              font-weight: 700; padding: 1px 5px; border-radius: 10px; 
                              min-width: 16px; text-align: center;">0</span>
             </button>
             <button class="icon-btn" onclick="showHelpMenu()" title="Ayuda">❓</button>
+            <!-- 🆕 v2.3.8 (#1): Botón de Cerrar Sesión en el header -->
+            <button class="icon-btn" onclick="handleLogout()" title="Cerrar sesión" id="header-logout-btn">🚪</button>
         </header>
         
         <!-- MENÚ DE USUARIO -->
@@ -224,6 +228,8 @@
             <button class="nav-item" data-section="productos" title="Productos">🏷️</button>
             <button class="nav-item" data-section="sales" title="Ventas">💰</button>
             <button class="nav-item" data-section="settings" title="Herramientas">⚙️</button>
+            <!-- 🆕 v2.3.8 (#4): Botón de Perfil en el bottom-nav -->
+            <button class="nav-item" data-section="profile" title="Mi Perfil">👤</button>
         </nav>
     </div>
 
@@ -271,7 +277,7 @@
          ============================================================ -->
     <script>
         (function() {
-            const SW_VERSION = '2.3.7';
+            const SW_VERSION = '2.3.9';
             
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
@@ -392,7 +398,9 @@
             console.log(`   🔧 viewport-fit=cover (safe areas respetadas)`);
             console.log(`   📚 FAQs externas: js/faqs.js`);
             console.log(`   📖 Help modules: help.js + help-detailed.js`);
-            console.log(`   🗑️ Archivo obsoleto eliminado: ayuda-panario.html`);
+            console.log(`   🚪 Botón cerrar sesión en header (extremo derecho)`);
+            console.log(`   👤 Botón Mi Perfil en bottom-nav (extremo derecho)`);
+            console.log(`   🔔 IDs corregidos: notification-bell + bell-badge (#2)`);
         })();
     </script>
     

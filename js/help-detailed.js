@@ -1,38 +1,30 @@
 // ============================================================
 // 📦 HELP DETAILED MODULE - Panario
+// v1.2.0 (300926): 🎯 CORRECCIÓN #3
+//   - ✅ NUEVO: Botones flotantes ⬆️⬇️ para scroll rápido
+//   - ✅ NUEVO: _crearBotonesFlotantesAyuda() — genérico
+//   - ✅ NUEVO: scrollToTopAyuda() / scrollToBottomAyuda()
+//   - ✅ NUEVO: Auto-ocultar botones si no hay scroll suficiente
+//   - ✅ NUEVO: Estilos .help-float-buttons y .help-float-btn
+//   - ✅ MANTENIDO: Todo lo de v1.1.0 (FAQs dinámicas, 15 secciones, etc.)
+//
+// HISTORIAL:
 // v1.1.0 (290926): 🎯 CORRECCIÓN #15 (290926)
 //   - ✅ NUEVO: Sección "❓ Preguntas Frecuentes" al final
 //   - ✅ NUEVO: renderFAQsEnAyudaDetallada() — lee window.FAQS_DB
 //   - ✅ NUEVO: Buscador y acordeón dentro de la sección de FAQs
-//   - ✅ MANTENIDO: Todo el contenido original de las 14 secciones
-//   - ✅ MANTENIDO: Estilos integrados con variables CSS de la app
-//   - ✅ MANTENIDO: Navegación lateral con scroll suave
-//   - ✅ MANTENIDO: Búsqueda en vivo del contenido del manual
-//   - ✅ MANTENIDO: Compatible con desktop y móvil
 //
-// HISTORIAL:
 // v1.0.0 (250926): CORRECCIÓN #14 (240926)
 //   - ✅ Convierte ayuda-panario.html en módulo JS integrado
 //   - ✅ Elimina el uso de iframe
 //   - ✅ Comparte estilos y variables CSS de la app
 //   - ✅ Respeta el tema actual (claro/oscuro)
-//   - ✅ Búsqueda en vivo y filtro por categorías
-//   - ✅ Índice lateral con navegación suave
-//   - ✅ Botón "Volver a Panario" que cierra el modal
-//   - ✅ Compatible con desktop y móvil
 // ============================================================
 
 window.HelpDetailedModule = {};
 
 // ============================================================
 // CONTENIDO DE LA AYUDA (ESTRUCTURA DE DATOS)
-// ============================================================
-// Cada sección tiene:
-//   - id: identificador único para el ancla
-//   - icon: emoji representativo
-//   - title: título de la sección
-//   - html: contenido HTML de la sección
-//   - dynamic: (opcional) si true, el contenido se genera en runtime
 // ============================================================
 
 const HELP_SECTIONS = [
@@ -849,7 +841,6 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             </div>
         `
     },
-    // 🆕 CORRECCIÓN #15: Sección dinámica de FAQs
     {
         id: 'faqs',
         icon: '❓',
@@ -952,6 +943,7 @@ function inyectarEstilosAyuda() {
             overflow-y: auto;
             padding-right: 8px;
             min-width: 0;
+            position: relative; /* ✅ CORRECCIÓN #3: necesario para los botones flotantes */
         }
         
         .help-detailed-section {
@@ -1211,6 +1203,56 @@ function inyectarEstilosAyuda() {
             color: var(--text-light);
         }
         
+        /* ============================================================
+           🆕 CORRECCIÓN #3: BOTONES FLOTANTES ⬆️⬇️
+           ============================================================ */
+        
+        .help-float-buttons {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 10;
+            pointer-events: none;
+        }
+        
+        .help-float-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: all 0.2s ease;
+            pointer-events: auto;
+            font-family: inherit;
+            line-height: 1;
+            padding: 0;
+        }
+        
+        .help-float-btn:hover {
+            background: var(--primary-dark);
+            transform: scale(1.08);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+        }
+        
+        .help-float-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .help-float-btn.hidden {
+            display: none !important;
+        }
+        
         /* Móvil */
         @media (max-width: 768px) {
             .help-detailed-layout {
@@ -1243,6 +1285,18 @@ function inyectarEstilosAyuda() {
                 font-size: 12px;
                 min-width: 350px;
             }
+            
+            .help-float-buttons {
+                bottom: 14px;
+                right: 14px;
+                gap: 6px;
+            }
+            
+            .help-float-btn {
+                width: 38px;
+                height: 38px;
+                font-size: 16px;
+            }
         }
     `;
     
@@ -1251,9 +1305,6 @@ function inyectarEstilosAyuda() {
 
 // ============================================================
 // 🆕 CORRECCIÓN #15: RENDERIZAR FAQs DENTRO DE LA AYUDA DETALLADA
-// ============================================================
-// Genera el HTML de la sección "❓ Preguntas Frecuentes" a partir
-// de window.FAQS_DB (cargado desde js/faqs.js).
 // ============================================================
 
 function renderFAQsEnAyudaDetallada() {
@@ -1267,7 +1318,6 @@ function renderFAQsEnAyudaDetallada() {
             return;
         }
         
-        // Obtener FAQs desde window.FAQS_DB
         const faqs = window.FAQS_DB;
         
         if (!faqs || !Array.isArray(faqs) || faqs.length === 0) {
@@ -1282,10 +1332,8 @@ function renderFAQsEnAyudaDetallada() {
             return;
         }
         
-        // Renumerar secuencialmente
         const faqsNumeradas = faqs.map((f, i) => ({ ...f, num: i + 1 }));
         
-        // Construir HTML agrupado por categoría
         let faqHtml = '';
         let currentCat = '';
         
@@ -1294,7 +1342,6 @@ function renderFAQsEnAyudaDetallada() {
                 currentCat = f.cat;
                 faqHtml += `<div class="help-faqs-category" data-category="${currentCat}">${currentCat}</div>`;
             }
-            // Escapar comillas para los data attributes
             const qEscaped = String(f.q).replace(/"/g, '&quot;');
             const aEscaped = String(f.a).replace(/"/g, '&quot;');
             faqHtml += `
@@ -1340,9 +1387,6 @@ function renderFAQsEnAyudaDetallada() {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #15: Expande/colapsa una FAQ en la ayuda detallada.
- */
 function toggleFAQEnAyudaDetallada(element) {
     try {
         const answer = element.querySelector('.help-faqs-item-answer');
@@ -1361,9 +1405,6 @@ function toggleFAQEnAyudaDetallada(element) {
     }
 }
 
-/**
- * 🆕 CORRECCIÓN #15: Filtra las FAQs dentro de la ayuda detallada.
- */
 function filtrarFAQsEnAyudaDetallada(query) {
     const q = String(query || '').trim().toLowerCase();
     const items = document.querySelectorAll('#help-faqs-list .help-faqs-item');
@@ -1391,7 +1432,6 @@ function filtrarFAQsEnAyudaDetallada(query) {
         if (matches) {
             item.style.display = '';
             visibleCount++;
-            // Marcar la categoría padre como visible
             let prev = item.previousElementSibling;
             while (prev) {
                 if (prev.classList.contains('help-faqs-category')) {
@@ -1422,6 +1462,173 @@ function filtrarFAQsEnAyudaDetallada(query) {
     }
     
     if (emptyMsg) emptyMsg.style.display = visibleCount === 0 ? 'block' : 'none';
+}
+
+// ============================================================
+// 🆕 CORRECCIÓN #3: BOTONES FLOTANTES ⬆️⬇️
+// ============================================================
+// Crea botones flotantes para ir al inicio/final del contenido.
+// Son genéricos: reciben el contenedor con scroll.
+// ============================================================
+
+/**
+ * 🆕 CORRECCIÓN #3: Crea los botones flotantes ⬆️⬇️ dentro de un contenedor.
+ * 
+ * @param {string} containerSelector - Selector CSS del contenedor con scroll (ej: '#help-detailed-content').
+ * @param {string} containerId - ID único para los botones (para poder eliminarlos después).
+ */
+function crearBotonesFlotantesAyuda(containerSelector, containerId) {
+    const LOG_PREFIX = '📖 [help-detailed]';
+    const container = document.querySelector(containerSelector);
+    
+    if (!container) {
+        console.warn(`${LOG_PREFIX} ⚠️ crearBotonesFlotantesAyuda: no se encontró el contenedor ${containerSelector}`);
+        return;
+    }
+    
+    // Eliminar botones previos si existen (mismo containerId)
+    const existingButtons = document.getElementById('help-float-buttons-' + containerId);
+    if (existingButtons) existingButtons.remove();
+    
+    // Asegurar que el contenedor tenga position: relative
+    const computedPosition = window.getComputedStyle(container).position;
+    if (computedPosition === 'static') {
+        container.style.position = 'relative';
+    }
+    
+    // Crear el contenedor de botones
+    const buttonsWrapper = document.createElement('div');
+    buttonsWrapper.id = 'help-float-buttons-' + containerId;
+    buttonsWrapper.className = 'help-float-buttons';
+    buttonsWrapper.innerHTML = `
+        <button type="button" 
+                class="help-float-btn" 
+                id="help-float-btn-top-${containerId}"
+                title="Ir al inicio"
+                aria-label="Ir al inicio del contenido"
+                onclick="scrollToTopAyuda('${containerId}')">⬆️</button>
+        <button type="button" 
+                class="help-float-btn" 
+                id="help-float-btn-bottom-${containerId}"
+                title="Ir al final"
+                aria-label="Ir al final del contenido"
+                onclick="scrollToBottomAyuda('${containerId}')">⬇️</button>
+    `;
+    
+    container.appendChild(buttonsWrapper);
+    
+    // Configurar la lógica de mostrar/ocultar según el scroll
+    const btnTop = buttonsWrapper.querySelector('#help-float-btn-top-' + containerId);
+    const btnBottom = buttonsWrapper.querySelector('#help-float-btn-bottom-' + containerId);
+    
+    function actualizarVisibilidadBotones() {
+        const scrollTop = container.scrollTop;
+        const scrollHeight = container.scrollHeight;
+        const clientHeight = container.clientHeight;
+        const scrollRange = scrollHeight - clientHeight;
+        
+        // Si no hay suficiente contenido para hacer scroll (< 100px), ocultar los botones
+        if (scrollRange < 100) {
+            buttonsWrapper.classList.add('hidden');
+            return;
+        }
+        
+        buttonsWrapper.classList.remove('hidden');
+        
+        // ⬆️ visible solo si hemos scrolleado hacia abajo (más de 100px)
+        if (scrollTop > 100) {
+            btnTop.classList.remove('hidden');
+        } else {
+            btnTop.classList.add('hidden');
+        }
+        
+        // ⬇️ visible solo si no estamos al final (más de 100px de margen)
+        if (scrollTop < scrollRange - 100) {
+            btnBottom.classList.remove('hidden');
+        } else {
+            btnBottom.classList.add('hidden');
+        }
+    }
+    
+    // Escuchar el scroll del contenedor
+    container.addEventListener('scroll', actualizarVisibilidadBotones, { passive: true });
+    
+    // También actualizar al redimensionar la ventana
+    const resizeHandler = () => actualizarVisibilidadBotones();
+    window.addEventListener('resize', resizeHandler);
+    
+    // Guardar referencia al resizeHandler para poder limpiarlo
+    buttonsWrapper._resizeHandler = resizeHandler;
+    buttonsWrapper._containerSelector = containerSelector;
+    
+    // Estado inicial
+    setTimeout(actualizarVisibilidadBotones, 100);
+    
+    console.log(`${LOG_PREFIX} ✅ Botones flotantes creados en ${containerSelector} (id: ${containerId})`);
+}
+
+/**
+ * 🆕 CORRECCIÓN #3: Elimina los botones flotantes de un contenedor.
+ */
+function eliminarBotonesFlotantesAyuda(containerId) {
+    const wrapper = document.getElementById('help-float-buttons-' + containerId);
+    if (!wrapper) return;
+    
+    // Limpiar listeners
+    if (wrapper._resizeHandler) {
+        window.removeEventListener('resize', wrapper._resizeHandler);
+        wrapper._resizeHandler = null;
+    }
+    
+    // Eliminar del DOM
+    wrapper.remove();
+    console.log(`📖 [help-detailed] 🗑️ Botones flotantes eliminados (id: ${containerId})`);
+}
+
+/**
+ * 🆕 CORRECCIÓN #3: Scroll suave al inicio del contenedor.
+ * 
+ * @param {string} containerId - El ID con el que se crearon los botones.
+ */
+function scrollToTopAyuda(containerId) {
+    const wrapper = document.getElementById('help-float-buttons-' + containerId);
+    const selector = wrapper ? wrapper._containerSelector : null;
+    const container = selector ? document.querySelector(selector) : null;
+    
+    if (!container) {
+        console.warn('⚠️ [help-detailed] scrollToTopAyuda: no se encontró el contenedor');
+        return;
+    }
+    
+    container.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+    });
+    
+    console.log(`📖 [help-detailed] ⬆️ Scroll al inicio (${containerId})`);
+}
+
+/**
+ * 🆕 CORRECCIÓN #3: Scroll suave al final del contenedor.
+ * 
+ * @param {string} containerId - El ID con el que se crearon los botones.
+ */
+function scrollToBottomAyuda(containerId) {
+    const wrapper = document.getElementById('help-float-buttons-' + containerId);
+    const selector = wrapper ? wrapper._containerSelector : null;
+    const container = selector ? document.querySelector(selector) : null;
+    
+    if (!container) {
+        console.warn('⚠️ [help-detailed] scrollToBottomAyuda: no se encontró el contenedor');
+        return;
+    }
+    
+    container.scrollTo({
+        top: container.scrollHeight,
+        behavior: 'smooth'
+    });
+    
+    console.log(`📖 [help-detailed] ⬇️ Scroll al final (${containerId})`);
 }
 
 // ============================================================
@@ -1477,11 +1684,15 @@ function renderHelpDetailed(containerId) {
     
     console.log('📖 [help-detailed] Contenido renderizado:', HELP_SECTIONS.length, 'secciones');
     
-    // Guardar referencia para uso posterior
     window._helpDetailedContainerId = containerId;
     
     // 🆕 CORRECCIÓN #15: Renderizar FAQs dinámicamente en su sección
     renderFAQsEnAyudaDetallada();
+    
+    // 🆕 CORRECCIÓN #3: Crear los botones flotantes ⬆️⬇️ para el contenido
+    setTimeout(() => {
+        crearBotonesFlotantesAyuda('#help-detailed-content', 'detailed');
+    }, 200);
 }
 
 // ============================================================
@@ -1501,7 +1712,6 @@ function scrollToHelpSection(sectionId) {
         behavior: 'smooth'
     });
     
-    // Actualizar enlace activo
     document.querySelectorAll('#help-detailed-nav a').forEach(a => a.classList.remove('active'));
     const activeLink = document.querySelector(`#help-detailed-nav a[data-section-id="${sectionId}"]`);
     if (activeLink) activeLink.classList.add('active');
@@ -1553,6 +1763,11 @@ window.HelpDetailedModule = {
     renderFAQsEnAyudaDetallada,
     toggleFAQEnAyudaDetallada,
     filtrarFAQsEnAyudaDetallada,
+    // 🆕 CORRECCIÓN #3
+    crearBotonesFlotantesAyuda,
+    eliminarBotonesFlotantesAyuda,
+    scrollToTopAyuda,
+    scrollToBottomAyuda,
     HELP_SECTIONS
 };
 
@@ -1564,10 +1779,16 @@ window.inyectarEstilosAyuda = inyectarEstilosAyuda;
 window.renderFAQsEnAyudaDetallada = renderFAQsEnAyudaDetallada;
 window.toggleFAQEnAyudaDetallada = toggleFAQEnAyudaDetallada;
 window.filtrarFAQsEnAyudaDetallada = filtrarFAQsEnAyudaDetallada;
+// 🆕 CORRECCIÓN #3
+window.crearBotonesFlotantesAyuda = crearBotonesFlotantesAyuda;
+window.eliminarBotonesFlotantesAyuda = eliminarBotonesFlotantesAyuda;
+window.scrollToTopAyuda = scrollToTopAyuda;
+window.scrollToBottomAyuda = scrollToBottomAyuda;
 
-console.log('📦 Help Detailed Module cargado correctamente v1.1.0 (CORRECCIÓN #15 290926)');
+console.log('📦 Help Detailed Module cargado correctamente v1.2.0 (CORRECCIÓN #3 300926)');
 console.log('   📚 Secciones estáticas:', HELP_SECTIONS.length - 1);
-console.log('   ❓ Sección dinámica de FAQs: se renderiza desde window.FAQ S_DB');
+console.log('   ❓ Sección dinámica de FAQs: se renderiza desde window.FAQS_DB');
+console.log('   ⬆️⬇️ Botones flotantes: activos en #help-detailed-content');
 console.log('   ✅ Sin iframe - todo dentro del mismo documento');
 console.log('   ✅ Respeta el tema actual (claro/oscuro)');
 console.log('   ✅ Búsqueda en vivo y navegación suave');

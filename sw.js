@@ -1,21 +1,23 @@
 // ============================================================
 // 📦 SERVICE WORKER - Panario
-// v2.3.7 (290926): 🎯 CORRECCIÓN #15 (290926)
-//   - ✅ SW_VERSION = '2.3.7'
-//   - ✅ CACHE_NAME actualizado a panario-v2.3.7
-//   - ✅ AÑADIDO: './js/faqs.js' a CRITICAL_ASSETS
-//   - ✅ AÑADIDO: './js/help-detailed.js' a CRITICAL_ASSETS
-//   - ✅ ELIMINADO: './ayuda-panario.html' (archivo obsoleto)
+// v2.3.9 (290926): 🎯 Correcciones GitHub 290926 (Punto #2)
+//   - ✅ SW_VERSION = '2.3.9'
+//   - ✅ CACHE_NAME actualizado a panario-v2.3.9 (fuerza invalidación)
+//   - ✅ MANTENIDO: './js/faqs.js' en CRITICAL_ASSETS
+//   - ✅ MANTENIDO: './js/help-detailed.js' en CRITICAL_ASSETS
+//   - ✅ MANTENIDO: './ayuda-panario.html' eliminado (obsoleto)
 //   - ✅ MANTENIDO: Auto-reparación de caché (verificación cada 15 min)
 //   - ✅ MANTENIDO: Umbral de integridad 80%
 //   - ✅ MANTENIDO: Estrategias Cache First + Network First
 //   - ✅ MANTENIDO: Notificación de nueva versión a clientes
 //
 // HISTORIAL:
+// v2.3.8 (290926): Correcciones #1 y #4 — Botones 🚪 y 👤 en index.html
+// v2.3.7 (290926): CORRECCIÓN #15 — FAQs externas + help-detailed.js
 // v2.3.6 (280926): Actualización de versión
 // ============================================================
 
-const SW_VERSION = '2.3.7';
+const SW_VERSION = '2.3.9';
 const CACHE_NAME_STATIC = `panario-static-v${SW_VERSION}`;
 const CACHE_NAME_DYNAMIC = `panario-dynamic-v${SW_VERSION}`;
 const CACHE_NAME = `panario-v${SW_VERSION}`;
@@ -516,6 +518,9 @@ console.log(`   📦 CACHE_NAME: ${CACHE_NAME}`);
 console.log(`   🆕 FAQs externas incluidas: ./js/faqs.js`);
 console.log(`   🆕 Help detailed incluidas: ./js/help-detailed.js`);
 console.log(`   🗑️ Archivo obsoleto eliminado: ./ayuda-panario.html`);
+console.log(`   🚪 index.html con botón cerrar sesión en header (extremo derecho)`);
+console.log(`   👤 index.html con botón Mi Perfil en bottom-nav (extremo derecho)`);
+console.log(`   🔔 index.html con IDs corregidos: notification-bell + bell-badge (#2)`);
 console.log(`   🔧 Auto-reparación de caché activada`);
 console.log(`   ⏰ Verificación periódica cada 15 minutos`);
 console.log(`   ⚙️ Umbral de integridad: ${INTEGRITY_THRESHOLD * 100}%`);
