@@ -33,8 +33,8 @@
     --safe-area-inset-left: env(safe-area-inset-left, 0px);
     --safe-area-inset-right: env(safe-area-inset-right, 0px);
     
-    /* 🆕 v2.3.6 (Corrección #13): Margen inferior unificado y reducido */
-    --bottom-margin-offset: 24px;
+    /* 🆕 v2.3.7 (Corrección #6): Margen inferior aumentado a 40px */
+    --bottom-margin-offset: 40px;
 }
 
 /* ============================================================
@@ -88,9 +88,7 @@
 }
 
 /* 🆕 v2.3.1: Bloquear completamente transform/will-change/isolation/filter
-   en html, body y #appScreen. Estas son las propiedades que rompen el
-   `position: sticky` del header en móvil. Se fuerza su reset global para
-   evitar que cualquier código (modal, animación, etc.) las aplique. */
+   en html, body y #appScreen. */
 html, body, #appScreen {
     transform: none !important;
     will-change: auto !important;
@@ -365,7 +363,6 @@ html {
 /* ============================================================
    APP HEADER - MODO OSCURO MEJORADO
    🆕 v2.3.1: FIX BUG #1 (Corrección #5) - Forzar position: sticky
-   con reglas defensivas reforzadas + contain aislado.
    ============================================================ */
 
 header {
@@ -379,7 +376,6 @@ header {
     flex-shrink: 0;
     border-bottom: 1px solid var(--border-color);
     
-    /* 🆕 v2.3.1: FIX DEFINITIVO - Forzar position: sticky con z-index alto */
     position: sticky !important;
     top: 0 !important;
     z-index: 200 !important;
@@ -388,7 +384,6 @@ header {
     padding-left: calc(16px + var(--safe-area-inset-left, 0px));
     padding-right: calc(16px + var(--safe-area-inset-right, 0px));
     
-    /* 🆕 v2.3.1: Resetear TODAS las propiedades que rompen sticky */
     transform: none !important;
     -webkit-transform: none !important;
     will-change: auto !important;
@@ -400,8 +395,6 @@ header {
     backface-visibility: visible !important;
     -webkit-backface-visibility: visible !important;
     
-    /* 🆕 v2.3.1: contain: layout style permite que el header sea su propio
-       containing block sin romper el sticky. NO usar paint. */
     contain: layout style;
 }
 
@@ -490,25 +483,35 @@ header h1 {
 
 /* ============================================================
    MAIN CONTENT
-   🆕 v2.3.6 (Corrección #13): Margen inferior reducido ~50%
-   Antes: nav-height + 80px + safe-area (con overrides de 100/120/130px)
-   Ahora: nav-height + 24px + safe-area (con overrides de 32/40/48px)
+   🆕 v2.3.7 (Corrección #6): 
+   - padding-top reducido a 12px (título más pegado al header)
+   - margen inferior aumentado a 40px (más respiro antes del bottom-nav)
+   - primera/last-child sin margen residual
    ============================================================ */
 
 main {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    padding: 12px 16px 16px 16px;
     padding-bottom: calc(var(--nav-height) + var(--bottom-margin-offset) + var(--safe-area-inset-bottom, 0px));
     width: 100%;
     max-width: 800px;
     margin: 0 auto;
     
-    /* 🆕 v2.3.1: Resetear transform/will-change en main para no romper sticky */
     transform: none !important;
     -webkit-transform: none !important;
     will-change: auto !important;
     isolation: auto !important;
+}
+
+/* 🆕 v2.3.7 (Corrección #6): Evitar margen superior residual en el primer hijo */
+main > *:first-child {
+    margin-top: 0 !important;
+}
+
+/* 🆕 v2.3.7 (Corrección #6): Pequeño respiro antes del padding-bottom */
+main > *:last-child {
+    margin-bottom: 8px;
 }
 
 @supports not (padding-bottom: env(safe-area-inset-bottom)) {
@@ -811,21 +814,8 @@ hr {
 
 /* ============================================================
    🆕 v2.3.1: CORRECCIÓN #5 - REGLAS DEFENSIVAS REFORZADAS
-   ============================================================
-   Estas reglas son la PRIMERA línea de defensa contra la
-   deformación del header. Se aplican SIEMPRE y con !important
-   para que ningún modal o animación las pueda sobrescribir.
-   
-   La SEGUNDA línea de defensa es forzarStickyHeader() en app.js,
-   que aplica estilos inline con !important.
-   
-   La TERCERA línea de defensa es limpiarEstilosResiduales() en
-   modal.js, que se ejecuta en múltiples eventos.
-   
-   Con las 3 capas, el header debería mantenerse sticky SIEMPRE.
    ============================================================ */
 
-/* 1) Header: siempre sticky, siempre arriba, siempre sin transform */
 #appScreen > header,
 #appScreen header,
 header {
@@ -844,9 +834,6 @@ header {
     -webkit-backface-visibility: visible !important;
 }
 
-/* 2) Resetear transform en el body si algún modal los dejó huérfanos.
-   La clase `modal-open` se añade al body cuando un modal está abierto,
-   así que solo reseteamos cuando NO hay modal abierto. */
 body:not(.modal-open) {
     transform: none !important;
     -webkit-transform: none !important;
@@ -856,7 +843,6 @@ body:not(.modal-open) {
     -webkit-filter: none !important;
 }
 
-/* 3) Resetear #appScreen siempre (nunca debe tener transform) */
 #appScreen {
     transform: none !important;
     -webkit-transform: none !important;
@@ -864,7 +850,6 @@ body:not(.modal-open) {
     isolation: auto !important;
 }
 
-/* 4) Resetear html y body siempre (nunca deben tener transform) */
 html, body {
     transform: none !important;
     -webkit-transform: none !important;
@@ -872,7 +857,6 @@ html, body {
     isolation: auto !important;
 }
 
-/* 5) Resetear main siempre (nunca debe tener transform) */
 main {
     transform: none !important;
     -webkit-transform: none !important;
@@ -880,42 +864,26 @@ main {
     isolation: auto !important;
 }
 
-/* 6) Resetear el contenedor del header y sus hijos directos.
-   El header en sí es un flex container; sus hijos directos (h1, div)
-   tampoco deben tener transform. */
 #appScreen > header > * {
     transform: none !important;
     -webkit-transform: none !important;
     will-change: auto !important;
 }
 
-/* 7) Prevenir que cualquier elemento con position:fixed cree un
-   nuevo stacking context que afecte al header. */
 .bottom-nav {
-    /* El bottom-nav es fixed, pero no debe afectar al sticky del header
-       porque tiene un z-index menor (100 < 200) */
     transform: none !important;
     -webkit-transform: none !important;
 }
 
-/* 8) Cuando un modal está abierto, NO forzar transform en el body,
-   porque algunos modales SÍ necesitan transform para animarse.
-   Pero cuando el modal se cierra, la clase se quita y se resetea. */
 body.modal-open {
-    /* No aplicar transform: none aquí para permitir animaciones de modales */
-    /* La limpieza se hace cuando se quita la clase modal-open */
 }
 
-/* 9) Fix específico para Samsung Internet, que aplica transform
-   residual al body después de usar modales. */
 @media screen and (-webkit-min-device-pixel-ratio: 0) {
     body:not(.modal-open) {
         transform: none !important;
     }
 }
 
-/* 10) Fix específico para iOS Safari, que aplica -webkit-transform
-   residual al body. */
 @supports (-webkit-touch-callout: none) {
     body:not(.modal-open),
     html,
@@ -926,7 +894,7 @@ body.modal-open {
 
 /* ============================================================
    RESPONSIVE - MODO OSCURO MEJORADO
-   🆕 v2.3.6 (Corrección #13): Todos los padding-bottom reducidos
+   🆕 v2.3.7 (Corrección #6): padding-top ajustado en todos los breakpoints
    ============================================================ */
 
 /* Móviles pequeños (Samsung A05, iPhone SE, etc.) */
@@ -969,9 +937,9 @@ body.modal-open {
         padding: 2px 6px;
     }
     
-    /* 🆕 v2.3.6: reducido de 100px a 32px */
+    /* 🆕 v2.3.7 (Corrección #6): padding-top reducido a 8px */
     main {
-        padding: 12px;
+        padding: 8px 12px 12px 12px;
         padding-bottom: calc(var(--nav-height) + 32px + var(--safe-area-inset-bottom, 0px));
         padding-bottom: calc(var(--nav-height) + 32px + env(safe-area-inset-bottom, 0px));
     }
@@ -1064,10 +1032,10 @@ body.modal-open {
     .auth-header .logo { font-size: 64px; }
     .auth-header h1 { font-size: 32px; }
     
-    /* 🆕 v2.3.6: reducido de 40px a 24px */
+    /* 🆕 v2.3.7 (Corrección #6): padding-top a 20px */
     main {
-        padding: 24px;
-        padding-bottom: calc(var(--nav-height) + 24px);
+        padding: 20px 24px 24px 24px;
+        padding-bottom: calc(var(--nav-height) + var(--bottom-margin-offset));
         max-width: 900px;
     }
     
@@ -1087,11 +1055,11 @@ body.modal-open {
 
 /* Desktop grande */
 @media (min-width: 1200px) {
-    /* 🆕 v2.3.6: reducido de 50px a 24px */
+    /* 🆕 v2.3.7 (Corrección #6): padding-top a 24px */
     main {
         max-width: 1100px;
-        padding: 32px;
-        padding-bottom: calc(var(--nav-height) + 24px);
+        padding: 24px 32px 32px 32px;
+        padding-bottom: calc(var(--nav-height) + var(--bottom-margin-offset));
     }
     .bottom-nav {
         max-width: 1100px;
@@ -1110,15 +1078,10 @@ body.modal-open {
     }
 }
 
-main > *:last-child {
-    margin-bottom: 8px;
-}
-
-/* 🆕 v2.3.6: Fix específico para Samsung y Android con gesture bar
-   Antes: 100px → Ahora: 32px */
+/* 🆕 v2.3.7 (Corrección #6): Fix final para padding-bottom */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
     main {
-        padding-bottom: calc(var(--nav-height) + 32px + env(safe-area-inset-bottom, 0px)) !important;
+        padding-bottom: calc(var(--nav-height) + 40px + env(safe-area-inset-bottom, 0px)) !important;
     }
     .bottom-nav {
         padding-bottom: env(safe-area-inset-bottom, 0px) !important;
@@ -1128,11 +1091,11 @@ main > *:last-child {
     }
 }
 
-/* 🆕 v2.3.6: Reducido de 120px a 40px */
+/* 🆕 v2.3.7 (Corrección #6): Móvil vertical - 48px */
 @media (max-width: 480px) and (orientation: portrait) {
     main {
-        padding-bottom: calc(var(--nav-height) + 40px + var(--safe-area-inset-bottom, 0px)) !important;
-        padding-bottom: calc(var(--nav-height) + 40px + env(safe-area-inset-bottom, 0px)) !important;
+        padding-bottom: calc(var(--nav-height) + 48px + var(--safe-area-inset-bottom, 0px)) !important;
+        padding-bottom: calc(var(--nav-height) + 48px + env(safe-area-inset-bottom, 0px)) !important;
     }
     .card:last-child {
         margin-bottom: 8px;
@@ -1147,9 +1110,9 @@ main > *:last-child {
     }
 }
 
-/* 🆕 v2.3.6: Reducido de 130px a 48px */
+/* 🆕 v2.3.7 (Corrección #6): 56px para muy pequeños */
 @media (max-width: 400px) {
     main {
-        padding-bottom: calc(var(--nav-height) + 48px + var(--safe-area-inset-bottom, 0px)) !important;
+        padding-bottom: calc(var(--nav-height) + 56px + var(--safe-area-inset-bottom, 0px)) !important;
     }
 }

@@ -235,6 +235,20 @@ window.FAQS_DB = [
         a: 'Si está activada, muestra el QR de tu cuenta bancaria por defecto. Puedes ampliarlo o descargarlo para compartirlo con tus clientes.' 
     },
 
+    { cat: "📊 Dashboard", 
+        q: "¿Por qué el título del Dashboard está más pegado al header?", 
+        a: "Desde la versión v3.0.8 de app.js y v2.3.7 de style.css, el título del Dashboard está más pegado al header (solo 12px de separación) para aprovechar mejor el espacio vertical. Antes había 16px de padding-top más 16px de margin-bottom del contenedor del título, lo que dejaba mucho espacio vacío." },
+    { cat: "📊 Dashboard", 
+        q: "¿Por qué hay más espacio entre el último contenido y el bottom-nav?", 
+        a: "Desde la versión v3.0.8, el margen inferior se ha aumentado a 40px extra (antes 24px) para dar más respiro al contenido antes del bottom-nav. Esto evita que el último elemento quede pegado a la barra de navegación, especialmente en móviles con gestos de navegación." },
+    { cat: "🎨 Interfaz", 
+        q: "¿Qué cambió en el espaciado superior e inferior de la app?", 
+        a: "La Corrección #6 ajustó dos cosas: (1) el título del Dashboard ahora está más pegado al header (12px de padding-top en lugar de 16px), y (2) el espacio inferior aumentó de 24px a 40px extra antes del bottom-nav. También se añadió una regla que evita que el primer hijo del main tenga margen superior residual." },
+    { cat: "🎨 Interfaz", 
+        q: "¿El cambio de espaciado afecta a otras vistas además del Dashboard?", 
+        a: "Sí. El padding-top de main y el padding-bottom se aplican a TODAS las vistas (Pedidos, Insumos, Recetas, Productos, Ventas, Herramientas, Perfil). El ajuste del título específico del Dashboard solo aplica a esa vista, pero el resto de vistas también se benefician del mayor espacio inferior." 
+    },
+
     // ============================================================
     // 📋 SECCIÓN 4: PEDIDOS
     // ============================================================
