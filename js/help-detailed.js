@@ -1,36 +1,19 @@
 // ============================================================
 // 📦 HELP DETAILED MODULE - Panario
-// v1.3.0 (031026): 🎯 CORRECCIÓN #8 (290926) — Actualización de contenido
-//   - ✅ ACTUALIZADO: Versión de app en "Introducción" (2.3.6 → 2.5.0)
-//   - ✅ ACTUALIZADO: Versión de app en "Créditos" (2.3.6 → 2.5.0)
-//   - ✅ NUEVO: Bloque N5 en "Dashboard" (Promedio diario por producto)
-//   - ✅ NUEVO: Bloques N1, N2, N2-bis, N1-historial en "Premios"
-//   - ✅ NUEVO: Bloques Config. Bancaria, #12, N6 en "Herramientas"
-//   - ✅ NUEVO: Bloques N3, N4 en "Ventas"
-//   - ✅ NUEVO: Bloque N5 en "Perfil"
-//   - ✅ MANTENIDO: Botones flotantes ⬆️⬇️ (CORRECCIÓN #3)
-//   - ✅ MANTENIDO: FAQs dinámicas desde window.FAQS_DB
-//   - ✅ MANTENIDO: Todas las secciones de v1.2.0
+// v1.3.2 (031026): 🎯 FIX DEFINITIVO botones flotantes
+//   - ✅ FIX: position: fixed con z-index 9999999999 (por encima del modal)
+//   - ✅ FIX: Detección robusta del contenedor con scroll activo
+//   - ✅ FIX: Listener global con captura (detecta scroll de cualquier hijo)
+//   - ✅ FIX: Polling cada 500ms (casos edge)
+//   - ✅ FIX: Umbral reducido a 30px
+//   - ✅ MANTENIDO: Todo lo de v1.3.0 y v1.3.1
 //
 // HISTORIAL:
-// v1.2.0 (300926): 🎯 CORRECCIÓN #3
-//   - ✅ NUEVO: Botones flotantes ⬆️⬇️ para scroll rápido
-//   - ✅ NUEVO: _crearBotonesFlotantesAyuda() — genérico
-//   - ✅ NUEVO: scrollToTopAyuda() / scrollToBottomAyuda()
-//   - ✅ NUEVO: Auto-ocultar botones si no hay scroll suficiente
-//   - ✅ NUEVO: Estilos .help-float-buttons y .help-float-btn
-//   - ✅ MANTENIDO: Todo lo de v1.1.0 (FAQs dinámicas, 15 secciones, etc.)
-//
-// v1.1.0 (290926): 🎯 CORRECCIÓN #15 (290926)
-//   - ✅ NUEVO: Sección "❓ Preguntas Frecuentes" al final
-//   - ✅ NUEVO: renderFAQsEnAyudaDetallada() — lee window.FAQS_DB
-//   - ✅ NUEVO: Buscador y acordeón dentro de la sección de FAQs
-//
-// v1.0.0 (250926): CORRECCIÓN #14 (240926)
-//   - ✅ Convierte ayuda-panario.html en módulo JS integrado
-//   - ✅ Elimina el uso de iframe
-//   - ✅ Comparte estilos y variables CSS de la app
-//   - ✅ Respeta el tema actual (claro/oscuro)
+// v1.3.1 (031026): FIX botones flotantes (umbral + scroll dinámico) — bug en MutationObserver
+// v1.3.0 (031026): CORRECCIÓN #8 — Actualización de contenido
+// v1.2.0 (300926): CORRECCIÓN #3 — Botones flotantes ⬆️⬇️
+// v1.1.0 (290926): CORRECCIÓN #15 — FAQs dinámicas
+// v1.0.0 (250926): CORRECCIÓN #14 — Ayuda sin iframe
 // ============================================================
 
 window.HelpDetailedModule = {};
@@ -936,9 +919,6 @@ Costo por unidad = Costo total / rendimiento</code></pre>
 // ============================================================
 // ESTILOS INLINE PARA LA AYUDA
 // ============================================================
-// Se inyectan una sola vez en el documento. Usan las variables
-// CSS de la app para respetar el tema actual.
-// ============================================================
 
 const HELP_DETAILED_STYLES_ID = 'help-detailed-styles';
 
@@ -1026,7 +1006,7 @@ function inyectarEstilosAyuda() {
             overflow-y: auto;
             padding-right: 8px;
             min-width: 0;
-            position: relative; /* ✅ CORRECCIÓN #3: necesario para los botones flotantes */
+            position: relative;
         }
         
         .help-detailed-section {
@@ -1287,49 +1267,54 @@ function inyectarEstilosAyuda() {
         }
         
         /* ============================================================
-           🆕 CORRECCIÓN #3: BOTONES FLOTANTES ⬆️⬇️
+           🆕 v1.3.2: BOTONES FLOTANTES ⬆️⬇️
+           - position: fixed → anclados a la pantalla (no al contenedor)
+           - z-index: 9999999999 → por encima de cualquier modal
+           - pointer-events: auto en los botones, none en el wrapper
            ============================================================ */
         
         .help-float-buttons {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            z-index: 10;
-            pointer-events: none;
+            position: fixed !important;
+            bottom: 20px !important;
+            right: 20px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 8px !important;
+            z-index: 9999999999 !important;
+            pointer-events: none !important;
         }
         
         .help-float-btn {
-            width: 42px;
-            height: 42px;
-            border-radius: 50%;
-            background: var(--primary);
-            color: #fff;
-            border: none;
-            cursor: pointer;
-            font-size: 18px;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            transition: all 0.2s ease;
-            pointer-events: auto;
-            font-family: inherit;
-            line-height: 1;
-            padding: 0;
+            width: 48px !important;
+            height: 48px !important;
+            border-radius: 50% !important;
+            background: var(--primary, #f5a623) !important;
+            color: #fff !important;
+            border: 2px solid #fff !important;
+            cursor: pointer !important;
+            font-size: 20px !important;
+            font-weight: 700 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4) !important;
+            transition: all 0.2s ease !important;
+            pointer-events: auto !important;
+            font-family: inherit !important;
+            line-height: 1 !important;
+            padding: 0 !important;
+            opacity: 1 !important;
+            visibility: visible !important;
         }
         
         .help-float-btn:hover {
-            background: var(--primary-dark);
-            transform: scale(1.08);
-            box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+            background: var(--primary-dark, #d4891b) !important;
+            transform: scale(1.08) !important;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.5) !important;
         }
         
         .help-float-btn:active {
-            transform: scale(0.95);
+            transform: scale(0.95) !important;
         }
         
         .help-float-btn.hidden {
@@ -1370,15 +1355,15 @@ function inyectarEstilosAyuda() {
             }
             
             .help-float-buttons {
-                bottom: 14px;
-                right: 14px;
-                gap: 6px;
+                bottom: 14px !important;
+                right: 14px !important;
+                gap: 6px !important;
             }
             
             .help-float-btn {
-                width: 38px;
-                height: 38px;
-                font-size: 16px;
+                width: 44px !important;
+                height: 44px !important;
+                font-size: 18px !important;
             }
         }
     `;
@@ -1548,42 +1533,35 @@ function filtrarFAQsEnAyudaDetallada(query) {
 }
 
 // ============================================================
-// 🆕 CORRECCIÓN #3: BOTONES FLOTANTES ⬆️⬇️
-// ============================================================
-// Crea botones flotantes para ir al inicio/final del contenido.
-// Son genéricos: reciben el contenedor con scroll.
+// 🆕 v1.3.2: BOTONES FLOTANTES SIMPLIFICADOS Y ROBUSTOS
 // ============================================================
 
+const HELP_FLOAT_THRESHOLD = 30;
+
 /**
- * 🆕 CORRECCIÓN #3: Crea los botones flotantes ⬆️⬇️ dentro de un contenedor.
- * 
- * @param {string} containerSelector - Selector CSS del contenedor con scroll (ej: '#help-detailed-content').
- * @param {string} containerId - ID único para los botones (para poder eliminarlos después).
+ * Crea los botones flotantes ⬆️⬇️ anclados a la pantalla.
  */
 function crearBotonesFlotantesAyuda(containerSelector, containerId) {
-    const LOG_PREFIX = '📖 [help-detailed]';
+    const LOG_PREFIX = '📖 [help-detailed v1.3.2]';
     const container = document.querySelector(containerSelector);
     
     if (!container) {
-        console.warn(`${LOG_PREFIX} ⚠️ crearBotonesFlotantesAyuda: no se encontró el contenedor ${containerSelector}`);
+        console.warn(`${LOG_PREFIX} ⚠️ No se encontró el contenedor ${containerSelector}`);
         return;
     }
     
-    // Eliminar botones previos si existen (mismo containerId)
-    const existingButtons = document.getElementById('help-float-buttons-' + containerId);
-    if (existingButtons) existingButtons.remove();
-    
-    // Asegurar que el contenedor tenga position: relative
-    const computedPosition = window.getComputedStyle(container).position;
-    if (computedPosition === 'static') {
-        container.style.position = 'relative';
+    // Eliminar botones previos
+    const existing = document.getElementById('help-float-buttons-' + containerId);
+    if (existing) {
+        if (existing._cleanup) { try { existing._cleanup(); } catch (e) {} }
+        existing.remove();
     }
     
-    // Crear el contenedor de botones
-    const buttonsWrapper = document.createElement('div');
-    buttonsWrapper.id = 'help-float-buttons-' + containerId;
-    buttonsWrapper.className = 'help-float-buttons';
-    buttonsWrapper.innerHTML = `
+    // Crear wrapper
+    const wrapper = document.createElement('div');
+    wrapper.id = 'help-float-buttons-' + containerId;
+    wrapper.className = 'help-float-buttons';
+    wrapper.innerHTML = `
         <button type="button" 
                 class="help-float-btn" 
                 id="help-float-btn-top-${containerId}"
@@ -1598,118 +1576,173 @@ function crearBotonesFlotantesAyuda(containerSelector, containerId) {
                 onclick="scrollToBottomAyuda('${containerId}')">⬇️</button>
     `;
     
-    container.appendChild(buttonsWrapper);
+    document.body.appendChild(wrapper);
     
-    // Configurar la lógica de mostrar/ocultar según el scroll
-    const btnTop = buttonsWrapper.querySelector('#help-float-btn-top-' + containerId);
-    const btnBottom = buttonsWrapper.querySelector('#help-float-btn-bottom-' + containerId);
+    const btnTop = document.getElementById('help-float-btn-top-' + containerId);
+    const btnBottom = document.getElementById('help-float-btn-bottom-' + containerId);
     
-    function actualizarVisibilidadBotones() {
-        const scrollTop = container.scrollTop;
-        const scrollHeight = container.scrollHeight;
-        const clientHeight = container.clientHeight;
-        const scrollRange = scrollHeight - clientHeight;
+    const cleanupFns = [];
+    
+    /**
+     * Encuentra el contenedor con scroll más relevante.
+     */
+    function encontrarContenedorConScroll() {
+        const todos = [container, ...container.querySelectorAll('*')];
+        let mejor = null;
+        let mejorArea = 0;
         
-        // Si no hay suficiente contenido para hacer scroll (< 100px), ocultar los botones
-        if (scrollRange < 100) {
-            buttonsWrapper.classList.add('hidden');
+        for (const el of todos) {
+            const style = window.getComputedStyle(el);
+            const overflowY = style.overflowY;
+            const tieneOverflow = (overflowY === 'auto' || overflowY === 'scroll');
+            const tieneScroll = el.scrollHeight > el.clientHeight + 5;
+            const esVisible = el.offsetWidth > 0 && el.offsetHeight > 0;
+            
+            if (tieneOverflow && tieneScroll && esVisible) {
+                const area = el.clientWidth * el.clientHeight;
+                if (area > mejorArea) {
+                    mejorArea = area;
+                    mejor = el;
+                }
+            }
+        }
+        
+        if (!mejor) {
+            const docEl = document.documentElement;
+            if (docEl.scrollHeight > docEl.clientHeight + 5) mejor = docEl;
+            else if (document.body.scrollHeight > document.body.clientHeight + 5) mejor = document.body;
+        }
+        
+        return mejor;
+    }
+    
+    let contenedorActual = encontrarContenedorConScroll();
+    
+    /**
+     * Actualiza la visibilidad de los botones.
+     */
+    function actualizarVisibilidad() {
+        const nuevo = encontrarContenedorConScroll();
+        if (nuevo && nuevo !== contenedorActual) contenedorActual = nuevo;
+        
+        if (!contenedorActual) {
+            wrapper.style.display = 'none';
             return;
         }
         
-        buttonsWrapper.classList.remove('hidden');
+        const scrollTop = contenedorActual.scrollTop || window.scrollY || 0;
+        const scrollRange = contenedorActual.scrollHeight - contenedorActual.clientHeight;
         
-        // ⬆️ visible solo si hemos scrolleado hacia abajo (más de 100px)
-        if (scrollTop > 100) {
+        if (scrollRange < HELP_FLOAT_THRESHOLD) {
+            wrapper.style.display = 'none';
+            return;
+        }
+        
+        wrapper.style.display = 'flex';
+        
+        // ⬆️
+        if (scrollTop > HELP_FLOAT_THRESHOLD) {
             btnTop.classList.remove('hidden');
         } else {
             btnTop.classList.add('hidden');
         }
         
-        // ⬇️ visible solo si no estamos al final (más de 100px de margen)
-        if (scrollTop < scrollRange - 100) {
+        // ⬇️
+        if (scrollTop < scrollRange - HELP_FLOAT_THRESHOLD) {
             btnBottom.classList.remove('hidden');
         } else {
             btnBottom.classList.add('hidden');
         }
     }
     
-    // Escuchar el scroll del contenedor
-    container.addEventListener('scroll', actualizarVisibilidadBotones, { passive: true });
+    // Listener global con captura
+    const scrollHandler = () => actualizarVisibilidad();
+    document.addEventListener('scroll', scrollHandler, { capture: true, passive: true });
+    window.addEventListener('scroll', scrollHandler, { passive: true });
     
-    // También actualizar al redimensionar la ventana
-    const resizeHandler = () => actualizarVisibilidadBotones();
+    cleanupFns.push(() => {
+        document.removeEventListener('scroll', scrollHandler, { capture: true });
+        window.removeEventListener('scroll', scrollHandler);
+    });
+    
+    // Resize
+    const resizeHandler = () => {
+        contenedorActual = encontrarContenedorConScroll();
+        actualizarVisibilidad();
+    };
     window.addEventListener('resize', resizeHandler);
+    cleanupFns.push(() => window.removeEventListener('resize', resizeHandler));
     
-    // Guardar referencia al resizeHandler para poder limpiarlo
-    buttonsWrapper._resizeHandler = resizeHandler;
-    buttonsWrapper._containerSelector = containerSelector;
+    // Polling cada 500ms
+    const pollInterval = setInterval(actualizarVisibilidad, 500);
+    cleanupFns.push(() => clearInterval(pollInterval));
     
-    // Estado inicial
-    setTimeout(actualizarVisibilidadBotones, 100);
+    wrapper._cleanup = () => { cleanupFns.forEach(fn => { try { fn(); } catch (e) {} }); };
+    wrapper._containerSelector = containerSelector;
     
-    console.log(`${LOG_PREFIX} ✅ Botones flotantes creados en ${containerSelector} (id: ${containerId})`);
+    // Primera actualización
+    actualizarVisibilidad();
+    setTimeout(actualizarVisibilidad, 300);
+    setTimeout(actualizarVisibilidad, 1000);
+    
+    console.log(`${LOG_PREFIX} ✅ Botones creados (contenedor=${contenedorActual ? (contenedorActual.id || contenedorActual.tagName) : 'ninguno'})`);
 }
 
 /**
- * 🆕 CORRECCIÓN #3: Elimina los botones flotantes de un contenedor.
+ * Elimina los botones flotantes.
  */
 function eliminarBotonesFlotantesAyuda(containerId) {
     const wrapper = document.getElementById('help-float-buttons-' + containerId);
     if (!wrapper) return;
-    
-    // Limpiar listeners
-    if (wrapper._resizeHandler) {
-        window.removeEventListener('resize', wrapper._resizeHandler);
-        wrapper._resizeHandler = null;
-    }
-    
-    // Eliminar del DOM
+    if (wrapper._cleanup) { try { wrapper._cleanup(); } catch (e) {} }
     wrapper.remove();
-    console.log(`📖 [help-detailed] 🗑️ Botones flotantes eliminados (id: ${containerId})`);
+    console.log(`📖 [help-detailed] 🗑️ Botones eliminados (id: ${containerId})`);
 }
 
 /**
- * 🆕 CORRECCIÓN #3: Scroll suave al inicio del contenedor.
- * 
- * @param {string} containerId - El ID con el que se crearon los botones.
+ * Scroll al inicio del contenedor con scroll activo.
  */
 function scrollToTopAyuda(containerId) {
     const wrapper = document.getElementById('help-float-buttons-' + containerId);
-    const selector = wrapper ? wrapper._containerSelector : null;
-    const container = selector ? document.querySelector(selector) : null;
+    if (!wrapper || !wrapper._containerSelector) return;
     
-    if (!container) {
-        console.warn('⚠️ [help-detailed] scrollToTopAyuda: no se encontró el contenedor');
-        return;
+    const container = document.querySelector(wrapper._containerSelector);
+    if (!container) return;
+    
+    const todos = [container, ...container.querySelectorAll('*')];
+    for (const el of todos) {
+        const style = window.getComputedStyle(el);
+        const overflowY = style.overflowY;
+        if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight + 5) {
+            el.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     }
     
-    container.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     
     console.log(`📖 [help-detailed] ⬆️ Scroll al inicio (${containerId})`);
 }
 
 /**
- * 🆕 CORRECCIÓN #3: Scroll suave al final del contenedor.
- * 
- * @param {string} containerId - El ID con el que se crearon los botones.
+ * Scroll al final del contenedor con scroll activo.
  */
 function scrollToBottomAyuda(containerId) {
     const wrapper = document.getElementById('help-float-buttons-' + containerId);
-    const selector = wrapper ? wrapper._containerSelector : null;
-    const container = selector ? document.querySelector(selector) : null;
+    if (!wrapper || !wrapper._containerSelector) return;
     
-    if (!container) {
-        console.warn('⚠️ [help-detailed] scrollToBottomAyuda: no se encontró el contenedor');
-        return;
+    const container = document.querySelector(wrapper._containerSelector);
+    if (!container) return;
+    
+    const todos = [container, ...container.querySelectorAll('*')];
+    for (const el of todos) {
+        const style = window.getComputedStyle(el);
+        const overflowY = style.overflowY;
+        if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight + 5) {
+            el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+        }
     }
     
-    container.scrollTo({
-        top: container.scrollHeight,
-        behavior: 'smooth'
-    });
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     
     console.log(`📖 [help-detailed] ⬇️ Scroll al final (${containerId})`);
 }
@@ -1727,7 +1760,6 @@ function renderHelpDetailed(containerId) {
     
     inyectarEstilosAyuda();
     
-    // Generar índice lateral
     const navHtml = HELP_SECTIONS.map(s => `
         <li>
             <a href="#help-section-${s.id}" 
@@ -1739,7 +1771,6 @@ function renderHelpDetailed(containerId) {
         </li>
     `).join('');
     
-    // Generar contenido
     const contentHtml = HELP_SECTIONS.map(s => `
         <section class="help-detailed-section" id="help-section-${s.id}" data-section-id="${s.id}">
             <h2>${s.icon} ${s.title}</h2>
@@ -1769,13 +1800,12 @@ function renderHelpDetailed(containerId) {
     
     window._helpDetailedContainerId = containerId;
     
-    // 🆕 CORRECCIÓN #15: Renderizar FAQs dinámicamente en su sección
     renderFAQsEnAyudaDetallada();
     
-    // 🆕 CORRECCIÓN #3: Crear los botones flotantes ⬆️⬇️ para el contenido
+    // Crear botones flotantes
     setTimeout(() => {
         crearBotonesFlotantesAyuda('#help-detailed-content', 'detailed');
-    }, 200);
+    }, 500);
 }
 
 // ============================================================
@@ -1846,7 +1876,6 @@ window.HelpDetailedModule = {
     renderFAQsEnAyudaDetallada,
     toggleFAQEnAyudaDetallada,
     filtrarFAQsEnAyudaDetallada,
-    // 🆕 CORRECCIÓN #3
     crearBotonesFlotantesAyuda,
     eliminarBotonesFlotantesAyuda,
     scrollToTopAyuda,
@@ -1854,7 +1883,6 @@ window.HelpDetailedModule = {
     HELP_SECTIONS
 };
 
-// Exponer funciones globalmente para uso desde onclick en HTML
 window.renderHelpDetailed = renderHelpDetailed;
 window.scrollToHelpSection = scrollToHelpSection;
 window.filtrarAyudaDetallada = filtrarAyudaDetallada;
@@ -1862,23 +1890,17 @@ window.inyectarEstilosAyuda = inyectarEstilosAyuda;
 window.renderFAQsEnAyudaDetallada = renderFAQsEnAyudaDetallada;
 window.toggleFAQEnAyudaDetallada = toggleFAQEnAyudaDetallada;
 window.filtrarFAQsEnAyudaDetallada = filtrarFAQsEnAyudaDetallada;
-// 🆕 CORRECCIÓN #3
 window.crearBotonesFlotantesAyuda = crearBotonesFlotantesAyuda;
 window.eliminarBotonesFlotantesAyuda = eliminarBotonesFlotantesAyuda;
 window.scrollToTopAyuda = scrollToTopAyuda;
 window.scrollToBottomAyuda = scrollToBottomAyuda;
 
-console.log('📦 Help Detailed Module cargado correctamente v1.3.0 (CORRECCIÓN #8 031026)');
+console.log('📦 Help Detailed Module cargado correctamente v1.3.2 (FIX DEFINITIVO botones flotantes)');
 console.log('   📚 Secciones estáticas:', HELP_SECTIONS.length - 1);
 console.log('   ❓ Sección dinámica de FAQs: se renderiza desde window.FAQS_DB');
-console.log('   ⬆️⬇️ Botones flotantes: activos en #help-detailed-content');
-console.log('   ✅ Sin iframe - todo dentro del mismo documento');
-console.log('   ✅ Respeta el tema actual (claro/oscuro)');
-console.log('   ✅ Búsqueda en vivo y navegación suave');
-console.log('   ✅ FAQs integradas al final del manual');
-console.log('   🎯 CORRECCIÓN #8 (290926) aplicada:');
-console.log('      ✅ Versión app: 2.3.6 → 2.5.0 (Intro + Créditos)');
-console.log('      ✅ N5: Promedio diario por producto (Dashboard + Perfil)');
-console.log('      ✅ N1/N2/N2-bis: Premios actualizados (exclusión deudores, 2 categorías, toggle entrega, historial)');
-console.log('      ✅ N3/N4: Ventas (ingresos unificados + liberadas se guardan siempre)');
-console.log('      ✅ N6/#12/Config.Bancaria: Herramientas ampliadas');
+console.log('   ⬆️⬇️ Botones flotantes v1.3.2:');
+console.log('      ✅ position: fixed con z-index 9999999999 (por encima del modal)');
+console.log('      ✅ Listener global con captura (detecta scroll de cualquier hijo)');
+console.log('      ✅ Polling cada 500ms');
+console.log('      ✅ Umbral reducido a 30px');
+console.log('   🎯 CORRECCIÓN #8 mantenida: contenido actualizado a v2.5.0');
