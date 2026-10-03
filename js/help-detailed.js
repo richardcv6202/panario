@@ -1,5 +1,18 @@
 // ============================================================
 // 📦 HELP DETAILED MODULE - Panario
+// v1.3.0 (031026): 🎯 CORRECCIÓN #8 (290926) — Actualización de contenido
+//   - ✅ ACTUALIZADO: Versión de app en "Introducción" (2.3.6 → 2.5.0)
+//   - ✅ ACTUALIZADO: Versión de app en "Créditos" (2.3.6 → 2.5.0)
+//   - ✅ NUEVO: Bloque N5 en "Dashboard" (Promedio diario por producto)
+//   - ✅ NUEVO: Bloques N1, N2, N2-bis, N1-historial en "Premios"
+//   - ✅ NUEVO: Bloques Config. Bancaria, #12, N6 en "Herramientas"
+//   - ✅ NUEVO: Bloques N3, N4 en "Ventas"
+//   - ✅ NUEVO: Bloque N5 en "Perfil"
+//   - ✅ MANTENIDO: Botones flotantes ⬆️⬇️ (CORRECCIÓN #3)
+//   - ✅ MANTENIDO: FAQs dinámicas desde window.FAQS_DB
+//   - ✅ MANTENIDO: Todas las secciones de v1.2.0
+//
+// HISTORIAL:
 // v1.2.0 (300926): 🎯 CORRECCIÓN #3
 //   - ✅ NUEVO: Botones flotantes ⬆️⬇️ para scroll rápido
 //   - ✅ NUEVO: _crearBotonesFlotantesAyuda() — genérico
@@ -8,7 +21,6 @@
 //   - ✅ NUEVO: Estilos .help-float-buttons y .help-float-btn
 //   - ✅ MANTENIDO: Todo lo de v1.1.0 (FAQs dinámicas, 15 secciones, etc.)
 //
-// HISTORIAL:
 // v1.1.0 (290926): 🎯 CORRECCIÓN #15 (290926)
 //   - ✅ NUEVO: Sección "❓ Preguntas Frecuentes" al final
 //   - ✅ NUEVO: renderFAQsEnAyudaDetallada() — lee window.FAQS_DB
@@ -64,7 +76,7 @@ const HELP_SECTIONS = [
             <div class="help-table-wrapper">
                 <table class="help-table">
                     <tr><th style="width: 40%;">Propiedad</th><th>Valor</th></tr>
-                    <tr><td>Versión</td><td><strong>2.3.6</strong></td></tr>
+                    <tr><td>Versión</td><td><strong>2.5.0</strong></td></tr>
                     <tr><td>Estado</td><td><span class="help-badge success">✅ Producción</span></td></tr>
                     <tr><td>Arquitectura</td><td>Cliente local (SQLite WASM)</td></tr>
                     <tr><td>Tecnología</td><td>HTML5 + CSS3 + JavaScript (ES6+)</td></tr>
@@ -174,6 +186,17 @@ const HELP_SECTIONS = [
                     <li>⭐ <strong>Amarillo:</strong> Día actual</li>
                 </ul>
             </div>
+
+            <h3>🆕 Promedio diario por producto (N5)</h3>
+            <p>Si activas el toggle <strong>"📊 Producto promedio"</strong> en tu Perfil y seleccionas un producto, aparecerá una tarjeta adicional en el Dashboard con las siguientes estadísticas del producto seleccionado:</p>
+            <ul>
+                <li>📊 <strong>Promedio diario de ventas</strong> (monto en pesos)</li>
+                <li>📅 <strong>Días con ventas:</strong> cuántos días distintos se vendió</li>
+                <li>💰 <strong>Total vendido:</strong> monto acumulado histórico</li>
+                <li>📦 <strong>Total unidades:</strong> cantidad de unidades vendidas</li>
+                <li>🥇 <strong>Mejor día:</strong> fecha y monto del día con mayor venta</li>
+            </ul>
+            <p style="font-size: 12px; color: var(--text-light);">💡 Útil para analizar qué tan bien se vende un producto específico y en qué días rinde más.</p>
         `
     },
     {
@@ -459,6 +482,12 @@ Costo por unidad = Costo total / rendimiento</code></pre>
 
             <h3>👤 Filtro por vendedor</h3>
             <p>Si hay más de 1 usuario en el negocio, aparece un selector <strong>👤 Vendedor</strong> para ver solo las ventas de un vendedor específico. El filtro aparece también en el reporte PDF.</p>
+
+            <h3>🆕 Ventas liberadas se guardan siempre (N4)</h3>
+            <p>Las ventas liberadas (sin cliente identificado) se guardan <strong>siempre</strong>, incluso si falla el descuento de stock por insuficiencia. Tras crearlas, el toggle <strong>"Mostrar liberadas"</strong> se activa automáticamente para que las veas listadas.</p>
+
+            <h3>🆕 Cálculo unificado de ingresos (N3)</h3>
+            <p>El total de ingresos mostrado en el <strong>Dashboard</strong> y en <strong>Ventas</strong> ahora se calcula desde <code>sales.total</code>, eliminando discrepancias entre ambas vistas. Si algún día ves cifras distintas, ejecuta el diagnóstico interno desde la consola.</p>
         `
     },
     {
@@ -598,6 +627,28 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <li>🎁 Premio asociado a cada uno</li>
                 <li>🏅 Top 5 del mes con medallas</li>
             </ul>
+
+            <h3>🆕 Exclusión de deudores (N1)</h3>
+            <p>Los clientes con <strong>deuda pendiente</strong> quedan <strong>excluidos automáticamente</strong> del cálculo de premios (Mejor Cliente y Más Frecuente). Esto evita premiar a clientes que no han pagado sus compras anteriores.</p>
+
+            <h3>🆕 Dos categorías de premios (N2)</h3>
+            <p>El modal de premios ahora distingue entre dos categorías independientes:</p>
+            <ul>
+                <li><strong>🥇 Mejor Cliente:</strong> el cliente con mayor gasto en el mes (mínimo de compras configurable, ej: 4)</li>
+                <li><strong>🥈 Más Frecuente:</strong> el cliente con mayor número de compras en el mes (mínimo de compras configurable, ej: 6)</li>
+            </ul>
+
+            <h3>🆕 Toggle "Premio no requiere entrega" (N2-bis)</h3>
+            <p>Permite registrar premios que <strong>no implican entrega física</strong> de producto (por ejemplo, un descuento o un reconocimiento). Estos premios quedan marcados como <strong>"Entregado"</strong> automáticamente, sin necesidad de registrar la entrega después.</p>
+
+            <h3>🆕 Historial de premios otorgados (N1)</h3>
+            <p>En la sección de premios hay una pestaña <strong>"🏆 Historial"</strong> donde puedes:</p>
+            <ul>
+                <li>Consultar todos los premios otorgados</li>
+                <li>Filtrar por año, tipo de premio, categoría o cliente</li>
+                <li>Ver si un premio ya fue entregado o está pendiente</li>
+                <li>Añadir notas a cada premio</li>
+            </ul>
         `
     },
     {
@@ -667,7 +718,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
             <p>Toggle para mostrar/ocultar la guía al inicio de la app.</p>
 
             <h3>📊 Elementos visibles en el Dashboard</h3>
-            <p>13 interruptores para personalizar el Dashboard:</p>
+            <p>Interruptores para personalizar el Dashboard:</p>
             <ul>
                 <li>⚡ Horario de corriente hoy</li>
                 <li>📋 Pedidos de hoy</li>
@@ -682,7 +733,19 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <li>🏆 Premios</li>
                 <li>🏦 QR de cuenta bancaria</li>
                 <li>🔗 Botones de acción rápida</li>
+                <li>🆕 📊 <strong>Producto promedio (N5)</strong></li>
             </ul>
+
+            <h3>🆕 Producto promedio (N5)</h3>
+            <p>Activa el toggle <strong>"📊 Producto promedio"</strong> y selecciona un producto. Aparecerá una tarjeta adicional en el Dashboard con:</p>
+            <ul>
+                <li>📊 Promedio diario de ventas del producto</li>
+                <li>📅 Días con ventas</li>
+                <li>💰 Total vendido</li>
+                <li>📦 Total unidades</li>
+                <li>🥇 Mejor día</li>
+            </ul>
+            <p style="font-size: 12px; color: var(--text-light);">💡 Al desactivar el toggle, el producto seleccionado se limpia automáticamente para evitar configuraciones inconsistentes.</p>
 
             <h3>🏦 Datos bancarios</h3>
             <p>Gestiona tus cuentas bancarias:</p>
@@ -747,6 +810,25 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <div class="help-card-title">⚠️ Advertencia</div>
                 <p>Las operaciones de <strong>eliminación</strong> y <strong>reinicio</strong> no se pueden deshacer. Haz copia de seguridad antes.</p>
             </div>
+
+            <h3>🆕 Configuración Bancaria (permisos)</h3>
+            <p>Solo el <strong>primer administrador</strong> puede configurar los permisos de las cuentas bancarias del negocio:</p>
+            <ul>
+                <li><strong>👁️ Ver QRs de otros:</strong> si los no-admin pueden ver las cuentas del negocio (solo lectura)</li>
+                <li><strong>⭐ Cambiar cuenta por defecto:</strong> si cada usuario puede elegir su cuenta individual</li>
+                <li><strong>🔒 Forzar QR del admin:</strong> TODOS ven únicamente el QR del admin en el Dashboard (anula las demás opciones)</li>
+            </ul>
+
+            <h3>🆕 Toggle "Producción HOY/MAÑANA" (#12)</h3>
+            <p>En Herramientas → <strong>"📅 Producción en Dashboard"</strong>, el primer admin puede elegir si la tarjeta de corriente del Dashboard muestra la producción del <strong>día actual</strong> o la del <strong>día siguiente</strong>. La preferencia se guarda por negocio.</p>
+
+            <h3>🆕 Diagnóstico de transacciones huérfanas (N6)</h3>
+            <p>En Herramientas → <strong>"🧹 Transacciones Huérfanas"</strong> hay dos botones:</p>
+            <ul>
+                <li><strong>🔍 Diagnosticar:</strong> detecta transacciones de ingreso sin venta válida asociada (sin <code>sale_id</code> o con venta eliminada)</li>
+                <li><strong>🧹 Limpiar:</strong> las elimina con confirmación previa (soft-delete)</li>
+            </ul>
+            <p style="font-size: 12px; color: var(--text-light);">💡 Útil para corregir posibles inflados en los totales de ingresos.</p>
         `
     },
     {
@@ -777,6 +859,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 <li>Revisa el <strong>Dashboard</strong> cada mañana</li>
                 <li>Haz <strong>copias de seguridad</strong> semanales</li>
                 <li>Registra los <strong>días sin ventas</strong> para tener estadísticas precisas</li>
+                <li>Activa el <strong>Producto promedio (N5)</strong> para analizar productos específicos</li>
             </ul>
 
             <h3>📱 Instalación como app</h3>
@@ -832,7 +915,7 @@ Costo por unidad = Costo total / rendimiento</code></pre>
                 </div>
 
                 <div style="margin-top: 24px; color: var(--text-light); font-size: 12px; line-height: 1.7;">
-                    <p><strong>Panario v2.3.6</strong></p>
+                    <p><strong>Panario v2.5.0</strong></p>
                     <p>© 2026 Ricardo Castillo Valdés</p>
                     <p>Todos los derechos reservados</p>
                     <p style="margin-top: 12px;">Hecho con ❤️ para panaderos artesanales</p>
@@ -1785,7 +1868,7 @@ window.eliminarBotonesFlotantesAyuda = eliminarBotonesFlotantesAyuda;
 window.scrollToTopAyuda = scrollToTopAyuda;
 window.scrollToBottomAyuda = scrollToBottomAyuda;
 
-console.log('📦 Help Detailed Module cargado correctamente v1.2.0 (CORRECCIÓN #3 300926)');
+console.log('📦 Help Detailed Module cargado correctamente v1.3.0 (CORRECCIÓN #8 031026)');
 console.log('   📚 Secciones estáticas:', HELP_SECTIONS.length - 1);
 console.log('   ❓ Sección dinámica de FAQs: se renderiza desde window.FAQS_DB');
 console.log('   ⬆️⬇️ Botones flotantes: activos en #help-detailed-content');
@@ -1793,3 +1876,9 @@ console.log('   ✅ Sin iframe - todo dentro del mismo documento');
 console.log('   ✅ Respeta el tema actual (claro/oscuro)');
 console.log('   ✅ Búsqueda en vivo y navegación suave');
 console.log('   ✅ FAQs integradas al final del manual');
+console.log('   🎯 CORRECCIÓN #8 (290926) aplicada:');
+console.log('      ✅ Versión app: 2.3.6 → 2.5.0 (Intro + Créditos)');
+console.log('      ✅ N5: Promedio diario por producto (Dashboard + Perfil)');
+console.log('      ✅ N1/N2/N2-bis: Premios actualizados (exclusión deudores, 2 categorías, toggle entrega, historial)');
+console.log('      ✅ N3/N4: Ventas (ingresos unificados + liberadas se guardan siempre)');
+console.log('      ✅ N6/#12/Config.Bancaria: Herramientas ampliadas');

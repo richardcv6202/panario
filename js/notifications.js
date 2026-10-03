@@ -42,6 +42,14 @@
 //     es necesario.
 //   - ✅ handleLogout() en app.js llama a cleanupNotificationsResources()
 //     antes de recargar la página.
+// 🆕 v2.3.6 (011026): 🎯 FIX NOTIFICACIONES EN LOGIN FRESCO
+//   - ✅ NUEVO flag _reminderSystemStarted para hacer idempotente
+//     startReminderSystem() (evita duplicar intervalos cuando se
+//     llama desde showApp() Y desde initApp()).
+//   - ✅ cleanupNotificationsResources() ahora resetea el flag
+//     _reminderSystemStarted para que el próximo login arranque
+//     el sistema de nuevo.
+//   - ✅ startReminderSystem() verifica el flag antes de arrancar.
 // ============================================================
 
 window.NotificationsModule = {};
@@ -99,6 +107,9 @@ const MAX_UNLOCK_ATTEMPTS = 10;
 // 🆕 v2.3.5: Flag para evitar listeners duplicados
 let _audioUnlockListenersAttached = false;
 let _audioUnlockHandlerRef = null;
+
+// 🆕 v2.3.6: Flag para hacer startReminderSystem() idempotente
+let _reminderSystemStarted = false;
 
 function getAudioContext() {
     if (_audioContext) return _audioContext;
@@ -268,7 +279,7 @@ if (document.readyState === 'loading') {
 // ============================================================
 
 function cleanupNotificationsResources() {
-    const LOG_PREFIX = '🧹 [cleanupNotificationsResources v2.3.5]';
+    const LOG_PREFIX = '🧹 [cleanupNotificationsResources v2.3.6]';
     console.log(`${LOG_PREFIX} ========== INICIO ==========`);
     
     try {
@@ -343,6 +354,10 @@ function cleanupNotificationsResources() {
         // 7. Resetear flag de procesamiento
         isProcessingNotification = false;
         
+        // 🆕 v2.3.6: Resetear flag del sistema de recordatorios
+        _reminderSystemStarted = false;
+        console.log(`${LOG_PREFIX} ✅ Flag de recordatorios reseteado (próximo login arrancará de nuevo)`);
+        
         console.log(`${LOG_PREFIX} ========== FIN ==========`);
         return true;
         
@@ -362,7 +377,7 @@ function cleanupNotificationsResources() {
  *   que fueron removidos al cerrar sesión.
  */
 function reinitAfterLogin() {
-    const LOG_PREFIX = '🔊 [reinitAfterLogin v2.3.5]';
+    const LOG_PREFIX = '🔊 [reinitAfterLogin v2.3.6]';
     console.log(`${LOG_PREFIX} Reinicializando recursos de audio tras login...`);
     
     try {
@@ -1381,12 +1396,29 @@ async function checkPendingOrders() {
 // ============================================================
 // INICIAR SISTEMA DE RECORDATORIOS
 // ============================================================
+// 
+// 🆕 v2.3.6: Ahora es IDEMPOTENTE.
+// 
+// ANTES: cada llamada creaba un nuevo setInterval + setTimeout,
+//        duplicando notificaciones si se llamaba desde showApp()
+//        Y desde initApp().
+// 
+// AHORA: un flag _reminderSystemStarted evita la duplicación.
+//        Se resetea en cleanupNotificationsResources() (logout).
+// ============================================================
 
 function startReminderSystem() {
+    // 🆕 v2.3.6: Evitar duplicación (idempotente)
+    if (_reminderSystemStarted) {
+        console.log('🔔 Sistema de recordatorios ya estaba iniciado, se omite');
+        return;
+    }
+    _reminderSystemStarted = true;
+    
     initNotificationSystem();
     setInterval(checkPendingOrders, 300000);
     setTimeout(checkPendingOrders, 3000);
-    console.log('🔔 Sistema de recordatorios iniciado');
+    console.log('🔔 Sistema de recordatorios iniciado (primera vez)');
 }
 
 // ============================================================
@@ -1432,10 +1464,10 @@ window.abortTestAllSounds = abortTestAllSounds;
 window.cleanupNotificationsResources = cleanupNotificationsResources;
 window.reinitAfterLogin = reinitAfterLogin;
 
-console.log('📦 Notifications Module v2.3.5 (REGRESIÓN #9 CORREGIDA)');
+console.log('📦 Notifications Module v2.3.6 (FIX NOTIFICACIONES EN LOGIN FRESCO)');
 console.log('   🔊 AudioContext singleton listo');
 console.log('   🎯 Listeners de unlock con flag anti-duplicados');
-console.log('   🆕 cleanupNotificationsResources() disponible');
-console.log('   🆕 reinitAfterLogin() disponible');
+console.log('   🆕 startReminderSystem() es idempotente (flag _reminderSystemStarted)');
+console.log('   🆕 cleanupNotificationsResources() resetea el flag de recordatorios');
 console.log('   ✅ getSoundConfig() lee de la BD (user_id)');
 console.log('   ✅ setSoundConfig() guarda en la BD (user_id)');

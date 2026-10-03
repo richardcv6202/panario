@@ -1,5 +1,26 @@
 // ============================================================
 // 📦 UI SETTINGS - Panario (Configuración y Herramientas)
+// v2.3.10 (021026): 🆕 CORRECCIÓN N6
+//   - ✅ NUEVO: Sección "🧹 Transacciones Huérfanas" en Herramientas → Diagnóstico
+//   - ✅ NUEVO: Botón "🔍 Diagnosticar" que ejecuta diagnosticarTransaccionesHuerfanas()
+//   - ✅ NUEVO: Botón "🧹 Limpiar" que ejecuta limpiarTransaccionesHuerfanas() con confirmación
+//   - ✅ NUEVO: Funciones diagnosticarTransaccionesHuerfanasAction() y limpiarTransaccionesHuerfanasAction()
+//   - ✅ ADAPTADO: Al formato real de db.js v2.6.0 (huerfanas, total_huerfano, detalle, porTipo)
+//   - ✅ MANTENIDO: Corrección #12 (300926)
+//   - ✅ MANTENIDO: Corrección #11 (300926)
+//   - ✅ MANTENIDO: Corrección #10 (300926)
+//   - ✅ MANTENIDO: FIX CRÍTICO closeHorarioDetalleModal (v2.3.6)
+//   - ✅ MANTENIDO: Todas las correcciones anteriores (#16, #2, #3, #4, etc.)
+//
+// HISTORIAL:
+// v2.3.9 (300926): 🎯 CORRECCIÓN #12
+//   - ✅ NUEVO: Toggle "Mostrar producción de HOY o MAÑANA" en Dashboard (solo admin)
+//   - ✅ NUEVO: Funciones globales getConfigGlobalNegocio() y saveConfigGlobalNegocio()
+//   - ✅ MANTENIDO: Corrección #11 (300926)
+//   - ✅ MANTENIDO: Corrección #10 (300926)
+//   - ✅ MANTENIDO: FIX CRÍTICO closeHorarioDetalleModal (v2.3.6)
+//   - ✅ MANTENIDO: Todas las correcciones anteriores (#16, #2, #3, #4, etc.)
+//
 // v2.3.8 (300926): 🎯 CORRECCIÓN #11
 //   - ✅ NUEVO: "Semanal" calcula hasta = desde + 6 días (7 días)
 //   - ✅ NUEVO: "Mensual" calcula desde=día 1 y hasta=fin del mes
@@ -10,7 +31,6 @@
 //   - ✅ MANTENIDO: FIX CRÍTICO closeHorarioDetalleModal (v2.3.6)
 //   - ✅ MANTENIDO: Todas las correcciones anteriores (#16, #2, #3, #4, etc.)
 //
-// HISTORIAL:
 // v2.3.7 (300926): 🎯 CORRECCIÓN #10
 //   - ✅ Bloque de producción coloreado en VERDE (#10b981)
 //
@@ -31,7 +51,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.3.8';
+    return '2.3.10';
 }
 
 window.getAppVersion = getAppVersion;
@@ -362,7 +382,6 @@ function _finDeMesDeFecha(fechaISO) {
         if (parts.length !== 3) return fechaISO;
         const year = parts[0];
         const month = parts[1];
-        // Día 0 del mes siguiente = último día del mes actual
         const ultimoDia = new Date(year, month, 0).getDate();
         return `${year}-${String(month).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
     } catch (e) {
@@ -390,7 +409,7 @@ window._primerDiaDelMes = _primerDiaDelMes;
 // ============================================================
 
 function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
-    const LOG_PREFIX = '🧠 [calcularBloquesIdeales v2.3.8]';
+    const LOG_PREFIX = '🧠 [calcularBloquesIdeales v2.3.10]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -400,7 +419,6 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
         if (!cpd || cpd <= 0) return { success: false, error: 'La cantidad a producir debe ser mayor a 0' };
         if (!cmpbc || cmpbc <= 0) return { success: false, error: 'El CMPBC debe ser mayor a 0' };
         
-        // PASO 1: RECOPILAR CANDIDATOS
         const candidatos = [];
         
         const bloquesHoy = window.CorrienteUtils.getBloques(fechaVenta);
@@ -444,7 +462,6 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
             return { success: false, error: 'No hay bloques de corriente disponibles', candidatos: [] };
         }
         
-        // PASO 2: CLASIFICAR
         const umbralIdeal = new Date(fechaVenta + 'T08:00:00');
         
         for (const c of candidatos) {
@@ -457,7 +474,6 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
         const amanecerValidos = candidatos.filter(c => c._esAmanecer);
         const restantes = candidatos.filter(c => !c._esAmanecer);
         
-        // PASO 3: ORDENAR
         amanecerValidos.sort((a, b) => {
             const aEsAyer = a.esBloqueAyer ? 1 : 0;
             const bEsAyer = b.esBloqueAyer ? 1 : 0;
@@ -475,7 +491,6 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
         
         const candidatosOrdenados = [...amanecerValidos, ...restantes];
         
-        // PASO 4: CALCULAR
         const numBloquesNecesarios = Math.ceil(cpd / cmpbc);
         const capacidadTotal = candidatosOrdenados.length * cmpbc;
         
@@ -490,7 +505,6 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
             };
         }
         
-        // PASO 5: DISTRIBUIR
         const asignacion = [];
         let restante = cpd;
         
@@ -517,7 +531,6 @@ function calcularBloquesIdeales(fechaVenta, cpd, cmpbc) {
             restante -= cantidad;
         }
         
-        // PASO 7: MENSAJE
         let mensaje = '';
         if (asignacion.length === 1) {
             const unico = asignacion[0];
@@ -569,6 +582,36 @@ function closeHorarioDetalleModal() {
 }
 
 window.closeHorarioDetalleModal = closeHorarioDetalleModal;
+
+// ============================================================
+// 🆕 CORRECCIÓN #12: HELPERS DE CONFIGURACIÓN GLOBAL
+// ============================================================
+
+function getConfigGlobalNegocio() {
+    try {
+        if (window.DBModule && typeof window.DBModule.getConfigGlobalNegocio === 'function') {
+            return window.DBModule.getConfigGlobalNegocio();
+        }
+    } catch (e) {
+        console.warn('⚠️ Error obteniendo config global:', e);
+    }
+    return { mostrar_produccion_hoy: 0 };
+}
+
+function saveConfigGlobalNegocio(config) {
+    try {
+        if (window.DBModule && typeof window.DBModule.saveConfigGlobalNegocio === 'function') {
+            return window.DBModule.saveConfigGlobalNegocio(config);
+        }
+    } catch (e) {
+        console.warn('⚠️ Error guardando config global:', e);
+        return { success: false, error: e.message };
+    }
+    return { success: false, error: 'DBModule.saveConfigGlobalNegocio no disponible' };
+}
+
+window.getConfigGlobalNegocio = getConfigGlobalNegocio;
+window.saveConfigGlobalNegocio = saveConfigGlobalNegocio;
 
 // ============================================================
 // DIAGNÓSTICO DE PRODUCCIÓN
@@ -1631,7 +1674,6 @@ function showHorarioDetalle(dateStr) {
         let totalHoras = 0;
         bloquesHoy.forEach(b => { totalHoras += b.duracionHoras; });
 
-        // 🆕 CORRECCIÓN #10: Bloque con producción en VERDE
         const bloquesHtml = bloquesHoy.map((h, i) => {
             const bloqueIndexHoy = i + 1;
             const esProduccionHoy = bloqueActual && !bloqueActual.esDiaAnterior && bloqueActual.bloqueIndex === bloqueIndexHoy;
@@ -2208,6 +2250,7 @@ function eliminarProduccion(fechaISO) {
 
 window.guardarProduccion = guardarProduccion;
 window.eliminarProduccion = eliminarProduccion;
+
 
 // ============================================================
 // PRODUCCIÓN POR RANGO
@@ -2825,17 +2868,9 @@ window.consultarHorariosFecha = consultarHorariosFecha;
 // ============================================================
 // 🆕 CORRECCIÓN #11: GENERAR REPORTE PDF DE CORRIENTE
 // ============================================================
-// 
-// CAMBIO v2.3.8:
-//   - ✅ NUEVO: "Semanal" calcula hasta = desde + 6 días (7 días)
-//   - ✅ NUEVO: "Mensual" calcula desde=día 1 y hasta=fin del mes
-//   - ✅ NUEVO: Inputs se actualizan visualmente ANTES de generar
-//   - ✅ NUEVO: Etiqueta de rango en el header del PDF
-//   - ✅ MANTENIDO: Todo el formato del PDF y badges verdes
-// ============================================================
 
 function generarReportePDF(tipo) {
-    const LOG_PREFIX = '📄 [generarReportePDF v2.3.8]';
+    const LOG_PREFIX = '📄 [generarReportePDF v2.3.10]';
     console.log(`${LOG_PREFIX} tipo="${tipo}" — CORRECCIÓN #11 aplicada`);
     
     const desdeInput = document.getElementById('reporte-fecha-desde');
@@ -2855,17 +2890,14 @@ function generarReportePDF(tipo) {
         return;
     }
     
-    // 🆕 CORRECCIÓN #11: Calcular "hasta" según el tipo
     let hasta = hastaInput.value;
     let rangoCalculado = false;
     
     if (tipo === 'semana') {
-        // Semanal: 7 días desde "desde" (desde + 6 días)
         hasta = _sumarDiasAFecha(desde, 6);
         rangoCalculado = true;
         console.log(`${LOG_PREFIX} 📅 Rango SEMANAL calculado: ${desde} → ${hasta} (7 días)`);
     } else if (tipo === 'mes') {
-        // Mensual: desde el día 1 del mes de "desde" hasta el último día de ese mes
         const primerDia = _primerDiaDelMes(desde);
         hasta = _finDeMesDeFecha(desde);
         desde = primerDia;
@@ -2873,7 +2905,6 @@ function generarReportePDF(tipo) {
         console.log(`${LOG_PREFIX} 📅 Rango MENSUAL calculado: ${desde} → ${hasta} (mes completo)`);
     }
     
-    // 🆕 CORRECCIÓN #11: Actualizar los inputs visualmente
     if (rangoCalculado) {
         desdeInput.value = desde;
         hastaInput.value = hasta;
@@ -5289,6 +5320,180 @@ window.deselectAllDeleteItems = deselectAllDeleteItems;
 window.executeDeleteSelected = executeDeleteSelected;
 
 // ============================================================
+// 🆕 CORRECCIÓN N6 v3: DIAGNÓSTICO Y LIMPIEZA DE TRANSACCIONES HUÉRFANAS
+// ADAPTADO AL FORMATO REAL DE db.js v2.6.0
+//   - Formato de retorno: { total, huerfanas, total_huerfano, porTipo, detalle }
+// ============================================================
+
+/**
+ * Acción para diagnosticar transacciones huérfanas.
+ */
+async function diagnosticarTransaccionesHuerfanasAction() {
+    const LOG_PREFIX = '🔍 [diagnosticarTransaccionesHuerfanasAction v2]';
+    console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+    
+    try {
+        if (!window.DBModule || typeof window.DBModule.diagnosticarTransaccionesHuerfanas !== 'function') {
+            console.error(`${LOG_PREFIX} ❌ Función no disponible`);
+            window.showToast('❌ Función de diagnóstico no disponible.', 'error', 5000);
+            return;
+        }
+
+        window.showToast('⏳ Diagnosticando...', 'info', 2000);
+        const resultado = window.DBModule.diagnosticarTransaccionesHuerfanas();
+        console.log(`${LOG_PREFIX} Resultado crudo:`, resultado);
+
+        if (!resultado) {
+            window.showToast('❌ Sin respuesta del diagnóstico', 'error', 5000);
+            return;
+        }
+
+        // ✅ ADAPTADO al formato real: huerfanas, total_huerfano, detalle, porTipo
+        const cantidad = resultado.huerfanas ?? resultado.cantidad ?? 0;
+        const totalMonto = resultado.total_huerfano ?? resultado.total ?? 0;
+        const detalles = resultado.detalle ?? resultado.detalles ?? [];
+        const porTipo = resultado.porTipo || {};
+        const totalIncome = resultado.total ?? 0;
+
+        console.log(`${LOG_PREFIX} Cantidad: ${cantidad}, Total: ${totalMonto}, TotalIncome: ${totalIncome}`);
+
+        if (cantidad > 0) {
+            const detallesHtml = (Array.isArray(detalles) ? detalles : []).map(d => 
+                `<li>ID: ${d.id} | Monto: $${parseFloat(d.amount || 0).toFixed(2)} | Concepto: ${d.concept || '—'} | Fecha: ${d.transaction_date ? new Date(d.transaction_date).toLocaleDateString() : '—'}</li>`
+            ).join('');
+
+            const desgloseHtml = Object.entries(porTipo)
+                .filter(([_, v]) => v > 0)
+                .map(([k, v]) => `<li><strong>${k}:</strong> ${v}</li>`)
+                .join('');
+
+            await window.ModalModule.showAlert({
+                title: '🔍 Transacciones Huérfanas Encontradas',
+                message: `Se encontraron <strong>${cantidad}</strong> transacción(es) huérfana(s) por un total de <strong>$${parseFloat(totalMonto).toFixed(2)}</strong>.`
+                    + (desgloseHtml ? `<br><br><strong>Desglose:</strong><ul style="margin: 6px 0 0 0; padding-left: 20px; font-size: 12px;">${desgloseHtml}</ul>` : '')
+                    + (detallesHtml ? `<br><details style="max-height: 200px; overflow-y: auto; background: var(--bg); padding: 8px; border-radius: 6px;"><summary style="cursor: pointer; font-weight: 600;">Ver detalles</summary><ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 12px;">${detallesHtml}</ul></details>` : ''),
+                icon: '🔍',
+                type: 'info'
+            });
+            window.showToast(`🔍 Encontradas ${cantidad} transacciones huérfanas ($${parseFloat(totalMonto).toFixed(2)})`, 'warning', 5000);
+        } else {
+            const desgloseHtml = Object.entries(porTipo).length > 0
+                ? `<br><br><strong>Desglose:</strong><ul style="margin: 6px 0 0 0; padding-left: 20px; font-size: 12px;">${Object.entries(porTipo).map(([k, v]) => `<li>${k}: ${v}</li>`).join('')}</ul>`
+                : '';
+            
+            const mensaje = `No se encontraron transacciones huérfanas.`
+                + `<br><br><strong>Total de transacciones income:</strong> ${totalIncome}`
+                + desgloseHtml;
+            
+            await window.ModalModule.showAlert({
+                title: '✅ Sin Transacciones Huérfanas',
+                message: mensaje,
+                icon: '✅',
+                type: 'success'
+            });
+            window.showToast('✅ No se encontraron transacciones huérfanas.', 'success', 5000);
+        }
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        console.error(`${LOG_PREFIX} Stack:`, e.stack);
+        window.showToast('❌ Error inesperado: ' + e.message, 'error', 6000);
+    }
+    
+    console.log(`${LOG_PREFIX} ========== FIN ==========`);
+}
+
+/**
+ * Acción para limpiar (soft-delete) transacciones huérfanas.
+ */
+async function limpiarTransaccionesHuerfanasAction() {
+    const LOG_PREFIX = '🧹 [limpiarTransaccionesHuerfanasAction v2]';
+    console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+    
+    try {
+        if (!window.DBModule || 
+            typeof window.DBModule.diagnosticarTransaccionesHuerfanas !== 'function' ||
+            typeof window.DBModule.limpiarTransaccionesHuerfanas !== 'function') {
+            console.error(`${LOG_PREFIX} ❌ Funciones no disponibles`);
+            window.showToast('❌ Funciones de limpieza no disponibles.', 'error', 5000);
+            return;
+        }
+
+        // 1. Diagnosticar
+        const diagnostico = window.DBModule.diagnosticarTransaccionesHuerfanas();
+        console.log(`${LOG_PREFIX} Diagnóstico:`, diagnostico);
+
+        const cantidad = diagnostico?.huerfanas ?? diagnostico?.cantidad ?? 0;
+        const totalMonto = diagnostico?.total_huerfano ?? diagnostico?.total ?? 0;
+        const totalIncome = diagnostico?.total ?? 0;
+
+        if (cantidad === 0) {
+            await window.ModalModule.showAlert({
+                title: '✅ Sin Transacciones Huérfanas',
+                message: `No hay transacciones huérfanas para limpiar.<br><br><strong>Total income revisadas:</strong> ${totalIncome}`,
+                icon: '✅',
+                type: 'success'
+            });
+            window.showToast('✅ No hay transacciones huérfanas para limpiar.', 'success', 5000);
+            return;
+        }
+
+        // 2. Confirmación
+        const confirmado = await window.ModalModule.showConfirm({
+            title: '🧹 Limpiar Transacciones Huérfanas',
+            message: `Se encontraron <strong>${cantidad}</strong> transacción(es) huérfana(s) por un total de <strong>$${parseFloat(totalMonto).toFixed(2)}</strong>.<br><br>¿Estás seguro de que quieres eliminarlas (soft-delete)?<br><br><strong>Esta acción no se puede deshacer.</strong>`,
+            confirmText: '🧹 Sí, limpiar',
+            cancelText: '❌ Cancelar',
+            icon: '🧹',
+            confirmColor: '#dc2626'
+        });
+
+        if (!confirmado) {
+            window.showToast('❌ Limpieza cancelada.', 'info', 2000);
+            return;
+        }
+
+        // 3. Ejecutar limpieza
+        window.showToast('⏳ Limpiando transacciones...', 'info', 3000);
+        const resultadoLimpieza = window.DBModule.limpiarTransaccionesHuerfanas(false);
+        console.log(`${LOG_PREFIX} Resultado limpieza:`, resultadoLimpieza);
+
+        // ✅ ADAPTADO: aceptar varios formatos posibles
+        if (resultadoLimpieza && (resultadoLimpieza.success || resultadoLimpieza.eliminadas > 0 || resultadoLimpieza.huerfanas_limpiadas > 0)) {
+            const eliminadas = resultadoLimpieza.eliminadas ?? resultadoLimpieza.huerfanas_limpiadas ?? resultadoLimpieza.huerfanas ?? cantidad;
+            const totalEliminado = resultadoLimpieza.totalEliminado ?? resultadoLimpieza.total_huerfano ?? resultadoLimpieza.total_eliminado ?? totalMonto;
+            
+            await window.ModalModule.showAlert({
+                title: '✅ Limpieza Completada',
+                message: `Se eliminaron <strong>${eliminadas}</strong> transacción(es) huérfana(s) por un total de <strong>$${parseFloat(totalEliminado).toFixed(2)}</strong>.`,
+                icon: '✅',
+                type: 'success'
+            });
+            window.showToast(`✅ ${eliminadas} transacción(es) eliminada(s)`, 'success', 6000);
+            
+            if (typeof window.renderSettingsView === 'function') {
+                setTimeout(window.renderSettingsView, 500);
+            }
+            if (typeof window.loadDashboardData === 'function') {
+                setTimeout(window.loadDashboardData, 800);
+            }
+        } else {
+            const errMsg = resultadoLimpieza?.error || 'Desconocido';
+            console.error(`${LOG_PREFIX} ❌ Error:`, errMsg);
+            window.showToast('❌ Error al limpiar: ' + errMsg, 'error', 6000);
+        }
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Excepción:`, e);
+        console.error(`${LOG_PREFIX} Stack:`, e.stack);
+        window.showToast('❌ Error inesperado: ' + e.message, 'error', 6000);
+    }
+    
+    console.log(`${LOG_PREFIX} ========== FIN ==========`);
+}
+
+window.diagnosticarTransaccionesHuerfanasAction = diagnosticarTransaccionesHuerfanasAction;
+window.limpiarTransaccionesHuerfanasAction = limpiarTransaccionesHuerfanasAction;
+
+// ============================================================
 // RENDER SETTINGS VIEW - COMPLETA
 // ============================================================
 
@@ -5358,6 +5563,39 @@ function renderSettingsView() {
                 🔐 Configurar permisos bancarios
             </button>
         </div>
+        
+        <div class="card" style="border-left: 4px solid #10b981; border: 2px solid #10b981;">
+            <h3 style="margin: 0 0 8px 0; color: #10b981;">📅 Producción en Dashboard</h3>
+            <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
+                Controla qué producción se muestra en la tarjeta de corriente del Dashboard:
+                <br>• <strong>Desactivado (default):</strong> muestra la producción de <strong>MAÑANA</strong>.
+                <br>• <strong>Activado:</strong> muestra la producción de <strong>HOY</strong>.
+            </p>
+            <div style="display: flex; align-items: center; gap: 12px; background: var(--bg); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+                <span style="font-size: 24px;">📅</span>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; font-size: 14px;">Mostrar producción de HOY</div>
+                    <div style="font-size: 11px; color: var(--text-light);">Si está desactivado, se muestra la de mañana.</div>
+                </div>
+                <label style="position: relative; display: inline-block; width: 50px; height: 26px; cursor: pointer; flex-shrink: 0;">
+                    <input type="checkbox" 
+                           id="toggle-mostrar-produccion-hoy"
+                           ${getConfigGlobalNegocio().mostrar_produccion_hoy ? 'checked' : ''}
+                           onchange="toggleConfigGlobal('mostrar_produccion_hoy', this.checked)"
+                           style="opacity: 0; width: 0; height: 0;">
+                    <span id="slider-mostrar-produccion-hoy" 
+                          style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+                                 background-color: ${getConfigGlobalNegocio().mostrar_produccion_hoy ? '#10b981' : '#94a3b8'}; 
+                                 border-radius: 26px; transition: 0.3s;">
+                        <span id="circle-mostrar-produccion-hoy" 
+                              style="position: absolute; height: 18px; width: 18px; 
+                                     left: ${getConfigGlobalNegocio().mostrar_produccion_hoy ? '28px' : '4px'}; bottom: 4px; 
+                                     background-color: white; border-radius: 50%; transition: 0.3s; 
+                                     box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
+                    </span>
+                </label>
+            </div>
+        </div>
         ` : ''}
         
         <div class="card" style="border-left: 4px solid #f59e0b; border: 2px solid #f59e0b;">
@@ -5425,7 +5663,24 @@ function renderSettingsView() {
                 🔍 Ejecutar diagnóstico
             </button>
         </div>
-        
+
+        <!-- 🆕 CORRECCIÓN N6: Botón para limpiar transacciones huérfanas -->
+        <div class="card" style="border-left: 4px solid #f97316; border: 2px dashed #f97316;">
+            <h3 style="margin: 0 0 8px 0; color: #f97316;">🧹 Transacciones Huérfanas</h3>
+            <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
+                Detecta y elimina transacciones de ingreso que no tienen una venta válida asociada.
+                <br>Esto corrige posibles inflados en los totales y reportes de ingresos.
+            </p>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button onclick="diagnosticarTransaccionesHuerfanasAction()" class="btn" style="padding: 8px 16px; font-size: 14px; width: auto; background: #f97316; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    🔍 Diagnosticar
+                </button>
+                <button onclick="limpiarTransaccionesHuerfanasAction()" class="btn danger" style="padding: 8px 16px; font-size: 14px; width: auto; background: #dc2626; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    🧹 Limpiar
+                </button>
+            </div>
+        </div>
+
         <div class="card" style="border-left: 4px solid #06b6d4; border: 2px solid #06b6d4;">
             <h3 style="margin: 0 0 8px 0; color: #06b6d4;">🎨 Restaurar Estilos</h3>
             <p style="font-size: 14px; color: var(--text-light); margin-bottom: 12px;">
@@ -5566,6 +5821,52 @@ function renderSettingsView() {
 }
 
 // ============================================================
+// 🆕 CORRECCIÓN #12: TOGGLE DE CONFIGURACIÓN GLOBAL
+// ============================================================
+
+async function toggleConfigGlobal(key, value) {
+    try {
+        const user = window.AuthModule.getCurrentUser();
+        if (!user || user.is_admin !== 1) {
+            window.showToast('🔒 Solo el administrador', 'warning', 4000);
+            return;
+        }
+
+        const currentConfig = getConfigGlobalNegocio();
+        currentConfig[key] = value ? 1 : 0;
+
+        const result = saveConfigGlobalNegocio(currentConfig);
+
+        if (result.success) {
+            const sliderId = `slider-${key.replace(/_/g, '-')}`;
+            const circleId = `circle-${key.replace(/_/g, '-')}`;
+            const slider = document.getElementById(sliderId);
+            const circle = document.getElementById(circleId);
+            
+            if (slider && circle) {
+                slider.style.backgroundColor = value ? '#10b981' : '#94a3b8';
+                circle.style.left = value ? '28px' : '4px';
+            }
+
+            const label = value ? '✅ Activado' : '🚫 Desactivado';
+            const nombre = key === 'mostrar_produccion_hoy' ? 'Mostrar producción de HOY' : key;
+            
+            window.showToast(`${label}: ${nombre}`, 'success', 2500);
+            console.log(`⚙️ [toggleConfigGlobal] ${key}=${value} guardado correctamente`);
+        } else {
+            window.showToast('❌ Error al guardar: ' + (result.error || 'Desconocido'), 'error', 4000);
+            const checkbox = document.getElementById(`toggle-${key.replace(/_/g, '-')}`);
+            if (checkbox) checkbox.checked = !value;
+        }
+    } catch (e) {
+        console.error('Error en toggleConfigGlobal:', e);
+        window.showToast('❌ Error: ' + e.message, 'error', 4000);
+    }
+}
+
+window.toggleConfigGlobal = toggleConfigGlobal;
+
+// ============================================================
 // UTILIDAD: COPIAR CÓDIGO DE INVITACIÓN
 // ============================================================
 
@@ -5601,7 +5902,7 @@ function copiarCodigoInvitacion(codigo) {
 window.copiarCodigoInvitacion = copiarCodigoInvitacion;
 
 // ============================================================
-// EXPORTACIÓN FINAL (v2.3.8)
+// EXPORTACIÓN FINAL (v2.3.10)
 // ============================================================
 
 window.renderSettingsView = renderSettingsView;
@@ -5715,17 +6016,31 @@ window.renderConfigBancariaContent = renderConfigBancariaContent;
 window.toggleConfigBancaria = toggleConfigBancaria;
 window.closeConfigBancariaModal = closeConfigBancariaModal;
 
-console.log('📦 UI Settings Module cargado correctamente v2.3.8');
-console.log('   🎯 CORRECCIÓN #11 (300926) aplicada:');
+window.getConfigGlobalNegocio = getConfigGlobalNegocio;
+window.saveConfigGlobalNegocio = saveConfigGlobalNegocio;
+window.toggleConfigGlobal = toggleConfigGlobal;
+
+// 🆕 CORRECCIÓN N6 v2 — Exportación de handlers
+window.diagnosticarTransaccionesHuerfanasAction = diagnosticarTransaccionesHuerfanasAction;
+window.limpiarTransaccionesHuerfanasAction = limpiarTransaccionesHuerfanasAction;
+
+console.log('📦 UI Settings Module cargado correctamente v2.3.10');
+console.log('   🆕 CORRECCIÓN N6 (021026) aplicada — v2 ADAPTADA:');
+console.log('      ✅ Nueva sección "🧹 Transacciones Huérfanas" en Herramientas → Diagnóstico');
+console.log('      ✅ Botón "🔍 Diagnosticar" con modal de resultados');
+console.log('      ✅ Botón "🧹 Limpiar" con confirmación y soft-delete');
+console.log('      ✅ Handlers ADAPTADOS al formato real de db.js v2.6.0:');
+console.log('         • Lee "huerfanas" (no "cantidad")');
+console.log('         • Lee "total_huerfano" (no "total")');
+console.log('         • Lee "detalle" (no "detalles")');
+console.log('         • Lee "porTipo" para desglose');
+console.log('         • Lee "total" para count de income');
+console.log('   🎯 CORRECCIÓN #12 (mantenida):');
+console.log('      ✅ Toggle "Mostrar producción de HOY/MAÑANA" en Dashboard');
+console.log('   🎯 CORRECCIÓN #11 (mantenida):');
 console.log('      ✅ Semanal → 7 días exactos desde "desde"');
 console.log('      ✅ Mensual → mes completo (día 1 al último día)');
-console.log('      ✅ Inputs de fecha se actualizan visualmente');
-console.log('      ✅ Etiqueta de rango en el header del PDF');
 console.log('   🎯 CORRECCIÓN #10 (mantenida):');
 console.log('      ✅ Bloque de producción coloreado en VERDE (#10b981)');
 console.log('   🆕 FIX CRÍTICO v2.3.6 (mantenido):');
 console.log('      ✅ closeHorarioDetalleModal es función global');
-console.log('   🔄 Correcciones anteriores mantenidas:');
-console.log('      • #16 (240926): Permisos bancarios');
-console.log('      • #2, #3, #4 (250926): Link créditos, modal progreso, salva');
-console.log('      • #8, #10, #11, #12, #14, #18 (240926)');

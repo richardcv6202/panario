@@ -43,19 +43,33 @@
 // 🆕 v2.3.7 (260926 v22): 🎯 NUEVA FUNCIONALIDAD #1 (260926) - NOTA A LA VENTA
 //   - ✅ NUEVA COLUMNA: sales.notes (TEXT DEFAULT NULL)
 // 🆕 v2.3.8 (260926 v23): 🎯 SESIÓN 7 - PERMISOS BANCARIOS + CUENTAS COMPARTIDAS
-//   - ✅ NUEVA COLUMNA: bank_accounts.is_shared (INTEGER DEFAULT 0)
-//     * 0 = Cuenta privada (solo el dueño y admin la ven)
-//     * 1 = Cuenta compartida (todos la ven si permitir_ver_qr_otros está activo)
-//   - ✅ NUEVA COLUMNA: users.is_first_admin (INTEGER DEFAULT 0)
-//     * 0 = Usuario normal o admin regular
-//     * 1 = Primer admin del negocio (el que lo creó)
-//   - ✅ NUEVA FUNCIÓN: ensureBankAccountSharedColumn(db)
-//   - ✅ NUEVA FUNCIÓN: ensureIsFirstAdminColumn(db)
-//   - ✅ NUEVA FUNCIÓN: esPrimerAdmin()
-//   - ✅ MODIFICADO: getBankAccountsParaUsuario() respeta is_shared
-//   - ✅ MODIFICADO: saveConfigBancaria() solo para primer admin
-//   - ✅ MODIFICADO: saveBankAccount() guarda is_shared
-//   - ✅ Se mantiene TODO lo anterior sin cambios.
+// 🆕 v2.3.9 (300926 v24): 🎯 CORRECCIÓN #12 - HORARIOS DE PRODUCCIÓN EN DASHBOARD
+// 🆕 v2.4.0 (011026 v25): 🎯 CORRECCIÓN N1 - HISTORIAL DE PREMIOS OTORGADOS
+// 🆕 v2.5.0 (011026 v26): 🎯 CORRECCIÓN N2 - NUEVOS REQUISITOS DE PREMIOS
+// 🆕 v2.6.0 (011026 v27): 🎯 CORRECCIONES N1-bis y N6 (011026)
+//   - ✅ N1-bis: Excluir clientes con deuda de premios (opción A: cualquier deuda)
+//     * calcularMejorClienteDelMes()
+//     * calcularClienteMasFrecuenteDelMes()
+//     * calcularGanadoresDelMes()
+//     * verificarExclusionGanadorAnterior()
+//     * calcularGanadorAnualPorVictorias()
+//     * calcularMejorClienteDelAño()
+//     * calcularMejorClienteDelAñoConConfig()
+//     * NUEVO HELPER: _getSQLExclusionDeudores()
+//   - ✅ N6: Limpieza de transacciones huérfanas (manual)
+//     * NUEVA FUNCIÓN: diagnosticarTransaccionesHuerfanas()
+//     * NUEVA FUNCIÓN: limpiarTransaccionesHuerfanas()
+// 🆕 v2.7.0 (011026 v28): 🎯 CORRECCIÓN N5 - TARJETA DE PROMEDIO DIARIO
+//   - ✅ NUEVA COLUMNA: users.dash_producto_promedio_id (INTEGER DEFAULT NULL)
+//   - ✅ NUEVA FUNCIÓN: getPromedioDiarioProducto(productoId, negocioId)
+//   - ✅ NUEVO HELPER: _ensureDashProductoPromedioColumn(db)
+//   - ✅ getUserDashboardConfig() y updateUserDashboardConfig() actualizados
+// 🆕 v2.7.1 (021026 v29): 🎯 FIX CRÍTICO N5
+//   - ✅ FIX: getUserDashboardConfig() ahora calcula show_producto_promedio
+//     dinámicamente basándose en dash_producto_promedio_id > 0
+//   - ❌ ANTES: show_producto_promedio estaba hardcodeado a false,
+//     lo que impedía que la tarjeta apareciera en el Dashboard aunque
+//     el usuario activara el toggle en el Perfil.
 // ============================================================
 
 let db = null;
@@ -91,7 +105,8 @@ const UUID_PREFIXES = {
     'bank_accounts':          'bco_',
     'waiting_list':           'wl_',
     'dias_sin_ventas':        'dsv_',
-    'calendario_produccion':  'cpr_'
+    'calendario_produccion':  'cpr_',
+    'premios_otorgados':      'pot_'
 };
 
 // ============================================================
@@ -119,7 +134,8 @@ const TABLAS_FUSION_ORDER = [
     'inventory',
     'inventory_movements',
     'notifications',
-    'dias_sin_ventas'
+    'dias_sin_ventas',
+    'premios_otorgados'
 ];
 
 const TABLAS_FK_MAP = {
@@ -170,6 +186,38 @@ const TABLAS_FK_MAP = {
         { col: 'producto_id', target: 'productos' }
     ]
 };
+
+// ============================================================
+// 🆕 v2.6.0: HELPER DE EXCLUSIÓN DE DEUDORES (N1-bis)
+// ============================================================
+
+/**
+ * Devuelve el fragmento SQL para excluir clientes con deuda pendiente.
+ * Opción A: cualquier deuda pendiente excluye al cliente de TODOS los premios.
+ * 
+ * Uso:
+ *   const sqlExclusion = _getSQLExclusionDeudores(negocioId);
+ *   // → " AND buyer NOT IN (SELECT DISTINCT buyer FROM sales WHERE negocio_id = 1 AND is_debt = 1 AND paid = 0 AND deleted_at IS NULL AND voided = 0 AND buyer IS NOT NULL AND buyer != '')"
+ * 
+ * @param {number} negocioId - ID del negocio
+ * @returns {string} Fragmento SQL para añadir a un WHERE (comienza con " AND ")
+ */
+function _getSQLExclusionDeudores(negocioId) {
+    if (!negocioId) return '';
+    // Nota: NO se usa parámetro ? aquí porque se interpola directamente
+    // El negocioId es un entero controlado internamente, sin riesgo de inyección
+    const negocioIdSafe = parseInt(negocioId) || 0;
+    return ` AND buyer NOT IN (
+        SELECT DISTINCT buyer FROM sales 
+        WHERE negocio_id = ${negocioIdSafe} 
+          AND is_debt = 1 
+          AND paid = 0 
+          AND deleted_at IS NULL 
+          AND voided = 0
+          AND buyer IS NOT NULL 
+          AND buyer != ''
+    )`;
+}
 
 // ============================================================
 // GENERADOR DE UUID
@@ -323,7 +371,6 @@ async function initDB() {
         await ensureCapacidadMaxBloqueColumn(db);
         await ensureBloquesDistribucionColumns(db);
         await ensureProductoIdColumn(db);
-        // 🆕 v2.3.7: Asegurar columna notes en sales
         await ensureSalesNotesColumn(db);
         await ensureNegociosTable(db);
         await ensureNegocioIdColumn(db);
@@ -336,19 +383,17 @@ async function initDB() {
         await ensureUuidColumns(db);
         await migrateUuids(db);
         await migrateToNewStructure(db);
-        // 🆕 CORRECCIÓN #16: Nuevas tablas de permisos bancarios
         await ensureBankDefaultUserTable(db);
         await ensureConfigBancariaTable(db);
-        // 🆕 REFINAMIENTO #16: Tercer toggle forzar_qr_admin
         await ensureForzarQRAdminColumn(db);
-        // 🆕 CORRECCIÓN #17: Nuevas columnas de preferencias individuales
         await ensureUserPreferencesColumns(db);
         await migratePreferencesFromLocalStorage(db);
-        // 🆕 v2.3.6: Reparar negocio_id nulos en bank_accounts
         await repararNegocioIdEnBankAccounts(db);
-        // 🆕 v2.3.8: SESIÓN 7 - Permisos bancarios + cuentas compartidas
         await ensureBankAccountSharedColumn(db);
         await ensureIsFirstAdminColumn(db);
+        await ensureConfigGlobalNegocioTable(db);
+        await ensurePremiosOtorgadosTable(db);
+        await _ensureDashProductoPromedioColumn(db);
         await seedDefaultUnits(db);
         await seedDefaultProducts(db);
         await seedDefaultInsumos(db);
@@ -362,6 +407,465 @@ async function initDB() {
     } catch (error) {
         console.error('❌ Error fatal inicializando DB:', error);
         throw error;
+    }
+}
+
+// ============================================================
+// 🆕 v2.7.0: CORRECCIÓN N5 - COLUMNA dash_producto_promedio_id
+// ============================================================
+
+async function _ensureDashProductoPromedioColumn(db) {
+    const LOG_PREFIX = '🔧 [_ensureDashProductoPromedioColumn v2.7.0]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        const tableCheck = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='users'`);
+        if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ La tabla users no existe todavía.`);
+            return;
+        }
+        
+        const columns = db.exec('PRAGMA table_info(users)');
+        const columnNames = columns[0]?.values?.map(row => row[1]) || [];
+        
+        if (!columnNames.includes('dash_producto_promedio_id')) {
+            try {
+                db.run('ALTER TABLE users ADD COLUMN dash_producto_promedio_id INTEGER DEFAULT NULL');
+                console.log(`${LOG_PREFIX} ✅ Columna dash_producto_promedio_id añadida a users`);
+            } catch (e) {
+                console.warn(`${LOG_PREFIX} ⚠️ Error añadiendo columna:`, e.message);
+            }
+        } else {
+            console.log(`${LOG_PREFIX} ✓ Columna dash_producto_promedio_id ya existe`);
+        }
+        
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+// ============================================================
+// 🆕 v2.4.0: CORRECCIÓN N1 - TABLA premios_otorgados
+// ============================================================
+
+async function ensurePremiosOtorgadosTable(db) {
+    const LOG_PREFIX = '🔧 [ensurePremiosOtorgadosTable v2.4.0]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        db.run(`
+            CREATE TABLE IF NOT EXISTS premios_otorgados (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                negocio_id INTEGER NOT NULL,
+                client_name TEXT NOT NULL,
+                tipo_premio TEXT NOT NULL,
+                categoria TEXT NOT NULL,
+                descripcion_premio TEXT,
+                fecha_otorgamiento TEXT NOT NULL,
+                periodo TEXT,
+                valor_pesos REAL DEFAULT 0,
+                notas TEXT,
+                entregado INTEGER DEFAULT 0,
+                created_by INTEGER,
+                modified_by INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                deleted_at DATETIME DEFAULT NULL,
+                uuid TEXT,
+                FOREIGN KEY (negocio_id) REFERENCES negocios(id)
+            )
+        `);
+        
+        try {
+            db.run('CREATE INDEX IF NOT EXISTS idx_premios_otorgados_negocio ON premios_otorgados(negocio_id)');
+            db.run('CREATE INDEX IF NOT EXISTS idx_premios_otorgados_client ON premios_otorgados(client_name)');
+            db.run('CREATE INDEX IF NOT EXISTS idx_premios_otorgados_fecha ON premios_otorgados(fecha_otorgamiento)');
+            db.run('CREATE INDEX IF NOT EXISTS idx_premios_otorgados_tipo ON premios_otorgados(tipo_premio)');
+            db.run('CREATE INDEX IF NOT EXISTS idx_premios_otorgados_categoria ON premios_otorgados(categoria)');
+        } catch (e) {}
+        
+        const columns = db.exec('PRAGMA table_info(premios_otorgados)');
+        const columnNames = columns[0]?.values?.map(row => row[1]) || [];
+        
+        const requiredColumns = [
+            { name: 'client_name', type: 'TEXT' },
+            { name: 'tipo_premio', type: 'TEXT' },
+            { name: 'categoria', type: 'TEXT' },
+            { name: 'descripcion_premio', type: 'TEXT' },
+            { name: 'fecha_otorgamiento', type: 'TEXT' },
+            { name: 'periodo', type: 'TEXT' },
+            { name: 'valor_pesos', type: 'REAL DEFAULT 0' },
+            { name: 'notas', type: 'TEXT' },
+            { name: 'entregado', type: 'INTEGER DEFAULT 0' },
+            { name: 'created_by', type: 'INTEGER' },
+            { name: 'modified_by', type: 'INTEGER' },
+            { name: 'created_at', type: 'DATETIME DEFAULT CURRENT_TIMESTAMP' },
+            { name: 'updated_at', type: 'DATETIME DEFAULT CURRENT_TIMESTAMP' },
+            { name: 'deleted_at', type: 'DATETIME DEFAULT NULL' },
+            { name: 'uuid', type: 'TEXT' }
+        ];
+        
+        for (const col of requiredColumns) {
+            if (!columnNames.includes(col.name)) {
+                try {
+                    db.run(`ALTER TABLE premios_otorgados ADD COLUMN ${col.name} ${col.type}`);
+                    console.log(`${LOG_PREFIX}   ✅ Columna añadida: ${col.name}`);
+                } catch (e) {
+                    console.warn(`${LOG_PREFIX}   ⚠️ No se pudo añadir ${col.name}:`, e.message);
+                }
+            }
+        }
+        
+        console.log(`${LOG_PREFIX} ✅ Tabla premios_otorgados verificada`);
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+        
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+function getPremiosOtorgados(filters = {}) {
+    const LOG_PREFIX = '🏆 [getPremiosOtorgados v2.4.0]';
+    
+    try {
+        const negocioId = getNegocioIdActual();
+        if (!negocioId) return [];
+        
+        let sql = 'SELECT * FROM premios_otorgados WHERE negocio_id = ? AND deleted_at IS NULL';
+        let params = [negocioId];
+        
+        if (filters.anio) {
+            sql += ' AND strftime("%Y", fecha_otorgamiento) = ?';
+            params.push(String(filters.anio));
+        }
+        if (filters.tipo_premio) {
+            sql += ' AND tipo_premio = ?';
+            params.push(filters.tipo_premio);
+        }
+        if (filters.categoria) {
+            sql += ' AND categoria = ?';
+            params.push(filters.categoria);
+        }
+        if (filters.client_name) {
+            sql += ' AND client_name LIKE ?';
+            params.push(`%${filters.client_name}%`);
+        }
+        if (filters.entregado !== undefined && filters.entregado !== null) {
+            sql += ' AND entregado = ?';
+            params.push(filters.entregado ? 1 : 0);
+        }
+        
+        sql += ' ORDER BY fecha_otorgamiento DESC, id DESC';
+        
+        const results = query(sql, params);
+        console.log(`${LOG_PREFIX} ✅ ${results.length} premios encontrados`);
+        return results;
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return [];
+    }
+}
+
+function getPremioOtorgado(id) {
+    const LOG_PREFIX = '🏆 [getPremioOtorgado v2.4.0]';
+    
+    try {
+        const negocioId = getNegocioIdActual();
+        const pid = Number(id);
+        if (!pid || isNaN(pid)) return null;
+        
+        const results = query(
+            'SELECT * FROM premios_otorgados WHERE id = ? AND negocio_id = ? AND deleted_at IS NULL',
+            [pid, negocioId]
+        );
+        
+        if (results.length === 0) return null;
+        return results[0];
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return null;
+    }
+}
+
+function savePremioOtorgado(data) {
+    const LOG_PREFIX = '🏆 [savePremioOtorgado v2.4.0]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        const negocioId = getNegocioIdActual();
+        const currentUserId = getCurrentUserId();
+        
+        if (!negocioId) {
+            return { success: false, error: 'No hay negocio activo' };
+        }
+        
+        if (!data.client_name || !data.client_name.trim()) {
+            return { success: false, error: 'El nombre del cliente es obligatorio' };
+        }
+        
+        if (!data.tipo_premio) {
+            return { success: false, error: 'El tipo de premio es obligatorio' };
+        }
+        
+        if (!data.categoria) {
+            return { success: false, error: 'La categoría es obligatoria' };
+        }
+        
+        if (!data.fecha_otorgamiento) {
+            return { success: false, error: 'La fecha de otorgamiento es obligatoria' };
+        }
+        
+        const clientName = data.client_name.trim();
+        const tipoPremio = data.tipo_premio.trim();
+        const categoria = data.categoria.trim();
+        const descripcion = data.descripcion_premio || null;
+        const fechaOtorgamiento = data.fecha_otorgamiento;
+        const periodo = data.periodo || null;
+        const valorPesos = parseFloat(data.valor_pesos) || 0;
+        const notas = data.notas || null;
+        const entregado = data.entregado ? 1 : 0;
+        
+        if (data.id) {
+            const pid = Number(data.id);
+            const existing = getPremioOtorgado(pid);
+            if (!existing) {
+                return { success: false, error: 'Premio no encontrado' };
+            }
+            
+            execute(`
+                UPDATE premios_otorgados 
+                SET client_name = ?, tipo_premio = ?, categoria = ?, descripcion_premio = ?,
+                    fecha_otorgamiento = ?, periodo = ?, valor_pesos = ?, notas = ?, entregado = ?,
+                    modified_by = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND negocio_id = ?
+            `, [
+                clientName, tipoPremio, categoria, descripcion,
+                fechaOtorgamiento, periodo, valorPesos, notas, entregado,
+                currentUserId, pid, negocioId
+            ]);
+            
+            console.log(`${LOG_PREFIX} ✅ Premio #${pid} actualizado`);
+            console.log(`${LOG_PREFIX} ========== FIN (update) ==========`);
+            return { success: true, id: pid, updated: true };
+        } else {
+            const uuid = generateUuidForTable('premios_otorgados');
+            
+            const result = execute(`
+                INSERT INTO premios_otorgados 
+                (negocio_id, client_name, tipo_premio, categoria, descripcion_premio,
+                 fecha_otorgamiento, periodo, valor_pesos, notas, entregado,
+                 created_by, modified_by, uuid)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                negocioId, clientName, tipoPremio, categoria, descripcion,
+                fechaOtorgamiento, periodo, valorPesos, notas, entregado,
+                currentUserId, currentUserId, uuid
+            ]);
+            
+            console.log(`${LOG_PREFIX} ✅ Premio creado. lastId=${result.lastId}`);
+            console.log(`${LOG_PREFIX} ========== FIN (insert) ==========`);
+            return { success: true, id: result.lastId, updated: false };
+        }
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return { success: false, error: e.message };
+    }
+}
+
+function deletePremioOtorgado(id) {
+    const LOG_PREFIX = '🏆 [deletePremioOtorgado v2.4.0]';
+    
+    try {
+        const negocioId = getNegocioIdActual();
+        const pid = Number(id);
+        
+        if (!pid || isNaN(pid)) {
+            return { success: false, error: 'ID inválido' };
+        }
+        
+        const existing = getPremioOtorgado(pid);
+        if (!existing) {
+            return { success: false, error: 'Premio no encontrado' };
+        }
+        
+        execute(
+            'UPDATE premios_otorgados SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND negocio_id = ?',
+            [pid, negocioId]
+        );
+        
+        console.log(`${LOG_PREFIX} ✅ Premio #${pid} eliminado (soft-delete)`);
+        return { success: true };
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return { success: false, error: e.message };
+    }
+}
+
+// ============================================================
+// 🆕 v2.6.0: CORRECCIÓN N6 - LIMPIEZA DE TRANSACCIONES HUÉRFANAS
+// ============================================================
+
+/**
+ * 🆕 N6: Diagnostica transacciones huérfanas SIN modificar nada.
+ * Útil para verificar antes de limpiar.
+ * @returns {Object} { total, huerfanas, porTipo, detalle }
+ */
+function diagnosticarTransaccionesHuerfanas() {
+    const LOG_PREFIX = '🔍 [diagnosticarTransaccionesHuerfanas v2.6.0]';
+    
+    try {
+        const negocioId = getNegocioIdActual();
+        if (!negocioId) {
+            return { total: 0, huerfanas: 0, porTipo: {}, detalle: [], error: 'No hay negocio activo' };
+        }
+        
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        // Todas las transacciones income activas
+        const todas = query(`
+            SELECT t.id, t.concept, t.amount, t.sale_id, t.category, t.transaction_date
+            FROM transactions t
+            WHERE t.negocio_id = ? 
+              AND t.type = 'income' 
+              AND t.deleted_at IS NULL 
+              AND t.voided = 0
+            ORDER BY t.id ASC
+        `, [negocioId]);
+        
+        // IDs de ventas válidas
+        const ventasValidas = query(`
+            SELECT id FROM sales 
+            WHERE negocio_id = ? AND deleted_at IS NULL
+        `, [negocioId]);
+        const ventasValidasSet = new Set(ventasValidas.map(v => Number(v.id)));
+        
+        const huerfanas = [];
+        const porTipo = {
+            sale_id_inexistente: 0,
+            sin_sale_id_no_inversion: 0,
+            sale_id_soft_deleted: 0
+        };
+        
+        for (const tx of todas) {
+            const saleId = tx.sale_id ? Number(tx.sale_id) : null;
+            
+            if (saleId && !ventasValidasSet.has(saleId)) {
+                // Tiene sale_id pero la venta no existe (o fue eliminada)
+                const ventaExiste = query('SELECT id, deleted_at FROM sales WHERE id = ?', [saleId]);
+                
+                if (ventaExiste.length === 0) {
+                    porTipo.sale_id_inexistente++;
+                    huerfanas.push({ ...tx, razon: `Venta #${saleId} no existe` });
+                } else if (ventaExiste[0].deleted_at) {
+                    porTipo.sale_id_soft_deleted++;
+                    huerfanas.push({ ...tx, razon: `Venta #${saleId} está eliminada (soft-delete)` });
+                }
+            } else if (!saleId && tx.category !== 'inversion') {
+                // Sin sale_id y no es inversión
+                porTipo.sin_sale_id_no_inversion++;
+                huerfanas.push({ ...tx, razon: 'Sin sale_id y no es inversión' });
+            }
+        }
+        
+        const totalHuerfano = huerfanas.reduce((sum, h) => sum + (parseFloat(h.amount) || 0), 0);
+        
+        console.log(`${LOG_PREFIX} Total transacciones income: ${todas.length}`);
+        console.log(`${LOG_PREFIX} Huérfanas detectadas: ${huerfanas.length} ($${totalHuerfano.toFixed(2)})`);
+        console.log(`${LOG_PREFIX} Desglose:`, porTipo);
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+        
+        return {
+            total: todas.length,
+            huerfanas: huerfanas.length,
+            total_huerfano: totalHuerfano,
+            porTipo,
+            detalle: huerfanas
+        };
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return { total: 0, huerfanas: 0, porTipo: {}, detalle: [], error: e.message };
+    }
+}
+
+/**
+ * 🆕 N6: Limpia (soft-delete) las transacciones huérfanas.
+ * @param {boolean} [dryRun=false] - Si true, solo simula sin modificar
+ * @returns {Object} { eliminadas, total_eliminado, detalle }
+ */
+function limpiarTransaccionesHuerfanas(dryRun = false) {
+    const LOG_PREFIX = '🧹 [limpiarTransaccionesHuerfanas v2.6.0]';
+    
+    try {
+        const negocioId = getNegocioIdActual();
+        if (!negocioId) {
+            return { success: false, error: 'No hay negocio activo', eliminadas: 0, total_eliminado: 0, detalle: [] };
+        }
+        
+        console.log(`${LOG_PREFIX} ========== INICIO (dryRun=${dryRun}) ==========`);
+        
+        const diagnostico = diagnosticarTransaccionesHuerfanas();
+        
+        if (diagnostico.huerfanas === 0) {
+            console.log(`${LOG_PREFIX} ✅ No hay transacciones huérfanas para limpiar`);
+            console.log(`${LOG_PREFIX} ========== FIN ==========`);
+            return {
+                success: true,
+                eliminadas: 0,
+                total_eliminado: 0,
+                detalle: [],
+                mensaje: 'No había transacciones huérfanas'
+            };
+        }
+        
+        const ids = diagnostico.detalle.map(h => Number(h.id));
+        
+        if (dryRun) {
+            console.log(`${LOG_PREFIX} 🔍 DRY RUN: se eliminarían ${ids.length} transacciones ($${diagnostico.total_huerfano.toFixed(2)})`);
+            console.log(`${LOG_PREFIX} ========== FIN (dryRun) ==========`);
+            return {
+                success: true,
+                eliminadas: ids.length,
+                total_eliminado: diagnostico.total_huerfano,
+                detalle: diagnostico.detalle,
+                dryRun: true
+            };
+        }
+        
+        const placeholders = ids.map(() => '?').join(',');
+        execute(`
+            UPDATE transactions 
+            SET deleted_at = CURRENT_TIMESTAMP,
+                void_reason = 'Transacción huérfana (limpieza N6)',
+                voided_at = CURRENT_TIMESTAMP
+            WHERE id IN (${placeholders})
+        `, ids);
+        
+        saveAndNotify();
+        
+        console.log(`${LOG_PREFIX} ✅ ${ids.length} transacciones eliminadas ($${diagnostico.total_huerfano.toFixed(2)})`);
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+        
+        return {
+            success: true,
+            eliminadas: ids.length,
+            total_eliminado: diagnostico.total_huerfano,
+            detalle: diagnostico.detalle,
+            porTipo: diagnostico.porTipo,
+            dryRun: false
+        };
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return { success: false, error: e.message, eliminadas: 0, total_eliminado: 0, detalle: [] };
     }
 }
 
@@ -569,6 +1073,135 @@ async function ensureIsFirstAdminColumn(db) {
         console.log(`${LOG_PREFIX} ========== FIN ==========`);
     } catch (error) {
         console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+// ============================================================
+// 🆕 v2.3.9: CORRECCIÓN #12 - CONFIG GLOBAL DEL NEGOCIO
+// ============================================================
+
+async function ensureConfigGlobalNegocioTable(db) {
+    const LOG_PREFIX = '🔧 [ensureConfigGlobalNegocioTable v2.3.9]';
+    
+    try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
+        db.run(`
+            CREATE TABLE IF NOT EXISTS config_global_negocio (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                negocio_id INTEGER NOT NULL UNIQUE,
+                mostrar_produccion_hoy INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (negocio_id) REFERENCES negocios(id)
+            )
+        `);
+        
+        try {
+            db.run('CREATE INDEX IF NOT EXISTS idx_config_global_negocio ON config_global_negocio(negocio_id)');
+        } catch (e) {}
+        
+        const columns = db.exec('PRAGMA table_info(config_global_negocio)');
+        const columnNames = columns[0]?.values?.map(row => row[1]) || [];
+        
+        if (!columnNames.includes('mostrar_produccion_hoy')) {
+            try {
+                db.run('ALTER TABLE config_global_negocio ADD COLUMN mostrar_produccion_hoy INTEGER DEFAULT 0');
+                console.log(`${LOG_PREFIX} ✅ Columna mostrar_produccion_hoy añadida`);
+            } catch (e) {
+                console.warn(`${LOG_PREFIX} ⚠️ Error añadiendo columna:`, e.message);
+            }
+        } else {
+            console.log(`${LOG_PREFIX} ✓ Columna mostrar_produccion_hoy ya existe`);
+        }
+        
+        console.log(`${LOG_PREFIX} ✅ Tabla config_global_negocio verificada`);
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+        
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
+}
+
+function getConfigGlobalNegocio() {
+    const LOG_PREFIX = '⚙️ [getConfigGlobalNegocio v2.3.9]';
+    
+    const defaults = {
+        mostrar_produccion_hoy: false
+    };
+    
+    try {
+        const negocioId = getNegocioIdActual();
+        if (!negocioId) {
+            console.log(`${LOG_PREFIX} ℹ️ Sin negocio activo, usando defaults`);
+            return defaults;
+        }
+        
+        const result = query(
+            'SELECT * FROM config_global_negocio WHERE negocio_id = ? LIMIT 1',
+            [negocioId]
+        );
+        
+        if (result.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ Sin config, usando defaults`);
+            return defaults;
+        }
+        
+        const row = result[0];
+        const config = {
+            mostrar_produccion_hoy: row.mostrar_produccion_hoy === 1
+        };
+        
+        console.log(`${LOG_PREFIX} ✅ Config cargada: mostrar_produccion_hoy=${config.mostrar_produccion_hoy}`);
+        return config;
+        
+    } catch (e) {
+        console.warn(`${LOG_PREFIX} ⚠️ Error:`, e);
+        return defaults;
+    }
+}
+
+function saveConfigGlobalNegocio(config) {
+    const LOG_PREFIX = '⚙️ [saveConfigGlobalNegocio v2.3.9]';
+    
+    try {
+        if (!esPrimerAdmin()) {
+            console.warn(`${LOG_PREFIX} 🔒 Usuario no es el primer admin`);
+            return { success: false, error: 'Solo el primer administrador puede cambiar esta configuración' };
+        }
+        
+        const negocioId = getNegocioIdActual();
+        if (!negocioId) return { success: false, error: 'No hay negocio activo' };
+        
+        const mostrarHoy = config.mostrar_produccion_hoy ? 1 : 0;
+        
+        const existing = query(
+            'SELECT id FROM config_global_negocio WHERE negocio_id = ? LIMIT 1',
+            [negocioId]
+        );
+        
+        if (existing.length > 0) {
+            execute(`
+                UPDATE config_global_negocio 
+                SET mostrar_produccion_hoy = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE negocio_id = ?
+            `, [mostrarHoy, negocioId]);
+            console.log(`${LOG_PREFIX} ✅ Config actualizada: mostrar_produccion_hoy=${mostrarHoy}`);
+        } else {
+            execute(`
+                INSERT INTO config_global_negocio 
+                (negocio_id, mostrar_produccion_hoy)
+                VALUES (?, ?)
+            `, [negocioId, mostrarHoy]);
+            console.log(`${LOG_PREFIX} ✅ Config creada: mostrar_produccion_hoy=${mostrarHoy}`);
+        }
+        
+        return { success: true };
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return { success: false, error: e.message };
     }
 }
 
@@ -909,12 +1542,10 @@ function getConfigBancaria() {
     }
 }
 
-// 🆕 v2.3.8: saveConfigBancaria modificada - solo primer admin
 function saveConfigBancaria(config) {
     const LOG_PREFIX = '🏦 [saveConfigBancaria v2.3.8]';
     
     try {
-        // 🆕 v2.3.8: Solo el primer admin puede cambiar la configuración
         if (!esPrimerAdmin()) {
             console.warn(`${LOG_PREFIX} 🔒 Usuario no es el primer admin`);
             return { success: false, error: 'Solo el primer administrador puede cambiar esta configuración' };
@@ -958,7 +1589,6 @@ function saveConfigBancaria(config) {
     }
 }
 
-// 🆕 v2.3.8: Función esPrimerAdmin()
 function esPrimerAdmin() {
     const LOG_PREFIX = '👑 [esPrimerAdmin v2.3.8]';
     
@@ -1165,7 +1795,6 @@ function puedeUsuarioVerCuenta(account) {
         if (Number(user.is_admin) === 1) return true;
         if (Number(account.user_id) === Number(user.id)) return true;
         
-        // 🆕 v2.3.8: Solo ver cuentas compartidas si permitir_ver_qr_otros está activo
         const config = getConfigBancaria();
         if (config.permitir_ver_qr_otros && Number(account.is_shared) === 1) return true;
         
@@ -1880,7 +2509,7 @@ async function ensureAuditColumns(db) {
     const tablesConAuditoria = [
         'insumos', 'recipes', 'productos', 'orders', 'sales', 'transactions',
         'clients', 'waiting_list', 'bank_accounts', 'corriente_config', 'premios_config',
-        'dias_sin_ventas', 'calendario_produccion'
+        'dias_sin_ventas', 'calendario_produccion', 'premios_otorgados'
     ];
     
     let addedColumns = 0;
@@ -2055,8 +2684,16 @@ async function ensureBankAccountsColumns(db) {
     }
 }
 
+// ============================================================
+// 🆕 v2.5.0: ensurePremiosConfigTable CON MIGRACIÓN N2
+// ============================================================
+
 async function ensurePremiosConfigTable(db) {
+    const LOG_PREFIX = '🔧 [ensurePremiosConfigTable v2.5.0]';
+    
     try {
+        console.log(`${LOG_PREFIX} ========== INICIO ==========`);
+        
         db.run(`
             CREATE TABLE IF NOT EXISTS premios_config (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2072,19 +2709,54 @@ async function ensurePremiosConfigTable(db) {
                 FOREIGN KEY (negocio_id) REFERENCES negocios(id)
             )
         `);
-
+        
         const columns = db.exec('PRAGMA table_info(premios_config)');
         const columnNames = columns[0]?.values?.map(row => row[1]) || [];
         
+        // Columnas antiguas (compatibilidad)
         if (!columnNames.includes('premio_anual_calculo')) {
             db.run(`ALTER TABLE premios_config ADD COLUMN premio_anual_calculo TEXT DEFAULT 'inicio_anio'`);
+            console.log(`${LOG_PREFIX}   ✅ Columna añadida: premio_anual_calculo`);
         }
         if (!columnNames.includes('premio_anual_fecha')) {
             db.run(`ALTER TABLE premios_config ADD COLUMN premio_anual_fecha TEXT`);
+            console.log(`${LOG_PREFIX}   ✅ Columna añadida: premio_anual_fecha`);
         }
-
-        console.log('✅ Tabla premios_config verificada');
-    } catch (error) {}
+        
+        // 🆕 N2: Nuevas columnas
+        const nuevasColumnasN2 = [
+            { name: 'activo_mejor_cliente', type: 'INTEGER DEFAULT 1' },
+            { name: 'activo_mas_frecuente', type: 'INTEGER DEFAULT 1' },
+            { name: 'min_compras_mejor_cliente', type: 'INTEGER DEFAULT 4' },
+            { name: 'min_compras_mas_frecuente', type: 'INTEGER DEFAULT 6' },
+            { name: 'premio_mejor_cliente_texto', type: 'TEXT' },
+            { name: 'premio_mejor_cliente_valor', type: 'REAL DEFAULT 0' },
+            { name: 'premio_mas_frecuente_texto', type: 'TEXT' },
+            { name: 'premio_mas_frecuente_valor', type: 'REAL DEFAULT 0' },
+            { name: 'premio_anual_texto', type: 'TEXT' },
+            { name: 'premio_anual_valor', type: 'REAL DEFAULT 0' },
+            { name: 'excluir_ganador_anterior', type: 'INTEGER DEFAULT 1' }
+        ];
+        
+        let addedN2 = 0;
+        for (const col of nuevasColumnasN2) {
+            if (!columnNames.includes(col.name)) {
+                try {
+                    db.run(`ALTER TABLE premios_config ADD COLUMN ${col.name} ${col.type}`);
+                    console.log(`${LOG_PREFIX}   ✅ Columna N2 añadida: ${col.name}`);
+                    addedN2++;
+                } catch (e) {
+                    console.warn(`${LOG_PREFIX}   ⚠️ Error añadiendo ${col.name}:`, e.message);
+                }
+            }
+        }
+        
+        console.log(`${LOG_PREFIX} ✅ Tabla premios_config verificada (${addedN2} columnas N2 nuevas)`);
+        console.log(`${LOG_PREFIX} ========== FIN ==========`);
+        
+    } catch (error) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, error);
+    }
 }
 
 async function ensureDiasSinVentasTable(db) {
@@ -2182,7 +2854,7 @@ async function ensureNegocioIdInAllTables(db) {
         'insumos', 'recipes', 'productos', 'clients', 'orders',
         'sales', 'transactions', 'inventory', 'waiting_list',
         'notifications', 'bank_accounts', 'corriente_config',
-        'dias_sin_ventas', 'calendario_produccion'
+        'dias_sin_ventas', 'calendario_produccion', 'premios_otorgados'
     ];
     for (const table of tables) {
         try {
@@ -2212,7 +2884,7 @@ async function migrateNegocioIdToAllTables(db) {
             'insumos', 'recipes', 'productos', 'clients', 'orders',
             'sales', 'transactions', 'inventory', 'waiting_list',
             'notifications', 'bank_accounts', 'corriente_config',
-            'dias_sin_ventas', 'calendario_produccion'
+            'dias_sin_ventas', 'calendario_produccion', 'premios_otorgados'
         ];
         
         for (const table of tablesWithUserId) {
@@ -2243,7 +2915,7 @@ async function createNegocioIdIndexes(db) {
         'insumos', 'recipes', 'productos', 'clients', 'orders',
         'sales', 'transactions', 'inventory', 'waiting_list',
         'notifications', 'bank_accounts', 'corriente_config',
-        'dias_sin_ventas', 'calendario_produccion'
+        'dias_sin_ventas', 'calendario_produccion', 'premios_otorgados'
     ];
     for (const table of tables) {
         try { db.run(`CREATE INDEX IF NOT EXISTS idx_${table}_negocio_id ON ${table}(negocio_id)`); } catch (error) {}
@@ -2371,13 +3043,15 @@ function getUserDashboardConfig(userId) {
         show_sales_by_employee: true,
         show_debts: true,
         show_rewards: true,
+        show_producto_promedio: false,
+        producto_promedio_id: null,
         chart_mode: 'last7'
     };
     try {
         const results = query(`SELECT dash_show_corriente, dash_show_top_clients, dash_show_top_products,
                     dash_show_funds_analysis, dash_show_payment_methods, dash_show_quick_actions,
                     dash_show_bank_qr, dash_show_help_button, dash_show_orders_today,
-                    dash_chart_mode
+                    dash_chart_mode, dash_producto_promedio_id
              FROM users WHERE id = ?`, [userId]);
         if (results.length === 0) return defaultConfig;
         const row = results[0];
@@ -2396,6 +3070,15 @@ function getUserDashboardConfig(userId) {
             show_sales_by_employee: true,
             show_debts: true,
             show_rewards: true,
+            // 🆕 v2.7.1: FIX CRÍTICO N5 - Calcular dinámicamente
+            // ANTES: show_producto_promedio estaba hardcodeado a false,
+            // lo que impedía que la tarjeta apareciera aunque el usuario
+            // activara el toggle y seleccionara un producto.
+            // AHORA: se calcula basándose en si hay un producto válido seleccionado.
+            show_producto_promedio: row.dash_producto_promedio_id !== null && 
+                                    row.dash_producto_promedio_id !== undefined && 
+                                    row.dash_producto_promedio_id > 0,
+            producto_promedio_id: row.dash_producto_promedio_id || null,
             chart_mode: row.dash_chart_mode || 'last7'
         };
     } catch (e) { return defaultConfig; }
@@ -2407,7 +3090,7 @@ function updateUserDashboardConfig(userId, config) {
                 dash_show_top_products = ?, dash_show_funds_analysis = ?,
                 dash_show_payment_methods = ?, dash_show_quick_actions = ?,
                 dash_show_bank_qr = ?, dash_show_help_button = ?, dash_show_orders_today = ?,
-                dash_chart_mode = ?
+                dash_chart_mode = ?, dash_producto_promedio_id = ?
             WHERE id = ?`, [
             config.show_corriente ? 1 : 0, config.show_top_clients ? 1 : 0,
             config.show_top_products ? 1 : 0, config.show_funds_analysis ? 1 : 0,
@@ -2415,10 +3098,73 @@ function updateUserDashboardConfig(userId, config) {
             config.show_bank_qr ? 1 : 0, config.show_help_button ? 1 : 0,
             config.show_orders_today ? 1 : 0,
             config.chart_mode || 'last7',
+            config.producto_promedio_id || null,
             userId
         ]);
         return { success: true };
     } catch (e) { return { success: false, error: e.message }; }
+}
+
+// ============================================================
+// 🆕 v2.7.0: CORRECCIÓN N5 - PROMEDIO DIARIO POR PRODUCTO
+// ============================================================
+
+/**
+ * Calcula el promedio de ventas diarias de un producto específico.
+ * @param {number} productoId - ID del producto
+ * @param {number} negocioId - ID del negocio
+ * @returns {Object} { promedio, dias_con_ventas, total_vendido, total_unidades, mejor_dia }
+ */
+function getPromedioDiarioProducto(productoId, negocioId) {
+    const LOG_PREFIX = '📊 [getPromedioDiarioProducto v2.7.0]';
+    
+    try {
+        if (!productoId || !negocioId) {
+            console.log(`${LOG_PREFIX} ℹ️ Sin productoId o negocioId`);
+            return { promedio: 0, dias_con_ventas: 0, total_vendido: 0, total_unidades: 0, mejor_dia: null };
+        }
+
+        // 1. Obtener todas las ventas del producto
+        const ventas = query(
+            `SELECT DATE(sale_date, "localtime") as dia, SUM(total) as total_dia, SUM(quantity) as unidades_dia
+             FROM sales 
+             WHERE negocio_id = ? AND producto_id = ? AND deleted_at IS NULL AND voided = 0
+             GROUP BY DATE(sale_date, "localtime")`,
+            [negocioId, productoId]
+        );
+
+        if (ventas.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ No hay ventas para el producto #${productoId}`);
+            return { promedio: 0, dias_con_ventas: 0, total_vendido: 0, total_unidades: 0, mejor_dia: null };
+        }
+
+        const totalVendido = ventas.reduce((sum, v) => sum + (v.total_dia || 0), 0);
+        const totalUnidades = ventas.reduce((sum, v) => sum + (v.unidades_dia || 0), 0);
+        const diasConVentas = ventas.length;
+        
+        let mejorDia = null;
+        for (const venta of ventas) {
+            if (!mejorDia || venta.total_dia > mejorDia.total) {
+                mejorDia = { fecha: venta.dia, total: venta.total_dia };
+            }
+        }
+        
+        const promedio = diasConVentas > 0 ? totalVendido / diasConVentas : 0;
+
+        console.log(`${LOG_PREFIX} ✅ Producto #${productoId}: Promedio=$${promedio.toFixed(2)}, Días=${diasConVentas}`);
+
+        return {
+            promedio: promedio,
+            dias_con_ventas: diasConVentas,
+            total_vendido: totalVendido,
+            total_unidades: totalUnidades,
+            mejor_dia: mejorDia
+        };
+
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return { promedio: 0, dias_con_ventas: 0, total_vendido: 0, total_unidades: 0, mejor_dia: null, error: e.message };
+    }
 }
 
 // ============================================================
@@ -2561,6 +3307,7 @@ async function createAllTables(db) {
             dash_show_payment_methods INTEGER DEFAULT 1, dash_show_quick_actions INTEGER DEFAULT 1,
             dash_show_bank_qr INTEGER DEFAULT 0, dash_show_help_button INTEGER DEFAULT 1,
             dash_show_orders_today INTEGER DEFAULT 1, dash_chart_mode TEXT DEFAULT 'last7',
+            dash_producto_promedio_id INTEGER DEFAULT NULL,
             sound_enabled INTEGER DEFAULT 1, sound_id TEXT DEFAULT 'beep',
             guia_rapida_activa INTEGER DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP, deleted_at DATETIME DEFAULT NULL,
@@ -2718,6 +3465,17 @@ async function createAllTables(db) {
             id INTEGER PRIMARY KEY AUTOINCREMENT, negocio_id INTEGER NOT NULL UNIQUE,
             activo INTEGER DEFAULT 1, premio_mensual TEXT, premio_anual TEXT,
             premio_anual_calculo TEXT DEFAULT 'inicio_anio', premio_anual_fecha TEXT,
+            activo_mejor_cliente INTEGER DEFAULT 1,
+            activo_mas_frecuente INTEGER DEFAULT 1,
+            min_compras_mejor_cliente INTEGER DEFAULT 4,
+            min_compras_mas_frecuente INTEGER DEFAULT 6,
+            premio_mejor_cliente_texto TEXT,
+            premio_mejor_cliente_valor REAL DEFAULT 0,
+            premio_mas_frecuente_texto TEXT,
+            premio_mas_frecuente_valor REAL DEFAULT 0,
+            premio_anual_texto TEXT,
+            premio_anual_valor REAL DEFAULT 0,
+            excluir_ganador_anterior INTEGER DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             deleted_at DATETIME DEFAULT NULL, FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
 
@@ -2770,6 +3528,34 @@ async function createAllTables(db) {
             forzar_qr_admin INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
+
+        db.run(`CREATE TABLE IF NOT EXISTS config_global_negocio (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            negocio_id INTEGER NOT NULL UNIQUE,
+            mostrar_produccion_hoy INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
+
+        db.run(`CREATE TABLE IF NOT EXISTS premios_otorgados (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            negocio_id INTEGER NOT NULL,
+            client_name TEXT NOT NULL,
+            tipo_premio TEXT NOT NULL,
+            categoria TEXT NOT NULL,
+            descripcion_premio TEXT,
+            fecha_otorgamiento TEXT NOT NULL,
+            periodo TEXT,
+            valor_pesos REAL DEFAULT 0,
+            notas TEXT,
+            entregado INTEGER DEFAULT 0,
+            created_by INTEGER,
+            modified_by INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            deleted_at DATETIME DEFAULT NULL,
+            uuid TEXT,
             FOREIGN KEY (negocio_id) REFERENCES negocios(id))`);
 
         console.log('✅ Todas las tablas creadas/verificadas');
@@ -2848,7 +3634,7 @@ async function ensureSoftDeleteColumns(db) {
             'orders', 'order_items', 'payments', 'notifications', 'sales', 'transactions',
             'inventory', 'inventory_movements', 'insumos', 'receta_insumos',
             'waiting_list', 'bank_accounts', 'corriente_config', 'negocios', 'premios_config',
-            'dias_sin_ventas', 'calendario_produccion'
+            'dias_sin_ventas', 'calendario_produccion', 'premios_otorgados'
         ];
         for (const table of tables) {
             try {
@@ -2943,7 +3729,7 @@ function execute(sql, params = []) {
 }
 
 // ============================================================
-// 🆕 ENTREGA B: FUNCIONES CMPBC
+// ENTREGA B: FUNCIONES CMPBC
 // ============================================================
 
 function getCMPBCProducto(productoId) {
@@ -3028,7 +3814,7 @@ function getProduccionByFecha(fecha) {
 }
 
 function saveProduccion(data) {
-    const LOG_PREFIX = '💾 [saveProduccion v2.3.8]';
+    const LOG_PREFIX = '💾 [saveProduccion v2.3.9]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -3226,7 +4012,7 @@ function getProduccionRango(desde, hasta) {
 }
 
 function saveProduccionRango(data) {
-    const LOG_PREFIX = '💾💾 [saveProduccionRango v2.3.8]';
+    const LOG_PREFIX = '💾💾 [saveProduccionRango v2.3.9]';
     
     try {
         console.log(`${LOG_PREFIX} ========== INICIO ==========`);
@@ -3445,7 +4231,7 @@ function writeBackupMeta(db, backupType) {
         db.run(`INSERT INTO ${BACKUP_META_TABLE} 
             (backup_type, backup_date, backup_version, backup_negocio_id, backup_negocio_nombre, backup_user, backup_user_role)
             VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-            backupType, new Date().toISOString(), '2.3.8', negocioId,
+            backupType, new Date().toISOString(), '2.7.1', negocioId,
             negocio?.nombre || 'Desconocido', user?.username || 'Desconocido',
             user?.is_admin === 1 ? 'admin' : 'user'
         ]);
@@ -3512,8 +4298,7 @@ function getBankAccountsParaUsuario() {
             }));
         }
         
-        // 🆕 v2.3.8: Usuario no-admin
-        // Regla: ve sus propias cuentas + cuentas compartidas si permitir_ver_qr_otros está activo
+        // Usuario no-admin
         if (config.permitir_ver_qr_otros) {
             const visibles = query(`
                 SELECT * FROM bank_accounts 
@@ -3641,7 +4426,6 @@ function saveBankAccount(accountData) {
             }
         }
 
-        // 🆕 v2.3.8: Coerción de is_shared
         const isShared = (accountData.is_shared === true || accountData.is_shared === 1) ? 1 : 0;
 
         if (accountData.id) {
@@ -3806,7 +4590,7 @@ function exportRecetasProductosSalva() {
 
         const salva = {
             _meta: {
-                app: 'Panario', version: '2.3.8', type: 'salva_recetas_productos',
+                app: 'Panario', version: '2.7.1', type: 'salva_recetas_productos',
                 exportDate: new Date().toISOString(), negocio_id: negocioId,
                 negocio_nombre: getNombreNegocioDB(),
                 counts: {
@@ -3851,7 +4635,7 @@ function importRecetasProductosSalva(salvaData, mode = 'merge') {
             db.run('UPDATE productos SET deleted_at = CURRENT_TIMESTAMP WHERE negocio_id = ? AND deleted_at IS NULL', [negocioId]);
             db.run('UPDATE recipes SET deleted_at = CURRENT_TIMESTAMP WHERE negocio_id = ? AND deleted_at IS NULL', [negocioId]);
             db.run(`DELETE FROM receta_insumos WHERE receta_id IN (SELECT id FROM recipes WHERE negocio_id = ?)`, [negocioId]);
-            db.run(`DELETE FROM recipe_ingredients WHERE recipe_id IN (SELECT id FROM recipes WHERE negocio_id = ?)`, [negocioId]);
+            db.run(`DELETE FROM recipe_ingredients WHERE receta_id IN (SELECT id FROM recipes WHERE negocio_id = ?)`, [negocioId]);
         }
         const recipeIdMap = {};
 
@@ -4439,21 +5223,55 @@ function getDailySummary(negocioId, filters = {}) {
 }
 
 // ============================================================
-// PREMIOS
+// 🆕 v2.6.0: PREMIOS CON N2 + N1-bis (EXCLUSIÓN DE DEUDORES)
 // ============================================================
 
 function getPremiosConfig() {
     const negocioId = getNegocioIdActual();
+    const defaults = {
+        activo: false,
+        premio_mensual: '',
+        premio_anual: '',
+        premio_anual_calculo: 'inicio_anio',
+        premio_anual_fecha: null,
+        activo_mejor_cliente: true,
+        activo_mas_frecuente: true,
+        min_compras_mejor_cliente: 4,
+        min_compras_mas_frecuente: 6,
+        premio_mejor_cliente_texto: '',
+        premio_mejor_cliente_valor: 0,
+        premio_mas_frecuente_texto: '',
+        premio_mas_frecuente_valor: 0,
+        premio_anual_texto: '',
+        premio_anual_valor: 0,
+        excluir_ganador_anterior: true
+    };
+    
     try {
         const results = query('SELECT * FROM premios_config WHERE negocio_id = ? AND deleted_at IS NULL LIMIT 1', [negocioId]);
-        if (results.length === 0) return { activo: false, premio_mensual: '', premio_anual: '', premio_anual_calculo: 'inicio_anio', premio_anual_fecha: null };
+        if (results.length === 0) return defaults;
+        
+        const row = results[0];
         return {
-            ...results[0],
-            activo: results[0].activo === 1,
-            premio_anual_calculo: results[0].premio_anual_calculo || 'inicio_anio',
-            premio_anual_fecha: results[0].premio_anual_fecha || null
+            ...row,
+            activo: row.activo === 1,
+            premio_anual_calculo: row.premio_anual_calculo || 'inicio_anio',
+            premio_anual_fecha: row.premio_anual_fecha || null,
+            activo_mejor_cliente: row.activo_mejor_cliente !== 0,
+            activo_mas_frecuente: row.activo_mas_frecuente !== 0,
+            min_compras_mejor_cliente: parseInt(row.min_compras_mejor_cliente) || 4,
+            min_compras_mas_frecuente: parseInt(row.min_compras_mas_frecuente) || 6,
+            premio_mejor_cliente_texto: row.premio_mejor_cliente_texto || '',
+            premio_mejor_cliente_valor: parseFloat(row.premio_mejor_cliente_valor) || 0,
+            premio_mas_frecuente_texto: row.premio_mas_frecuente_texto || '',
+            premio_mas_frecuente_valor: parseFloat(row.premio_mas_frecuente_valor) || 0,
+            premio_anual_texto: row.premio_anual_texto || '',
+            premio_anual_valor: parseFloat(row.premio_anual_valor) || 0,
+            excluir_ganador_anterior: row.excluir_ganador_anterior !== 0
         };
-    } catch (e) { return { activo: false, premio_mensual: '', premio_anual: '', premio_anual_calculo: 'inicio_anio', premio_anual_fecha: null }; }
+    } catch (e) {
+        return defaults;
+    }
 }
 
 function savePremiosConfig(config) {
@@ -4461,24 +5279,62 @@ function savePremiosConfig(config) {
     const currentUserId = getCurrentUserId();
     try {
         const existing = query('SELECT id FROM premios_config WHERE negocio_id = ? LIMIT 1', [negocioId]);
+        
+        const valores = [
+            config.activo ? 1 : 0,
+            config.premio_mensual || '',
+            config.premio_anual || '',
+            config.premio_anual_calculo || 'inicio_anio',
+            config.premio_anual_fecha || null,
+            config.activo_mejor_cliente !== false ? 1 : 0,
+            config.activo_mas_frecuente !== false ? 1 : 0,
+            parseInt(config.min_compras_mejor_cliente) || 4,
+            parseInt(config.min_compras_mas_frecuente) || 6,
+            config.premio_mejor_cliente_texto || '',
+            parseFloat(config.premio_mejor_cliente_valor) || 0,
+            config.premio_mas_frecuente_texto || '',
+            parseFloat(config.premio_mas_frecuente_valor) || 0,
+            config.premio_anual_texto || '',
+            parseFloat(config.premio_anual_valor) || 0,
+            config.excluir_ganador_anterior !== false ? 1 : 0
+        ];
+        
         if (existing.length > 0) {
-            execute(`UPDATE premios_config SET activo = ?, premio_mensual = ?, premio_anual = ?, 
+            execute(`UPDATE premios_config SET 
+                    activo = ?, premio_mensual = ?, premio_anual = ?, 
                     premio_anual_calculo = ?, premio_anual_fecha = ?,
-                    modified_by = ?, updated_at = CURRENT_TIMESTAMP WHERE negocio_id = ?`, [
-                config.activo ? 1 : 0, config.premio_mensual || '', config.premio_anual || '',
-                config.premio_anual_calculo || 'inicio_anio', config.premio_anual_fecha || null,
-                currentUserId, negocioId]);
+                    activo_mejor_cliente = ?, activo_mas_frecuente = ?,
+                    min_compras_mejor_cliente = ?, min_compras_mas_frecuente = ?,
+                    premio_mejor_cliente_texto = ?, premio_mejor_cliente_valor = ?,
+                    premio_mas_frecuente_texto = ?, premio_mas_frecuente_valor = ?,
+                    premio_anual_texto = ?, premio_anual_valor = ?,
+                    excluir_ganador_anterior = ?,
+                    modified_by = ?, updated_at = CURRENT_TIMESTAMP 
+                WHERE negocio_id = ?`, [
+                ...valores, currentUserId, negocioId
+            ]);
         } else {
-            execute(`INSERT INTO premios_config (negocio_id, activo, premio_mensual, premio_anual, premio_anual_calculo, premio_anual_fecha, created_by, modified_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [negocioId, config.activo ? 1 : 0, config.premio_mensual || '',
-                config.premio_anual || '', config.premio_anual_calculo || 'inicio_anio',
-                config.premio_anual_fecha || null, currentUserId, currentUserId]);
+            execute(`INSERT INTO premios_config 
+                (negocio_id, activo, premio_mensual, premio_anual, premio_anual_calculo, premio_anual_fecha,
+                 activo_mejor_cliente, activo_mas_frecuente,
+                 min_compras_mejor_cliente, min_compras_mas_frecuente,
+                 premio_mejor_cliente_texto, premio_mejor_cliente_valor,
+                 premio_mas_frecuente_texto, premio_mas_frecuente_valor,
+                 premio_anual_texto, premio_anual_valor, excluir_ganador_anterior,
+                 created_by, modified_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+                negocioId, ...valores, currentUserId, currentUserId
+            ]);
         }
         saveAndNotify();
         return { success: true };
     } catch (e) { return { success: false, error: e.message }; }
 }
 
+/**
+ * 🆕 N1-bis: Calcula el mejor cliente del mes (mayor gasto).
+ * EXCLUYE clientes con deuda pendiente.
+ */
 function calcularMejorClienteDelMes() {
     const negocioId = getNegocioIdActual();
     try {
@@ -4489,10 +5345,13 @@ function calcularMejorClienteDelMes() {
         const ultimoDia = new Date(year, now.getMonth() + 1, 0).getDate();
         const finMes = `${year}-${month}-${String(ultimoDia).padStart(2, '0')}`;
         
+        const exclusion = _getSQLExclusionDeudores(negocioId);
+        
         const results = query(`SELECT buyer, COUNT(*) as compras, SUM(total) as total_gastado
             FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
               AND buyer IS NOT NULL AND buyer != '' AND buyer != 'Cliente sin nombre' AND buyer != 'Cliente ocasional'
               AND DATE(sale_date) >= DATE(?) AND DATE(sale_date) <= DATE(?)
+              ${exclusion}
             GROUP BY buyer ORDER BY total_gastado DESC LIMIT 1`, [negocioId, inicioMes, finMes]);
         
         if (results.length === 0) return null;
@@ -4500,15 +5359,322 @@ function calcularMejorClienteDelMes() {
     } catch (e) { return null; }
 }
 
+/**
+ * 🆕 N2 + N1-bis: Cliente más frecuente del mes (mayor número de compras).
+ * EXCLUYE clientes con deuda pendiente.
+ */
+function calcularClienteMasFrecuenteDelMes(year = null, month = null) {
+    const negocioId = getNegocioIdActual();
+    try {
+        const now = new Date();
+        const anio = year || now.getFullYear();
+        const mes = month || (now.getMonth() + 1);
+        const monthStr = String(mes).padStart(2, '0');
+        const inicioMes = `${anio}-${monthStr}-01`;
+        const ultimoDia = new Date(anio, mes, 0).getDate();
+        const finMes = `${anio}-${monthStr}-${String(ultimoDia).padStart(2, '0')}`;
+        
+        const config = getPremiosConfig();
+        const minCompras = config.min_compras_mas_frecuente || 6;
+        const exclusion = _getSQLExclusionDeudores(negocioId);
+        
+        const results = query(`SELECT buyer, COUNT(*) as compras, SUM(total) as total_gastado
+            FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
+              AND buyer IS NOT NULL AND buyer != '' AND buyer != 'Cliente sin nombre' AND buyer != 'Cliente ocasional'
+              AND DATE(sale_date) >= DATE(?) AND DATE(sale_date) <= DATE(?)
+              ${exclusion}
+            GROUP BY buyer 
+            HAVING COUNT(*) >= ?
+            ORDER BY compras DESC, total_gastado DESC
+            LIMIT 1`, [negocioId, inicioMes, finMes, minCompras]);
+        
+        if (results.length === 0) return null;
+        return { 
+            buyer: results[0].buyer, 
+            compras: results[0].compras, 
+            total_gastado: results[0].total_gastado, 
+            periodo: `${monthStr}/${anio}`,
+            min_compras: minCompras
+        };
+    } catch (e) { 
+        console.error('Error en calcularClienteMasFrecuenteDelMes:', e);
+        return null; 
+    }
+}
+
+/**
+ * 🆕 N1-bis: Verifica si un cliente ya ganó en una categoría el mes anterior.
+ * EXCLUYE clientes con deuda pendiente.
+ */
+function verificarExclusionGanadorAnterior(categoria, mesReferencia = null) {
+    const negocioId = getNegocioIdActual();
+    try {
+        const ref = mesReferencia || new Date();
+        const mesAnterior = new Date(ref.getFullYear(), ref.getMonth() - 1, 1);
+        const year = mesAnterior.getFullYear();
+        const month = String(mesAnterior.getMonth() + 1).padStart(2, '0');
+        const inicioMes = `${year}-${month}-01`;
+        const ultimoDia = new Date(year, mesAnterior.getMonth() + 1, 0).getDate();
+        const finMes = `${year}-${month}-${String(ultimoDia).padStart(2, '0')}`;
+        
+        const config = getPremiosConfig();
+        const exclusion = _getSQLExclusionDeudores(negocioId);
+        
+        if (categoria === 'mejor_cliente') {
+            const minCompras = config.min_compras_mejor_cliente || 4;
+            const results = query(`SELECT buyer FROM sales 
+                WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
+                  AND buyer IS NOT NULL AND buyer != '' AND buyer != 'Cliente sin nombre' AND buyer != 'Cliente ocasional'
+                  AND DATE(sale_date) >= DATE(?) AND DATE(sale_date) <= DATE(?)
+                  ${exclusion}
+                GROUP BY buyer 
+                HAVING COUNT(*) >= ?
+                ORDER BY SUM(total) DESC LIMIT 1`, [negocioId, inicioMes, finMes, minCompras]);
+            return results.length > 0 ? results[0].buyer : null;
+        } else if (categoria === 'mas_frecuente') {
+            const minCompras = config.min_compras_mas_frecuente || 6;
+            const results = query(`SELECT buyer FROM sales 
+                WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
+                  AND buyer IS NOT NULL AND buyer != '' AND buyer != 'Cliente sin nombre' AND buyer != 'Cliente ocasional'
+                  AND DATE(sale_date) >= DATE(?) AND DATE(sale_date) <= DATE(?)
+                  ${exclusion}
+                GROUP BY buyer 
+                HAVING COUNT(*) >= ?
+                ORDER BY COUNT(*) DESC, SUM(total) DESC LIMIT 1`, [negocioId, inicioMes, finMes, minCompras]);
+            return results.length > 0 ? results[0].buyer : null;
+        }
+        
+        return null;
+    } catch (e) {
+        console.error('Error en verificarExclusionGanadorAnterior:', e);
+        return null;
+    }
+}
+
+/**
+ * 🆕 N2 + N1-bis: Calcula AMBOS ganadores del mes aplicando exclusiones.
+ * EXCLUYE clientes con deuda pendiente.
+ */
+function calcularGanadoresDelMes(year = null, month = null) {
+    const negocioId = getNegocioIdActual();
+    try {
+        const now = new Date();
+        const anio = year || now.getFullYear();
+        const mes = month || (now.getMonth() + 1);
+        const monthStr = String(mes).padStart(2, '0');
+        const inicioMes = `${anio}-${monthStr}-01`;
+        const ultimoDia = new Date(anio, mes, 0).getDate();
+        const finMes = `${anio}-${monthStr}-${String(ultimoDia).padStart(2, '0')}`;
+        
+        const config = getPremiosConfig();
+        const exclusion = _getSQLExclusionDeudores(negocioId);
+        
+        if (!config.activo) {
+            return { mejor_cliente: null, mas_frecuente: null, exclusion_aplicada: false };
+        }
+        
+        let mejorCliente = null;
+        let masFrecuente = null;
+        let exclusionAplicada = false;
+        
+        // 🥇 Mejor Cliente
+        if (config.activo_mejor_cliente) {
+            const minCompras = config.min_compras_mejor_cliente || 4;
+            const results = query(`SELECT buyer, COUNT(*) as compras, SUM(total) as total_gastado
+                FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
+                  AND buyer IS NOT NULL AND buyer != '' AND buyer != 'Cliente sin nombre' AND buyer != 'Cliente ocasional'
+                  AND DATE(sale_date) >= DATE(?) AND DATE(sale_date) <= DATE(?)
+                  ${exclusion}
+                GROUP BY buyer 
+                HAVING COUNT(*) >= ?
+                ORDER BY total_gastado DESC LIMIT 1`, [negocioId, inicioMes, finMes, minCompras]);
+            
+            if (results.length > 0) {
+                mejorCliente = {
+                    buyer: results[0].buyer,
+                    compras: results[0].compras,
+                    total_gastado: results[0].total_gastado,
+                    periodo: `${monthStr}/${anio}`
+                };
+            }
+        }
+        
+        // 🥈 Más Frecuente (con exclusión)
+        if (config.activo_mas_frecuente) {
+            const minCompras = config.min_compras_mas_frecuente || 6;
+            
+            const ganadorAnterior = config.excluir_ganador_anterior 
+                ? verificarExclusionGanadorAnterior('mas_frecuente', new Date(anio, mes - 1, 1))
+                : null;
+            
+            let sql = `SELECT buyer, COUNT(*) as compras, SUM(total) as total_gastado
+                FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
+                  AND buyer IS NOT NULL AND buyer != '' AND buyer != 'Cliente sin nombre' AND buyer != 'Cliente ocasional'
+                  AND DATE(sale_date) >= DATE(?) AND DATE(sale_date) <= DATE(?)
+                  ${exclusion}`;
+            let params = [negocioId, inicioMes, finMes];
+            
+            if (ganadorAnterior) {
+                sql += ` AND buyer != ?`;
+                params.push(ganadorAnterior);
+                exclusionAplicada = true;
+            }
+            
+            sql += ` GROUP BY buyer HAVING COUNT(*) >= ? ORDER BY compras DESC, total_gastado DESC LIMIT 1`;
+            params.push(minCompras);
+            
+            const results = query(sql, params);
+            
+            if (results.length > 0) {
+                masFrecuente = {
+                    buyer: results[0].buyer,
+                    compras: results[0].compras,
+                    total_gastado: results[0].total_gastado,
+                    periodo: `${monthStr}/${anio}`,
+                    excluido_ganador_anterior: ganadorAnterior || null
+                };
+            }
+        }
+        
+        return {
+            mejor_cliente: mejorCliente,
+            mas_frecuente: masFrecuente,
+            exclusion_aplicada: exclusionAplicada,
+            periodo: `${monthStr}/${anio}`
+        };
+        
+    } catch (e) {
+        console.error('Error en calcularGanadoresDelMes:', e);
+        return { mejor_cliente: null, mas_frecuente: null, exclusion_aplicada: false };
+    }
+}
+
+/**
+ * 🆕 N2 + N1-bis: Ganador anual por VICTORIAS.
+ * EXCLUYE clientes con deuda pendiente.
+ */
+function calcularGanadorAnualPorVictorias(year = null) {
+    const negocioId = getNegocioIdActual();
+    try {
+        const anio = year || new Date().getFullYear();
+        const config = getPremiosConfig();
+        const exclusion = _getSQLExclusionDeudores(negocioId);
+        
+        const victoriasPorCliente = {};
+        
+        for (let mes = 1; mes <= 12; mes++) {
+            const monthStr = String(mes).padStart(2, '0');
+            const inicioMes = `${anio}-${monthStr}-01`;
+            const ultimoDia = new Date(anio, mes, 0).getDate();
+            const finMes = `${anio}-${monthStr}-${String(ultimoDia).padStart(2, '0')}`;
+            
+            if (config.activo_mejor_cliente) {
+                const minCompras = config.min_compras_mejor_cliente || 4;
+                const results = query(`SELECT buyer FROM sales 
+                    WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
+                      AND buyer IS NOT NULL AND buyer != '' AND buyer != 'Cliente sin nombre' AND buyer != 'Cliente ocasional'
+                      AND DATE(sale_date) >= DATE(?) AND DATE(sale_date) <= DATE(?)
+                      ${exclusion}
+                    GROUP BY buyer HAVING COUNT(*) >= ? ORDER BY SUM(total) DESC LIMIT 1`,
+                    [negocioId, inicioMes, finMes, minCompras]);
+                
+                if (results.length > 0) {
+                    const cliente = results[0].buyer;
+                    if (!victoriasPorCliente[cliente]) {
+                        victoriasPorCliente[cliente] = { victorias: 0, mejor_cliente: 0, mas_frecuente: 0 };
+                    }
+                    victoriasPorCliente[cliente].victorias++;
+                    victoriasPorCliente[cliente].mejor_cliente++;
+                }
+            }
+            
+            if (config.activo_mas_frecuente) {
+                const minCompras = config.min_compras_mas_frecuente || 6;
+                const results = query(`SELECT buyer FROM sales 
+                    WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
+                      AND buyer IS NOT NULL AND buyer != '' AND buyer != 'Cliente sin nombre' AND buyer != 'Cliente ocasional'
+                      AND DATE(sale_date) >= DATE(?) AND DATE(sale_date) <= DATE(?)
+                      ${exclusion}
+                    GROUP BY buyer HAVING COUNT(*) >= ? ORDER BY COUNT(*) DESC, SUM(total) DESC LIMIT 1`,
+                    [negocioId, inicioMes, finMes, minCompras]);
+                
+                if (results.length > 0) {
+                    const cliente = results[0].buyer;
+                    if (!victoriasPorCliente[cliente]) {
+                        victoriasPorCliente[cliente] = { victorias: 0, mejor_cliente: 0, mas_frecuente: 0 };
+                    }
+                    victoriasPorCliente[cliente].victorias++;
+                    victoriasPorCliente[cliente].mas_frecuente++;
+                }
+            }
+        }
+        
+        // Gasto total del año por cliente
+        const gastosAnio = {};
+        const gastosResults = query(`SELECT buyer, COUNT(*) as compras, SUM(total) as total_gastado
+            FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
+              AND buyer IS NOT NULL AND buyer != '' AND buyer != 'Cliente sin nombre' AND buyer != 'Cliente ocasional'
+              AND DATE(sale_date) >= DATE(?) AND DATE(sale_date) <= DATE(?)
+              ${exclusion}
+            GROUP BY buyer`, [negocioId, `${anio}-01-01`, `${anio}-12-31`]);
+        
+        gastosResults.forEach(row => {
+            gastosAnio[row.buyer] = {
+                compras: row.compras,
+                total_gastado: row.total_gastado
+            };
+        });
+        
+        const ranking = Object.entries(victoriasPorCliente)
+            .map(([buyer, stats]) => ({
+                buyer,
+                victorias: stats.victorias,
+                mejor_cliente: stats.mejor_cliente,
+                mas_frecuente: stats.mas_frecuente,
+                compras: gastosAnio[buyer]?.compras || 0,
+                total_gastado: gastosAnio[buyer]?.total_gastado || 0
+            }))
+            .sort((a, b) => {
+                if (b.victorias !== a.victorias) return b.victorias - a.victorias;
+                return b.total_gastado - a.total_gastado;
+            });
+        
+        if (ranking.length === 0) return null;
+        
+        const ganador = ranking[0];
+        return {
+            buyer: ganador.buyer,
+            victorias: ganador.victorias,
+            mejor_cliente: ganador.mejor_cliente,
+            mas_frecuente: ganador.mas_frecuente,
+            compras: ganador.compras,
+            total_gastado: ganador.total_gastado,
+            periodo: `${anio}`,
+            ranking: ranking.slice(0, 5)
+        };
+        
+    } catch (e) {
+        console.error('Error en calcularGanadorAnualPorVictorias:', e);
+        return null;
+    }
+}
+
+/**
+ * 🆕 N1-bis: Mejor cliente del año (mayor gasto).
+ * EXCLUYE clientes con deuda pendiente.
+ */
 function calcularMejorClienteDelAño() {
     const negocioId = getNegocioIdActual();
     try {
         const now = new Date();
         const year = now.getFullYear();
+        const exclusion = _getSQLExclusionDeudores(negocioId);
+        
         const results = query(`SELECT buyer, COUNT(*) as compras, SUM(total) as total_gastado
             FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
               AND buyer IS NOT NULL AND buyer != '' AND buyer != 'Cliente sin nombre' AND buyer != 'Cliente ocasional'
               AND DATE(sale_date) >= DATE(?) AND DATE(sale_date) <= DATE(?)
+              ${exclusion}
             GROUP BY buyer ORDER BY total_gastado DESC LIMIT 1`, [negocioId, `${year}-01-01`, `${year}-12-31`]);
         
         if (results.length === 0) return null;
@@ -4516,11 +5682,16 @@ function calcularMejorClienteDelAño() {
     } catch (e) { return null; }
 }
 
+/**
+ * 🆕 N1-bis: Mejor cliente del año con config.
+ * EXCLUYE clientes con deuda pendiente.
+ */
 function calcularMejorClienteDelAñoConConfig(calculo = 'inicio_anio', year = null) {
     const negocioId = getNegocioIdActual();
     try {
         const now = new Date();
         const anio = year || now.getFullYear();
+        const exclusion = _getSQLExclusionDeudores(negocioId);
         
         let fechaFin = `${anio}-12-31`;
         
@@ -4533,7 +5704,8 @@ function calcularMejorClienteDelAñoConConfig(calculo = 'inicio_anio', year = nu
         const results = query(`SELECT buyer, COUNT(*) as compras, SUM(total) as total_gastado
             FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
               AND buyer IS NOT NULL AND buyer != '' AND buyer != 'Cliente sin nombre' AND buyer != 'Cliente ocasional'
-              AND DATE(sale_date) >= DATE(?) AND DATE(sale_date) <= DATE(?) 
+              AND DATE(sale_date) >= DATE(?) AND DATE(sale_date) <= DATE(?)
+              ${exclusion}
             GROUP BY buyer ORDER BY total_gastado DESC LIMIT 1`, 
             [negocioId, `${anio}-01-01`, fechaFin]);
         
@@ -5169,23 +6341,32 @@ window.DBModule = {
     ensureNegociosTable, ensureNegocioIdColumn, migrateToMultiUser,
     ensureNegocioIdInAllTables, migrateNegocioIdToAllTables, createNegocioIdIndexes,
     ensureIsAdminColumn,
-    // 🆕 v2.3.6: Reparación de negocio_id en bank_accounts
     repararNegocioIdEnBankAccounts,
-    // 🆕 v2.3.8: SESIÓN 7 - Permisos bancarios + cuentas compartidas
     ensureBankAccountSharedColumn,
     ensureIsFirstAdminColumn,
     esPrimerAdmin,
-    // 🆕 ENTREGA B
+    ensureConfigGlobalNegocioTable,
+    getConfigGlobalNegocio,
+    saveConfigGlobalNegocio,
+    // N1: Historial de premios otorgados
+    ensurePremiosOtorgadosTable,
+    getPremiosOtorgados,
+    getPremioOtorgado,
+    savePremioOtorgado,
+    deletePremioOtorgado,
+    // N6: Limpieza de transacciones huérfanas
+    diagnosticarTransaccionesHuerfanas,
+    limpiarTransaccionesHuerfanas,
+    // ENTREGA B
     ensureCapacidadMaxBloqueColumn,
     ensureBloquesDistribucionColumns,
     getCMPBCProducto,
     getProductosConCMPBC,
-    // 🆕 CORRECCIÓN #9 + #1
+    // CORRECCIÓN #9 + #1
     contarPedidosYVentasFecha,
     contarPedidosYVentasFechaDetallado,
-    // 🆕 CORRECCIÓN #11
+    // CORRECCIÓN #11
     ensureProductoIdColumn,
-    // 🆕 v2.2.7: NUEVAS funciones de producto_id
     getProductoDeProduccion,
     getProduccionConProducto,
     validarProductoId,
@@ -5204,12 +6385,13 @@ window.DBModule = {
     getRecetaInsumos, saveRecetaInsumo, deleteRecetaInsumo,
     getCorrienteConfig, saveCorrienteConfig,
     getUserDashboardConfig, updateUserDashboardConfig,
+    getPromedioDiarioProducto, // 🆕 v2.7.0
     getInventory, getInventoryItem, getInventoryItemByName, saveInventoryItem,
     deleteInventoryItem,
     getWaitingList, getWaitingListCount, getNextWaitingPosition,
     addToWaitingList, removeFromWaitingList, reindexWaitingList,
     attendFromWaitingList, getWaitingListWithDetails, atenderParcialmenteDeLista,
-    // 🆕 CORRECCIÓN #16 + REFINAMIENTO #16 + v2.3.6 + v2.3.8
+    // Bancos
     getBankAccounts, getBankAccount, getDefaultBankAccount, saveBankAccount, deleteBankAccount, setDefaultBankAccount,
     getBankAccountsParaUsuario,
     getConfigBancaria, saveConfigBancaria,
@@ -5218,20 +6400,28 @@ window.DBModule = {
     ensureBankDefaultUserTable, ensureConfigBancariaTable,
     ensureForzarQRAdminColumn,
     esUsuarioActualAdmin,
-    // 🆕 CORRECCIÓN #17: Preferencias individuales
+    // Preferencias individuales
     ensureUserPreferencesColumns,
     migratePreferencesFromLocalStorage,
     getUserSoundConfig,
     updateUserSoundConfig,
     getUserGuiaRapidaActiva,
     updateUserGuiaRapida,
-    // Fin correcciones
+    // Ventas
     getDailySummary,
+    // 🆕 N2 + N1-bis: Premios con exclusión de deudores
     getPremiosConfig, savePremiosConfig,
-    calcularMejorClienteDelMes, calcularMejorClienteDelAño,
+    calcularMejorClienteDelMes,
+    calcularClienteMasFrecuenteDelMes,
+    calcularGanadoresDelMes,
+    verificarExclusionGanadorAnterior,
+    calcularGanadorAnualPorVictorias,
+    calcularMejorClienteDelAño,
     calcularMejorClienteDelAñoConConfig,
+    // Días sin ventas
     getDiasSinVentas, getDiaSinVenta, getDiaSinVentaByFecha,
     saveDiaSinVenta, deleteDiaSinVenta,
+    // Producción
     getProduccionByFecha,
     saveProduccion,
     deleteProduccion,
@@ -5239,18 +6429,32 @@ window.DBModule = {
     saveProduccionRango,
     contarProduccionEnRango,
     getProduccionRangoFechas,
+    // Backup
     exportDatabase, downloadDatabase, importDatabase, importDatabaseFromFile,
     importDatabaseDataOnly, importDatabaseDataOnlyFromFile,
     exportRecetasProductosSalva, importRecetasProductosSalva, readSalvaFile,
     BACKUP_TYPE_COMPLETE, BACKUP_TYPE_DATA_ONLY
 };
 
-console.log('📦 DB Module cargado correctamente v2.3.8');
-console.log('   🆕 SESIÓN 7 aplicada:');
-console.log('      ✅ Columna is_shared en bank_accounts');
-console.log('      ✅ Columna is_first_admin en users');
-console.log('      ✅ Función esPrimerAdmin()');
-console.log('      ✅ getBankAccountsParaUsuario() respeta is_shared');
-console.log('      ✅ saveConfigBancaria() solo para primer admin');
-console.log('      ✅ saveBankAccount() guarda is_shared');
+console.log('📦 DB Module cargado correctamente v2.7.1');
+console.log('   🆕 v2.7.1 (021026) — FIX CRÍTICO N5:');
+console.log('      ✅ getUserDashboardConfig() ahora calcula show_producto_promedio');
+console.log('         dinámicamente basándose en dash_producto_promedio_id > 0');
+console.log('      ✅ Corrige bug que impedía que la tarjeta apareciera en el Dashboard');
+console.log('   🆕 v2.7.0 (011026):');
+console.log('      ✅ Columna users.dash_producto_promedio_id');
+console.log('      ✅ _ensureDashProductoPromedioColumn() helper');
+console.log('      ✅ getPromedioDiarioProducto() implementada');
+console.log('      ✅ getUserDashboardConfig() extendida');
+console.log('      ✅ updateUserDashboardConfig() extendida');
+console.log('   🆕 CORRECCIÓN N1-bis (011026):');
+console.log('      ✅ _getSQLExclusionDeudores() helper');
+console.log('      ✅ 7 funciones de premios excluyen deudores');
+console.log('   🆕 CORRECCIÓN N6 (011026):');
+console.log('      ✅ diagnosticarTransaccionesHuerfanas()');
+console.log('      ✅ limpiarTransaccionesHuerfanas(dryRun)');
+console.log('   🆕 CORRECCIÓN N2 (011026) mantenida:');
+console.log('      ✅ 11 columnas nuevas en premios_config');
+console.log('   🆕 CORRECCIÓN N1 (v2.4.0) mantenida:');
+console.log('      ✅ Tabla premios_otorgados + CRUD');
 console.log('   🔄 Correcciones anteriores mantenidas: #1 a #17');

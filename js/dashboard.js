@@ -1,16 +1,14 @@
 // ============================================================
 // 📦 DASHBOARD MODULE - Panario (Panel de Control)
-// v2.2.5 (290926): 🎯 Correcciones GitHub 290926 (Punto #5 - Parte 1/2)
-//   - ✅ NUEVO: debtDetailsByClient → agrupación de deudas por cliente
-//     * Campo: { client_name, total, count, items: [...] }
-//     * items contiene las deudas individuales (id, total, remaining, delivery_date, product_name, quantity)
-//   - ✅ MANTENIDO: debtDetails intacto (vista plana, compatibilidad)
-//   - ✅ MANTENIDO: salesByEmployee (COALESCE created_by/user_id)
-//   - ✅ MANTENIDO: diasSinVentas + diasSinVentasDetalle
-//   - ✅ MANTENIDO: releasedSales, bestWorstDay, topClients, topProducts
-//   - ✅ MANTENIDO: 3 modos de gráfico (last7 | dom-sab | lun-dom)
+// v2.2.7 (011026): 🎯 Corrección N5 — Promedio diario por producto
+//   - ✅ NUEVO: campo promedioProducto en el objeto de retorno
+//   - ✅ NUEVO: lectura de show_producto_promedio y producto_promedio_id
+//   - ✅ NUEVO: llamada a DBModule.getPromedioDiarioProducto() cuando aplica
+//   - ✅ MANTENIDO: _diagnosticoIngresos, debtDetailsByClient, etc.
 //
 // HISTORIAL:
+// v2.2.6 (011026): Corrección N3 — Diagnóstico de ingresos
+// v2.2.5 (290926): Correcciones GitHub 290926 (Punto #5 - Parte 1/2)
 // v2.2.4 (260926): REGRESIÓN #5 — Ventas por empleado (COALESCE)
 // v2.2.3 (260926): CORRECCIONES #2 y #3 — Días sin ventas
 // ============================================================
@@ -96,7 +94,7 @@ function calcularRangoGrafico(weekOffset, chartMode) {
 
 // ============================================================
 // 📊 ESTADÍSTICAS DEL DASHBOARD
-// 🆕 v2.2.5: + debtDetailsByClient (agrupación por cliente)
+// 🆕 v2.2.7: + promedioProducto (N5)
 // ============================================================
 
 async function getDashboardStats(options = {}) {
@@ -127,16 +125,75 @@ async function getDashboardStats(options = {}) {
         
         // ============================================================
         // VENTAS TOTALES
+        // 🆕 v2.2.6: Logging detallado + cálculo paralelo de transactions
         // ============================================================
         let totalSales = 0;
         let totalRevenue = 0;
+        let totalIncomeFromTransactions = 0;  // 🆕 v2.2.6
+        let _diagnosticoIngresos = {};        // 🆕 v2.2.6
         try {
+            // Cálculo principal: SUM(sales.total)
             const salesResult = window.DBModule.query(
                 'SELECT COUNT(*) as count, SUM(total) as total FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0',
                 [negocioId]
             );
             totalSales = salesResult[0]?.count || 0;
             totalRevenue = salesResult[0]?.total || 0;
+
+            // 🆕 v2.2.6: Cálculo paralelo: SUM(transactions.amount)
+            const incomeResult = window.DBModule.query(
+                'SELECT COUNT(*) as count, SUM(amount) as total FROM transactions WHERE negocio_id = ? AND type = "income" AND deleted_at IS NULL AND voided = 0',
+                [negocioId]
+            );
+            totalIncomeFromTransactions = incomeResult[0]?.total || 0;
+            const incomeCount = incomeResult[0]?.count || 0;
+
+            // 🆕 v2.2.6: Diagnóstico detallado
+            const diagnosticoSales = window.DBModule.query(`
+                SELECT 
+                    COUNT(*) as total_ventas,
+                    SUM(total) as total_facturado,
+                    SUM(CASE WHEN is_liberated = 1 THEN total ELSE 0 END) as total_liberadas,
+                    SUM(CASE WHEN is_debt = 1 AND paid = 0 THEN total ELSE 0 END) as total_deudas,
+                    SUM(CASE WHEN is_debt = 0 OR paid = 1 THEN total ELSE 0 END) as total_cobrado,
+                    COUNT(CASE WHEN is_liberated = 1 THEN 1 END) as count_liberadas,
+                    COUNT(CASE WHEN is_debt = 1 AND paid = 0 THEN 1 END) as count_deudas
+                FROM sales 
+                WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0
+            `, [negocioId]);
+
+            const diagnosticoTx = window.DBModule.query(`
+                SELECT 
+                    COUNT(*) as total_transacciones,
+                    SUM(amount) as total_transacciones_amount,
+                    SUM(CASE WHEN category = 'venta_liberada' THEN amount ELSE 0 END) as total_liberadas_tx,
+                    SUM(CASE WHEN category = 'venta' THEN amount ELSE 0 END) as total_ventas_tx
+                FROM transactions 
+                WHERE negocio_id = ? AND type = 'income' AND deleted_at IS NULL AND voided = 0
+            `, [negocioId]);
+
+            _diagnosticoIngresos = {
+                sales_total: totalRevenue,
+                sales_count: totalSales,
+                sales_liberadas: diagnosticoSales[0]?.total_liberadas || 0,
+                sales_liberadas_count: diagnosticoSales[0]?.count_liberadas || 0,
+                sales_deudas: diagnosticoSales[0]?.total_deudas || 0,
+                sales_deudas_count: diagnosticoSales[0]?.count_deudas || 0,
+                sales_cobrado: diagnosticoSales[0]?.total_cobrado || 0,
+                transactions_total: totalIncomeFromTransactions,
+                transactions_count: incomeCount,
+                transactions_liberadas: diagnosticoTx[0]?.total_liberadas_tx || 0,
+                transactions_ventas: diagnosticoTx[0]?.total_ventas_tx || 0,
+                diferencia: totalRevenue - totalIncomeFromTransactions
+            };
+
+            console.log('💰 [N3] Diagnóstico de ingresos:');
+            console.log('   📊 SUM(sales.total):', totalRevenue.toFixed(2), `(${totalSales} ventas)`);
+            console.log('   📊 SUM(transactions.amount):', totalIncomeFromTransactions.toFixed(2), `(${incomeCount} transacciones)`);
+            console.log('   📊 Diferencia:', (totalRevenue - totalIncomeFromTransactions).toFixed(2));
+            console.log('   📊 Ventas liberadas (sales):', diagnosticoSales[0]?.total_liberadas?.toFixed(2) || 0, `(${diagnosticoSales[0]?.count_liberadas || 0} ventas)`);
+            console.log('   📊 Deudas pendientes (sales):', diagnosticoSales[0]?.total_deudas?.toFixed(2) || 0, `(${diagnosticoSales[0]?.count_deudas || 0} ventas)`);
+            console.log('   📊 Total cobrado (sales):', diagnosticoSales[0]?.total_cobrado?.toFixed(2) || 0);
         } catch (e) {
             console.warn('⚠️ Error obteniendo ventas:', e);
         }
@@ -768,10 +825,80 @@ async function getDashboardStats(options = {}) {
         }
 
         // ============================================================
+        // 🆕 CORRECCIÓN N5: PROMEDIO DIARIO POR PRODUCTO
+        // ============================================================
+        let promedioProducto = null;
+        try {
+            const dashConfig = user.dashboard_config || window.DBModule.getUserDashboardConfig(user.id);
+            const showProductoPromedio = dashConfig.show_producto_promedio === true;
+            const productoPromedioId = dashConfig.producto_promedio_id || null;
+            
+            if (showProductoPromedio && productoPromedioId) {
+                console.log(`📊 [N5] Calculando promedio para producto #${productoPromedioId}`);
+                
+                if (typeof window.DBModule.getPromedioDiarioProducto === 'function') {
+                    const datos = window.DBModule.getPromedioDiarioProducto(productoPromedioId, negocioId);
+                    const producto = window.DBModule.getProducto(productoPromedioId);
+                    
+                    promedioProducto = {
+                        ...datos,
+                        producto: producto ? {
+                            id: producto.id,
+                            nombre: producto.nombre,
+                            precio_venta: producto.precio_venta,
+                            unidad_venta: producto.unidad_venta
+                        } : null,
+                        configurado: true
+                    };
+                    
+                    console.log(`✅ [N5] Promedio: $${promedioProducto.promedio.toFixed(2)}, Días: ${promedioProducto.dias_con_ventas}`);
+                } else {
+                    console.warn('⚠️ [N5] getPromedioDiarioProducto no disponible');
+                    promedioProducto = {
+                        configurado: true,
+                        error: 'Función no disponible',
+                        producto: null,
+                        promedio: 0,
+                        dias_con_ventas: 0,
+                        total_vendido: 0,
+                        total_unidades: 0,
+                        mejor_dia: null
+                    };
+                }
+            } else {
+                console.log(`📊 [N5] Promedio de producto no configurado o inactivo`);
+                promedioProducto = {
+                    configurado: false,
+                    producto: null,
+                    promedio: 0,
+                    dias_con_ventas: 0,
+                    total_vendido: 0,
+                    total_unidades: 0,
+                    mejor_dia: null
+                };
+            }
+        } catch (e) {
+            console.warn('⚠️ [N5] Error calculando promedio del producto:', e);
+            promedioProducto = {
+                configurado: false,
+                error: e.message,
+                producto: null,
+                promedio: 0,
+                dias_con_ventas: 0,
+                total_vendido: 0,
+                total_unidades: 0,
+                mejor_dia: null
+            };
+        }
+
+        // ============================================================
         // RETORNAR OBJETO COMPLETO
         // ============================================================
         return {
             totalSales, totalRevenue, todaySalesCount, todayRevenue,
+            // 🆕 v2.2.6: Diagnóstico de ingresos
+            _diagnosticoIngresos,
+            totalIncomeFromTransactions,
             pendingOrdersCount, 
             ordersTodayCount, 
             ordersTomorrowCount,
@@ -805,7 +932,9 @@ async function getDashboardStats(options = {}) {
             isCurrentRange: isCurrentRange,
             releasedSales: releasedSales,
             bestWorstDay: bestWorstDay,
-            salesByEmployee: salesByEmployee
+            salesByEmployee: salesByEmployee,
+            // 🆕 CORRECCIÓN N5: Promedio diario por producto
+            promedioProducto: promedioProducto
         };
 
     } catch (error) {
@@ -823,10 +952,13 @@ window.DashboardModule = {
     calcularRangoGrafico
 };
 
-console.log('📦 Dashboard Module cargado correctamente v2.2.5');
-console.log('   🎯 PUNTO #5 (290926) - Parte 1/2:');
-console.log('      ✅ debtDetailsByClient → agrupación de deudas por cliente');
-console.log('      ✅ Estructura: { client_name, total, count, items: [...] }');
+console.log('📦 Dashboard Module cargado correctamente v2.2.7');
+console.log('   🆕 v2.2.7 (011026) — Corrección N5:');
+console.log('      ✅ Campo promedioProducto en getDashboardStats()');
+console.log('      ✅ Lectura de show_producto_promedio y producto_promedio_id');
+console.log('      ✅ Llamada a DBModule.getPromedioDiarioProducto()');
 console.log('   🔄 Correcciones anteriores mantenidas:');
+console.log('      • v2.2.6: Diagnóstico de ingresos (_diagnosticoIngresos)');
+console.log('      • v2.2.5: Punto #5 — debtDetailsByClient');
 console.log('      • v2.2.4: REGRESIÓN #5 — Ventas por empleado (COALESCE)');
 console.log('      • v2.2.3: CORRECCIONES #2 y #3 — Días sin ventas');

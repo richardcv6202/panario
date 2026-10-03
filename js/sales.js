@@ -38,6 +38,13 @@
 //     * Actualiza notes y updated_at.
 //   - ✅ La nota es opcional (puede quedar vacía o null).
 //   - ✅ La nota NO se incluye en el reporte PDF (por decisión de diseño).
+// 🆕 v2.1.14 (011026 v5): 🐛 FIX CRÍTICO - VENTAS LIBERADAS NO SE GUARDAN
+//   - ✅ CAUSA RAÍZ: Si el descuento de stock fallaba (receta no compartida,
+//     stock insuficiente, etc.), la venta se ELIMINABA automáticamente.
+//   - ✅ SOLUCIÓN: La venta se guarda SIEMPRE. Si el stock falla, se muestra
+//     una advertencia pero la venta NO se elimina.
+//   - ✅ Logging mejorado para diagnosticar problemas de guardado.
+//   - ✅ El error de stock se registra pero no bloquea la operación.
 // ============================================================
 
 window.SalesModule = {};
@@ -264,9 +271,11 @@ async function getSale(id) {
 // GUARDAR VENTA - CON FIX DE DUPLICADOS EN TRANSACCIONES
 // 🆕 v2.1.12: Verifica permisos antes de EDITAR (no al crear)
 // 🆕 v2.1.13: Acepta y guarda notes (INSERT y UPDATE)
+// 🆕 v2.1.14: FIX CRÍTICO - No eliminar venta si falla descuento de stock
 // ============================================================
 
 async function saveSale(saleData) {
+    const LOG_PREFIX = '💾 [saveSale]';
     const user = window.AuthModule.getCurrentUser();
     if (!user) return { success: false, error: 'No hay usuario autenticado' };
 
@@ -283,14 +292,14 @@ async function saveSale(saleData) {
         if (saleData.id && saleData.id > 0) {
             const permisos = _puedeUsuarioActualProcesarVenta(saleData.id);
             if (!permisos.puede) {
-                console.warn('🔒 [saveSale] Edición bloqueada:', permisos.razon);
+                console.warn(`${LOG_PREFIX} 🔒 Edición bloqueada:`, permisos.razon);
                 return { success: false, error: '🔒 ' + permisos.razon };
             }
         }
 
         // 🆕 FIX 2: Normalizar sale_date (defensa en profundidad)
         const saleDateNormalizada = normalizarFechaVenta(saleData.sale_date);
-        console.log('📅 [saveSale] Fecha normalizada:', saleData.sale_date, '→', saleDateNormalizada);
+        console.log(`${LOG_PREFIX} 📅 Fecha normalizada:`, saleData.sale_date, '→', saleDateNormalizada);
 
         // 🆕 v2.1.13: Normalizar notes
         const notesFinal = (saleData.notes !== undefined && saleData.notes !== null)
@@ -359,7 +368,7 @@ async function saveSale(saleData) {
                 'UPDATE transactions SET deleted_at = CURRENT_TIMESTAMP WHERE sale_id = ? AND user_id = ?',
                 [saleData.id, user.id]
             );
-            console.log('🗑️ Transacciones anteriores eliminadas por sale_id:', saleData.id);
+            console.log(`${LOG_PREFIX} 🗑️ Transacciones anteriores eliminadas por sale_id:`, saleData.id);
             
         } else {
             const saleUuid = window.DBModule.generateUuidForTable('sales');
@@ -388,9 +397,12 @@ async function saveSale(saleData) {
                 saleUuid
             ]);
             
-            console.log(`✅ [saveSale] Venta #${result.lastId} creada con uuid ${saleUuid}`);
+            console.log(`${LOG_PREFIX} ✅ Venta #${result.lastId} creada con uuid ${saleUuid}`);
             if (notesFinal) {
-                console.log(`   📝 Con nota: "${notesFinal}"`);
+                console.log(`${LOG_PREFIX}    📝 Con nota: "${notesFinal}"`);
+            }
+            if (isLiberated) {
+                console.log(`${LOG_PREFIX}    🚀 VENTA LIBERADA`);
             }
         }
 
@@ -398,19 +410,48 @@ async function saveSale(saleData) {
         
         _limpiarCachePermisosVenta(saleId);
         
+        // 🆕 v2.1.14: FIX CRÍTICO - No eliminar la venta si falla el descuento de stock
         if (saleData.receta_id) {
-            const stockResult = await window.RecipesModule.descontarStockReceta(
-                saleData.receta_id, 
-                saleData.quantity,
-                `Venta: ${saleData.product_name || 'producto'} (${saleData.quantity} unidades)`
-            );
-            
-            if (!stockResult.success) {
-                if (!isUpdate) {
-                    window.DBModule.execute('DELETE FROM sales WHERE id = ?', [saleId]);
+            console.log(`${LOG_PREFIX} 📦 Descontando stock para receta #${saleData.receta_id}...`);
+            try {
+                const stockResult = await window.RecipesModule.descontarStockReceta(
+                    saleData.receta_id, 
+                    saleData.quantity,
+                    `Venta: ${saleData.product_name || 'producto'} (${saleData.quantity} unidades)`
+                );
+                
+                if (!stockResult.success) {
+                    // 🆕 v2.1.14: NO eliminar la venta. Solo advertir.
+                    console.warn(`${LOG_PREFIX} ⚠️ Error al descontar stock:`, stockResult.error);
+                    console.warn(`${LOG_PREFIX} ⚠️ La venta #${saleId} se guardó, pero el stock NO se descontó.`);
+                    
+                    // Notificar al usuario (si el módulo está disponible)
+                    if (window.NotificationsModule?.addNotification) {
+                        window.NotificationsModule.addNotification(
+                            `⚠️ Venta #${saleId} guardada, pero el stock no se pudo descontar: ${stockResult.error}`,
+                            'warning',
+                            6000
+                        );
+                    }
+                    
+                    // Devolver success: true pero con advertencia
+                    // La venta SÍ se guardó, solo el stock falló
+                } else {
+                    console.log(`${LOG_PREFIX} ✅ Stock descontado correctamente`);
                 }
-                return { success: false, error: 'Error al descontar stock: ' + stockResult.error };
+            } catch (stockError) {
+                console.error(`${LOG_PREFIX} ❌ Error crítico descontando stock:`, stockError);
+                // La venta ya se guardó, no la eliminamos
+                if (window.NotificationsModule?.addNotification) {
+                    window.NotificationsModule.addNotification(
+                        `⚠️ Venta #${saleId} guardada, pero hubo un error con el stock: ${stockError.message}`,
+                        'warning',
+                        6000
+                    );
+                }
             }
+        } else {
+            console.log(`${LOG_PREFIX} ℹ️ Venta sin receta asociada, no se descuenta stock`);
         }
 
         const txExistente = window.DBModule.query(`
@@ -431,9 +472,9 @@ async function saveSale(saleData) {
                 sale_id: saleId,
                 transaction_date: saleDateNormalizada
             });
-            console.log('✅ Transacción creada para venta:', saleId);
+            console.log(`${LOG_PREFIX} ✅ Transacción creada para venta:`, saleId);
         } else {
-            console.log('ℹ️ Ya existe transacción para venta', saleId, '- no se duplica');
+            console.log(`${LOG_PREFIX} ℹ️ Ya existe transacción para venta ${saleId} - no se duplica`);
         }
 
         window.DBModule.saveAndNotify();
@@ -471,7 +512,7 @@ async function saveSale(saleData) {
         return { success: true, id: saleId, updated: isUpdate };
 
     } catch (e) {
-        console.error('Error guardando venta:', e);
+        console.error(`${LOG_PREFIX} ❌ Error guardando venta:`, e);
         return { success: false, error: e.message };
     }
 }
@@ -1004,12 +1045,13 @@ window.SalesModule = {
     _puedeUsuarioActualProcesarVenta
 };
 
-console.log('📦 Sales Module v2.1.13 (NUEVA FUNCIONALIDAD #1: nota a la venta)');
-console.log('   🆕 Novedades v2.1.13:');
-console.log('      • ✅ saveSale() acepta y guarda saleData.notes');
-console.log('      • ✅ NUEVA: updateSaleNote(saleId, note)');
-console.log('      • ✅ Solo el creador puede modificar la nota');
-console.log('      • ✅ Nota opcional (puede quedar vacía)');
+console.log('📦 Sales Module v2.1.14 (FIX CRÍTICO: ventas liberadas no se guardaban)');
+console.log('   🆕 Novedades v2.1.14:');
+console.log('      • ✅ FIX: La venta se guarda SIEMPRE, incluso si el stock falla');
+console.log('      • ✅ No se elimina la venta si descontarStockReceta() falla');
+console.log('      • ✅ Se notifica al usuario si el stock no se pudo descontar');
+console.log('      • ✅ Logging detallado para diagnosticar problemas');
 console.log('   🔄 Correcciones anteriores mantenidas:');
+console.log('      • v2.1.13: Nota a la venta');
 console.log('      • v2.1.12: Bloqueo por recetas no compartidas');
 console.log('      • FIX 2: Normalización de fechas');

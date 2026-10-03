@@ -11,7 +11,7 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 | Icono | Significado |
 |-------|-------------|
-| ➕ | Nuevo / Añadido |
+| ✨ | Nuevo / Añadido |
 | ✏️ | Modificado / Cambiado |
 | 🗑️ | Eliminado |
 | 🐛 | Corregido (bug fix) |
@@ -27,9 +27,168 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### Pendiente para v1.0.0
 
-- 📚 Documentación final (MANUAL.md, CHANGELOG.md, LICENSE) — ✅ **COMPLETADO**
 - 🚀 Publicación en GitHub Pages
 - 🧪 Pruebas finales de integración
+- 📚 Actualización del MANUAL DE USUARIO.pdf a v2.5.0
+
+---
+
+## [2.5.0] — 2026-10-03
+
+### 🎯 Correcciones 011026 (N1–N6) + FIX N5
+
+Sesión completa de correcciones sobre la versión estable 2.4.0. Se resolvieron
+seis incidencias funcionales (N1–N6) y un bug crítico asociado a N5.
+
+#### ✨ Añadido
+
+- **N1 — Exclusión de deudores en premios** (`db.js` v2.7.1 + `rewards.js` v2.4.0):
+  los clientes con deuda pendiente quedan excluidos automáticamente del cálculo
+  de premios (Mejor Cliente mensual/anual y Más Frecuente).
+- **N1 — Historial de premios otorgados** (`db.js` v2.7.1 + `rewards.js` v2.4.0):
+  nueva tabla `premios_otorgados` con registro histórico consultable.
+- **N2 — Dos categorías de premios + exclusión** (`db.js` v2.7.1 + `rewards.js` v2.4.0):
+  el modal de premios ahora distingue entre premios por victorias y premios por
+  frecuencia, con exclusión de deudores en ambos casos.
+- **N2-bis — Interruptor "Premio no requiere entrega"** (`db.js` v2.7.1 + `rewards.js` v2.4.0):
+  nuevo toggle que permite registrar premios que no implican entrega física de
+  producto (quedan marcados como "Entregado" automáticamente).
+- **N5 — Tarjeta "Promedio diario por producto"** (`db.js` v2.7.1 + `profile.js` v2.4.1 + `dashboard.js` v2.2.7 + `app.js` v3.1.2):
+  nueva tarjeta del Dashboard que muestra el promedio diario de ventas de un
+  producto seleccionado por el usuario, con día de mayor venta, total vendido
+  y unidades totales.
+- **N6 — Limpieza de transacciones huérfanas** (`db.js` v2.7.1 + `ui-settings.js` v2.3.10):
+  nueva herramienta en Herramientas → Diagnóstico que detecta y limpia
+  transacciones de ingreso sin `sale_id` válido o con venta eliminada.
+
+#### 🐛 Corregido
+
+- **N3 — Diferencia en cálculo de ingresos** (`ui-sales.js` v2.1.16 + `dashboard.js` v2.2.7):
+  el total de ingresos mostrado en Dashboard y Ventas ahora se calcula desde
+  `sales.total`, eliminando la discrepancia entre ambas vistas. Se añadió
+  diagnóstico interno de ingresos.
+- **N4 — Ventas liberadas no se guardaban ni listaban** (`sales.js` v2.1.14 + `ui-sales.js` v2.1.16):
+  las ventas liberadas ahora se guardan siempre, incluso si falla el descuento
+  de stock, y se listan correctamente forzando el toggle "Mostrar liberadas" a ON
+  tras crearlas.
+- **N6 — Formato de retorno de handlers UI** (`ui-settings.js` v2.3.10):
+  los handlers `diagnosticarTransaccionesHuerfanasAction()` y
+  `limpiarTransaccionesHuerfanasAction()` fueron adaptados al formato real que
+  devuelve `db.js` (`{ total, huerfanas, total_huerfano, porTipo, detalle }`).
+- **FIX N5 — `show_producto_promedio` hardcodeado** (`db.js` v2.7.1):
+  `getUserDashboardConfig()` devolvía `show_producto_promedio: false` fijo,
+  impidiendo que la tarjeta apareciera. Ahora se calcula dinámicamente según
+  `dash_producto_promedio_id > 0`.
+- **FIX N5 — Limpieza de `producto_promedio_id`** (`profile.js` v2.4.1):
+  `toggleProductoPromedio()` no limpiaba el producto seleccionado al desactivar
+  el toggle. Ahora sí lo limpia, evitando configuraciones inconsistentes.
+
+#### 🔧 Cambios internos
+
+- **`db.js` v2.7.1**: migraciones idempotentes para las nuevas columnas
+  (`dash_producto_promedio_id`, columnas de `premios_config`), nueva función
+  `getPromedioDiarioProducto()`, helper `_getSQLExclusionDeudores()`,
+  `getConfigGlobalNegocio()` / `saveConfigGlobalNegocio()`.
+- **`rewards.js` v2.4.0**: refactor del modal de premios para soportar las dos
+  categorías, historial y toggle de entrega.
+- **`dashboard.js` v2.2.7**: inclusión de `promedioProducto` en el retorno de
+  `getDashboardStats()` y diagnóstico de ingresos.
+- **`app.js` v3.1.2**: nueva función `renderTarjetaProductoPromedio()` y
+  contenedor `#dashboard-producto-promedio-container`.
+- **`profile.js` v2.4.1**: nuevas funciones `toggleProductoPromedio()`,
+  `cambiarProductoPromedio()`, `cargarProductosEnCombobox()`.
+- **`ui-sales.js` v2.1.16**: adaptación del cálculo de ingresos a `sales.total`.
+- **`sales.js` v2.1.14**: la venta se guarda siempre, aunque falle el stock.
+
+### 🎯 Correcciones GitHub 290926 (#3, #7, #12)
+
+#### ✨ Añadido
+
+- **#3 — Botones flotantes "ir al inicio" / "ir al final"** (`help.js` v3.0.3 + `help-detailed.js` v1.3.0):
+  botones flotantes de navegación rápida en las vistas de Ayuda Detallada,
+  Guía Rápida y FAQs. Se añadieron `crearBotonesFlotantesAyuda()`,
+  `eliminarBotonesFlotantesAyuda()`, `scrollToTopAyuda()` y `scrollToBottomAyuda()`.
+- **#7 — Tutorial mejorado** (`help.js` v3.0.2 + v3.0.3):
+  el tour ahora siempre comienza en el paso 1, llega hasta el final e incluye
+  el módulo Perfil. Se corrigieron los IDs únicos en contenedores con scroll
+  y se ajustó el flujo de los 9 pasos.
+- **#12 — Toggle admin "Producción HOY/MAÑANA"** (`db.js` v2.7.1 + `ui-settings.js` v2.3.10 + `dashboard.js` v2.2.7):
+  nuevo toggle en Herramientas → "📅 Producción en Dashboard" que permite al
+  primer administrador elegir si la tarjeta de corriente del Dashboard muestra
+  la producción del **día actual** o la del **día siguiente**. La preferencia se
+  persiste por negocio en la tabla `config_global_negocio`
+  (columna `mostrar_produccion_hoy`). Solo el primer admin (`is_first_admin = 1`)
+  puede modificarla. Valores: `0` = producción de MAÑANA (default),
+  `1` = producción de HOY.
+
+#### 🐛 Corregido
+
+- **#7 — Tour iniciaba en paso incorrecto**: el estado del tour no se reiniciaba
+  correctamente entre ejecuciones. Ahora `startTour()` siempre empieza por el paso 1.
+
+### 📚 Documentación
+
+#### ✏️ Modificado
+
+- **`js/help-detailed.js` v1.3.0**: actualización de contenido para incluir
+  las funcionalidades de v2.5.0 (N1–N6, #3, #7, #12, Config. Bancaria).
+  - Versión de app actualizada a 2.5.0 (Introducción y Créditos).
+  - Nuevo bloque N5 en Dashboard (Promedio diario por producto).
+  - Nuevos bloques N3 y N4 en Ventas.
+  - Nuevos bloques N1, N2, N2-bis y N1-historial en Premios.
+  - Nuevo bloque N5 en Perfil.
+  - Nuevos bloques Config. Bancaria, #12 y N6 en Herramientas.
+  - Nuevo consejo N5 en Atajos y consejos.
+- **`js/faqs.js` v1.1.0**: ampliación con 15 FAQs nuevas sobre N1–N6,
+  290926 (#3, #7, #12) y Configuración Bancaria. Total: 219 FAQs en 17 categorías.
+- **`CHANGELOG.md` v2.5.0**: reescritura completa con codificación UTF-8 correcta.
+
+---
+
+## [2.4.0] — 2026-10-01
+
+### 🎯 FIX PWA — Pantalla completa + GitHub Pages
+
+#### 🐛 Corregido
+
+- **`manifest.json`**: Eliminado `"browser"` de `display_override`. Era la causa
+  principal de que la app instalada se abriera dentro de Chrome con barra de
+  direcciones en lugar de pantalla completa.
+- **`manifest.json`**: `start_url` simplificado a `"./index.html"` (sin query
+  string `?v=`). Chrome rechazaba instalar en modo standalone cuando el
+  `start_url` tenía parámetros.
+- **`manifest.json`**: Añadido `"id": "./"` explícito para identificación estable
+  de la PWA.
+- **`manifest.json`**: Shortcuts sin query string de versión.
+- **`sw.js`**: Nueva estrategia `handleNavigation()` que reconoce peticiones HTML
+  con query strings (`?v=`, `?nav=`, `?refresh=`, `?nocache=`) y las resuelve
+  correctamente offline contra el `index.html` cacheado.
+- **`sw.js`**: Detecta navegación por `request.mode === 'navigate'` (más fiable
+  que solo `pathname.endsWith('.html')`).
+- **`offline.html`**: Reemplazado `window.location.reload(true)` (deprecado) por
+  `window.location.href = './index.html?nocache=' + Date.now()`.
+- **`offline.html`**: `SW_VERSION` actualizado a `2.4.0`.
+
+#### ✨ Añadido
+
+- **`LICENSE`**: Licencia propietaria completa.
+- **`.gitignore`**: Exclusión de bases de datos locales, backups, archivos del
+  sistema y dependencias.
+- **`README.md`**: Documentación completa para GitHub Pages.
+- **`CHANGELOG.md`**: Este archivo.
+
+#### ✏️ Modificado
+
+- **`sw.js`**: `CACHE_NAME` actualizado a `panario-v2.4.0` (fuerza invalidación
+  de cachés antiguas).
+- **`sw.js`**: `SW_VERSION` = `2.4.0`.
+
+#### 🔧 Cambios internos
+
+- **`sw.js`**: Estrategia de navegación diferenciada de estrategia de recursos
+  estáticos.
+- **`sw.js`**: Fallback en cascada: red → caché exacta → `index.html` cacheado →
+  `offline.html` → 503.
 
 ---
 
@@ -37,126 +196,73 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### 🎯 CORRECCIÓN #15 — Sistema de Ayuda con FAQs Externas
 
-#### ➕ Añadido
+#### ✨ Añadido
 
-- **`js/faqs.js`** (v1.0.1): Nuevo archivo externo con **204 FAQs** únicas organizadas en 19 categorías.
-- **`js/help-detailed.js`**: Nueva sección dinámica **"❓ Preguntas Frecuentes"** al final del manual.
-- **`js/help-detailed.js`**: Nueva función `renderFAQsEnAyudaDetallada()`.
-- **`js/help-detailed.js`**: Nueva función `toggleFAQEnAyudaDetallada()`.
-- **`js/help-detailed.js`**: Nueva función `filtrarFAQsEnAyudaDetallada()`.
-- **`js/help.js`**: Nueva función `obtenerFAQs()` para leer `window.FAQS_DB`.
-- **`js/profile.js`**: Nuevo botón **"📖 Ayuda detallada"** en la sección "Ayuda y Tutoriales".
+- **`js/faqs.js`** (v1.0.1): 204 FAQs únicas en 19 categorías.
+- **`js/help-detailed.js`**: Sección dinámica "❓ Preguntas Frecuentes".
 - **`MANUAL.md`**: Manual completo del usuario (~1.850 líneas).
-- **`CHANGELOG.md`**: Este archivo de historial de versiones.
 
 #### ✏️ Modificado
 
-- **`js/help.js`** (v3.0.0 → v3.0.1): Ahora carga las FAQs desde `window.FAQS_DB` en lugar de tenerlas embebidas.
-- **`index.html`** (v2.3.6 → v2.3.7): Añadida carga de `js/faqs.js` (antes de `help.js`) y `js/help-detailed.js` (después de `help.js`).
-- **`sw.js`** (v2.3.6 → v2.3.7): `CACHE_NAME` actualizado. Añadidos `js/faqs.js` y `js/help-detailed.js` a `CRITICAL_ASSETS`.
-- **`manifest.json`** (v2.3.6 → v2.3.7): Versión y URLs de shortcuts actualizadas.
-- **`offline.html`** (v2.3.6 → v2.3.7): Constante `SW_VERSION` actualizada.
-- **`meta[name="app-version"]`**: Ahora reporta `2.3.7`.
+- **`js/help.js`** (v3.0.0 → v3.0.1): Carga FAQs desde `window.FAQS_DB`.
+- **`index.html`** (v2.3.6 → v2.3.7): Carga de `faqs.js` y `help-detailed.js`.
+- **`sw.js`** (v2.3.6 → v2.3.7): Nuevos assets en `CRITICAL_ASSETS`.
+- **`manifest.json`** (v2.3.6 → v2.3.7): Versión y URLs actualizadas.
 
 #### 🗑️ Eliminado
 
-- **`js/help.js`**: Array `FAQS_DB` local (solo tenía 10 FAQs hardcodeadas).
-
-#### 🔧 Cambios internos
-
-- **`js/help.js`**: Nuevo getter `window.HelpModule.FAQS_DB` para retrocompatibilidad.
-- **`js/help-detailed.js`**: `HELP_SECTIONS` ahora tiene 15 secciones (14 estáticas + 1 dinámica).
+- **`js/help.js`**: Array `FAQS_DB` local (solo 10 FAQs hardcodeadas).
 
 #### 🐛 Corregido
 
-- **`js/faqs.js`**: Eliminadas **12 FAQs duplicadas** de la versión inicial (v1.0.0 → v1.0.1).
-- **`js/help.js`**: El popover del Centro de Ayuda ahora muestra dinámicamente el número de FAQs (antes mostraba un valor hardcodeado).
-
-#### 🔒 Seguridad
-
-- Ninguna corrección de seguridad en esta versión.
+- **`js/faqs.js`**: Eliminadas 12 FAQs duplicadas.
 
 ---
 
 ## [2.3.6] — 2026-09-28
 
-### 🎯 SESIÓN 7 — Cuentas Compartidas + Primer Admin + Config Bancaria
+### 🎯 SESIÓN 7 — Cuentas Compartidas + Primer Admin
 
-#### ➕ Añadido
+#### ✨ Añadido
 
 - **`db.js` v2.3.8**: Tablas `bank_default_user` y `config_bancaria_negocio`.
-- **`db.js`**: Funciones `getConfigBancaria()`, `saveConfigBancaria()`, `getCuentaDefaultUsuario()`, `setCuentaDefaultUsuario()`.
-- **`db.js`**: Columna `is_first_admin` en tabla `users`.
-- **`db.js`**: Columna `is_shared` en tabla `bank_accounts`.
-- **`db.js`**: Función `repararNegocioIdEnBankAccounts()` (auto-reparación de cuentas huérfanas).
-- **`auth.js` v2.3.5**: Marcar automáticamente al primer usuario de un negocio como admin.
-- **`profile.js`**: Toggle **"🔗 Compartida"** en el formulario de crear/editar cuenta bancaria.
-- **`profile.js`**: Badge visual **"🔗 Compartida"** en la lista de cuentas.
-- **`ui-settings.js`**: Nueva sección **"🔐 Configuración Bancaria"** (solo admin) con 3 toggles:
-  - 👁️ Permitir a usuarios ver QRs de otros.
-  - ⭐ Permitir a usuarios cambiar su cuenta por defecto.
-  - 👑 Solo usar y mostrar el QR del administrador.
-- **`ui-settings.js`**: Sección **"👥 Gestión de Usuarios"** con badge "👑 PRIMER ADMIN".
-
-#### ✏️ Modificado
-
-- **`db.js`**: `saveBankAccount()` ahora guarda `is_shared` y garantiza `negocio_id` no nulo.
-- **`profile.js`**: `showBankAccountsModal()` ahora usa `getBankAccountsParaUsuario()` para filtrar por permisos.
-- **`profile.js`**: `setDefaultBankAccount()` distingue entre admin (global) y no-admin (individual).
-- **`profile.js`**: `deleteBankAccount()` verifica permisos antes de eliminar.
-- **`app.js` v3.0.6**: `renderDashboardBankQR()` respeta `forzar_qr_admin`.
-- **`app.js`**: `downloadDashboardQR()` usa `getCuentaDefaultUsuario()`.
-- **`css/style.css` v2.3.6**: Corrección #13 (reducir margen inferior).
-- **`index.html`**: Botón **👤 Perfil** añadido a la barra inferior.
-- **`index.html`**: Botón **🚪 Cerrar sesión** añadido al header.
-- **`manifest.json`** v2.3.6: Versión y shortcuts actualizados.
-- **`sw.js`** v2.3.6: `CACHE_NAME` actualizado.
-- **`offline.html`** v2.3.6: `SW_VERSION` actualizado.
+- **`db.js`**: Columna `is_first_admin` en `users`, `is_shared` en `bank_accounts`.
+- **`ui-settings.js`**: Sección "🔐 Configuración Bancaria" (solo admin).
+- **`ui-settings.js`**: Sección "👥 Gestión de Usuarios" con badge "👑 PRIMER ADMIN".
 
 #### 🐛 Corregido
 
 - **`ui-settings.js`**: `closeHorarioDetalleModal` no definida (FIX CRÍTICO).
-- **`profile.js`**: Error al guardar cuentas bancarias por `await` innecesario (regresión #16).
+- **`profile.js`**: Error al guardar cuentas bancarias por `await` innecesario.
 - **`profile.js`**: Cuentas con `negocio_id = NULL` (huérfanas).
-- **`profile.js`**: Comparación de `user_id` fallaba por coerción de tipos en SQLite.
-- **`orders.js` v2.3.1**: `validarYAjustarCantidadPedido()` no usaba `excludeOrderId`.
-- **`dashboard.js` v2.2.4**: Query de "Ventas por empleado" filtraba por `created_by` (columna añadida después).
-- **`orders.js` v2.3.2**: Fecha de venta desde pedido ahora es fecha actual (FIX #10).
-- **`notifications.js` v2.3.5**: Cleanup al cerrar sesión (regresión #9).
-- **`ui-sales.js` v2.1.15**: Traducción de métodos de pago (Corrección #7).
+- **`orders.js` v2.3.2**: Fecha de venta desde pedido ahora es fecha actual.
+- **`notifications.js` v2.3.5**: Cleanup al cerrar sesión.
 
 ---
 
 ## [2.3.5] — 2026-09-26
 
-### 🎯 CORRECCIÓN #17 — Configuraciones Individuales por Usuario
+### 🎯 CORRECCIÓN #17 — Configuraciones Individuales
 
-#### ➕ Añadido
+#### ✨ Añadido
 
-- **`db.js`**: Columnas `sound_enabled`, `sound_id`, `guia_rapida_activa` en tabla `users`.
-- **`db.js`**: Funciones `getUserSoundConfig()`, `updateUserSoundConfig()`, `getUserGuiaRapidaActiva()`, `updateUserGuiaRapida()`.
-- **`auth.js`**: Carga automática de preferencias al hacer login.
-
-#### ✏️ Modificado
-
-- **`profile.js` v2.3.5**: `loadProfile()` lee guía rápida y sonido desde la BD (con fallback a localStorage).
-- **`profile.js`**: `toggleGuiaRapida()` guarda en la BD con `user_id`.
-- **`notifications.js` v2.3.5**: `getSoundConfig()` lee desde BD con `user_id`.
+- **`db.js`**: Columnas `sound_enabled`, `sound_id`, `guia_rapida_activa` en `users`.
+- **`db.js`**: Funciones `getUserSoundConfig()`, `updateUserSoundConfig()`, etc.
 
 #### 🐛 Corregido
 
-- **`notifications.js`**: Error al cerrar sesión por listeners no limpiados (regresión #9).
+- **`notifications.js`**: Error al cerrar sesión por listeners no limpiados.
 
 ---
 
 ## [2.3.4] — 2026-09-26
 
-### 🎯 CORRECCIÓN #16 (parte 2) — Configuraciones Individuales
+### 🎯 CORRECCIÓN #16 (parte 2)
 
 #### ✏️ Modificado
 
-- **`db.js`**: `ensureUserPreferencesColumns()` se ejecuta al iniciar la app.
-- **`profile.js`**: Los toggles de Perfil reflejan el estado correcto del usuario actual.
+- **`db.js`**: `ensureUserPreferencesColumns()` se ejecuta al iniciar.
+- **`profile.js`**: Toggles reflejan el estado del usuario actual.
 
 ---
 
@@ -164,19 +270,13 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### 🎯 CORRECCIÓN #16 (parte 1) — Permisos Bancarios
 
-#### ➕ Añadido
+#### ✨ Añadido
 
-- **`db.js`**: Tabla `config_bancaria_negocio` con campos `permitir_ver_qr_otros` y `permitir_cambiar_default`.
+- **`db.js`**: Tabla `config_bancaria_negocio` con `permitir_ver_qr_otros` y
+  `permitir_cambiar_default`.
 - **`db.js`**: Tabla `bank_default_user` para cuenta por defecto individual.
 - **`db.js`**: Funciones `getBankAccountsParaUsuario()`, `puedeUsuarioEditarCuenta()`.
 - **`ui-settings.js`**: Sección "Configuración Bancaria" (solo admin).
-
-#### ✏️ Modificado
-
-- **`profile.js` v2.3.3**: Modal de cuentas bancarias con permisos.
-- **`profile.js`**: Botón **"⭐ Mi Default"** para cuenta por defecto individual.
-- **`profile.js`**: Indicadores visuales "⭐ Mi default" y "👑 Default global".
-- **`profile.js`**: Banner informativo en modo solo lectura.
 
 ---
 
@@ -184,32 +284,14 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### 🎯 CORRECCIÓN #14 — Ayuda Detallada sin iframe
 
-#### ➕ Añadido
+#### ✨ Añadido
 
-- **`js/help-detailed.js`** v1.0.0: Nuevo módulo que convierte `ayuda-panario.html` en módulo JS integrado.
-- **`js/help.js`**: Función `abrirAyudaEnModalControlado()`.
-- **`js/help.js`**: Función `imprimirAyudaModal()` (reemplaza a `imprimirAyudaIframe()`).
-- **`js/help.js`**: Función `renderAyudaStandalone()` para `?standalone=1`.
-- **`js/help.js`**: Función `abrirAyudaStandalone()`.
-- **`js/help.js`**: Botón **🔗 ↗** (standalone, solo desktop).
-- **`js/help.js`**: Botón **🖨️** (imprimir directamente el modal).
-
-#### ✏️ Modificado
-
-- **`js/help.js`** v3.0.0: `abrirAyudaDetallada()` usa `HelpDetailedModule.renderHelpDetailed()`.
+- **`js/help-detailed.js`** v1.0.0: Módulo JS integrado.
+- **`js/help.js`**: `abrirAyudaEnModalControlado()`, `imprimirAyudaModal()`.
 
 #### 🗑️ Eliminado
 
 - **`js/help.js`**: iframe de `ayuda-panario.html`.
-- **`js/help.js`**: `postMessage` `CLOSE_HELP`/`PONG`/`NAVIGATE`.
-- **`js/help.js`**: `forzarModalAlFrente()`.
-- **`js/help.js`**: `ofrecerFallbackPestanaNueva()`.
-- **`js/help.js`**: `imprimirAyudaIframe()`.
-
-#### 🐛 Corregido
-
-- **`js/help.js`**: Problemas de z-index del iframe.
-- **`js/help.js`**: Problemas de `postMessage` cross-origin.
 
 ---
 
@@ -219,8 +301,7 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 #### ✏️ Modificado
 
-- **`css/style.css` v2.3.1**: Reducir margen inferior para mejor uso del espacio.
-- **`css/style.css`**: Iconos optimizados.
+- **`css/style.css`**: Reducido margen inferior.
 
 ---
 
@@ -228,41 +309,24 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### 🎯 FASE 3.3 — Toggles del Dashboard
 
-#### ➕ Añadido
+#### ✨ Añadido
 
-- **`profile.js` v2.3.0**: 13 toggles en "📊 Elementos visibles en el Dashboard":
-  - `show_corriente`
-  - `show_orders_today`
-  - `show_released_sales`
-  - `show_best_worst_day`
-  - `show_sales_by_employee`
-  - `show_top_clients`
-  - `show_top_products`
-  - `show_funds_analysis`
-  - `show_payment_methods`
-  - `show_debts`
-  - `show_rewards`
-  - `show_bank_qr`
-  - `show_quick_actions`
+- **`profile.js`**: 13 toggles en "📊 Elementos visibles en el Dashboard".
 
 ---
 
 ## [2.2.8] — 2026-09-19
 
-### 🎯 FASE 2.2.8 — Producto en producción + Bug fixes
+### 🎯 FASE 2.2.8 — Producto en producción
 
-#### ➕ Añadido
+#### ✨ Añadido
 
 - **`db.js`**: Columna `producto_id` en `calendario_produccion`.
-- **`db.js`**: Funciones `getProductoDeProduccion()`, `getProduccionConProducto()`, `contarProduccionConProducto()`.
 - **`ui-settings.js`**: Dropdown de productos en el modal de producción.
 
 #### 🐛 Corregido
 
 - **`ui-settings.js`**: Modal de producción no guardaba `producto_id`.
-- **`ui-settings.js`**: Productos con CMPBC=0 no aparecían en dropdown.
-- **`ui-settings.js`**: Producto guardado se perdía al reabrir el modal.
-- **`ui-settings.js`**: `producto_id` no se propagaba a todas las fechas del rango.
 
 ---
 
@@ -270,14 +334,13 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### 🎯 FASE 2.2.7 — Filtros del Dashboard + Algoritmo del amanecer
 
-#### ➕ Añadido
+#### ✨ Añadido
 
-- **`app.js`**: `window._pendingOrderFilters` para pasar filtros entre módulos.
+- **`app.js`**: `window._pendingOrderFilters`.
 - **`ui-settings.js`**: Regla del amanecer mejorada (bloques ≤ 9:00 AM).
 
 #### 🐛 Corregido
 
-- **`ui-settings.js`**: Bloque de 8:00 AM no era válido para el amanecer.
 - **`ui-orders.js`**: `renderOrdersView()` no leía `window._pendingOrderFilters`.
 - **`dashboard.js`**: Tarjeta "Pedidos hoy/mañana" no aplicaba filtros.
 
@@ -289,8 +352,7 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 #### ✏️ Modificado
 
-- **`ui-orders.js`**: Badge morado de producción ahora es clickeable (`event.stopPropagation()`).
-- **`ui-orders.js`**: Tooltip: "Clic para configurar la producción del día".
+- **`ui-orders.js`**: Badge morado de producción ahora es clickeable.
 
 ---
 
@@ -298,15 +360,10 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### 🎯 FASE 2.2.5 — Conteo unificado de pedidos
 
-#### ➕ Añadido
+#### ✨ Añadido
 
 - **`db.js`**: Función `contarPedidosYVentasFecha()`.
 - **`db.js`**: Función `getProduccionRangoFechas()`.
-
-#### 🐛 Corregido
-
-- **`ui-settings.js`**: Contador "Pedidos: 3/6" cambiaba al convertir pedido en venta.
-- **`dashboard.js`**: Diferencia entre "Pedidos de hoy" en Dashboard y en lista de Pedidos.
 
 ---
 
@@ -314,18 +371,10 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### 🎯 FASE 2.2.4 — CMPBC + Algoritmo de bloques
 
-#### ➕ Añadido
+#### ✨ Añadido
 
-- **`db.js`**: Columna `capacidad_max_bloque` en tabla `productos`.
-- **`db.js`**: Columna `bloques_usados` y `distribucion_bloques` en `calendario_produccion`.
-- **`db.js`**: Funciones `getCMPBCProducto()`, `getProductosConCMPBC()`, `calcularBloquesIdeales()`.
-- **`ui-productos.js`**: Campo CMPBC en formulario de producto.
-- **`ui-settings.js`**: Botón **✨ Calcular bloques automáticamente** en modal de producción.
-
-#### ✏️ Modificado
-
-- **`db.js`**: Migración de `cantidad_produccion` de INTEGER a REAL.
-- **`ui-settings.js`**: Modal de producción acepta decimales.
+- **`db.js`**: Columna `capacidad_max_bloque` en `productos`.
+- **`db.js`**: Funciones `getCMPBCProducto()`, `getProductosConCMPBC()`.
 
 ---
 
@@ -335,8 +384,7 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 #### 🐛 Corregido
 
-- **`css/style.css`**: Barra de título se deformaba al minimizar/restaurar la app.
-- **`app.js`**: `limpiarEstilosResiduales()` ahora limpia más propiedades CSS.
+- **`css/style.css`**: Barra de título se deformaba al minimizar/restaurar.
 
 ---
 
@@ -346,8 +394,7 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 #### ✏️ Modificado
 
-- **`dashboard.js`**: Tarjeta "Pedidos mañana" usa la misma función de conteo que la lista de Pedidos.
-- **`orders.js`**: Orden de pedidos por `id` ascendente (antes por `created_at`).
+- **`orders.js`**: Orden de pedidos por `id` ascendente.
 
 ---
 
@@ -357,39 +404,29 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 #### 🐛 Corregido
 
-- **`db.js`**: Insertar 18 productos por defecto en tabla `productos` (antes intentaba en `products`, que no existía).
+- **`db.js`**: Insertar 18 productos por defecto en tabla `productos`.
 
 ---
 
 ## [2.2.0] — 2026-09-11
 
-### 🎯 FASE 2.2.0 — PWA shortcuts + Versión unificada
+### 🎯 FASE 2.2.0 — PWA shortcuts
 
-#### ➕ Añadido
+#### ✨ Añadido
 
-- **`manifest.json`**: Shortcut **🔨 Producción**.
+- **`manifest.json`**: Shortcut "🔨 Producción".
 - **`manifest.json`**: `display_override`, `share_target`, `launch_handler`.
-
-#### ✏️ Modificado
-
-- **Todos los archivos**: Versión unificada a `2.2.0`.
-- **`sw.js`**: `CACHE_NAME` actualizado.
 
 ---
 
 ## [2.1.11] — 2026-09-10
 
-### 🎯 FASE 2.1.11 — Auto-reparación de caché + Auto-retry
+### 🎯 FASE 2.1.11 — Auto-reparación de caché
 
-#### ➕ Añadido
+#### ✨ Añadido
 
-- **`sw.js`**: Auto-reparación de caché (verificación cada 15 min, umbral 80%).
+- **`sw.js`**: Auto-reparación cada 15 min, umbral 80%.
 - **`offline.html`**: Auto-retry cada 5s (máx 12 intentos).
-- **`offline.html`**: Detección de reconexión con fetch HEAD.
-
-#### ✏️ Modificado
-
-- **`index.html`**: `viewport` cambiado a `user-scalable=5.0` (zoom permitido).
 
 ---
 
@@ -397,9 +434,9 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### 🎯 FASE 2.1.10 — Desbloqueo de audio
 
-#### ➕ Añadido
+#### ✨ Añadido
 
-- **`notifications.js`**: Desbloqueo automático del `AudioContext` con el primer gesto del usuario.
+- **`notifications.js`**: Desbloqueo del `AudioContext` con primer gesto.
 
 #### 🐛 Corregido
 
@@ -409,12 +446,12 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ## [2.1.9] — 2026-09-08
 
-### 🎯 FASE 2.1.9 — Orden de ventas + Decimales
+### 🎯 FASE 2.1.9 — Orden de ventas
 
 #### ✏️ Modificado
 
 - **`sales.js`**: Orden de ventas por `id` ascendente.
-- **`reports.js`**: Reportes ordenados por fecha ASC + id ASC.
+- **`reports.js`**: Reportes ordenados por fecha ASC.
 
 ---
 
@@ -422,13 +459,9 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### 🎯 FASE 2.1.8 — Producción con decimales
 
-#### ➕ Añadido
+#### ✨ Añadido
 
 - **`ui-settings.js`**: Cantidad de producción acepta decimales.
-
-#### ✏️ Modificado
-
-- **`db.js`**: Migración de `cantidad_produccion` de INTEGER a REAL.
 
 ---
 
@@ -436,13 +469,9 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### 🎯 FASE 2.1.7 — Reprogramación por rango
 
-#### ➕ Añadido
+#### ✨ Añadido
 
-- **`ui-settings.js`**: Modal de **🔄 Reprogramar Pedidos por Rango**.
-
-#### ✏️ Modificado
-
-- **`orders.js`**: Añadir causa y nota a pedidos reprogramados.
+- **`ui-settings.js`**: Modal de Reprogramar Pedidos por Rango.
 
 ---
 
@@ -450,14 +479,9 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### 🎯 FASE 2.1.6 — Ayuda detallada (iframe)
 
-#### ➕ Añadido
+#### ✨ Añadido
 
 - **`js/help.js`**: `abrirAyudaDetallada()` con iframe.
-- **`ayuda-panario.html`**: Manual completo en HTML.
-
-#### 🐛 Corregido
-
-- **`js/help.js`**: Problemas de z-index del iframe.
 
 ---
 
@@ -465,13 +489,9 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### 🎯 FASE 2.1.5 — Centro de Ayuda flotante
 
-#### ➕ Añadido
+#### ✨ Añadido
 
-- **`js/help.js`**: Popover del Centro de Ayuda (❓).
-- **`js/help.js`**: Tour interactivo de 8 pasos.
-- **`js/help.js`**: Guía rápida de inicio (5 pasos).
-- **`js/help.js`**: Modal de Léeme.
-- **`js/help.js`**: Modal de Créditos.
+- **`js/help.js`**: Popover del Centro de Ayuda, tour de 8 pasos.
 
 ---
 
@@ -479,10 +499,9 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### 🎯 FASE 2.1.0 — Módulo de Producción
 
-#### ➕ Añadido
+#### ✨ Añadido
 
 - **`ui-settings.js`**: Calendario de producción.
-- **`ui-settings.js`**: Modal de configuración de bloques.
 
 ---
 
@@ -492,19 +511,13 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 #### ⚠️ BREAKING CHANGES
 
-- **`db.js`**: Migración de esquema para soportar multiusuario.
+- **`db.js`**: Migración de esquema para multiusuario.
 - **`auth.js`**: Nuevo sistema de login con negocio.
-- **`db.js`**: Todas las tablas ahora tienen `negocio_id` y `user_id`.
 
-#### ➕ Añadido
+#### ✨ Añadido
 
 - **`auth.js`**: Códigos de invitación (8 caracteres).
 - **`db.js`**: Roles admin/usuario.
-- **`ui-settings.js`**: Gestión de usuarios.
-
-#### ✏️ Modificado
-
-- **Todos los módulos**: Refactor para filtrar por negocio.
 
 ---
 
@@ -512,7 +525,7 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ### 🎉 Versión inicial
 
-#### ➕ Añadido
+#### ✨ Añadido
 
 - Módulos base: Dashboard, Pedidos, Insumos, Recetas, Productos, Ventas, Herramientas.
 - Login/registro simple.
@@ -525,14 +538,12 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 | Métrica | Valor |
 |---------|-------|
-| **Versión actual** | 2.3.7 |
-| **Total de versiones documentadas** | 20+ |
-| **Archivos JS** | 20 |
+| **Versión actual** | 2.5.0 |
+| **Total de versiones documentadas** | 26+ |
+| **Archivos JS** | 23 |
 | **Archivos CSS** | 1 |
-| **Archivos HTML** | 3 (index, offline, ayuda) |
-| **Archivos PWA** | 3 (manifest, sw, offline) |
-| **FAQs** | 204 (19 categorías) |
-| **Secciones del manual** | 15 |
+| **Archivos HTML** | 3 |
+| **FAQs** | 219 (17 categorías) |
 | **Shortcuts PWA** | 6 |
 | **Idiomas soportados** | Español (es) |
 
@@ -544,30 +555,27 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 - ✅ Sistema de Ayuda completo con FAQs externas
 - ✅ Documentación final (MANUAL, CHANGELOG, LICENSE)
+- ✅ FIX PWA: pantalla completa en instalación
+- ✅ Correcciones 011026 (N1–N6) + FIX N5
+- ✅ Correcciones 290926 (#3, #7, #12)
+- ✅ Ayuda Detallada actualizada (290926 #8)
+- ✅ FAQs ampliadas (219 preguntas)
+- ⏳ Actualización del MANUAL DE USUARIO.pdf a v2.5.0
 - ⏳ Publicación en GitHub Pages
 - ⏳ Pruebas finales de integración
 
 ### v1.1.0 (futuro)
 
-- 📱 Sincronización entre dispositivos (opcional, vía export/import)
+- 📱 Sincronización entre dispositivos (export/import)
 - 📊 Gráficos avanzados en Dashboard
-- 🎨 Más temas visuales
-- 🌐 Soporte multiidioma (inglés, portugués)
+- 🌐 Soporte multiidioma
 - 📦 Exportación a Excel/CSV
-
-### v1.2.0 (futuro)
-
-- 🖨️ Reportes imprimibles personalizables
-- 📅 Vista de calendario unificada
-- 🔔 Notificaciones push (PWA)
-- 🎯 Objetivos y metas de ventas
 
 ### v2.0.0 (futuro lejano)
 
 - ☁️ Sincronización cloud (opcional)
-- 👥 Colaboración en tiempo real
 - 📱 App nativa (React Native / Flutter)
-- 🔌 API pública para integraciones
+- 🔌 API pública
 
 ---
 
@@ -588,4 +596,4 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ---
 
-**Última actualización:** 29 de septiembre de 2026
+**Última actualización:** 3 de octubre de 2026

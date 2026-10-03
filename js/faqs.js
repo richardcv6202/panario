@@ -1,6 +1,9 @@
 // ============================================================
 // 📦 FAQs - Panario
-// v1.0.0 (290926): Base de datos de Preguntas Frecuentes
+// v1.1.0 (031026): Ampliación con FAQs v2.5.0
+//   - ✅ NUEVO: 15 FAQs sobre N1-N6, 290926 (#3, #7, #12) y Config. Bancaria
+//   - ✅ MANTENIDO: Las 204 FAQs originales (v1.0.0)
+//   - ✅ Total: 219 FAQs en 17 categorías
 //   - ✅ Extraídas del manual técnico y resúmenes de correcciones
 //   - ✅ Filtradas: solo usuario final (sin nivel técnico)
 //   - ✅ Organizadas por categoría temática
@@ -247,6 +250,18 @@ window.FAQS_DB = [
     { cat: "🎨 Interfaz", 
         q: "¿El cambio de espaciado afecta a otras vistas además del Dashboard?", 
         a: "Sí. El padding-top de main y el padding-bottom se aplican a TODAS las vistas (Pedidos, Insumos, Recetas, Productos, Ventas, Herramientas, Perfil). El ajuste del título específico del Dashboard solo aplica a esa vista, pero el resto de vistas también se benefician del mayor espacio inferior." 
+    },
+
+    // 🆕 N5: Promedio diario por producto
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Qué es el "Promedio diario por producto"?', 
+        a: 'Es una tarjeta opcional del Dashboard que muestra el promedio diario de ventas de un producto específico que tú elijas. Incluye: promedio en pesos, días con ventas, total vendido, total de unidades y el mejor día (fecha y monto). Útil para analizar qué tan bien rinde un producto concreto.' 
+    },
+    { 
+        cat: '📊 Dashboard', 
+        q: '¿Cómo activo la tarjeta de "Producto promedio"?', 
+        a: 'Ve a tu Perfil → "Elementos visibles en el Dashboard" → activa el toggle "📊 Producto promedio" → selecciona el producto en el combobox que aparece. La tarjeta aparecerá automáticamente en tu Dashboard con las estadísticas de ese producto. Si desactivas el toggle, el producto seleccionado se limpia automáticamente.' 
     },
 
     // ============================================================
@@ -624,6 +639,20 @@ window.FAQS_DB = [
         a: 'En Ventas, pulsa "📊 Reporte" para abrir el modal de reporte. Puedes filtrar por fecha, cliente, producto, método de pago y vendedor.' 
     },
 
+    // 🆕 N3: Cálculo unificado de ingresos
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Por qué el Dashboard y Ventas muestran el mismo total de ingresos?', 
+        a: 'Desde la corrección N3, el total de ingresos se calcula siempre desde sales.total, eliminando la discrepancia que había antes entre ambas vistas. Si alguna vez ves cifras distintas, significa que hay transacciones huérfanas (transacciones de ingreso sin venta válida) que puedes limpiar desde Herramientas → Diagnóstico.' 
+    },
+
+    // 🆕 N4: Ventas liberadas siempre se guardan
+    { 
+        cat: '💰 Ventas', 
+        q: '¿Qué pasa si una venta liberada falla al descontar stock?', 
+        a: 'Desde la corrección N4, la venta liberada se guarda SIEMPRE, incluso si falla el descuento de stock por insuficiencia. Después de crearla, el toggle "Mostrar liberadas" se activa automáticamente para que la veas listada. Esto evita perder registros de ventas cuando hay problemas de stock.' 
+    },
+
     // ============================================================
     // ⚡ SECCIÓN 9: CORRIENTE Y PRODUCCIÓN
     // ============================================================
@@ -762,6 +791,34 @@ window.FAQS_DB = [
         a: 'En el Dashboard, si el sistema de premios está activo. Muestra el mejor cliente del mes, del año y el top 5 del mes.' 
     },
 
+    // 🆕 N1: Exclusión de deudores
+    { 
+        cat: '🏆 Premios', 
+        q: '¿Qué es la exclusión de deudores en premios?', 
+        a: 'Desde la corrección N1, los clientes con deuda pendiente quedan excluidos automáticamente del cálculo de premios (tanto Mejor Cliente como Más Frecuente). Esto evita premiar a clientes que no han pagado sus compras anteriores. Si un cliente paga su deuda, vuelve a ser elegible.' 
+    },
+
+    // 🆕 N2: Dos categorías
+    { 
+        cat: '🏆 Premios', 
+        q: '¿Cuáles son las dos categorías de premios?', 
+        a: 'Desde la corrección N2 hay dos categorías independientes: 🥇 Mejor Cliente (mayor gasto en el mes, con mínimo de compras configurable) y 🥈 Más Frecuente (mayor número de compras en el mes, también con mínimo configurable). Cada categoría tiene su propio premio y sus propias reglas.' 
+    },
+
+    // 🆕 N2-bis: Toggle no requiere entrega
+    { 
+        cat: '🏆 Premios', 
+        q: '¿Qué significa "premio no requiere entrega"?', 
+        a: 'Es un toggle (N2-bis) que permite registrar premios que NO implican entrega física de producto (por ejemplo, un reconocimiento o un descuento). Al activarlo, el premio queda marcado como "Entregado" automáticamente sin necesidad de registrar la entrega después.' 
+    },
+
+    // 🆕 N1: Historial de premios
+    { 
+        cat: '🏆 Premios', 
+        q: '¿Dónde veo el historial de premios otorgados?', 
+        a: 'En la sección de Premios hay una pestaña "🏆 Historial" (N1) donde puedes consultar todos los premios otorgados, filtrar por año, tipo de premio, categoría o cliente, ver si ya fueron entregados o están pendientes, y añadir notas a cada premio.' 
+    },
+
     // ============================================================
     // 🔔 SECCIÓN 11: NOTIFICACIONES
     // ============================================================
@@ -869,6 +926,13 @@ window.FAQS_DB = [
         cat: '👤 Perfil', 
         q: '¿Cómo accedo a la Ayuda?', 
         a: 'En tu Perfil → "❓ Ayuda y Tutoriales". Puedes acceder a la Guía rápida, Tutorial interactivo, Preguntas frecuentes y Ayuda detallada.' 
+    },
+
+    // 🆕 N5: Toggle Producto promedio en Perfil
+    { 
+        cat: '👤 Perfil', 
+        q: '¿Qué es el toggle "Producto promedio"?', 
+        a: 'Es un toggle en tu Perfil (dentro de "Elementos visibles en el Dashboard") que, al activarlo, te permite seleccionar un producto y mostrar una tarjeta adicional en el Dashboard con el promedio diario de ventas de ese producto, días con ventas, total vendido, total unidades y mejor día. Al desactivar el toggle, el producto seleccionado se limpia automáticamente.' 
     },
 
     // ============================================================
@@ -990,6 +1054,32 @@ window.FAQS_DB = [
         a: 'Es una función que limpia estilos residuales que puedan estar deformando la interfaz. Útil si la barra superior se ve mal.' 
     },
 
+    // 🆕 Config. Bancaria ampliada
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cómo configuro los permisos bancarios?', 
+        a: 'Solo el primer administrador puede hacerlo: ve a Herramientas → "🔐 Configuración Bancaria". Ahí puedes activar/desactivar tres opciones: (1) Permitir ver QRs de otros, (2) Permitir cambiar cuenta por defecto, (3) Forzar QR del admin. La tercera anula las dos anteriores.' 
+    },
+
+    // 🆕 #12: Toggle Producción HOY/MAÑANA
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cómo hago para que el Dashboard muestre la producción de HOY?', 
+        a: 'Solo el primer administrador puede hacerlo: ve a Herramientas → "📅 Producción en Dashboard" → activa el toggle "Mostrar producción de HOY". Por defecto muestra la de MAÑANA. La preferencia se guarda por negocio.' 
+    },
+
+    // 🆕 N6: Transacciones huérfanas
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Qué son las transacciones huérfanas?', 
+        a: 'Son transacciones de ingreso que no tienen una venta válida asociada (por ejemplo, porque la venta fue eliminada o porque nunca existió el sale_id). Pueden inflar los totales de ingresos y causar discrepancias entre Dashboard y Ventas.' 
+    },
+    { 
+        cat: '⚙️ Herramientas', 
+        q: '¿Cómo limpio las transacciones huérfanas?', 
+        a: 'Ve a Herramientas → "🧹 Transacciones Huérfanas" → pulsa "🔍 Diagnosticar" para ver cuántas hay, y luego "🧹 Limpiar" para eliminarlas (con confirmación previa). El sistema usa soft-delete, así que quedan recuperables desde la base de datos si fuese necesario.' 
+    },
+
     // ============================================================
     // 📄 SECCIÓN 14: REPORTES
     // ============================================================
@@ -1091,6 +1181,20 @@ window.FAQS_DB = [
         cat: '❓ Preguntas Técnicas', 
         q: '¿Cómo puedo ver los logs de la app?', 
         a: 'Abre DevTools (F12) → pestaña Console. Ahí verás todos los logs detallados de la app.' 
+    },
+
+    // 🆕 #3: Botones flotantes en Ayuda
+    { 
+        cat: '❓ Preguntas Técnicas', 
+        q: '¿Qué son los botones flotantes ⬆️⬇️ en la Ayuda?', 
+        a: 'Son botones (corrección #3) que aparecen en las esquinas inferiores de la Ayuda Detallada, la Guía Rápida y las FAQs. Sirven para ir rápidamente al inicio (⬆️) o al final (⬇️) del contenido. Se ocultan automáticamente cuando no hay suficiente scroll, para no molestar.' 
+    },
+
+    // 🆕 #7: Tutorial mejorado
+    { 
+        cat: '❓ Preguntas Técnicas', 
+        q: '¿Por qué el tutorial antes no funcionaba bien?', 
+        a: 'El tutorial (corrección #7) tenía tres problemas: (1) a veces no empezaba en el paso 1, (2) no siempre llegaba al final, y (3) no incluía el módulo Perfil. Ya está corregido: ahora el tour siempre empieza en el paso 1, recorre los 9 pasos correctamente y termina incluyendo el Perfil.' 
     },
 
     // ============================================================
@@ -1234,12 +1338,12 @@ window.FAQS_DB = [
         cat: '🎯 Consejos y Trucos', 
         q: '¿Cómo puedo reducir el desperdicio?', 
         a: 'Ajusta la producción a la demanda real. Usa el CMPBC para no sobreproducir. Revisa el historial de ventas para prever la demanda.' 
-    },
+    }, 
     { 
         cat: '🎯 Consejos y Trucos', 
         q: '¿Cómo puedo ahorrar tiempo en la gestión?', 
         a: 'Usa la app en el móvil. Registra las ventas al momento. Usa los reportes para no tener que hacer cuentas manualmente.' 
-    },
+    }, 
     { 
         cat: '🎯 Consejos y Trucos', 
         q: '¿Qué hago si me quedo sin espacio en el dispositivo?', 
@@ -1251,7 +1355,8 @@ window.FAQS_DB = [
 // LOG DE CARGA
 // ============================================================
 
-console.log('📚 FAQs cargadas correctamente v1.0.0');
+console.log('📚 FAQs cargadas correctamente v1.1.0');
 console.log(`   📝 Total de preguntas: ${window.FAQS_DB.length}`);
 console.log(`   📂 Categorías: ${[...new Set(window.FAQS_DB.map(f => f.cat))].length}`);
 console.log('   🎯 Filtradas para usuario final (sin nivel técnico)');
+console.log('   🆕 v1.1.0: +15 FAQs sobre N1-N6, 290926 (#3, #7, #12) y Config. Bancaria');

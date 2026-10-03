@@ -1,12 +1,19 @@
 // ============================================================
 // 📦 PROFILE MODULE - Panario
-// v2.3.7 (290926): 🎯 CORRECCIÓN #15 (290926)
-//   - ✅ NUEVO: Botón "📖 Ayuda detallada" en la sección
-//     "Ayuda y Tutoriales" del perfil, entre FAQ y Editar perfil.
-//   - ✅ Llama a openDetailedHelp() (definida en app.js v3.0.6).
-//   - ✅ Todo el resto del módulo se mantiene idéntico a v2.3.6.
+// v2.4.1 (021026): 🎯 FIX N5 - Limpieza de producto al desactivar toggle
+//   - ✅ FIX: toggleProductoPromedio() ahora limpia producto_promedio_id
+//     cuando el toggle se desactiva
+//   - ✅ MANTENIDO: Todas las funcionalidades de v2.4.0
 //
 // HISTORIAL:
+// v2.4.0 (011026): CORRECCIÓN N5 - Tarjeta de promedio diario
+//   - ✅ NUEVO: Toggle "📊 Producto promedio" en Elementos del Dashboard
+//   - ✅ NUEVO: Combobox de selección de producto (visible si el toggle está activo)
+//   - ✅ NUEVO: Función toggleProductoPromedio()
+//   - ✅ NUEVO: Función cambiarProductoPromedio()
+//   - ✅ NUEVO: Función cargarProductosEnCombobox()
+//   - ✅ MODIFICADO: loadProfile() lee show_producto_promedio y producto_promedio_id
+// v2.3.7 (290926): CORRECCIÓN #15 — Botón "Ayuda detallada"
 // v2.3.6 (280926): SESIÓN 7 — Toggle "Compartida" en cuentas
 // v2.3.5 (260926): CORRECCIÓN #17 — Configuraciones individuales
 // v2.3.4 (260926): CORRECCIÓN #17 — Configuraciones individuales
@@ -72,7 +79,6 @@ function loadProfile(user) {
         if (window.DBModule && typeof window.DBModule.getUserGuiaRapidaActiva === 'function') {
             guiaActiva = window.DBModule.getUserGuiaRapidaActiva(user.id);
         } else {
-            // Fallback: localStorage (compatibilidad)
             guiaActiva = localStorage.getItem('panario_guia_deshabilitada') !== 'true';
         }
     } catch (e) {
@@ -98,6 +104,10 @@ function loadProfile(user) {
     }
     
     const availableSounds = window.NotificationsModule?.getAvailableSounds() || [];
+    
+    // 🆕 CORRECCIÓN N5: Leer config del producto promedio
+    const showProductoPromedio = dashConfig.show_producto_promedio === true;
+    const productoPromedioId = dashConfig.producto_promedio_id || '';
     
     main.innerHTML = `
         <div class="card">
@@ -287,6 +297,38 @@ function loadProfile(user) {
                     ${renderDashboardToggle('show_payment_methods', '💳 Métodos de pago', 'Distribución de ventas por método de pago', dashConfig.show_payment_methods)}
                     ${renderDashboardToggle('show_debts', '💳 Deudas', 'Lista detallada de deudas pendientes de cobro', dashConfig.show_debts !== false)}
                     ${renderDashboardToggle('show_rewards', '🏆 Premios', 'Mejor cliente del mes y del año', dashConfig.show_rewards !== false)}
+                    
+                    <!-- 🆕 CORRECCIÓN N5: Toggle + Combobox de producto promedio -->
+                    <div style="background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); padding: 8px 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="flex: 1;">
+                                <div style="font-size: 13px; font-weight: 500;">📊 Producto promedio</div>
+                                <div style="font-size: 10px; color: var(--text-light); margin-top: 1px;">Promedio diario de ventas de un producto</div>
+                            </div>
+                            <label style="position: relative; display: inline-block; width: 44px; height: 24px; cursor: pointer; flex-shrink: 0;">
+                                <input type="checkbox" id="toggle-producto-promedio"
+                                       ${showProductoPromedio ? 'checked' : ''}
+                                       onchange="toggleProductoPromedio(this.checked)"
+                                       style="opacity: 0; width: 0; height: 0;">
+                                <span id="toggle-producto-promedio-slider"
+                                      style="position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                                             background-color: ${showProductoPromedio ? '#10b981' : '#94a3b8'};
+                                             border-radius: 24px; transition: 0.3s;">
+                                    <span style="position: absolute; height: 18px; width: 18px;
+                                                 left: ${showProductoPromedio ? '22px' : '3px'}; bottom: 3px;
+                                                 background-color: white; border-radius: 50%; transition: 0.3s;
+                                                 box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
+                                </span>
+                            </label>
+                        </div>
+                        <div id="producto-promedio-selector" style="margin-top: 8px; display: ${showProductoPromedio ? 'block' : 'none'};">
+                            <select id="select-producto-promedio" onchange="cambiarProductoPromedio(this.value)"
+                                    style="width: 100%; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 12px; cursor: pointer;">
+                                <option value="">— Selecciona un producto —</option>
+                            </select>
+                        </div>
+                    </div>
+                    
                     ${renderDashboardToggle('show_bank_qr', '🏦 QR de cuenta bancaria', 'Muestra el QR de tu cuenta bancaria predeterminada', dashConfig.show_bank_qr)}
                     ${renderDashboardToggle('show_quick_actions', '🔗 Botones de acción rápida', 'Accesos directos a Pedidos, Ventas, Insumos, etc.', dashConfig.show_quick_actions)}
                 </div>
@@ -417,6 +459,11 @@ function loadProfile(user) {
     document.getElementById('editProfileModal').addEventListener('click', (e) => {
         if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
     });
+    
+    // 🆕 CORRECCIÓN N5: Cargar productos en el combobox después de renderizar
+    if (showProductoPromedio) {
+        cargarProductosEnCombobox(productoPromedioId);
+    }
 }
 
 // ============================================================
@@ -514,7 +561,6 @@ function toggleGuiaRapida(activada) {
         const user = window.AuthModule?.getCurrentUser();
         
         if (user && user.id && window.DBModule && typeof window.DBModule.updateUserGuiaRapida === 'function') {
-            // 🆕 CORRECCIÓN #17: Guardar en la BD con user_id
             const result = window.DBModule.updateUserGuiaRapida(user.id, activada);
             
             if (result.success) {
@@ -523,7 +569,6 @@ function toggleGuiaRapida(activada) {
                 console.warn('⚠️ Error guardando guía rápida en BD:', result.error);
             }
         } else {
-            // Fallback: localStorage (retrocompatibilidad)
             if (activada) {
                 localStorage.removeItem('panario_guia_deshabilitada');
                 localStorage.removeItem('panario_tour_completed');
@@ -532,7 +577,6 @@ function toggleGuiaRapida(activada) {
             }
         }
         
-        // Actualizar UI del slider
         const slider = document.getElementById('toggle-guia-slider');
         const innerCircle = slider?.querySelector('span');
         if (slider && innerCircle) {
@@ -545,7 +589,6 @@ function toggleGuiaRapida(activada) {
             }
         }
         
-        // Mostrar toast
         if (activada) {
             window.showToast('✅ Guía rápida activada. Se mostrará al próximo inicio.', 'success', 3000);
         } else {
@@ -634,6 +677,192 @@ async function toggleDashboardElement(key, isActive) {
     } catch (e) {
         console.error('Error guardando configuración del dashboard:', e);
         window.showToast('❌ Error al guardar la configuración', 'error');
+    }
+}
+
+// ============================================================
+// 🆕 CORRECCIÓN N5: TOGGLE Y COMBOBOX DE PRODUCTO PROMEDIO
+// ============================================================
+
+/**
+ * Maneja el toggle "📊 Producto promedio" en Elementos del Dashboard.
+ * Si se activa, muestra el combobox de selección de producto.
+ * 🆕 v2.4.1: Si se desactiva, limpia producto_promedio_id.
+ * @param {boolean} activado - Estado del toggle
+ */
+async function toggleProductoPromedio(activado) {
+    const LOG_PREFIX = '📊 [toggleProductoPromedio v2.4.1]';
+    
+    try {
+        const user = window.AuthModule.getCurrentUser();
+        if (!user) {
+            window.showToast('❌ No hay usuario autenticado', 'error');
+            return;
+        }
+        
+        console.log(`${LOG_PREFIX} Toggle cambiado a: ${activado}`);
+        
+        // 1. Actualizar la config del dashboard
+        const currentConfig = user.dashboard_config || window.DBModule.getUserDashboardConfig(user.id);
+        currentConfig.show_producto_promedio = activado;
+        
+        // 🆕 v2.4.1: Si se desactiva, limpiar el producto seleccionado
+        // Esto evita que al reactivar el toggle, el producto "recordado"
+        // reactive automáticamente la tarjeta sin que el usuario lo sepa.
+        if (!activado) {
+            currentConfig.producto_promedio_id = null;
+            console.log(`${LOG_PREFIX} 🧹 producto_promedio_id limpiado (toggle desactivado)`);
+        }
+        
+        const result = window.DBModule.updateUserDashboardConfig(user.id, currentConfig);
+        
+        if (!result.success) {
+            window.showToast('❌ Error al guardar: ' + result.error, 'error');
+            return;
+        }
+        
+        // 2. Actualizar la UI del slider
+        const slider = document.getElementById('toggle-producto-promedio-slider');
+        const innerCircle = slider?.querySelector('span');
+        if (slider && innerCircle) {
+            slider.style.backgroundColor = activado ? '#10b981' : '#94a3b8';
+            innerCircle.style.left = activado ? '22px' : '3px';
+        }
+        
+        // 3. Mostrar/ocultar el combobox
+        const selectorContainer = document.getElementById('producto-promedio-selector');
+        if (selectorContainer) {
+            selectorContainer.style.display = activado ? 'block' : 'none';
+            
+            if (activado) {
+                cargarProductosEnCombobox(currentConfig.producto_promedio_id || '');
+            }
+        }
+        
+        // 4. Actualizar el user en sessionStorage
+        user.dashboard_config = currentConfig;
+        window.AuthModule.setCurrentUser(user);
+        
+        window.showToast(
+            activado ? '✅ Producto promedio activado' : '🚫 Producto promedio desactivado',
+            'info',
+            2000
+        );
+        
+        // 5. Refrescar el dashboard si estamos en él
+        const currentSection = document.querySelector('.nav-item.active')?.dataset?.section;
+        if (currentSection === 'dashboard' && typeof window.renderDashboardView === 'function') {
+            setTimeout(() => window.renderDashboardView(), 300);
+        }
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        window.showToast('❌ Error al cambiar la configuración', 'error');
+    }
+}
+
+/**
+ * Guarda el ID del producto seleccionado en el combobox.
+ * @param {string} productoId - ID del producto seleccionado
+ */
+async function cambiarProductoPromedio(productoId) {
+    const LOG_PREFIX = '📊 [cambiarProductoPromedio v2.4.1]';
+    
+    try {
+        const user = window.AuthModule.getCurrentUser();
+        if (!user) {
+            window.showToast('❌ No hay usuario autenticado', 'error');
+            return;
+        }
+        
+        const idNumerico = productoId ? parseInt(productoId) : null;
+        console.log(`${LOG_PREFIX} Producto seleccionado: ${idNumerico || '(ninguno)'}`);
+        
+        // 1. Actualizar la config del dashboard
+        const currentConfig = user.dashboard_config || window.DBModule.getUserDashboardConfig(user.id);
+        currentConfig.producto_promedio_id = idNumerico;
+        
+        const result = window.DBModule.updateUserDashboardConfig(user.id, currentConfig);
+        
+        if (!result.success) {
+            window.showToast('❌ Error al guardar: ' + result.error, 'error');
+            return;
+        }
+        
+        // 2. Actualizar el user en sessionStorage
+        user.dashboard_config = currentConfig;
+        window.AuthModule.setCurrentUser(user);
+        
+        if (idNumerico) {
+            const producto = window.DBModule.getProducto(idNumerico);
+            const nombre = producto ? producto.nombre : 'Producto';
+            window.showToast(`✅ Producto seleccionado: ${nombre}`, 'success', 2000);
+        } else {
+            window.showToast('ℹ️ Selecciona un producto para ver el promedio', 'info', 2000);
+        }
+        
+        // 3. Refrescar el dashboard si estamos en él
+        const currentSection = document.querySelector('.nav-item.active')?.dataset?.section;
+        if (currentSection === 'dashboard' && typeof window.renderDashboardView === 'function') {
+            setTimeout(() => window.renderDashboardView(), 300);
+        }
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        window.showToast('❌ Error al guardar el producto', 'error');
+    }
+}
+
+/**
+ * Carga todos los productos del negocio en el combobox.
+ * @param {number|string} productoSeleccionadoId - ID del producto a preseleccionar
+ */
+function cargarProductosEnCombobox(productoSeleccionadoId = '') {
+    const LOG_PREFIX = '📊 [cargarProductosEnCombobox v2.4.1]';
+    
+    try {
+        const select = document.getElementById('select-producto-promedio');
+        if (!select) {
+            console.log(`${LOG_PREFIX} ℹ️ Combobox no encontrado`);
+            return;
+        }
+        
+        // Limpiar y añadir opción por defecto
+        select.innerHTML = '<option value="">— Selecciona un producto —</option>';
+        
+        // Obtener todos los productos del negocio
+        const productos = window.DBModule.getProductos();
+        
+        if (!productos || productos.length === 0) {
+            console.log(`${LOG_PREFIX} ℹ️ No hay productos registrados`);
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = '— No hay productos —';
+            opt.disabled = true;
+            select.appendChild(opt);
+            return;
+        }
+        
+        // Ordenar alfabéticamente
+        productos.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+        
+        // Añadir cada producto
+        const idSel = productoSeleccionadoId ? String(productoSeleccionadoId) : '';
+        
+        for (const p of productos) {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.nombre;
+            if (String(p.id) === idSel) {
+                opt.selected = true;
+            }
+            select.appendChild(opt);
+        }
+        
+        console.log(`${LOG_PREFIX} ✅ ${productos.length} productos cargados (seleccionado: ${idSel || 'ninguno'})`);
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
     }
 }
 
@@ -975,7 +1204,6 @@ async function showBankAccountsModal() {
                 badgeDefault = '<span style="font-size: 11px; background: #f59e0b20; color: #f59e0b; padding: 1px 8px; border-radius: 10px; font-weight: 600;">👑 Default global</span>';
             }
             
-            // 🆕 v2.3.6: Badge de "Compartida"
             const badgeCompartida = esCompartida
                 ? '<span style="font-size: 10px; background: #8b5cf620; color: #8b5cf6; padding: 1px 8px; border-radius: 10px; margin-left: 4px; font-weight: 600;">🔗 Compartida</span>'
                 : '';
@@ -1147,7 +1375,6 @@ async function showBankAccountsModal() {
                     </div>
                 </div>
                 
-                <!-- 🆕 v2.3.6: Toggle "Compartida" -->
                 <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #8b5cf610; border-radius: 6px; border: 1px solid #8b5cf6;">
                     <span style="font-size: 16px;">🔗</span>
                     <div style="flex: 1;">
@@ -1237,7 +1464,7 @@ async function showBankAccountsModal() {
         const accountNumber = document.getElementById('bank-account-number').value.trim();
         const phone = document.getElementById('bank-account-phone').value.trim();
         const isDefault = document.getElementById('bank-account-default').checked;
-        const isShared = document.getElementById('bank-account-shared').checked;  // 🆕 v2.3.6
+        const isShared = document.getElementById('bank-account-shared').checked;
         
         if (!bank) { window.showToast('⚠️ El nombre del banco es obligatorio', 'error'); return; }
         if (!accountNumber) { window.showToast('⚠️ El número de cuenta es obligatorio', 'error'); return; }
@@ -1249,7 +1476,7 @@ async function showBankAccountsModal() {
             phone: phone || null,
             qr_code: window._qrDataTemp || null,
             is_default: isDefault,
-            is_shared: isShared ? 1 : 0  // 🆕 v2.3.6
+            is_shared: isShared ? 1 : 0
         };
         
         const result = await window.DBModule.saveBankAccount(accountData);
@@ -1377,7 +1604,6 @@ async function editBankAccount(accountId) {
                     </small>
                 </div>
                 
-                <!-- 🆕 v2.3.6: Toggle "Compartida" (edición) -->
                 <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #8b5cf610; border-radius: 6px; border: 1px solid #8b5cf6;">
                     <span style="font-size: 16px;">🔗</span>
                     <div style="flex: 1;">
@@ -1477,7 +1703,7 @@ async function editBankAccount(accountId) {
         const accountNumber = document.getElementById('edit-bank-account-number').value.trim();
         const phone = document.getElementById('edit-bank-account-phone').value.trim();
         const isDefault = document.getElementById('edit-bank-account-default').checked;
-        const isShared = document.getElementById('edit-bank-account-shared').checked;  // 🆕 v2.3.6
+        const isShared = document.getElementById('edit-bank-account-shared').checked;
         const currentQr = document.getElementById('edit-bank-qr-data').value;
         
         if (!bank) { window.showToast('⚠️ El nombre del banco es obligatorio', 'error'); return; }
@@ -1498,7 +1724,7 @@ async function editBankAccount(accountId) {
             phone: phone || null,
             qr_code: finalQr,
             is_default: isDefault,
-            is_shared: isShared ? 1 : 0  // 🆕 v2.3.6
+            is_shared: isShared ? 1 : 0
         };
         
         const result = await window.DBModule.saveBankAccount(accountData);
@@ -1540,7 +1766,7 @@ async function viewBankAccountQR(accountId) {
         `;
         
         const ownerName = account.owner_name || '';
-        const esCompartida = Number(account.is_shared) === 1;  // 🆕 v2.3.6
+        const esCompartida = Number(account.is_shared) === 1;
         
         let qrHtml = '';
         if (account.qr_code) {
@@ -1734,13 +1960,23 @@ window.testAllNotificationSounds = testAllNotificationSounds;
 window.generarQRPreview = generarQRPreview;
 window.generarEditQRPreview = generarEditQRPreview;
 window.construirTextoQR = construirTextoQR;
+// 🆕 CORRECCIÓN N5: Exportar nuevas funciones
+window.toggleProductoPromedio = toggleProductoPromedio;
+window.cambiarProductoPromedio = cambiarProductoPromedio;
+window.cargarProductosEnCombobox = cargarProductosEnCombobox;
 
-console.log('📦 Profile Module cargado correctamente v2.3.7');
-console.log('   🆕 CORRECCIÓN #15 (290926) - Botón "📖 Ayuda detallada":');
-console.log('      ✅ Añadido en la sección "Ayuda y Tutoriales" del perfil');
-console.log('      ✅ Llama a openDetailedHelp() (app.js v3.0.6)');
-console.log('      ✅ Todo lo demás se mantiene idéntico a v2.3.6');
+console.log('📦 Profile Module cargado correctamente v2.4.1');
+console.log('   🆕 v2.4.1 (021026) — FIX N5:');
+console.log('      ✅ toggleProductoPromedio() limpia producto_promedio_id al desactivar');
+console.log('      ✅ Evita que la tarjeta se reactive automáticamente');
+console.log('   🆕 v2.4.0 (011026) — Corrección N5:');
+console.log('      ✅ Toggle "📊 Producto promedio" añadido');
+console.log('      ✅ Combobox de selección de producto');
+console.log('      ✅ toggleProductoPromedio() implementada');
+console.log('      ✅ cambiarProductoPromedio() implementada');
+console.log('      ✅ cargarProductosEnCombobox() implementada');
 console.log('   🔄 Correcciones anteriores mantenidas:');
+console.log('      • v2.3.7: Botón "📖 Ayuda detallada"');
 console.log('      • v2.3.6: Toggle "Compartida" en cuentas bancarias');
 console.log('      • v2.3.5: Configuraciones individuales (sonido/guía)');
 console.log('      • v2.3.3: Permisos bancarios');

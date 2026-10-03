@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual de Usuario · Panario v2.5.0</title>
+    <style>
+        /* ============================================================
+           ESTILOS BASE
+           ============================================================ */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary: #f5a623;
+            --primary-dark: #d4891b;
+            --primary-light: #fef3e0;
+            --text: #2d2d2d;
+            --text-light: #666;
+            --bg: #fdf6e3;
+            --bg-card: #ffffff;
+            --border: #e0d5c0;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+            --purple: #8b5cf6;
+        }
+        
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            font-size: 14px;
+            padding: 20px;
+        }
+        
+        .manual-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: var(--bg-card);
+            padding: 40px 50px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        
+        /* ============================================================
+           PORTADA
+           ============================================================ */
+        .cover {
+            text-align: center;
+            padding: 60px 20px 80px;
+            border-bottom: 3px solid var(--primary);
+            margin-bottom: 40px;
+        }
+        
+        .cover-icon {
+            font-size: 120px;
+            line-height: 1;
+            margin-bottom: 20px;
+        }
+        
+        .cover h1 {
+            font-size: 48px;
+            color: var(--primary);
+            margin-bottom: 8px;
+            letter-spacing: -1px;
+        }
+        
+        .cover h2 {
+            font-size: 20px;
+            color: var(--text-light);
+            font-weight: 400;
+            margin-bottom: 30px;
+        }
+        
+        .cover-info {
+            display: inline-block;
+            background: var(--primary-light);
+            border: 2px solid var(--primary);
+            border-radius: 12px;
+            padding: 16px 32px;
+            margin-top: 20px;
+        }
+        
+        .cover-info .version {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--primary-dark);
+        }
+        
+        .cover-info .date {
+            font-size: 13px;
+            color: var(--text-light);
+            margin-top: 4px;
+        }
+        
+        /* ============================================================
+           TABLA DE CONTENIDOS
+           ============================================================ */
+        .toc {
+            background: var(--primary-light);
+            border-left: 4px solid var(--primary);
+            border-radius: 8px;
+            padding: 24px 32px;
+            margin: 30px 0;
+        }
+        
+        .toc h2 {
+            font-size: 20px;
+            color: var(--primary-dark);
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--primary);
+        }
+        
+        .toc ol {
+            list-style: none;
+            counter-reset: toc-counter;
+            padding-left: 0;
+        }
+        
+        .toc li {
+            counter-increment: toc-counter;
+            padding: 4px 0;
+        }
+        
+        .toc li::before {
+            content: counter(toc-counter) ". ";
+            font-weight: 700;
+            color: var(--primary);
+        }
+        
+        .toc a {
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .toc a:hover {
+            color: var(--primary);
+            text-decoration: underline;
+        }
+        
+        /* ============================================================
+           SECCIONES
+           ============================================================ */
+        section {
+            margin-bottom: 40px;
+            page-break-inside: auto;
+        }
+        
+        h1.section-title {
+            font-size: 28px;
+            color: var(--primary);
+            border-bottom: 3px solid var(--primary);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        h2 {
+            font-size: 20px;
+            color: var(--text);
+            margin: 24px 0 12px;
+            padding-left: 8px;
+            border-left: 4px solid var(--primary);
+        }
+        
+        h3 {
+            font-size: 16px;
+            color: var(--text);
+            margin: 18px 0 8px;
+        }
+        
+        h4 {
+            font-size: 14px;
+            color: var(--text-light);
+            margin: 12px 0 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        p {
+            margin: 8px 0;
+        }
+        
+        ul, ol {
+            margin: 8px 0 8px 28px;
+        }
+        
+        li {
+            margin: 4px 0;
+        }
+        
+        strong {
+            color: var(--primary-dark);
+        }
+        
+        code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            font-size: 13px;
+            color: var(--danger);
+            border: 1px solid #e5e5e5;
+        }
+        
+        pre {
+            background: #f8f8f8;
+            padding: 12px 16px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            overflow-x: auto;
+            font-size: 13px;
+            margin: 12px 0;
+        }
+        
+        pre code {
+            background: none;
+            padding: 0;
+            border: none;
+            color: var(--text);
+        }
+        
+        /* ============================================================
+           TABLAS
+           ============================================================ */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 13px;
+            page-break-inside: avoid;
+        }
+        
+        th {
+            background: var(--primary);
+            color: white;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 700;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        
+        td {
+            padding: 9px 12px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+        
+        tr:nth-child(even) td {
+            background: #fafaf5;
+        }
+        
+        tr:hover td {
+            background: var(--primary-light);
+        }
+        
+        /* ============================================================
+           CAJAS INFORMATIVAS
+           ============================================================ */
+        .card {
+            background: var(--primary-light);
+            border-left: 4px solid var(--primary);
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin: 16px 0;
+            page-break-inside: avoid;
+        }
+        
+        .card.success {
+            background: #e8f9f0;
+            border-left-color: var(--success);
+        }
+        
+        .card.warning {
+            background: #fef6e7;
+            border-left-color: var(--warning);
+        }
+        
+        .card.danger {
+            background: #fdecec;
+            border-left-color: var(--danger);
+        }
+        
+        .card.info {
+            background: #e8f2fd;
+            border-left-color: var(--info);
+        }
+        
+        .card.purple {
+            background: #f3efff;
+            border-left-color: var(--purple);
+        }
+        
+        .card-title {
+            font-weight: 700;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* ============================================================
+           BADGES
+           ============================================================ */
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        
+        .badge.success { background: #d1fae5; color: var(--success); }
+        .badge.warning { background: #fef3c7; color: var(--warning); }
+        .badge.danger { background: #fee2e2; color: var(--danger); }
+        .badge.info { background: #dbeafe; color: var(--info); }
+        
+        /* ============================================================
+           ESTILOS DE IMPRESIÓN
+           ============================================================ */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+                font-size: 11pt;
+                color: black;
+            }
+            
+            .manual-container {
+                max-width: 100%;
+                padding: 0;
+                box-shadow: none;
+                border-radius: 0;
+            }
+            
+            .cover {
+                padding: 30px 0;
+                border-bottom: 2px solid var(--primary);
+                page-break-after: always;
+            }
+            
+            .cover-icon { font-size: 80px; }
+            .cover h1 { font-size: 36px; }
+            .cover h2 { font-size: 16px; }
+            
+            .toc {
+                page-break-after: always;
+            }
+            
+            section {
+                page-break-before: auto;
+            }
+            
+            h1.section-title {
+                font-size: 22px;
+                page-break-after: avoid;
+                page-break-before: always;
+            }
+            
+            h1.section-title:first-of-type {
+                page-break-before: auto;
+            }
+            
+            h2, h3, h4 {
+                page-break-after: avoid;
+            }
+            
+            table, .card, pre {
+                page-break-inside: avoid;
+            }
+            
+            a {
+                color: black;
+                text-decoration: none;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+        }
+        
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media (max-width: 768px) {
+            .manual-container {
+                padding: 20px;
+            }
+            
+            .cover h1 { font-size: 32px; }
+            .cover-icon { font-size: 80px; }
+            
+            h1.section-title { font-size: 22px; }
+            h2 { font-size: 17px; }
+            
+            table { font-size: 12px; }
+            th, td { padding: 6px 8px; }
+        }
+        
+        /* ============================================================
+           BOTÓN DE IMPRESIÓN
+           ============================================================ */
+        .print-button {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 14px 24px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(245, 166, 35, 0.4);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: inherit;
+            z-index: 9999;
+        }
+        
+        .print-button:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(245, 166, 35, 0.5);
+        }
+        
+        .print-button:active {
+            transform: translateY(0);
+        }
+        
+        @media print {
+            .print-button {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<button class="print-button no-print" onclick="window.print()">
+    🖨️ Guardar como PDF
+</button>
+
+<div class="manual-container">
+
+    <!-- ============================================================
+         PORTADA
+         ============================================================ -->
+    <div class="cover">
+        <div class="cover-icon">🍞</div>
+        <h1>PANARIO</h1>
+        <h2>Manual de Usuario</h2>
+        <div class="cover-info">
+            <div class="version">Versión 2.5.0</div>
+            <div class="date">3 de octubre de 2026</div>
+        </div>
+        <p style="margin-top: 24px; color: #666; font-size: 13px;">
+            Sistema de gestión para panadería artesanal<br>
+            Por Ricardo Castillo Valdés
+        </p>
+    </div>
+
+    <!-- ============================================================
+         TABLA DE CONTENIDOS
+         ============================================================ -->
+    <div class="toc">
+        <h2>📑 Tabla de Contenidos</h2>
+        <ol>
+            <li><a href="#intro">Introducción</a></li>
+            <li><a href="#primeros-pasos">Primeros Pasos</a></li>
+            <li><a href="#dashboard">Dashboard (Panel de Control)</a></li>
+            <li><a href="#pedidos">Pedidos</a></li>
+            <li><a href="#insumos">Insumos</a></li>
+            <li><a href="#recetas">Recetas</a></li>
+            <li><a href="#productos">Productos</a></li>
+            <li><a href="#ventas">Ventas</a></li>
+            <li><a href="#corriente">Corriente y Producción</a></li>
+            <li><a href="#premios">Premios</a></li>
+            <li><a href="#notificaciones">Notificaciones</a></li>
+            <li><a href="#perfil">Perfil</a></li>
+            <li><a href="#herramientas">Herramientas</a></li>
+            <li><a href="#reportes">Reportes</a></li>
+            <li><a href="#consejos">Consejos y Trucos</a></li>
+            <li><a href="#faqs">Preguntas Frecuentes</a></li>
+            <li><a href="#contacto">Contacto y Créditos</a></li>
+        </ol>
+    </div>
+
+    <!-- ============================================================
+         1. INTRODUCCIÓN
+         ============================================================ -->
+    <section id="intro">
+        <h1 class="section-title">🏠 1. Introducción</h1>
+        
+        <h2>1.1 ¿Qué es Panario?</h2>
+        <p><strong>Panario</strong> es una aplicación PWA (Progressive Web App) diseñada específicamente para la gestión integral de una <strong>panadería artesanal</strong>. Funciona completamente offline y guarda todos tus datos localmente en tu dispositivo.</p>
+        
+        <h2>1.2 ¿Qué puedes hacer con Panario?</h2>
+        <ul>
+            <li>🛒 Gestionar <strong>insumos</strong> (compras, stock, costos)</li>
+            <li>📖 Crear <strong>recetas</strong> con fórmulas y cálculo de costos</li>
+            <li>🏷️ Definir <strong>productos</strong> para la venta</li>
+            <li>💰 Registrar <strong>ventas</strong> con descuento automático de stock</li>
+            <li>📋 Gestionar <strong>pedidos y reservas</strong></li>
+            <li>⏰ Administrar la <strong>lista de espera</strong></li>
+            <li>📊 Ver <strong>estadísticas</strong> y análisis del negocio</li>
+            <li>⚡ Planificar según <strong>horarios de corriente</strong></li>
+            <li>🔨 Programar <strong>producción</strong> con algoritmo inteligente</li>
+            <li>🏭 Configurar <strong>CMPBC</strong> (Capacidad Máxima por Bloque)</li>
+            <li>🏆 Premiar a tus <strong>mejores clientes</strong></li>
+            <li>📅 Registrar <strong>días sin ventas</strong></li>
+            <li>👥 Trabajar en <strong>multiusuario</strong></li>
+        </ul>
+        
+        <h2>1.3 ¿Por qué se llama "Panario"?</h2>
+        <p>El nombre es un juego con <strong>"pan"</strong> y <strong>"diario"</strong> (de contabilidad). Es corto, original y describe perfectamente el propósito: llevar el diario contable de una panadería.</p>
+        
+        <h2>1.4 Información técnica</h2>
+        <table>
+            <tr><th style="width: 40%;">Propiedad</th><th>Valor</th></tr>
+            <tr><td>Versión</td><td><strong>2.5.0</strong></td></tr>
+            <tr><td>Estado</td><td><span class="badge success">✅ Producción</span></td></tr>
+            <tr><td>Arquitectura</td><td>Cliente local (SQLite WASM)</td></tr>
+            <tr><td>Tecnología</td><td>HTML5 + CSS3 + JavaScript (ES6+)</td></tr>
+            <tr><td>Persistencia</td><td>SQLite (sql.js) + localStorage</td></tr>
+            <tr><td>Modo offline</td><td>✅ 100% funcional</td></tr>
+            <tr><td>Instalable</td><td>✅ Como app nativa</td></tr>
+        </table>
+        
+        <h2>1.5 Privacidad y seguridad</h2>
+        <div class="card success">
+            <div class="card-title">💾 Privacidad y seguridad</div>
+            <ul>
+                <li>✅ Todos los datos se guardan <strong>localmente en tu dispositivo</strong>.</li>
+                <li>✅ No se envía información a ningún servidor externo.</li>
+                <li>✅ Puedes hacer copias de seguridad desde <strong>Herramientas</strong>.</li>
+                <li>✅ Funciona 100% offline.</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- ============================================================
+         2. PRIMEROS PASOS
+         ============================================================ -->
+    <section id="primeros-pasos">
+        <h1 class="section-title">🚀 2. Primeros Pasos</h1>
+        
+        <h2>2.1 Crear tu cuenta</h2>
+        <p>Al abrir Panario por primera vez, verás la pantalla de login. Pulsa <strong>"Crear una"</strong> y elige:</p>
+        <ul>
+            <li><strong>✨ Crear nuevo negocio:</strong> si eres el dueño y vas a crear tu panadería. Serás el <strong>primer administrador</strong>.</li>
+            <li><strong>🔗 Unirme a uno existente:</strong> si te han invitado con un código de 8 caracteres.</li>
+        </ul>
+        
+        <h2>2.2 Los 5 pasos para empezar</h2>
+        
+        <div class="card">
+            <div class="card-title">Paso 1: Registrar insumos</div>
+            <p>Ve a <strong>🛒 Insumos</strong> y registra todo lo que compras: harina, levadura, yogur, mantequilla, etc. Define el costo unitario, stock actual y stock mínimo.</p>
+        </div>
+        
+        <div class="card purple">
+            <div class="card-title">Paso 2: Crear recetas</div>
+            <p>Ve a <strong>📖 Recetas</strong> y crea tus fórmulas. Asocia los insumos con sus cantidades. Ej: "Pan de Yogur" con harina, levadura y yogur.</p>
+        </div>
+        
+        <div class="card success">
+            <div class="card-title">Paso 3: Crear productos</div>
+            <p>Ve a <strong>🏷️ Productos</strong> y define lo que vendes. Asocia cada producto a una receta. Ej: "Jaba de Pan" con 10 panes de la receta "Pan de Yogur".</p>
+        </div>
+        
+        <div class="card info">
+            <div class="card-title">Paso 4: Registrar ventas</div>
+            <p>Ve a <strong>💰 Ventas</strong> y registra tus transacciones. El stock de insumos se descuenta automáticamente según la receta.</p>
+        </div>
+        
+        <div class="card warning">
+            <div class="card-title">Paso 5: Gestionar pedidos</div>
+            <p>Ve a <strong>📋 Pedidos</strong> para gestionar reservas, lista de espera y entregas. Al entregar un pedido, se crea la venta automáticamente.</p>
+        </div>
+        
+        <h2>2.3 Instalar Panario como app</h2>
+        <h3>En Android (Chrome):</h3>
+        <ol>
+            <li>Abre Panario en Chrome.</li>
+            <li>Menú (3 puntos) → <strong>"Instalar aplicación"</strong> o <strong>"Añadir a pantalla de inicio"</strong>.</li>
+            <li>Confirma.</li>
+        </ol>
+        
+        <h3>En iOS (Safari):</h3>
+        <ol>
+            <li>Abre Panario en Safari.</li>
+            <li>Botón <strong>Compartir</strong> → <strong>"Añadir a pantalla de inicio"</strong>.</li>
+            <li>Confirma.</li>
+        </ol>
+        
+        <h3>En Desktop (Chrome/Edge):</h3>
+        <ol>
+            <li>Abre Panario en el navegador.</li>
+            <li>En la barra de direcciones, haz clic en el icono de instalación (⊕).</li>
+            <li>Confirma.</li>
+        </ol>
+    </section>
+
+    <!-- ============================================================
+         3. DASHBOARD
+         ============================================================ -->
+    <section id="dashboard">
+        <h1 class="section-title">📊 3. Dashboard (Panel de Control)</h1>
+        
+        <h2>3.1 ¿Qué es el Dashboard?</h2>
+        <p>Es la pantalla principal de Panario. Muestra un resumen completo de tu negocio: ventas, ingresos, gastos, ganancias, pedidos pendientes, deudas y más.</p>
+        
+        <h2>3.2 Tarjetas de estadísticas</h2>
+        <table>
+            <tr><th style="width: 35%;">Tarjeta</th><th>Descripción</th></tr>
+            <tr><td>🛒 Ventas totales</td><td>Cantidad total de ventas registradas</td></tr>
+            <tr><td>💰 Ingresos</td><td>Suma total de todos los ingresos</td></tr>
+            <tr><td>📤 Gastos</td><td>Suma total de gastos registrados</td></tr>
+            <tr><td>📈 Ganancia</td><td>Ingresos − Gastos</td></tr>
+            <tr><td>📋 Pedidos pendientes</td><td>Pedidos aún no entregados</td></tr>
+            <tr><td>💳 Deudas</td><td>Ventas pendientes de cobro</td></tr>
+            <tr><td>📈 Ventas hoy</td><td>Total vendido en el día actual</td></tr>
+            <tr><td>💵 Fondo en caja</td><td>Saldo en efectivo</td></tr>
+            <tr><td>🏦 Fondo en banco</td><td>Saldo por transferencia</td></tr>
+        </table>
+        
+        <h2>3.3 Estadísticas avanzadas</h2>
+        <table>
+            <tr><th style="width: 35%;">Estadística</th><th>Descripción</th></tr>
+            <tr><td>📅 Días con ventas</td><td>Número de días únicos con al menos una venta</td></tr>
+            <tr><td>📊 Promedio diario</td><td>Ingresos totales / días con ventas</td></tr>
+            <tr><td>🎂 Primer día venta</td><td>Fecha de la primera venta registrada</td></tr>
+            <tr><td>👥 Clientes diferentes</td><td>Cantidad de clientes únicos</td></tr>
+            <tr><td>🚀 Ventas liberadas</td><td>Cantidad e importe de ventas sin cliente</td></tr>
+            <tr><td>🥇 Mejor día</td><td>Día con mayor facturación histórica</td></tr>
+            <tr><td>📉 Peor día</td><td>Día con menor facturación histórica</td></tr>
+            <tr><td>👥 Ventas por empleado</td><td>Ranking de ventas por usuario del negocio</td></tr>
+        </table>
+        
+        <h2>3.4 Gráfico de ventas diarias</h2>
+        <p>Muestra las ventas con los siguientes controles:</p>
+        <ul>
+            <li><strong>◀ ▶</strong> — Navegar entre semanas</li>
+            <li><strong>📅 Ver:</strong> Últimos 7 días / Semana Dom-Sáb / Semana Lun-Dom</li>
+            <li><strong>Tipo</strong> — Barras, Línea o Pastel</li>
+            <li><strong>🖼️</strong> — Exportar como imagen PNG</li>
+            <li><strong>📄</strong> — Exportar como PDF</li>
+        </ul>
+        
+        <div class="card info">
+            <div class="card-title">🎨 Colores del gráfico</div>
+            <ul>
+                <li>🥇 <strong>Verde:</strong> Día con mayor venta del período</li>
+                <li>📉 <strong>Rojo:</strong> Día con menor venta del período</li>
+                <li>⭐ <strong>Amarillo:</strong> Día actual</li>
+            </ul>
+        </div>
+        
+        <h2>3.5 🆕 Promedio diario por producto (N5)</h2>
+        <p>Si activas el toggle <strong>"📊 Producto promedio"</strong> en tu Perfil y seleccionas un producto, aparecerá una tarjeta adicional en el Dashboard con:</p>
+        <ul>
+            <li>📊 <strong>Promedio diario de ventas</strong> del producto (monto en pesos)</li>
+            <li>📅 <strong>Días con ventas:</strong> cuántos días distintos se vendió</li>
+            <li>💰 <strong>Total vendido:</strong> monto acumulado histórico</li>
+            <li>📦 <strong>Total unidades:</strong> cantidad de unidades vendidas</li>
+            <li>🥇 <strong>Mejor día:</strong> fecha y monto del día con mayor venta</li>
+        </ul>
+        <div class="card purple">
+            <div class="card-title">💡 Útil para</div>
+            <p>Analizar qué tan bien se vende un producto específico y en qué días rinde más.</p>
+        </div>
+    </section>
+
+    <!-- ============================================================
+         4. PEDIDOS
+         ============================================================ -->
+    <section id="pedidos">
+        <h1 class="section-title">📋 4. Pedidos</h1>
+        
+        <h2>4.1 ¿Qué es un pedido?</h2>
+        <p>Un pedido es una reserva de productos que un cliente hace para una fecha futura. <strong>No es una venta</strong> hasta que se entrega.</p>
+        
+        <h2>4.2 Estados de un pedido</h2>
+        <table>
+            <tr><th style="width: 35%;">Estado</th><th>Descripción</th></tr>
+            <tr><td>⏳ Pendiente</td><td>Recién creado, sin confirmar</td></tr>
+            <tr><td>✅ Confirmado</td><td>Cliente confirmó el pedido</td></tr>
+            <tr><td>🔨 En producción</td><td>Se está elaborando</td></tr>
+            <tr><td>📦 Listo</td><td>Listo para entregar</td></tr>
+            <tr><td>🚚 Entregado</td><td>Ya entregado (crea venta)</td></tr>
+            <tr><td>❌ Cancelado</td><td>Cancelado (repone stock)</td></tr>
+            <tr><td>⏰ En lista de espera</td><td>Cliente en cola</td></tr>
+            <tr><td>🔄 Compró por lista</td><td>Atendido desde lista</td></tr>
+        </table>
+        
+        <h2>4.3 Crear un pedido individual</h2>
+        <ol>
+            <li>Clic en <strong>➕ Nuevo Pedido</strong></li>
+            <li>Completa cliente, teléfono, fecha de entrega</li>
+            <li>Selecciona sesión de recogida (mañana/tarde/noche)</li>
+            <li>Agrega productos con cantidades y precios</li>
+            <li>Guarda el pedido</li>
+        </ol>
+        
+        <h2>4.4 Reserva por período</h2>
+        <p>Permite crear <strong>múltiples pedidos a la vez</strong> con el mismo cliente y productos:</p>
+        <ul>
+            <li><strong>Rango completo:</strong> Todos los días del rango</li>
+            <li><strong>Paridad:</strong> Solo pares o solo impares</li>
+            <li><strong>Días de la semana:</strong> Solo martes, etc.</li>
+            <li><strong>Días específicos:</strong> 1, 15, 30 del mes</li>
+            <li><strong>🚫 Excluir días:</strong> Excluir domingos, sábados, etc.</li>
+        </ul>
+        
+        <div class="card info">
+            <div class="card-title">💡 Sesiones de recogida</div>
+            <ul>
+                <li>🌅 <strong>Mañana:</strong> 10:00 AM</li>
+                <li>☀️ <strong>Tarde:</strong> 3:00 PM</li>
+                <li>🌙 <strong>Noche:</strong> 7:00 PM</li>
+            </ul>
+        </div>
+        
+        <h2>4.5 Lista de espera</h2>
+        <p>Cuando la demanda supera la oferta, los clientes se ponen en lista de espera. Al haber disponibilidad:</p>
+        <ul>
+            <li>Se les notifica por orden de posición</li>
+            <li>Puedes atenderlos completos o parcialmente</li>
+            <li>Se reindexa la lista automáticamente</li>
+        </ul>
+        
+        <h2>4.6 Cancelación global (solo admin)</h2>
+        <p>Como administrador, puedes cancelar pedidos por <strong>rango de fechas</strong>. Útil para:</p>
+        <ul>
+            <li>Apagones prolongados</li>
+            <li>Falta de insumos</li>
+            <li>Vacaciones no planificadas</li>
+            <li>Enfermedad</li>
+            <li>Cierres temporales</li>
+        </ul>
+    </section>
+
+    <!-- ============================================================
+         5. INSUMOS
+         ============================================================ -->
+    <section id="insumos">
+        <h1 class="section-title">🛒 5. Insumos</h1>
+        
+        <h2>5.1 ¿Qué es un insumo?</h2>
+        <p>Un insumo es una materia prima que usas para producir: harina, levadura, yogur, mantequilla, etc.</p>
+        
+        <h2>5.2 Campos de un insumo</h2>
+        <table>
+            <tr><th style="width: 30%;">Campo</th><th>Descripción</th></tr>
+            <tr><td>📛 Nombre</td><td>Nombre del insumo (Ej: Harina de trigo)</td></tr>
+            <tr><td>📏 Unidad</td><td>Unidad de medida (kg, g, L, unid)</td></tr>
+            <tr><td>💰 Costo unitario</td><td>Precio por unidad</td></tr>
+            <tr><td>📦 Stock</td><td>Cantidad actual disponible</td></tr>
+            <tr><td>📉 Stock mínimo</td><td>Nivel para alerta de reposición</td></tr>
+        </table>
+        
+        <h2>5.3 Indicadores visuales</h2>
+        <ul>
+            <li><span class="badge success">✅ Stock OK</span> — Stock por encima del mínimo</li>
+            <li><span class="badge warning">⚠️ Stock bajo</span> — Stock igual o por debajo del mínimo</li>
+            <li><span class="badge danger">🚫 Sin stock</span> — Stock agotado</li>
+        </ul>
+        
+        <h2>5.4 Descuento automático</h2>
+        <p>Al vender un producto o confirmar un pedido, el stock se descuenta automáticamente según la receta asociada.</p>
+        
+        <h2>5.5 Permisos por rol</h2>
+        <table>
+            <tr><th>Acción</th><th style="text-align: center;">Admin</th><th style="text-align: center;">Usuario</th></tr>
+            <tr><td>Ver insumos</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+            <tr><td>Ver costos</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+            <tr><td>Crear / Editar / Eliminar</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
+        </table>
+    </section>
+
+    <!-- ============================================================
+         6. RECETAS
+         ============================================================ -->
+    <section id="recetas">
+        <h1 class="section-title">📖 6. Recetas</h1>
+        
+        <h2>6.1 ¿Qué es una receta?</h2>
+        <p>Una receta es la fórmula de producción. Indica qué insumos se necesitan y en qué cantidad.</p>
+        
+        <h2>6.2 Campos de una receta</h2>
+        <ul>
+            <li><strong>📛 Nombre:</strong> Ej: "Pan de Yogur"</li>
+            <li><strong>📝 Descripción:</strong> Breve descripción</li>
+            <li><strong>📦 Rendimiento:</strong> Cuántas unidades produce (Ej: 33 panes)</li>
+            <li><strong>🛒 Insumos:</strong> Lista de insumos con cantidades</li>
+            <li><strong>📋 Instrucciones:</strong> Pasos de preparación</li>
+        </ul>
+        
+        <h2>6.3 Cálculo de costos</h2>
+        <p>El costo se calcula automáticamente:</p>
+        <pre><code>Costo total = Σ (cantidad × costo_unitario)
+Costo por unidad = Costo total / rendimiento</code></pre>
+        
+        <h2>6.4 Recalcular receta</h2>
+        <p>Permite ajustar una receta para un nuevo rendimiento usando regla de 3:</p>
+        <ol>
+            <li>Abre la receta → clic en <strong>🔄 Recalcular</strong></li>
+            <li>Ingresa el nuevo rendimiento (Ej: 50 panes)</li>
+            <li>Ve la vista previa con los valores ajustados</li>
+            <li>Elige:
+                <ul>
+                    <li><strong>✏️ Modificar esta receta:</strong> Sobrescribe (solo admin)</li>
+                    <li><strong>📋 Crear nueva receta:</strong> Crea una copia</li>
+                </ul>
+            </li>
+        </ol>
+        
+        <h2>6.5 Permisos por rol</h2>
+        <table>
+            <tr><th>Acción</th><th style="text-align: center;">Admin</th><th style="text-align: center;">Usuario</th></tr>
+            <tr><td>Ver recetas</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+            <tr><td>Ver costos</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
+            <tr><td>Crear / Editar / Eliminar</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
+            <tr><td>Recalcular (crear nueva)</td><td style="text-align: center;">✅</td><td style="text-align: center;">✅</td></tr>
+            <tr><td>Compartir</td><td style="text-align: center;">✅</td><td style="text-align: center;">❌</td></tr>
+        </table>
+    </section>
+
+    <!-- ============================================================
+         7. PRODUCTOS
+         ============================================================ -->
+    <section id="productos">
+        <h1 class="section-title">🏷️ 7. Productos</h1>
+        
+        <h2>7.1 ¿Qué es un producto?</h2>
+        <p>Un producto es un artículo que vendes al cliente: una jaba de pan, una docena de croissants, un pan suelto, etc.</p>
+        
+        <h2>7.2 Campos de un producto</h2>
+        <table>
+            <tr><th style="width: 30%;">Campo</th><th>Descripción</th></tr>
+            <tr><td>📛 Nombre</td><td>Ej: "Jaba de Pan"</td></tr>
+            <tr><td>📝 Descripción</td><td>Breve descripción (opcional)</td></tr>
+            <tr><td>💰 Precio de venta</td><td>Precio al público</td></tr>
+            <tr><td>📦 Unidad de venta</td><td>unidad, jaba, docena, etc.</td></tr>
+            <tr><td>📊 Cantidad por unidad</td><td>Cuántas unidades contiene</td></tr>
+            <tr><td>📋 Receta asociada</td><td>Receta que usa este producto</td></tr>
+            <tr><td>🏭 CMPBC</td><td>Capacidad Máxima de Producción por Bloque</td></tr>
+        </table>
+        
+        <h2>7.3 Ejemplo práctico: Jaba de Pan</h2>
+        <div class="card">
+            <div class="card-title">Jaba de Pan</div>
+            <ul>
+                <li><strong>Precio:</strong> $550</li>
+                <li><strong>Unidad:</strong> jaba</li>
+                <li><strong>Cantidad:</strong> 10 panes por jaba</li>
+                <li><strong>Receta:</strong> Pan de Yogur (33 panes)</li>
+                <li><strong>🏭 CMPBC:</strong> 7 jabas por bloque de corriente</li>
+            </ul>
+            <p>Al vender 1 jaba, se descuentan 0.303 kg de harina, 0.003 kg de levadura, etc.</p>
+        </div>
+        
+        <h2>7.4 CMPBC — Capacidad Máxima por Bloque</h2>
+        <p>Es un valor opcional que indica <strong>cuántas unidades de un producto puedes producir en un solo bloque de corriente</strong>.</p>
+        <ul>
+            <li><strong>NULL / vacío / 0:</strong> Sin límite definido</li>
+            <li><strong>&gt; 0:</strong> CMPBC real (Ej: 7 = 7 jabas por bloque)</li>
+        </ul>
+    </section>
+
+    <!-- ============================================================
+         8. VENTAS
+         ============================================================ -->
+    <section id="ventas">
+        <h1 class="section-title">💰 8. Ventas</h1>
+        
+        <h2>8.1 Tipos de venta</h2>
+        <table>
+            <tr><th style="width: 35%;">Tipo</th><th>Descripción</th></tr>
+            <tr><td>💰 Venta normal</td><td>Con cliente identificado</td></tr>
+            <tr><td>🚀 Venta liberada</td><td>Sin cliente (mostrador anónimo)</td></tr>
+            <tr><td>💳 Venta a deuda</td><td>Cliente paga después</td></tr>
+            <tr><td>📋 Venta desde pedido</td><td>Al entregar un pedido</td></tr>
+            <tr><td>🔄 Venta desde lista</td><td>Cliente de lista de espera</td></tr>
+        </table>
+        
+        <h2>8.2 Métodos de pago</h2>
+        <ul>
+            <li>💵 <strong>Efectivo:</strong> Afecta al saldo de caja</li>
+            <li>🏦 <strong>Transferencia:</strong> Afecta al saldo del banco</li>
+            <li>💳 <strong>Deuda:</strong> Queda pendiente de cobro</li>
+            <li>🔄 <strong>Otra:</strong> Otros métodos</li>
+        </ul>
+        
+        <h2>8.3 Días sin ventas</h2>
+        <p>Permite registrar los días en los que no tuviste actividad, con motivo y nota.</p>
+        
+        <p><strong>Motivos disponibles:</strong></p>
+        <ul>
+            <li>⚡ Apagón</li>
+            <li>🛒 Falta de insumos</li>
+            <li>🎉 Feriado</li>
+            <li>🏖️ Vacaciones</li>
+            <li>🏥 Enfermedad</li>
+            <li>🔧 Mantenimiento</li>
+            <li>🌧️ Mal clima</li>
+            <li>🔄 Otro</li>
+        </ul>
+        
+        <h2>8.4 Filtro por vendedor</h2>
+        <p>Si hay más de 1 usuario en el negocio, aparece un selector <strong>👤 Vendedor</strong> para ver solo las ventas de un vendedor específico. El filtro aparece también en el reporte PDF.</p>
+        
+        <h2>8.5 🆕 Ventas liberadas se guardan siempre (N4)</h2>
+        <p>Las ventas liberadas (sin cliente identificado) se guardan <strong>siempre</strong>, incluso si falla el descuento de stock por insuficiencia. Tras crearlas, el toggle <strong>"Mostrar liberadas"</strong> se activa automáticamente para que las veas listadas.</p>
+        
+        <h2>8.6 🆕 Cálculo unificado de ingresos (N3)</h2>
+        <p>El total de ingresos mostrado en el <strong>Dashboard</strong> y en <strong>Ventas</strong> ahora se calcula desde <code>sales.total</code>, eliminando discrepancias entre ambas vistas.</p>
+    </section>
+
+    <!-- ============================================================
+         9. CORRIENTE Y PRODUCCIÓN
+         ============================================================ -->
+    <section id="corriente">
+        <h1 class="section-title">⚡ 9. Corriente y Producción</h1>
+        
+        <h2>9.1 ¿Qué es la "corriente"?</h2>
+        <p>Es la electricidad. En Cuba, la corriente llega en bloques programados (ej: 3 horas de corriente, 12 horas de apagón). Panario te ayuda a planificar la producción según estos horarios.</p>
+        
+        <h2>9.2 Configuración de horarios</h2>
+        <p>Ve a <strong>⚙️ Herramientas → ⚡ Gestionar Horarios</strong>:</p>
+        <ol>
+            <li><strong>Patrón:</strong> Define cuántas horas hay corriente y cuántas no (Ej: 3h corriente / 12h apagón)</li>
+            <li><strong>Referencia inicial:</strong> Una fecha y hora conocida donde hubo corriente</li>
+            <li>Guarda la configuración</li>
+        </ol>
+        
+        <h2>9.3 Calendario</h2>
+        <p>Muestra el mes actual con colores:</p>
+        <ul>
+            <li>🟠 <strong>Naranja</strong> — Días con corriente</li>
+            <li>⚪ <strong>Gris</strong> — Días sin corriente</li>
+            <li>🔴 <strong>Rojo</strong> — Día actual</li>
+            <li>🟣 <strong>Borde morado</strong> — Día con producción programada</li>
+        </ul>
+        
+        <h2>9.4 Conceptos clave</h2>
+        <table>
+            <tr><th style="width: 30%;">Concepto</th><th>Descripción</th></tr>
+            <tr><td>🔨 Bloque de producción</td><td>Bloque de corriente donde se horneará</td></tr>
+            <tr><td>📦 CPD</td><td>Cantidad de Producción Diaria</td></tr>
+            <tr><td>🏭 CMPBC</td><td>Capacidad Máxima por Bloque</td></tr>
+            <tr><td>✨ Algoritmo</td><td>Calcula automáticamente los bloques</td></tr>
+        </table>
+        
+        <h2>9.5 Programar producción para un día</h2>
+        <ol>
+            <li>Ve a <strong>⚙️ Herramientas → ⚡ Gestionar Horarios → 📅 Calendario</strong></li>
+            <li>Haz clic en el día que quieras programar</li>
+            <li>Selecciona el <strong>🏷️ producto a producir</strong></li>
+            <li>Escribe la <strong>📦 cantidad</strong></li>
+            <li>Opcional: pulsa <strong>✨ Calcular bloques automáticamente</strong></li>
+            <li>Confirma y guarda</li>
+        </ol>
+        
+        <h2>9.6 Algoritmo inteligente de bloques</h2>
+        <p>El sistema sugiere cómo distribuir la producción entre los bloques de corriente, priorizando que el pan esté listo <strong>antes de las 8:00 AM</strong> del día de venta.</p>
+        
+        <h2>9.7 Ejemplo práctico</h2>
+        <div class="card purple">
+            <div class="card-title">Jaba de Pan, CMPBC=7, CPD=12</div>
+            <p>El algoritmo calcula:</p>
+            <ul>
+                <li><strong>Bloques necesarios:</strong> 2 (12 ÷ 7 = 1.71 → 2)</li>
+                <li><strong>Bloque 1 (amanecer):</strong> 7 unidades</li>
+                <li><strong>Bloque 2 (tarde):</strong> 5 unidades</li>
+            </ul>
+            <p>"Se horneará en 2 bloques: 7 al amanecer (2-5 AM), 5 por la tarde (5-8 PM)."</p>
+        </div>
+        
+        <h2>9.8 Producción en el bloque del día anterior</h2>
+        <p>Si el primer bloque del día de venta comienza demasiado tarde, el sistema usa el <strong>último bloque del día anterior</strong> para que el pan esté listo al amanecer. En el calendario aparece con el icono 🌙.</p>
+        
+        <h2>9.9 Cantidades decimales</h2>
+        <p>La cantidad a producir acepta decimales:</p>
+        <ul>
+            <li><code>6.5</code> = 6 jabas y media</li>
+            <li><code>2.25</code> = 2 jabas y cuarto</li>
+            <li><code>0.5</code> = media jaba</li>
+        </ul>
+    </section>
+
+    <!-- ============================================================
+         10. PREMIOS
+         ============================================================ -->
+    <section id="premios">
+        <h1 class="section-title">🏆 10. Premios</h1>
+        
+        <h2>10.1 ¿Qué es el sistema de premios?</h2>
+        <p>Es un sistema de fidelización que premia a los clientes que más compran.</p>
+        
+        <h2>10.2 Configuración</h2>
+        <p>Ve a <strong>💰 Ventas → 🏆 Premios</strong>:</p>
+        <ul>
+            <li><strong>🎁 Activar sistema:</strong> Toggle para activar/desactivar</li>
+            <li><strong>🥇 Premio mensual:</strong> Ej: "Media jaba de pan"</li>
+            <li><strong>🥈 Premio anual:</strong> Ej: "Jaba completa de pan"</li>
+            <li><strong>⚙️ Cálculo del premio anual:</strong> Navidad (24 dic) / Fin de año (31 dic) / Inicio de año</li>
+        </ul>
+        
+        <h2>10.3 🆕 Exclusión de deudores (N1)</h2>
+        <div class="card warning">
+            <div class="card-title">💡 Exclusión de deudores</div>
+            <p>Los clientes con <strong>deuda pendiente</strong> quedan <strong>excluidos automáticamente</strong> del cálculo de premios. Esto evita premiar a clientes que no han pagado sus compras anteriores.</p>
+        </div>
+        
+        <h2>10.4 🆕 Dos categorías de premios (N2)</h2>
+        <p>El modal de premios distingue entre dos categorías independientes:</p>
+        <ul>
+            <li><strong>🥇 Mejor Cliente:</strong> el cliente con mayor gasto en el mes (mínimo de compras configurable, ej: 4)</li>
+            <li><strong>🥈 Más Frecuente:</strong> el cliente con mayor número de compras en el mes (mínimo de compras configurable, ej: 6)</li>
+        </ul>
+        
+        <h2>10.5 🆕 Toggle "Premio no requiere entrega" (N2-bis)</h2>
+        <p>Permite registrar premios que <strong>no implican entrega física</strong> de producto (por ejemplo, un descuento o un reconocimiento). Estos premios quedan marcados como <strong>"Entregado"</strong> automáticamente.</p>
+        
+        <h2>10.6 🆕 Historial de premios otorgados (N1)</h2>
+        <p>En la sección de premios hay una pestaña <strong>"🏆 Historial"</strong> donde puedes:</p>
+        <ul>
+            <li>Consultar todos los premios otorgados</li>
+            <li>Filtrar por año, tipo de premio, categoría o cliente</li>
+            <li>Ver si un premio ya fue entregado o está pendiente</li>
+            <li>Añadir notas a cada premio</li>
+        </ul>
+    </section>
+
+    <!-- ============================================================
+         11. NOTIFICACIONES
+         ============================================================ -->
+    <section id="notificaciones">
+        <h1 class="section-title">🔔 11. Notificaciones</h1>
+        
+        <h2>11.1 Tipos de notificación</h2>
+        <table>
+            <tr><th style="width: 20%;">Tipo</th><th>Descripción</th></tr>
+            <tr><td>✅ Éxito</td><td>Operaciones completadas</td></tr>
+            <tr><td>❌ Error</td><td>Problemas que requieren atención</td></tr>
+            <tr><td>⚠️ Advertencia</td><td>Alertas importantes</td></tr>
+            <tr><td>ℹ️ Información</td><td>Datos relevantes</td></tr>
+            <tr><td>📋 Pedido</td><td>Pedidos para hoy/mañana</td></tr>
+            <tr><td>💰 Deuda</td><td>Deudas pendientes de cobro</td></tr>
+            <tr><td>🛒 Stock</td><td>Insumos con stock bajo</td></tr>
+        </table>
+        
+        <h2>11.2 Campanita</h2>
+        <p>El icono 🔔 en la barra superior muestra:</p>
+        <ul>
+            <li>Badge rojo con el número de notificaciones no leídas</li>
+            <li>Al hacer clic → abre el modal de notificaciones</li>
+            <li>Al abrir el modal → se marcan como vistas</li>
+        </ul>
+        
+        <h2>11.3 Sonido configurable</h2>
+        <p>Ve a <strong>👤 Perfil → 🔔 Sonido de notificaciones</strong>:</p>
+        <ul>
+            <li><strong>Toggle:</strong> Activar/desactivar sonido</li>
+            <li><strong>🔔 Beep:</strong> Tono corto</li>
+            <li><strong>🎵 Chime:</strong> Tono medio</li>
+            <li><strong>💧 Pop:</strong> Tono corto y agudo</li>
+            <li><strong>⚠️ Alert:</strong> Tono grave</li>
+            <li><strong>✅ Success:</strong> Tono agudo y largo</li>
+            <li><strong>🔊 Probar:</strong> Escuchar cada sonido</li>
+            <li><strong>🔊 Probar todos:</strong> Escuchar todos con animación</li>
+        </ul>
+    </section>
+
+    <!-- ============================================================
+         12. PERFIL
+         ============================================================ -->
+    <section id="perfil">
+        <h1 class="section-title">👤 12. Perfil</h1>
+        
+        <h2>12.1 Información personal</h2>
+        <ul>
+            <li>👤 Nombre completo</li>
+            <li>🏢 Nombre del negocio</li>
+            <li>📧 Email</li>
+            <li>📞 Teléfono</li>
+            <li>📷 Foto de perfil</li>
+            <li>🌓 Tema (claro/oscuro)</li>
+        </ul>
+        
+        <h2>12.2 Elementos visibles en el Dashboard</h2>
+        <p>Interruptores para personalizar el Dashboard:</p>
+        <ul>
+            <li>⚡ Horario de corriente hoy</li>
+            <li>📋 Pedidos de hoy</li>
+            <li>🚀 Ventas liberadas</li>
+            <li>🥇 Mejor / Peor día</li>
+            <li>👥 Ventas por empleado</li>
+            <li>🏆 Mejores clientes</li>
+            <li>🏷️ Productos más vendidos</li>
+            <li>💵 Análisis de efectivo y banco</li>
+            <li>💳 Métodos de pago</li>
+            <li>💳 Deudas</li>
+            <li>🏆 Premios</li>
+            <li>🏦 QR de cuenta bancaria</li>
+            <li>🔗 Botones de acción rápida</li>
+            <li>📊 <strong>Producto promedio (N5)</strong></li>
+        </ul>
+        
+        <h2>12.3 🆕 Producto promedio (N5)</h2>
+        <p>Activa el toggle <strong>"📊 Producto promedio"</strong> y selecciona un producto. Aparecerá una tarjeta adicional en el Dashboard con:</p>
+        <ul>
+            <li>📊 Promedio diario de ventas del producto</li>
+            <li>📅 Días con ventas</li>
+            <li>💰 Total vendido</li>
+            <li>📦 Total unidades</li>
+            <li>🥇 Mejor día</li>
+        </ul>
+        <div class="card purple">
+            <div class="card-title">💡</div>
+            <p>Al desactivar el toggle, el producto seleccionado se limpia automáticamente.</p>
+        </div>
+        
+        <h2>12.4 Datos bancarios</h2>
+        <p>Gestiona tus cuentas bancarias:</p>
+        <ul>
+            <li>🏦 Nombre del banco</li>
+            <li>👤 Nombre del propietario de la tarjeta</li>
+            <li>📋 Número de cuenta</li>
+            <li>📞 Teléfono de confirmación</li>
+            <li>📷 Código QR de la cuenta (generado o subido)</li>
+        </ul>
+    </section>
+
+    <!-- ============================================================
+         13. HERRAMIENTAS
+         ============================================================ -->
+    <section id="herramientas">
+        <h1 class="section-title">⚙️ 13. Herramientas</h1>
+        
+        <h2>13.1 Horarios de corriente</h2>
+        <p>Configuración de la planificación eléctrica.</p>
+        
+        <h2>13.2 Lista de espera</h2>
+        <p>Acceso directo a la gestión de lista de espera y su reporte PDF.</p>
+        
+        <h2>13.3 Cancelación global (solo admin)</h2>
+        <p>Cancela todos los pedidos en un rango de fechas con causa y nota.</p>
+        
+        <h2>13.4 Reprogramar por rango (solo admin)</h2>
+        <p>Mueve todos los pedidos de un rango a una fecha destino.</p>
+        
+        <h2>13.5 Reporte de gastos</h2>
+        <p>Genera un reporte parametrizable de gastos por rango, categoría y origen del pago.</p>
+        
+        <h2>13.6 Exportar base de datos</h2>
+        <p>Descarga una copia de seguridad completa o solo datos.</p>
+        
+        <h2>13.7 Importar base de datos</h2>
+        <p>Restaura una copia con 3 modos:</p>
+        <ul>
+            <li><strong>📥 Importar copia:</strong> Reemplaza todo</li>
+            <li><strong>📊 Importar solo datos:</strong> Conserva usuarios</li>
+            <li><strong>🔀 Fusionar bases de datos:</strong> Combina por UUID</li>
+        </ul>
+        
+        <h2>13.8 Salva diferencial</h2>
+        <p>Exporta/importa solo recetas y productos en formato JSON.</p>
+        
+        <h2>13.9 Gestión de usuarios (solo admin)</h2>
+        <p>Crear, editar, promover, eliminar usuarios; regenerar código de invitación.</p>
+        
+        <h2>13.10 Limpiar datos eliminados</h2>
+        <p>Elimina permanentemente los registros con soft-delete.</p>
+        
+        <h2>13.11 Eliminación por error (solo admin)</h2>
+        <p>Elimina pedidos y ventas creados por error. <strong>NO</strong> se puede deshacer.</p>
+        
+        <h2>13.12 Reiniciar base de datos (solo admin)</h2>
+        <p>Elimina TODOS los datos excepto usuarios y temas. <strong>Contraseña: "panario"</strong>.</p>
+        
+        <div class="card danger">
+            <div class="card-title">⚠️ Advertencia</div>
+            <p>Las operaciones de <strong>eliminación</strong> y <strong>reinicio</strong> no se pueden deshacer. Haz copia de seguridad antes.</p>
+        </div>
+        
+        <h2>13.13 🆕 Configuración Bancaria (solo primer admin)</h2>
+        <p>Solo el <strong>primer administrador</strong> puede configurar los permisos de las cuentas bancarias del negocio:</p>
+        <ul>
+            <li><strong>👁️ Ver QRs de otros:</strong> si los no-admin pueden ver las cuentas del negocio (solo lectura)</li>
+            <li><strong>⭐ Cambiar cuenta por defecto:</strong> si cada usuario puede elegir su cuenta individual</li>
+            <li><strong>🔒 Forzar QR del admin:</strong> TODOS ven únicamente el QR del admin en el Dashboard (anula las demás opciones)</li>
+        </ul>
+        
+        <h2>13.14 🆕 Toggle "Producción HOY/MAÑANA" (#12)</h2>
+        <p>En Herramientas → <strong>"📅 Producción en Dashboard"</strong>, el primer admin puede elegir si la tarjeta de corriente del Dashboard muestra la producción del <strong>día actual</strong> o la del <strong>día siguiente</strong>. La preferencia se guarda por negocio.</p>
+        
+        <h2>13.15 🆕 Diagnóstico de transacciones huérfanas (N6)</h2>
+        <p>En Herramientas → <strong>"🧹 Transacciones Huérfanas"</strong> hay dos botones:</p>
+        <ul>
+            <li><strong>🔍 Diagnosticar:</strong> detecta transacciones de ingreso sin venta válida asociada</li>
+            <li><strong>🧹 Limpiar:</strong> las elimina con confirmación previa (soft-delete)</li>
+        </ul>
+        <div class="card warning">
+            <div class="card-title">💡 Útil para</div>
+            <p>Corregir posibles inflados en los totales de ingresos.</p>
+        </div>
+    </section>
+
+    <!-- ============================================================
+         14. REPORTES
+         ============================================================ -->
+    <section id="reportes">
+        <h1 class="section-title">📄 14. Reportes</h1>
+        
+        <h2>14.1 Reportes disponibles</h2>
+        <p>Pedidos, Ventas, Gastos, Insumos, Recetas, Lista de espera, Días sin ventas, Corriente, Producción y más.</p>
+        
+        <h2>14.2 Reporte de ventas</h2>
+        <p>En Ventas, pulsa "📊 Reporte". Selecciona los filtros (fecha, cliente, producto, pago) y pulsa "Generar Reporte".</p>
+        
+        <h2>14.3 Reporte de pedidos</h2>
+        <p>En Pedidos, pulsa "📊 Reporte". Selecciona los filtros y pulsa "Generar Reporte".</p>
+        
+        <h2>14.4 Reporte de gastos</h2>
+        <p>En Herramientas → "📊 Reporte de Gastos". Selecciona el rango de fechas y los filtros opcionales.</p>
+        
+        <h2>14.5 Reporte de corriente</h2>
+        <p>En la pestaña "📊 Reporte" del modal de corriente. Puedes generar un reporte semanal o mensual.</p>
+        
+        <h2>14.6 Notas importantes</h2>
+        <ul>
+            <li>Los reportes se generan en el momento y se abren en una ventana de impresión.</li>
+            <li>Puedes guardarlos como PDF.</li>
+            <li>Los pedidos y ventas se ordenan por ID ascendente dentro de cada fecha.</li>
+        </ul>
+    </section>
+
+    <!-- ============================================================
+         15. CONSEJOS Y TRUCOS
+         ============================================================ -->
+    <section id="consejos">
+        <h1 class="section-title">🎯 15. Consejos y Trucos</h1>
+        
+        <h2>15.1 Consejos de uso</h2>
+        <ul>
+            <li>Configura el <strong>stock mínimo</strong> de cada insumo para recibir alertas</li>
+            <li>Usa <strong>ventas liberadas</strong> para clientes ocasionales</li>
+            <li>Aprovecha la <strong>reserva por período</strong> para clientes frecuentes</li>
+            <li>Configura el <strong>CMPBC</strong> de cada producto para cálculo automático</li>
+            <li>Activa el <strong>sistema de premios</strong> para fidelizar</li>
+            <li>Revisa el <strong>Dashboard</strong> cada mañana</li>
+            <li>Haz <strong>copias de seguridad</strong> semanales</li>
+            <li>Registra los <strong>días sin ventas</strong> para tener estadísticas precisas</li>
+            <li>Activa el <strong>Producto promedio (N5)</strong> para analizar productos específicos</li>
+        </ul>
+        
+        <h2>15.2 ¿Cómo puedo saber cuál es mi producto más rentable?</h2>
+        <p>Revisa el margen de ganancia en la lista de productos. Los productos con mayor margen son los más rentables.</p>
+        
+        <h2>15.3 ¿Cómo puedo prepararme para un apagón?</h2>
+        <p>Usa el calendario de corriente para planificar la producción. Produce en los bloques de corriente y almacena el pan para los días de apagón.</p>
+        
+        <h2>15.4 ¿Cómo puedo reducir el desperdicio?</h2>
+        <p>Ajusta la producción a la demanda real. Usa el CMPBC para no sobreproducir. Revisa el historial de ventas para prever la demanda.</p>
+        
+        <h2>15.5 ¿Qué hago si me quedo sin espacio en el dispositivo?</h2>
+        <p>Limpia los datos eliminados (soft-delete). Exporta un backup y luego reinicia la base de datos. Elimina fotos antiguas de productos.</p>
+    </section>
+
+    <!-- ============================================================
+         16. PREGUNTAS FRECUENTES
+         ============================================================ -->
+    <section id="faqs">
+        <h1 class="section-title">❓ 16. Preguntas Frecuentes</h1>
+        
+        <p>La aplicación incluye <strong>219 preguntas frecuentes</strong> organizadas en <strong>17 categorías</strong>. Puedes acceder a ellas desde:</p>
+        <ul>
+            <li><strong>Ayuda → Preguntas Frecuentes</strong> (dentro de la app)</li>
+            <li><strong>Ayuda Detallada → Preguntas Frecuentes</strong> (al final)</li>
+        </ul>
+        
+        <h2>Categorías disponibles</h2>
+        <ol>
+            <li>🏠 Generales</li>
+            <li>🚀 Primeros Pasos</li>
+            <li>📊 Dashboard</li>
+            <li>📋 Pedidos</li>
+            <li>🛒 Insumos</li>
+            <li>📖 Recetas</li>
+            <li>🏷️ Productos</li>
+            <li>💰 Ventas</li>
+            <li>⚡ Corriente y Producción</li>
+            <li>🏆 Premios</li>
+            <li>🔔 Notificaciones</li>
+            <li>👤 Perfil</li>
+            <li>⚙️ Herramientas</li>
+            <li>📄 Reportes</li>
+            <li>❓ Preguntas Técnicas</li>
+            <li>📚 Glosario</li>
+            <li>🎯 Consejos y Trucos</li>
+        </ol>
+    </section>
+
+    <!-- ============================================================
+         17. CONTACTO Y CRÉDITOS
+         ============================================================ -->
+    <section id="contacto">
+        <h1 class="section-title">📞 17. Contacto y Créditos</h1>
+        
+        <h2>17.1 Información del desarrollador</h2>
+        <div class="card primary" style="text-align: center; padding: 24px;">
+            <div style="font-size: 64px; margin-bottom: 8px;">👨‍💻</div>
+            <h3 style="margin: 0; color: var(--primary-dark);">Ricardo Castillo Valdés</h3>
+            <p style="color: var(--text-light);">Desarrollador y Diseñador de Panario</p>
+            <p style="margin-top: 12px;">🇨🇺 Cuba</p>
+            <p style="margin-top: 12px;">
+                📱 WhatsApp: <strong>+53 55031725</strong><br>
+                📧 Email: <strong>3sayricardo@gmail.com</strong>
+            </p>
+        </div>
+        
+        <h2>17.2 Información de la versión</h2>
+        <table>
+            <tr><th style="width: 40%;">Propiedad</th><th>Valor</th></tr>
+            <tr><td><strong>Panario</strong></td><td>v2.5.0</td></tr>
+            <tr><td><strong>Fecha de publicación</strong></td><td>3 de octubre de 2026</td></tr>
+            <tr><td><strong>Estado</strong></td><td>Producción estable</td></tr>
+            <tr><td><strong>Cobertura offline</strong></td><td>100%</td></tr>
+        </table>
+        
+        <h2>17.3 Licencia</h2>
+        <div class="card warning">
+            <div class="card-title">📄 Licencia propietaria</div>
+            <p><strong>© 2026 Ricardo Castillo Valdés — Todos los derechos reservados.</strong></p>
+            <p>Este software es <strong>propietario</strong>. Ver el archivo LICENSE para los términos completos.</p>
+        </div>
+        
+        <div style="text-align: center; margin-top: 40px; padding-top: 30px; border-top: 2px solid var(--primary);">
+            <p style="font-size: 16px; color: var(--primary-dark); font-weight: 700;">
+                Hecho con ❤️ para panaderos artesanales
+            </p>
+            <p style="font-size: 14px; color: var(--text-light); margin-top: 4px;">
+                Desarrollado en Cuba 🇨🇺
+            </p>
+            <p style="font-size: 20px; color: var(--primary); font-weight: 700; margin-top: 16px;">
+                🍞 Panario — Tu panadería en orden
+            </p>
+            <p style="font-size: 12px; color: var(--text-light); margin-top: 24px;">
+                Última actualización: 3 de octubre de 2026
+            </p>
+        </div>
+    </section>
+
+</div>
+
+</body>
+</html>

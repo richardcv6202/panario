@@ -1,10 +1,15 @@
 // ============================================================
 // 📦 APP CONTROLLER - Panario
-// v3.0.8 (300926): 🎯 CORRECCIÓN #6
-//   - ✅ CORREGIDO: renderDashboardView() — título más pegado al header
-//     * margin-bottom del contenedor: 16px → 8px
-//     * h2 con margin-top: 0 explícito
+// v3.1.2 (011026): 🎯 CORRECCIÓN N5 — Tarjeta de promedio diario por producto
+//   - ✅ NUEVO: función renderTarjetaProductoPromedio(promedioProducto)
+//   - ✅ NUEVO: contenedor #dashboard-producto-promedio-container en el Dashboard
+//   - ✅ NUEVO: dashConfig.show_producto_promedio y producto_promedio_id
+//   - ✅ NUEVO: renderizado de la tarjeta en loadDashboardData()
 //   - ✅ MANTENIDO: TODAS las correcciones anteriores:
+//     * v3.1.1: FIX notificaciones en login fresco + sonido
+//     * v3.1.0: Corrección #8 (Toggle HOY/MAÑANA producción)
+//     * v3.0.9: Corrección #12 (bloque de producción resaltado)
+//     * v3.0.8: Corrección #6 (título más pegado al header)
 //     * v3.0.7: Punto #5 (deudas agrupadas por cliente)
 //     * v3.0.6: QR del Dashboard respeta forzar_qr_admin
 //     * v3.0.5: Fix CRÍTICO redeclaración dbReady
@@ -104,11 +109,11 @@ function forzarStickyHeader() {
         });
         
         if (!header._stickyForced) {
-            console.log('🔧 [v3.0.8] forzarStickyHeader() aplicado al header');
+            console.log('🔧 [v3.1.2] forzarStickyHeader() aplicado al header');
             header._stickyForced = true;
         }
     } catch (e) {
-        console.warn('⚠️ [v3.0.8] Error en forzarStickyHeader:', e);
+        console.warn('⚠️ [v3.1.2] Error en forzarStickyHeader:', e);
     }
 }
 
@@ -131,7 +136,7 @@ function _debouncedForzarSticky() {
 
 function startHeaderCleanupWatchers() {
     if (_headerCleanupWatchersStarted) {
-        console.log('🔄 [v3.0.8] Watchers de header ya estaban activos');
+        console.log('🔄 [v3.1.2] Watchers de header ya estaban activos');
         return;
     }
     
@@ -175,16 +180,16 @@ function startHeaderCleanupWatchers() {
         });
         
         _headerCleanupWatchersStarted = true;
-        console.log('🔄 [v3.0.8] Watchers de header activados');
+        console.log('🔄 [v3.1.2] Watchers de header activados');
         
     } catch (e) {
-        console.warn('⚠️ [v3.0.8] Error activando watchers de header:', e);
+        console.warn('⚠️ [v3.1.2] Error activando watchers de header:', e);
     }
 }
 
 function stopHeaderCleanupWatchers() {
     _headerCleanupWatchersStarted = false;
-    console.log('🛑 [v3.0.8] Watchers de header detenidos');
+    console.log('🛑 [v3.1.2] Watchers de header detenidos');
 }
 
 // ============================================================
@@ -241,7 +246,7 @@ function getAppVersion() {
     } catch (e) {
         console.warn('⚠️ Error leyendo app-version:', e);
     }
-    return '2.3.7';
+    return '3.1.2';
 }
 
 window.getAppVersion = getAppVersion;
@@ -427,7 +432,7 @@ function cerrarTodosLosModalesRespaldo() {
         'waiting-manager-modal', 'global-cancel-modal',
         'help-popover', 'ayuda-modal', 'dias-sin-ventas-modal',
         'dia-sin-venta-form-modal', 'reprogramar-modal',
-        'debt-detail-modal'  // 🆕 v3.0.7 (Punto #5)
+        'debt-detail-modal'
     ];
     
     let cerrados = 0;
@@ -515,14 +520,14 @@ async function initApp() {
         const standaloneParam = urlParams.get('standalone');
         
         if (standaloneParam === '1') {
-            console.log('📖 [v3.0.8] Modo standalone detectado → renderizando SOLO la ayuda');
+            console.log('📖 [v3.1.2] Modo standalone detectado → renderizando SOLO la ayuda');
             
             setTimeout(() => {
                 if (window.HelpModule && typeof window.HelpModule.renderAyudaStandalone === 'function') {
                     window.HelpModule.renderAyudaStandalone();
-                    console.log('✅ [v3.0.8] Ayuda standalone renderizada');
+                    console.log('✅ [v3.1.2] Ayuda standalone renderizada');
                 } else {
-                    console.error('❌ [v3.0.8] HelpModule.renderAyudaStandalone no disponible');
+                    console.error('❌ [v3.1.2] HelpModule.renderAyudaStandalone no disponible');
                     document.body.innerHTML = `
                         <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; text-align: center; font-family: system-ui, sans-serif;">
                             <div>
@@ -585,15 +590,8 @@ async function initApp() {
         const user = window.AuthModule.getCurrentUser();
         if (user) {
             currentUser = user;
+            // 🆕 v3.1.1: showApp() ahora se encarga de TODO (UI + notificaciones)
             showApp(user);
-            
-            if (window.NotificationsModule) {
-                window.NotificationsModule.initNotificationSystem();
-                window.NotificationsModule.startReminderSystem();
-                setTimeout(() => {
-                    window.NotificationsModule.requestNotificationPermission();
-                }, 5000);
-            }
             
             if (window.RewardsModule) {
                 setTimeout(() => {
@@ -636,7 +634,7 @@ async function initApp() {
         setTimeout(adjustForSafeArea, 500);
 
         console.log(`✅ App inicializada correctamente (v${version})`);
-        console.log(`   🔧 [v3.0.8] CORRECCIÓN #6: Espacio superior/inferior ajustado`);
+        console.log(`   🔧 [v3.1.2] Corrección N5: tarjeta de promedio diario`);
 
     } catch (error) {
         console.error('❌ Error inicializando app:', error);
@@ -997,7 +995,6 @@ async function handleRegister() {
 
 // ============================================================
 // CIERRE DE SESIÓN
-// 🆕 v3.0.4: REGRESIÓN #9 - Limpieza de recursos antes de recargar
 // ============================================================
 
 async function handleLogout() {
@@ -1011,7 +1008,7 @@ async function handleLogout() {
     });
 
     if (confirm) {
-        const LOG_PREFIX = '🚪 [handleLogout v3.0.8]';
+        const LOG_PREFIX = '🚪 [handleLogout v3.1.2]';
         console.log(`${LOG_PREFIX} Cerrando sesión...`);
         
         try {
@@ -1113,7 +1110,12 @@ function updateTopBarAvatar(photoData) {
 
 // ============================================================
 // MOSTRAR APP
-// 🆕 v3.0.4: REGRESIÓN #9 - Reinicializar notificaciones tras login
+// ============================================================
+// 
+// 🆕 v3.1.1: Esta función es el ÚNICO punto donde se arranca
+// el sistema de notificaciones. Se llama tanto en login fresco
+// (desde handleLogin/handleRegister) como en recarga con sesión
+// activa (desde initApp).
 // ============================================================
 
 function showApp(user) {
@@ -1161,13 +1163,32 @@ function showApp(user) {
     
     setTimeout(forzarStickyHeader, 100);
     
+    // ============================================================
+    // 🆕 v3.1.1: ARRANQUE DE NOTIFICACIONES (FIX)
+    // ============================================================
     try {
-        if (window.NotificationsModule && 
-            typeof window.NotificationsModule.reinitAfterLogin === 'function') {
-            window.NotificationsModule.reinitAfterLogin();
+        if (window.NotificationsModule) {
+            if (typeof window.NotificationsModule.reinitAfterLogin === 'function') {
+                window.NotificationsModule.reinitAfterLogin();
+            }
+            
+            if (typeof window.NotificationsModule.startReminderSystem === 'function') {
+                window.NotificationsModule.startReminderSystem();
+                console.log('🔔 [v3.1.2] startReminderSystem() llamado desde showApp()');
+            } else {
+                console.warn('⚠️ [v3.1.2] NotificationsModule.startReminderSystem no disponible');
+            }
+            
+            setTimeout(() => {
+                if (typeof window.NotificationsModule.requestNotificationPermission === 'function') {
+                    window.NotificationsModule.requestNotificationPermission();
+                }
+            }, 5000);
+        } else {
+            console.warn('⚠️ [v3.1.2] NotificationsModule no disponible');
         }
     } catch (e) {
-        console.warn('⚠️ [v3.0.8] Error en reinitAfterLogin:', e.message);
+        console.warn('⚠️ [v3.1.2] Error en inicialización de notificaciones:', e.message);
     }
     
     document.dispatchEvent(new CustomEvent('panario:logged-in'));
@@ -1366,15 +1387,54 @@ function navigate(section) {
 // ============================================================
 // HELPERS DE CORRIENTE
 // ============================================================
+// 
+// 🆕 v3.1.0: CORRECCIÓN #8 - Toggle "Mostrar producción de HOY/MAÑANA"
+// ============================================================
 
 function renderTarjetaCorrienteHoy() {
     if (!window.CorrienteUtils) return '';
     
     try {
         const hoy = hoyYYYYMMDD();
+        const manana = mananaYYYYMMDD();
         const resumen = window.CorrienteUtils.getResumen(hoy);
         
         if (!resumen.tieneCorriente) return '';
+        
+        let configGlobal = { mostrar_produccion_hoy: false };
+        try {
+            if (typeof window.getConfigGlobalNegocio === 'function') {
+                configGlobal = window.getConfigGlobalNegocio();
+            } else if (window.DBModule && typeof window.DBModule.getConfigGlobalNegocio === 'function') {
+                configGlobal = window.DBModule.getConfigGlobalNegocio();
+            }
+        } catch (e) {
+            console.warn('⚠️ [renderTarjetaCorrienteHoy v3.1.2] Error leyendo config global:', e);
+        }
+        
+        const mostrarHoy = configGlobal.mostrar_produccion_hoy === true 
+            || configGlobal.mostrar_produccion_hoy === 1;
+        
+        const fechaProduccion = mostrarHoy ? hoy : manana;
+        const etiquetaProduccion = mostrarHoy ? 'HOY' : 'MAÑANA';
+        
+        console.log(`📅 [renderTarjetaCorrienteHoy v3.1.2] Mostrar producción de: ${etiquetaProduccion} (${fechaProduccion})`);
+        
+        let prodConfig = null;
+        try {
+            if (window.DBModule && typeof window.DBModule.getProduccionByFecha === 'function') {
+                prodConfig = window.DBModule.getProduccionByFecha(fechaProduccion);
+            }
+        } catch (e) {
+            console.warn('⚠️ [renderTarjetaCorrienteHoy v3.1.2] Error leyendo producción:', e);
+        }
+        
+        const bloqueProduccion = prodConfig ? {
+            bloqueIndex: parseInt(prodConfig.bloque_index) || null,
+            esDiaAnterior: prodConfig.es_bloque_dia_anterior === 1,
+            horaInicio: prodConfig.hora_inicio,
+            horaFin: prodConfig.hora_fin
+        } : null;
         
         const ahora = new Date();
         let proximoBloque = null;
@@ -1405,14 +1465,58 @@ function renderTarjetaCorrienteHoy() {
             
             const esActual = bloqueActual && b.inicio.getTime() === bloqueActual.inicio.getTime();
             
+            const bloqueIndexHoy = i + 1;
+            const esProduccion = mostrarHoy 
+                && bloqueProduccion 
+                && !bloqueProduccion.esDiaAnterior 
+                && bloqueProduccion.bloqueIndex === bloqueIndexHoy;
+            
+            let fondo, borde, colorTexto, icono, badges = '';
+            
+            if (esProduccion) {
+                fondo = '#10b98125';
+                borde = '#10b981';
+                colorTexto = '#10b981';
+                icono = '🔨';
+                badges += '<span style="font-size: 10px; color: #10b981; background: #10b98125; padding: 2px 8px; border-radius: 8px; margin-left: auto; font-weight: 700; border: 1px solid #10b981;">🔨 PRODUCCIÓN</span>';
+            } else if (esActual) {
+                fondo = '#10b98115';
+                borde = '#10b981';
+                colorTexto = '#10b981';
+                icono = '🟢';
+                badges += '<span style="font-size: 10px; color: #10b981; background: #10b98120; padding: 1px 6px; border-radius: 8px; margin-left: auto;">EN CURSO</span>';
+            } else {
+                fondo = '#f59e0b10';
+                borde = '#f59e0b';
+                colorTexto = '#f59e0b';
+                icono = '⚡';
+            }
+            
+            const borderStyle = esProduccion ? '2px solid' : '1px solid';
+            
             return `
-                <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: ${esActual ? '#10b98115' : '#f59e0b10'}; border-radius: 6px; margin-bottom: 4px; border-left: 3px solid ${esActual ? '#10b981' : '#f59e0b'};">
-                    <span style="font-size: 16px;">${esActual ? '🟢' : '⚡'}</span>
-                    <span style="font-size: 13px; font-weight: 600; color: ${esActual ? '#10b981' : '#f59e0b'};">${texto}</span>
-                    ${esActual ? '<span style="font-size: 10px; color: #10b981; background: #10b98120; padding: 1px 6px; border-radius: 8px; margin-left: auto;">EN CURSO</span>' : ''}
+                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: ${fondo}; border-radius: 6px; margin-bottom: 4px; border-left: 4px solid ${borde}; border: ${borderStyle} ${borde}40;">
+                    <span style="font-size: 16px;">${icono}</span>
+                    <span style="font-size: 13px; font-weight: 600; color: ${colorTexto};">${texto}</span>
+                    ${badges}
                 </div>
             `;
         }).join('');
+        
+        let bloqueAyerHTML = '';
+        if (mostrarHoy && bloqueProduccion && bloqueProduccion.esDiaAnterior) {
+            const textoAyer = `${bloqueProduccion.horaInicio} - ${bloqueProduccion.horaFin}`;
+            bloqueAyerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #8b5cf615; border-radius: 6px; margin-bottom: 4px; border-left: 4px solid #8b5cf6; border: 2px dashed #8b5cf6;">
+                    <span style="font-size: 16px;">🌙</span>
+                    <div style="flex: 1;">
+                        <span style="font-size: 13px; font-weight: 600; color: #8b5cf6;">${textoAyer}</span>
+                        <div style="font-size: 10px; color: #8b5cf6; opacity: 0.8; margin-top: 2px;">Bloque del día anterior (producción para hoy)</div>
+                    </div>
+                    <span style="font-size: 10px; color: #8b5cf6; background: #8b5cf625; padding: 2px 8px; border-radius: 8px; font-weight: 700; border: 1px solid #8b5cf6;">🔨 PRODUCCIÓN</span>
+                </div>
+            `;
+        }
         
         let estadoActualHTML = '';
         
@@ -1436,6 +1540,63 @@ function renderTarjetaCorrienteHoy() {
         
         const fechaConDia = formatearFechaConDiaSemana(new Date());
         
+        let produccionResumenHTML = '';
+        if (prodConfig) {
+            const cantidadProd = parseFloat(prodConfig.cantidad_produccion) || 0;
+            const productoNombre = prodConfig.producto_id && window.DBModule.getProducto 
+                ? (window.DBModule.getProducto(prodConfig.producto_id)?.nombre || null)
+                : null;
+            
+            let conteo = { pedidos: 0, ventas: 0, disponibles: null };
+            try {
+                if (typeof window.contarPedidosYVentasFecha === 'function') {
+                    conteo = window.contarPedidosYVentasFecha(fechaProduccion);
+                } else if (window.DBModule && typeof window.DBModule.contarPedidosYVentasFecha === 'function') {
+                    conteo = window.DBModule.contarPedidosYVentasFecha(fechaProduccion);
+                }
+            } catch (e) {
+                console.warn('⚠️ [renderTarjetaCorrienteHoy v3.1.2] Error en conteo:', e);
+            }
+            
+            const fmt = (n) => (typeof window.formatearCantidadProduccion === 'function') 
+                ? window.formatearCantidadProduccion(n) 
+                : n;
+            
+            const colorEtiqueta = mostrarHoy ? '#10b981' : '#3b82f6';
+            const bgEtiqueta = mostrarHoy ? '#10b98125' : '#3b82f625';
+            const iconoEtiqueta = mostrarHoy ? '📅' : '📆';
+            
+            produccionResumenHTML = `
+                <div style="background: linear-gradient(135deg, #10b98115 0%, #10b98108 100%); border: 2px solid #10b981; border-radius: 10px; padding: 10px 12px; margin-top: 10px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 18px;">🔨</span>
+                            <div>
+                                <div style="font-weight: 700; font-size: 12px; color: #10b981; display: flex; align-items: center; gap: 6px;">
+                                    Producción programada
+                                    <span style="font-size: 10px; color: ${colorEtiqueta}; background: ${bgEtiqueta}; padding: 1px 8px; border-radius: 8px; font-weight: 700; border: 1px solid ${colorEtiqueta};">
+                                        ${iconoEtiqueta} ${etiquetaProduccion}
+                                    </span>
+                                </div>
+                                ${productoNombre ? `<div style="font-size: 10px; color: var(--text-light);">🏷️ ${productoNombre}</div>` : ''}
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 18px; font-weight: 700; color: #10b981;">${fmt(cantidadProd)}</div>
+                            <div style="font-size: 9px; color: var(--text-light);">unidades</div>
+                        </div>
+                    </div>
+                    ${conteo.disponibles !== null ? `
+                        <div style="display: flex; gap: 6px; font-size: 10px; padding-top: 6px; border-top: 1px solid #10b98130;">
+                            <div style="flex: 1;"><span style="color: var(--text-light);">📋 Ped:</span> <strong style="color: #3b82f6;">${fmt(conteo.pedidos)}</strong></div>
+                            <div style="flex: 1;"><span style="color: var(--text-light);">💰 Ven:</span> <strong style="color: #f59e0b;">${fmt(conteo.ventas)}</strong></div>
+                            <div style="flex: 1;"><span style="color: var(--text-light);">✅ Disp:</span> <strong style="color: ${conteo.disponibles > 0 ? '#10b981' : '#ef4444'};">${fmt(conteo.disponibles)}</strong></div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
         return `
             <div class="card" style="border-left: 4px solid #f59e0b; border: 2px solid #f59e0b; padding: 14px; margin-bottom: 16px;">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
@@ -1456,7 +1617,8 @@ function renderTarjetaCorrienteHoy() {
                     </button>
                 </div>
                 ${estadoActualHTML}
-                <div>${bloquesHTML}</div>
+                <div>${bloquesHTML}${bloqueAyerHTML}</div>
+                ${produccionResumenHTML}
             </div>
         `;
     } catch (e) {
@@ -1553,8 +1715,130 @@ function renderTarjetaPedidosHoy(stats) {
 }
 
 // ============================================================
+// 🆕 v3.1.2: TARJETA DE PROMEDIO DIARIO POR PRODUCTO (CORRECCIÓN N5)
+// ============================================================
+
+/**
+ * Renderiza la tarjeta de promedio diario por producto.
+ * @param {Object} promedioProducto - Datos de stats.promedioProducto
+ * @returns {string} HTML de la tarjeta o '' si no aplica
+ */
+function renderTarjetaProductoPromedio(promedioProducto) {
+    const LOG_PREFIX = '📊 [renderTarjetaProductoPromedio v3.1.2]';
+    
+    try {
+        // Validaciones iniciales
+        if (!promedioProducto) {
+            console.log(`${LOG_PREFIX} ℹ️ Sin datos de promedio`);
+            return '';
+        }
+        
+        if (!promedioProducto.configurado) {
+            console.log(`${LOG_PREFIX} ℹ️ Promedio no configurado (toggle OFF)`);
+            return '';
+        }
+        
+        if (!promedioProducto.producto) {
+            // Toggle activo pero sin producto seleccionado
+            return `
+                <div class="card" style="border-left: 4px solid #06b6d4; padding: 14px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 28px;">📊</span>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 700; color: #06b6d4; font-size: 14px;">
+                                Promedio diario por producto
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-light); margin-top: 2px;">
+                                ⚠️ Selecciona un producto en tu Perfil para ver este indicador
+                            </div>
+                        </div>
+                        <button onclick="window.navigate('profile')" class="btn secondary" style="padding: 6px 12px; font-size: 11px; width: auto;">
+                            ⚙️ Configurar
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        const producto = promedioProducto.producto;
+        const promedio = promedioProducto.promedio || 0;
+        const diasConVentas = promedioProducto.dias_con_ventas || 0;
+        const totalVendido = promedioProducto.total_vendido || 0;
+        const totalUnidades = promedioProducto.total_unidades || 0;
+        const mejorDia = promedioProducto.mejor_dia;
+        
+        // Formatear mejor día
+        let mejorDiaHTML = '';
+        if (mejorDia && mejorDia.fecha) {
+            const fechaFormateada = formatearFechaYYYYMMDD(mejorDia.fecha);
+            mejorDiaHTML = `
+                <div style="display: flex; justify-content: space-between; font-size: 11px; padding: 4px 0; border-bottom: 1px dashed var(--border-color);">
+                    <span style="color: var(--text-light);">🏆 Mejor día:</span>
+                    <span style="font-weight: 600; color: #10b981;">$${mejorDia.total.toFixed(2)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 10px; padding: 2px 0;">
+                    <span style="color: var(--text-light);"></span>
+                    <span style="color: var(--text-light);">📅 ${fechaFormateada}</span>
+                </div>
+            `;
+        }
+        
+        console.log(`${LOG_PREFIX} ✅ Renderizando para "${producto.nombre}" (promedio: $${promedio.toFixed(2)})`);
+        
+        return `
+            <div class="card" style="border-left: 4px solid #06b6d4; padding: 14px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                    <span style="font-size: 28px;">📊</span>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-weight: 700; color: #06b6d4; font-size: 14px;">
+                            Promedio diario
+                        </div>
+                        <div style="font-size: 12px; color: var(--text); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            🏷️ <strong>${producto.nombre}</strong>
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 20px; font-weight: 700; color: #06b6d4;">
+                            $${promedio.toFixed(2)}
+                        </div>
+                        <div style="font-size: 10px; color: var(--text-light);">
+                            por día
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="background: var(--bg); border-radius: 8px; padding: 10px 12px; border: 1px solid var(--border-color);">
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; padding: 4px 0; border-bottom: 1px dashed var(--border-color);">
+                        <span style="color: var(--text-light);">📅 Días con ventas:</span>
+                        <span style="font-weight: 600; color: #8b5cf6;">${diasConVentas}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; padding: 4px 0; border-bottom: 1px dashed var(--border-color);">
+                        <span style="color: var(--text-light);">💰 Total facturado:</span>
+                        <span style="font-weight: 600; color: #10b981;">$${totalVendido.toFixed(2)}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; padding: 4px 0; border-bottom: 1px dashed var(--border-color);">
+                        <span style="color: var(--text-light);">📦 Total unidades:</span>
+                        <span style="font-weight: 600; color: #f59e0b;">${totalUnidades}</span>
+                    </div>
+                    ${mejorDiaHTML}
+                </div>
+                
+                <button onclick="window.navigate('profile')" class="btn secondary" style="margin-top: 10px; padding: 4px 12px; font-size: 11px; width: auto;">
+                    ⚙️ Cambiar producto
+                </button>
+            </div>
+        `;
+        
+    } catch (e) {
+        console.error(`${LOG_PREFIX} ❌ Error:`, e);
+        return '';
+    }
+}
+
+window.renderTarjetaProductoPromedio = renderTarjetaProductoPromedio;
+
+// ============================================================
 // RENDER DASHBOARD VIEW
-// 🆕 v3.0.8 (Corrección #6): Título más pegado al header
 // ============================================================
 
 function renderDashboardView() {
@@ -1575,6 +1859,8 @@ function renderDashboardView() {
         show_sales_by_employee: true,
         show_debts: true,
         show_rewards: true,
+        show_producto_promedio: false,
+        producto_promedio_id: null,
         chart_mode: 'last7'
     };
     
@@ -1633,6 +1919,8 @@ function renderDashboardView() {
         ${dashConfig.show_corriente ? `<div id="dashboard-corriente-container">${tarjetaCorriente}</div>` : ''}
         
         ${dashConfig.show_orders_today ? `<div id="dashboard-orders-today-container"></div>` : ''}
+        
+        ${dashConfig.show_producto_promedio ? `<div id="dashboard-producto-promedio-container"></div>` : ''}
         
         <div id="dashboard-stats" style="${GRID_STYLE}">
             <div class="card" style="${CARD_STYLE_BASE}">
@@ -1932,7 +2220,6 @@ function renderDashboardView() {
 
 // ============================================================
 // QR DE CUENTA BANCARIA EN DASHBOARD
-// 🆕 v3.0.6: FIX - Respeta forzar_qr_admin usando getCuentaDefaultUsuario()
 // ============================================================
 
 async function renderDashboardBankQR() {
@@ -1942,7 +2229,7 @@ async function renderDashboardBankQR() {
     try {
         const user = window.AuthModule.getCurrentUser();
         if (!user) {
-            console.warn('⚠️ [renderDashboardBankQR v3.0.8] No hay usuario autenticado');
+            console.warn('⚠️ [renderDashboardBankQR v3.1.2] No hay usuario autenticado');
             return;
         }
         
@@ -1950,10 +2237,10 @@ async function renderDashboardBankQR() {
         
         if (typeof window.DBModule.getCuentaDefaultUsuario === 'function') {
             defaultAccount = window.DBModule.getCuentaDefaultUsuario(user.id);
-            console.log(`🏦 [renderDashboardBankQR v3.0.8] getCuentaDefaultUsuario(${user.id}) →`,
+            console.log(`🏦 [renderDashboardBankQR v3.1.2] getCuentaDefaultUsuario(${user.id}) →`,
                 defaultAccount ? `${defaultAccount.bank} (id=${defaultAccount.id})` : 'null');
         } else {
-            console.warn('⚠️ [renderDashboardBankQR v3.0.8] getCuentaDefaultUsuario no disponible, usando fallback');
+            console.warn('⚠️ [renderDashboardBankQR v3.1.2] getCuentaDefaultUsuario no disponible, usando fallback');
             const accounts = window.DBModule.getBankAccountsParaUsuario();
             defaultAccount = accounts.find(acc => Number(acc.is_default) === 1);
             if (!defaultAccount && accounts.length > 0) {
@@ -2044,7 +2331,6 @@ async function renderDashboardBankQR() {
 
 // ============================================================
 // DESCARGAR QR DEL DASHBOARD
-// 🆕 v3.0.6: FIX - Usa getCuentaDefaultUsuario() para descargar el QR correcto
 // ============================================================
 
 async function downloadDashboardQR(bank, accountNumber) {
@@ -2321,7 +2607,6 @@ function getMotivoSinVentas(fechaISO) {
 
 // ============================================================
 // RENDER BAR CHART
-// 🆕 CORRECCIÓN #2: Motivo SV en vertical
 // ============================================================
 
 function renderBarChart(container, chartData) {
@@ -2372,7 +2657,6 @@ function renderBarChart(container, chartData) {
 
 // ============================================================
 // RENDER LINE CHART
-// 🆕 CORRECCIÓN #2: Motivo SV en vertical
 // ============================================================
 
 function renderLineChart(container, chartData) {
@@ -2654,7 +2938,6 @@ async function loadDashboardData() {
 
         window._dailySalesData = stats.dailySales || [];
         window._diasSinVentasDetalle = stats.diasSinVentasDetalle || {};
-        // 🆕 v3.0.8: Guardar debtDetailsByClient para el modal
         window._debtDetailsByClient = stats.debtDetailsByClient || [];
 
         const elements = {
@@ -2717,6 +3000,8 @@ async function loadDashboardData() {
             show_sales_by_employee: true,
             show_debts: true,
             show_rewards: true,
+            show_producto_promedio: false,
+            producto_promedio_id: null,
             ...(user?.dashboard_config || {})
         };
 
@@ -2724,6 +3009,16 @@ async function loadDashboardData() {
             const ordersTodayContainer = document.getElementById('dashboard-orders-today-container');
             if (ordersTodayContainer) {
                 ordersTodayContainer.innerHTML = renderTarjetaPedidosHoy(stats);
+            }
+        }
+
+        // 🆕 CORRECCIÓN N5: Renderizar tarjeta de promedio diario
+        if (dashConfig.show_producto_promedio) {
+            const promedioContainer = document.getElementById('dashboard-producto-promedio-container');
+            if (promedioContainer) {
+                const promedioHtml = renderTarjetaProductoPromedio(stats.promedioProducto);
+                promedioContainer.innerHTML = promedioHtml;
+                console.log(`📊 [N5] Tarjeta de promedio renderizada: ${promedioHtml ? 'SÍ' : 'NO'}`);
             }
         }
 
@@ -2767,6 +3062,7 @@ async function loadDashboardData() {
 
         console.log('✅ Dashboard actualizado correctamente (v' + getAppVersion() + ')');
         console.log('   💰 [Punto #5] Deudas: ' + (stats.debtCount || 0) + ' ventas en ' + (stats.debtDetailsByClient?.length || 0) + ' cliente(s)');
+        console.log('   📊 [N5] Promedio producto: ' + (stats.promedioProducto?.configurado ? 'activo' : 'inactivo'));
 
     } catch (error) {
         console.error('❌ Error cargando dashboard:', error);
@@ -2775,7 +3071,7 @@ async function loadDashboardData() {
 }
 
 // ============================================================
-// 🆕 v3.0.7 (Punto #5): RENDER DEUDAS AGRUPADAS POR CLIENTE
+// RENDER DEUDAS AGRUPADAS POR CLIENTE
 // ============================================================
 
 function renderDebtDetails(debtDetailsByClient) {
@@ -2825,11 +3121,11 @@ function renderDebtDetails(debtDetailsByClient) {
 }
 
 // ============================================================
-// 🆕 v3.0.7 (Punto #5): MODAL CON DETALLE DE DEUDAS POR CLIENTE
+// MODAL CON DETALLE DE DEUDAS POR CLIENTE
 // ============================================================
 
 function showDebtDetailModal(clientName) {
-    const LOG_PREFIX = '💳 [showDebtDetailModal v3.0.8]';
+    const LOG_PREFIX = '💳 [showDebtDetailModal v3.1.2]';
     console.log(`${LOG_PREFIX} Abriendo detalle de deudas para: ${clientName}`);
     
     try {
@@ -2956,11 +3252,10 @@ window.showDebtDetailModal = showDebtDetailModal;
 
 // ============================================================
 // RENDER VENTAS POR EMPLEADO
-// 🆕 REGRESIÓN #5: Logging + fallbacks + tolerancia a formatos
 // ============================================================
 
 function renderSalesByEmployee(salesByEmployee) {
-    const LOG_PREFIX = '👥 [renderSalesByEmployee v3.0.8]';
+    const LOG_PREFIX = '👥 [renderSalesByEmployee v3.1.2]';
     
     const container = document.getElementById('sales-by-employee');
     if (!container) {
@@ -3228,11 +3523,10 @@ ${nombreNegocio}
 
 // ============================================================
 // EXPORTAR GRÁFICOS
-// 🆕 v3.0.4: REGRESIÓN #8 - Logging detallado para diagnosticar
 // ============================================================
 
 function exportChartAsImage() {
-    const LOG_PREFIX = '🖼️ [exportChartAsImage v3.0.8]';
+    const LOG_PREFIX = '🖼️ [exportChartAsImage v3.1.2]';
     console.log(`${LOG_PREFIX} Iniciando exportación de gráfico como imagen...`);
     
     const container = document.getElementById('daily-sales-chart');
@@ -3397,7 +3691,7 @@ function downloadImage(dataUrl, filename) {
 }
 
 function exportChartAsPDF() {
-    const LOG_PREFIX = '📄 [exportChartAsPDF v3.0.8]';
+    const LOG_PREFIX = '📄 [exportChartAsPDF v3.1.2]';
     console.log(`${LOG_PREFIX} Iniciando exportación de gráfico como PDF...`);
     
     const container = document.getElementById('daily-sales-chart');
@@ -3700,6 +3994,7 @@ window.reloadChartWithWeekOffset = reloadChartWithWeekOffset;
 window.updateChartModeUI = updateChartModeUI;
 window.renderTarjetaCorrienteHoy = renderTarjetaCorrienteHoy;
 window.renderTarjetaPedidosHoy = renderTarjetaPedidosHoy;
+window.renderTarjetaProductoPromedio = renderTarjetaProductoPromedio; // 🆕 N5
 window.selectNegocioMode = selectNegocioMode;
 window.previewNegocio = previewNegocio;
 window.refreshCurrentView = refreshCurrentView;
@@ -3727,7 +4022,7 @@ window.startHeaderCleanupWatchers = startHeaderCleanupWatchers;
 window.stopHeaderCleanupWatchers = stopHeaderCleanupWatchers;
 window.getMotivoSinVentas = getMotivoSinVentas;
 
-console.log('📦 App Controller v' + getAppVersion() + ' (v3.0.8: Corrección #6 - Espacio superior/inferior ajustado)');
+console.log('📦 App Controller v' + getAppVersion() + ' (v3.1.2: Corrección N5 - tarjeta de promedio diario)');
 
 // ============================================================
 // INICIALIZACIÓN AUTOMÁTICA

@@ -1,39 +1,15 @@
 // ============================================================
 // 📦 UI SALES - Panario (Ventas y Finanzas con ventas liberadas)
-// CORREGIDO: Origen del pago en gastos + Reporte de gastos
-// AÑADIDO: FASE 12 - Botón "🏆 Premios"
-// CORREGIDO FASE 2 (160926): Reporte de ventas con filtros ampliados
-// CORREGIDO FASE 4B (170926): 
-//   - registerSalePayment() ahora desactiva is_debt = 0 al cobrar
-// AÑADIDO FASE A.4 (170926 v2):
-//   - renderAuditoriaHTML() helper compartido
-//   - viewSale() muestra sección de Auditoría
-//   - viewExpense() muestra sección de Auditoría
-// AÑADIDO (180926): 
-//   - Se muestra el #ID de cada venta en TODAS las vistas
-// CORREGIDO FASE 1.1 (190926):
-//   - loadSalesAndExpenses() ahora filtra por negocio_id (no user_id)
-// CORREGIDO FASE 1.4 (190926 v2-v3): voidSale() con triple verificación
-// 🆕 FIX 2 (190926 v4): normalizarFechaVenta() helper
-// 🆕 FASE 3.5 (200926 v5): 5 tarjetas de alturas homogéneas
-// 🆕 FASE 4.2 (#13) (200926 v6): INTERRUPTOR DE VENTAS LIBERADAS
-// 🆕 FASE 5 (#20) (200926 v7): UI DE DÍAS SIN VENTAS
-// 🆕 ENTREGA 2 (230926 v8): ANULAR VENTA + VENDEDOR
-// 🆕 v2.1.12 (210926 v9): CORRECCIÓN #2 - BLOQUEO POR RECETAS NO COMPARTIDAS
-// 🆕 v2.1.13 (250926 v10): CORRECCIÓN #15 - FILTRO POR VENDEDOR
-// 🆕 v2.1.14 (260926 v11): 🎯 NUEVA FUNCIONALIDAD #1 (260926) - NOTA A LA VENTA
-//   - ✅ showSaleForm() ahora incluye un campo <textarea> para la nota
-//     (opcional, se puede dejar vacío).
-//   - ✅ Al editar una venta existente, la nota se precarga.
-//   - ✅ submitSaleForm() envía saleData.notes.
-//   - ✅ viewSale() muestra la nota si existe.
-//   - ✅ viewSale() ahora incluye un botón "✏️ Editar nota" visible
-//     SOLO para el creador de la venta (no anulada).
-//   - ✅ NUEVA función showEditSaleNoteModal(saleId) que permite
-//     editar la nota post-venta mediante un modal simple.
-//   - ✅ Al guardar la nota desde el modal, se llama a
-//     window.SalesModule.updateSaleNote().
-//   - ✅ La nota NO se muestra en el reporte PDF (por decisión de diseño).
+// v2.1.16 (011026 v13): CORRECCIONES N3 + N4
+//   - ✅ N3: "Ingresos totales" ahora suma sales.total (no transactions.amount)
+//     * Consistente con el Dashboard
+//     * Se añade detalle de diagnóstico en la tarjeta
+//   - ✅ N4: Al crear una venta liberada, se fuerza el toggle "Mostrar liberadas" a ON
+//     * La venta aparece inmediatamente en el listado
+// HISTORIAL:
+// v2.1.14 (260926): Nota a la venta
+// v2.1.13 (250926): Filtro por vendedor
+// v2.1.12 (210926): Bloqueo por recetas no compartidas
 // ============================================================
 
 // ============================================================
@@ -338,6 +314,7 @@ function renderSalesView() {
                 <div style="font-size: 20px; margin-bottom: 4px;">💰</div>
                 <div style="font-size: 11px; color: var(--text-light);">Ingresos totales</div>
                 <div style="font-size: 20px; font-weight: 700; color: #10b981;" id="total-income">$0.00</div>
+                <div style="font-size: 10px; color: var(--text-light); margin-top: 2px;" id="total-income-detail"></div>
             </div>
             
             <div class="card" style="padding: 14px; text-align: center; min-height: 90px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-left: 4px solid #ef4444;">
@@ -778,7 +755,7 @@ if (typeof window.getSeccionCorrienteHTML !== 'function') {
 }
 
 // ============================================================
-// 🆕 v2.1.12 + v2.1.13: LOAD SALES AND EXPENSES
+// LOAD SALES AND EXPENSES
 // ============================================================
 
 async function loadSalesAndExpenses() {
@@ -1318,7 +1295,6 @@ function renderSalesGroupedByDay(container, sales) {
                     const statusLabel = isVoid ? '🚫 ANULADA' : (bloqueado ? '🔒 Solo lectura' : (isDebt ? '💳 Deuda' : '✅ Pagado'));
                     const sesionBadge = sale.session ? getBadgeSesion(sale.session) : '';
                     
-                    // 🆕 v2.1.14: Indicador visual si la venta tiene nota
                     const tieneNota = sale.notes && String(sale.notes).trim() !== '';
                     const notaIcono = tieneNota ? '<span title="Tiene nota" style="font-size: 12px; margin-left: 4px;">📝</span>' : '';
                     
@@ -1464,7 +1440,7 @@ function toggleDaySales(dayId) {
 }
 
 // ============================================================
-// ACTUALIZAR RESUMEN
+// 🆕 v2.1.16: ACTUALIZAR RESUMEN (N3: Ingresos desde sales.total)
 // ============================================================
 
 async function updateSummary() {
@@ -1474,6 +1450,7 @@ async function updateSummary() {
         
         const today = new Date().toISOString().split('T')[0];
         
+        // Ventas hoy
         const todaySales = window.DBModule.query(
             'SELECT SUM(total) as total FROM sales WHERE negocio_id = ? AND DATE(sale_date, "localtime") = DATE(?) AND deleted_at IS NULL AND voided = 0',
             [negocioId, today]
@@ -1482,14 +1459,44 @@ async function updateSummary() {
         const salesTodayEl = document.getElementById('sales-today');
         if (salesTodayEl) salesTodayEl.textContent = '$' + todayTotal.toFixed(2);
         
-        const incomeResult = window.DBModule.query(
-            'SELECT SUM(amount) as total FROM transactions WHERE negocio_id = ? AND type = "income" AND deleted_at IS NULL AND voided = 0',
+        // 🆕 N3: Ingresos totales = SUM(sales.total) — consistente con Dashboard
+        const incomeFromSales = window.DBModule.query(
+            'SELECT SUM(total) as total, COUNT(*) as count FROM sales WHERE negocio_id = ? AND deleted_at IS NULL AND voided = 0',
             [negocioId]
         );
-        const totalIncome = incomeResult[0]?.total || 0;
+        const totalIncome = incomeFromSales[0]?.total || 0;
+        const incomeCount = incomeFromSales[0]?.count || 0;
+        
+        // 🆕 N3: Cálculo paralelo para diagnóstico (transactions)
+        const incomeFromTx = window.DBModule.query(
+            'SELECT SUM(amount) as total, COUNT(*) as count FROM transactions WHERE negocio_id = ? AND type = "income" AND deleted_at IS NULL AND voided = 0',
+            [negocioId]
+        );
+        const totalIncomeTx = incomeFromTx[0]?.total || 0;
+        const incomeCountTx = incomeFromTx[0]?.count || 0;
+        
         const totalIncomeEl = document.getElementById('total-income');
         if (totalIncomeEl) totalIncomeEl.textContent = '$' + totalIncome.toFixed(2);
         
+        // 🆕 N3: Mostrar detalle del diagnóstico
+        const totalIncomeDetailEl = document.getElementById('total-income-detail');
+        if (totalIncomeDetailEl) {
+            const diferencia = totalIncome - totalIncomeTx;
+            if (Math.abs(diferencia) > 0.01) {
+                totalIncomeDetailEl.innerHTML = `📊 ${incomeCount} ventas · ⚠️ Diff: $${diferencia.toFixed(2)}`;
+                totalIncomeDetailEl.style.color = '#f59e0b';
+            } else {
+                totalIncomeDetailEl.textContent = `📊 ${incomeCount} ventas`;
+                totalIncomeDetailEl.style.color = 'var(--text-light)';
+            }
+        }
+        
+        console.log('💰 [N3 - updateSummary] Ingresos:');
+        console.log('   📊 SUM(sales.total):', totalIncome.toFixed(2), `(${incomeCount} ventas)`);
+        console.log('   📊 SUM(transactions.amount):', totalIncomeTx.toFixed(2), `(${incomeCountTx} transacciones)`);
+        console.log('   📊 Diferencia:', (totalIncome - totalIncomeTx).toFixed(2));
+        
+        // Gastos totales
         const expenseResult = window.DBModule.query(
             'SELECT SUM(amount) as total FROM transactions WHERE negocio_id = ? AND type = "expense" AND deleted_at IS NULL AND voided = 0',
             [negocioId]
@@ -1498,6 +1505,7 @@ async function updateSummary() {
         const totalExpensesEl = document.getElementById('total-expenses');
         if (totalExpensesEl) totalExpensesEl.textContent = '$' + totalExpenses.toFixed(2);
         
+        // Deudas
         const debtsResult = window.DBModule.query(
             'SELECT SUM(total) as total FROM sales WHERE negocio_id = ? AND is_debt = 1 AND paid = 0 AND deleted_at IS NULL AND voided = 0',
             [negocioId]
@@ -1506,6 +1514,7 @@ async function updateSummary() {
         const totalDebtsEl = document.getElementById('total-debts');
         if (totalDebtsEl) totalDebtsEl.textContent = '$' + totalDebts.toFixed(2);
         
+        // Ventas liberadas
         const releasedResult = window.DBModule.query(
             'SELECT COUNT(*) as count, SUM(total) as total FROM sales WHERE negocio_id = ? AND is_liberated = 1 AND deleted_at IS NULL AND voided = 0',
             [negocioId]
@@ -2032,7 +2041,7 @@ async function reporteDiasSinVentas() {
 }
 
 // ============================================================
-// FORMULARIO: VENTA LIBERADA
+// FORMULARIO: VENTA LIBERADA (con N4 aplicada)
 // ============================================================
 
 async function showLiberatedSaleForm() {
@@ -2097,7 +2106,6 @@ async function showLiberatedSaleForm() {
                     </select>
                 </div>
                 
-                <!-- 🆕 v2.1.14: Campo de nota opcional -->
                 <div class="form-group">
                     <label>📝 Nota (opcional)</label>
                     <textarea id="liberated-notes" rows="2" placeholder="Ej: Venta de mostrador sin cliente"
@@ -2190,10 +2198,20 @@ async function submitLiberatedSale() {
             unit_price: unitPrice,
             payment_method: paymentMethod,
             sale_date: saleDateNormalizada,
-            notes: notes   // 🆕 v2.1.14
+            notes: notes
         });
         
         if (result.success) {
+            // 🆕 N4: FORZAR toggle a ON para que la venta liberada aparezca inmediatamente
+            console.log('🚀 [N4] Forzando toggle "Mostrar liberadas" a ON tras crear venta liberada #' + result.id);
+            setShowLiberatedSales(true);
+            
+            const checkbox = document.getElementById('filter-show-liberated');
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+            updateShowLiberatedToggleVisual();
+            
             closeLiberatedSaleModal();
             window.showToast('✅ Venta liberada registrada', 'success');
             loadSalesAndExpenses();
@@ -2222,7 +2240,6 @@ function closeLiberatedSaleModal() {
 
 // ============================================================
 // FORMULARIO: NUEVA VENTA
-// 🆕 v2.1.14: Añadido campo de nota
 // ============================================================
 
 async function showSaleForm(saleId = null) {
@@ -2294,7 +2311,6 @@ async function showSaleForm(saleId = null) {
             `;
         }
         
-        // 🆕 v2.1.14: Valor actual de la nota (o cadena vacía)
         const notesValue = (saleData?.notes !== undefined && saleData?.notes !== null) 
             ? String(saleData.notes) 
             : '';
@@ -2393,7 +2409,6 @@ async function showSaleForm(saleId = null) {
                                style="width: 20px; height: 20px; cursor: pointer; accent-color: var(--primary);">
                     </div>
                     
-                    <!-- 🆕 v2.1.14: Campo de nota opcional -->
                     <div class="form-group">
                         <label>📝 Nota (opcional)</label>
                         <textarea id="sale-notes" rows="2" 
@@ -2521,7 +2536,6 @@ function onSaleDateChange() {
 
 // ============================================================
 // ENVIAR FORMULARIO DE VENTA
-// 🆕 v2.1.14: Envía notes
 // ============================================================
 
 async function submitSaleForm(isEdit, isDebtEdit = false) {
@@ -2543,8 +2557,6 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
     
     const paymentMethod = document.getElementById('sale-payment').value;
     const isDebt = document.getElementById('sale-is-debt').checked;
-    
-    // 🆕 v2.1.14: Leer la nota
     const notes = document.getElementById('sale-notes')?.value?.trim() || null;
     
     let session = '';
@@ -2565,8 +2577,6 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
     
     const saleDateNormalizada = normalizarFechaVenta(saleDate);
     
-    console.log('📅 [submitSaleForm] Fecha original:', saleDate, '→ normalizada:', saleDateNormalizada);
-    
     const saleData = {
         producto_id: productoId,
         product_name: productName,
@@ -2580,7 +2590,7 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
         paid: isDebt ? 0 : 1,
         sale_date: saleDateNormalizada,
         session: session,
-        notes: notes   // 🆕 v2.1.14
+        notes: notes
     };
     
     const idInput = document.getElementById('sale-id');
@@ -2607,7 +2617,6 @@ async function submitSaleForm(isEdit, isDebtEdit = false) {
 
 // ============================================================
 // VER VENTA
-// 🆕 v2.1.14: Muestra la nota + botón editar nota
 // ============================================================
 
 async function viewSale(id) {
@@ -2618,7 +2627,6 @@ async function viewSale(id) {
         const permisos = checkSalePermission(sale);
         const bloqueado = !permisos.puede;
         
-        // 🆕 v2.1.14: Determinar si el usuario actual es el creador
         const currentUser = window.AuthModule.getCurrentUser();
         const esCreador = currentUser && Number(sale.user_id) === Number(currentUser.id);
         const puedoEditarNota = esCreador && sale.voided !== 1;
@@ -2689,7 +2697,6 @@ async function viewSale(id) {
             `;
         }
         
-        // 🆕 v2.1.14: Sección de nota
         const tieneNota = sale.notes && String(sale.notes).trim() !== '';
         let notaSection = '';
         
@@ -2790,18 +2797,15 @@ async function viewSale(id) {
 }
 
 // ============================================================
-// 🆕 v2.1.14: MODAL PARA EDITAR LA NOTA (POST-VENTA)
+// MODAL PARA EDITAR LA NOTA (POST-VENTA)
 // ============================================================
 
 async function showEditSaleNoteModal(saleId) {
-    const LOG_PREFIX = '📝 [showEditSaleNoteModal]';
-    
     if (!saleId) {
         window.showToast('❌ ID de venta inválido', 'error');
         return;
     }
     
-    // Verificar que la venta existe y que el usuario es el creador
     const sale = await window.SalesModule.getSale(saleId);
     if (!sale) {
         window.showToast('❌ Venta no encontrada', 'error');
@@ -2890,7 +2894,6 @@ async function showEditSaleNoteModal(saleId) {
         const textarea = document.getElementById('edit-sale-note-textarea');
         if (textarea) {
             textarea.focus();
-            // Colocar el cursor al final
             textarea.setSelectionRange(textarea.value.length, textarea.value.length);
         }
     }, 100);
@@ -2907,14 +2910,11 @@ async function showEditSaleNoteModal(saleId) {
 }
 
 async function submitEditSaleNote(saleId) {
-    const LOG_PREFIX = '📝 [submitEditSaleNote]';
-    
     const textarea = document.getElementById('edit-sale-note-textarea');
     if (!textarea) return;
     
     let notes = textarea.value.trim();
     
-    // Limitar a 500 caracteres
     if (notes.length > 500) {
         notes = notes.substring(0, 500);
     }
@@ -2928,15 +2928,12 @@ async function submitEditSaleNote(saleId) {
             window.showToast('✅ Nota guardada correctamente', 'success', 3000);
             closeEditSaleNoteModal();
             
-            // Refrescar la vista si está abierta
             const viewModal = document.getElementById('sale-view-modal');
             if (viewModal) {
-                // Recargar el modal de vista
                 window.closeSaleViewModal();
                 setTimeout(() => viewSale(saleId), 300);
             }
             
-            // Refrescar el listado
             if (typeof loadSalesAndExpenses === 'function') {
                 loadSalesAndExpenses();
             }
@@ -2944,7 +2941,7 @@ async function submitEditSaleNote(saleId) {
             window.showToast('❌ Error: ' + (result.error || 'Desconocido'), 'error', 5000);
         }
     } catch (error) {
-        console.error(`${LOG_PREFIX} ❌ Excepción:`, error);
+        console.error('❌ Error:', error);
         window.showToast('❌ Error: ' + error.message, 'error', 5000);
     }
 }
@@ -2959,28 +2956,21 @@ function closeEditSaleNoteModal() {
     }
 }
 
-window.showEditSaleNoteModal = showEditSaleNoteModal;
-window.closeEditSaleNoteModal = closeEditSaleNoteModal;
-window.submitEditSaleNote = submitEditSaleNote;
-
 // ============================================================
 // ANULAR VENTA
 // ============================================================
 
 async function voidSale(id) {
-    console.log('🚫 [voidSale] ========== INICIO ==========');
-    console.log('🚫 [voidSale] Anulando venta #' + id);
+    console.log('🚫 [voidSale] Iniciando anulación de venta #' + id);
     
     const permisos = checkSalePermission(id);
     if (!permisos.puede) {
-        console.warn('🔒 [voidSale] Bloqueado:', permisos.razon);
         window.showToast('🔒 ' + permisos.razon, 'error', 6000);
         return;
     }
     
     const modalHuerfano = document.getElementById('custom-modal');
     if (modalHuerfano) {
-        console.warn('🚫 [voidSale] Modal huérfano detectado, eliminando...');
         modalHuerfano.remove();
         window._modalResolve = null;
         window._modalResolved = false;
@@ -2992,14 +2982,10 @@ async function voidSale(id) {
         confirm = await window.ModalModule.showConfirm({
             title: 'Anular venta',
             message: '¿Seguro que quieres anular esta venta?\n\nEl stock se repondrá automáticamente.',
-            confirmText: 'Sí, anular',
-            cancelText: 'Cancelar',
-            icon: '🚫',
-            confirmColor: '#ef4444'
+            confirmText: 'Sí, anular', cancelText: 'Cancelar',
+            icon: '🚫', confirmColor: '#ef4444'
         });
     } catch (err) {
-        console.error('🚫 [voidSale] Error en showConfirm:', err);
-        window.showToast('❌ Error al mostrar confirmación', 'error', 5000);
         return;
     }
     
@@ -3009,18 +2995,6 @@ async function voidSale(id) {
     }
     
     await waitForCustomModalRemoval(800);
-    
-    for (let i = 0; i < 3; i++) {
-        const stillThere = document.getElementById('custom-modal');
-        if (!stillThere) break;
-        await new Promise(r => setTimeout(r, 200));
-        if (i === 2 && stillThere) {
-            stillThere.remove();
-            window._modalResolve = null;
-            window._modalResolved = false;
-        }
-    }
-    
     await new Promise(r => setTimeout(r, 150));
     
     let reason = null;
@@ -3055,8 +3029,6 @@ async function voidSale(id) {
         console.error('❌ [voidSale] Excepción:', error);
         window.showToast('❌ Error: ' + error.message, 'error', 6000);
     }
-    
-    console.log('🚫 [voidSale] ========== FIN ==========');
 }
 
 // ============================================================
@@ -3064,11 +3036,8 @@ async function voidSale(id) {
 // ============================================================
 
 async function unvoidSale(id) {
-    console.log('🔄 [unvoidSale] Iniciando restauración de venta #' + id);
-    
     const permisos = checkSalePermission(id);
     if (!permisos.puede) {
-        console.warn('🔒 [unvoidSale] Bloqueado:', permisos.razon);
         window.showToast('🔒 ' + permisos.razon, 'error', 6000);
         return;
     }
@@ -3086,10 +3055,8 @@ async function unvoidSale(id) {
         confirm = await window.ModalModule.showConfirm({
             title: 'Restaurar venta',
             message: '¿Seguro que quieres restaurar esta venta anulada?',
-            confirmText: 'Sí, restaurar',
-            cancelText: 'Cancelar',
-            icon: '🔄',
-            confirmColor: '#10b981'
+            confirmText: 'Sí, restaurar', cancelText: 'Cancelar',
+            icon: '🔄', confirmColor: '#10b981'
         });
     } catch (err) {
         return;
@@ -3132,7 +3099,6 @@ async function registerSalePayment(saleId) {
         
         const permisos = checkSalePermission(sale);
         if (!permisos.puede) {
-            console.warn('🔒 [registerSalePayment] Bloqueado:', permisos.razon);
             window.showToast('🔒 ' + permisos.razon, 'error', 6000);
             return;
         }
@@ -3148,10 +3114,8 @@ async function registerSalePayment(saleId) {
         const confirm = await window.ModalModule.showConfirm({
             title: '💰 Cobrar deuda',
             message: `¿Confirmas el cobro de $${sale.total.toFixed(2)} por "${sale.product_name}"?\n\n👤 Cliente: ${sale.buyer || 'Cliente sin nombre'}\n🆔 Venta: #${sale.id}`,
-            confirmText: '✅ Cobrar',
-            cancelText: 'Cancelar',
-            icon: '💰',
-            confirmColor: '#10b981'
+            confirmText: '✅ Cobrar', cancelText: 'Cancelar',
+            icon: '💰', confirmColor: '#10b981'
         });
         
         if (!confirm) return;
@@ -3405,8 +3369,6 @@ async function viewExpense(id) {
 // ============================================================
 
 async function voidExpense(id) {
-    console.log('🚫 [voidExpense] Iniciando anulación de gasto #' + id);
-    
     const modalHuerfano = document.getElementById('custom-modal');
     if (modalHuerfano) {
         modalHuerfano.remove();
@@ -3457,7 +3419,6 @@ async function voidExpense(id) {
             window.showToast('❌ Error: ' + errorMsg, 'error', 6000);
         }
     } catch (error) {
-        console.error('❌ [voidExpense] Excepción:', error);
         window.showToast('❌ Error: ' + error.message, 'error', 6000);
     }
 }
@@ -3750,7 +3711,6 @@ function generateSalesReportFromForm() {
     const vendedorId = document.getElementById('report-sales-vendedor')?.value || '';
     if (vendedorId) {
         filters.created_by = parseInt(vendedorId);
-        console.log(`👤 [Reporte Ventas] Filtrando por vendedor: ${vendedorId}`);
     }
     
     if (document.getElementById('report-sales-liberated')?.checked) {
@@ -3815,7 +3775,7 @@ window.closeExpenseViewModal = function() {
 };
 
 // ============================================================
-// EXPORTACIÓN
+// EXPORTACIÓN GLOBAL
 // ============================================================
 
 window.renderSalesView = renderSalesView;
@@ -3872,18 +3832,14 @@ window.renderBadgeSoloLecturaVenta = renderBadgeSoloLecturaVenta;
 
 window.poblarSelectorVendedores = poblarSelectorVendedores;
 
-// 🆕 v2.1.14: Exportar funciones de nota
 window.showEditSaleNoteModal = showEditSaleNoteModal;
 window.closeEditSaleNoteModal = closeEditSaleNoteModal;
 window.submitEditSaleNote = submitEditSaleNote;
 
-console.log('📦 UI Sales Module v2.1.14 (NUEVA FUNCIONALIDAD #1: nota a la venta)');
-console.log('   🆕 Novedades v2.1.14:');
-console.log('      • ✅ Campo "Nota" en el formulario de nueva venta/edición');
-console.log('      • ✅ Sección "📝 Nota" en el detalle de venta');
-console.log('      • ✅ Botón "✏️ Editar nota" (solo el creador)');
-console.log('      • ✅ NUEVA función: showEditSaleNoteModal()');
-console.log('      • ✅ Indicador visual 📝 en ventas con nota');
+console.log('📦 UI Sales Module v2.1.16 (N3 + N4 aplicadas)');
+console.log('   🆕 N3: "Ingresos totales" ahora suma sales.total');
+console.log('   🆕 N4: Al crear venta liberada se fuerza toggle "Mostrar liberadas" a ON');
 console.log('   🔄 Correcciones anteriores mantenidas:');
-console.log('      • v2.1.13: Filtro por vendedor (Corrección #15)');
+console.log('      • v2.1.14: Nota a la venta');
+console.log('      • v2.1.13: Filtro por vendedor');
 console.log('      • v2.1.12: Bloqueo por recetas no compartidas');
